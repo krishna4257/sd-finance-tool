@@ -1,28 +1,15 @@
 FROM python:3.10-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y build-essential gcc
+RUN apt-get update && apt-get install -y gcc libpq-dev python3-dev
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    unixodbc-dev \
-    libpq-dev \
-    default-libmysqlclient-dev \
-    && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY . .
 
-COPY . /app
-
-ENV PORT=8080
-ENV GCS_BUCKET=sd-finance-db
-
-EXPOSE 8080
-
-CMD exec gunicorn --bind :$PORT --workers 2 --threads 4 app:app
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
