@@ -903,6 +903,43 @@ def get_payments_data(filename: str):
         if conn:
             conn.close()
 
+@app.route("/post_payment_report", methods=["GET"])
+def post_payment_report():
+    selected_file = session.get("selected_file")
+    if not selected_file:
+        return redirect("/dashboard")
+
+    try:
+        return render_template("post_payment_report.html")
+    except Exception as e:
+        logger.exception("Error loading post_payment_report page: %s", e)
+        return "Could not load posting report page", 500
+
+@app.route("/get_all_postings", methods=["GET"])
+def get_all_postings():
+    selected_file = session.get("selected_file")
+    if not selected_file:
+        return jsonify(success=False, error="No DB selected")
+
+    conn = None
+    try:
+        conn = connect_db(selected_file)
+        if conn is None:
+            return jsonify(success=False, error="Could not connect to database")
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT ANO, PDT, AMT FROM PAMT1 ORDER BY CAST(ANO AS INTEGER)")
+        rows = cursor.fetchall()
+        results = [dict(row) for row in rows]
+
+        return jsonify(success=True, data=results)
+    except Exception as e:
+        logger.exception("Error in get_all_postings: %s", e)
+        return jsonify(success=False, error=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 # -----------------------
 # Template filters & main
 # -----------------------
