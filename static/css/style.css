@@ -1,0 +1,1522 @@
+:root {
+  /* New Alice Blue Palette */
+  --bg: #F0F8FF;
+  --text: #2F4F4F; /* Dark Slate Gray for softer text */
+  --sidebar: #FFFFFF; /* White for cards and sidebars */
+  --highlight: #BBA14F; /* Keeping the existing gold */
+  --active-glow: #fff4c1;
+  --input-bg: #FFFFFF;
+  --input-text: #2F4F4F;
+  --input-border: #BCCCDC; /* A softer, blue-toned gray */
+}
+
+[data-theme="dark"] body {
+  background-color: #333333;
+  color: white;
+}
+
+[data-theme="light"] body {
+  background-color: white;
+  color: black;
+}
+
+
+[data-theme="dark"] {
+  --bg: #333333;
+  --text: #f0f0f0;
+  --sidebar: #2c2c2c;
+  --input-bg: #444;
+  --input-text: #f0f0f0;
+  --input-border: #666;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+  overflow: hidden; /* Keep body overflow hidden to prevent overall scrollbars */
+}
+
+/* --- Logo Styles --- */
+.logo-container img {
+  max-width: 100%; /* Keep this to ensure it doesn't overflow */
+  height: 50px; /* <-- ADJUST THIS VALUE to control the size */
+  width: auto;     /* This maintains the correct aspect ratio */
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.logo-container img {
+  max-width: 70%;
+  align-items: center; /* Ensure the logo is responsive and fits the sidebar */
+  height: auto; /* Maintain the aspect ratio */
+  border-radius: 10px; /* Optional: adds slightly rounded corners to the logo */
+}
+
+aside {
+  width: 220px;
+  background: var(--sidebar);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+aside h2 {
+  font-size: 1.3em;
+  margin-bottom: 30px;
+  text-align: center;
+  color: var(--text);
+}
+
+h2 {
+    text-align: center;
+}
+
+/* --- Modal (Pop-up) Styles --- */
+
+/* The Modal Background (semi-transparent overlay) */
+.modal {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place even when scrolling */
+  z-index: 1000; /* Sit on top of everything else */
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgba(0, 0, 0, 0.6); /* Black with opacity */
+  backdrop-filter: blur(5px); /* Optional: blur the background */
+  -webkit-backdrop-filter: blur(5px);
+}
+
+/* The Modal Content Box */
+.modal-content {
+  background-color: var(--sidebar);
+  margin: 15% auto; /* 15% from the top and centered horizontally */
+  padding: 30px;
+  border-radius: 20px;
+  width: 80%;
+  max-width: 500px; /* Max width for larger screens */
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  position: relative;
+  animation: fadeIn 0.3s;
+}
+
+/* Add Animation (Fade in the modal) */
+@keyframes fadeIn {
+  from {opacity: 0; transform: scale(0.95);}
+  to {opacity: 1; transform: scale(1);}
+}
+
+/* The Close Button (the "×") */
+.close-btn {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Styling for inputs and buttons inside the modal */
+.modal-content h3 {
+  margin-bottom: 20px;
+  text-align: center;
+  color: var(--highlight);
+}
+
+.modal-content input {
+  margin-bottom: 15px;
+}
+
+/* Neumorphic Button Base Style (used for navigation and other buttons) */
+.neumorphic-btn, .neumorphic-btn-h {
+  display: inline-flex; /* Use inline-flex for better alignment of icon and text */
+  align-items: center; /* Vertically align icon and text */
+  justify-content: center; /* Center content horizontally */
+  gap: 8px; /* Space between icon and text */
+  border: none;
+  padding: 14px 18px;
+  border-radius: 15px;
+  margin-bottom: 14px; /* Consistent spacing between nav items */
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--sidebar); /* Use sidebar background for consistency */
+  box-shadow: 6px 6px 12px #d6e4f0, -6px -6px 12px #ffffff;
+  transition: 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap; /* Prevent text wrapping in buttons */
+}
+
+[data-theme="dark"] .neumorphic-btn, [data-theme="dark"] .neumorphic-btn-h {
+  background: var(--sidebar); /* Use sidebar background for consistency in dark mode */
+  color: var(--text);
+  box-shadow: 6px 6px 12px #2a2a2a, -6px -6px 12px #3c3c3c;
+}
+
+.neumorphic-btn-h { margin-left: 20px;}
+[data-theme="dark"] .neumorphic-btn-h {margin-left: 20px;}
+
+
+.neumorphic-btn:hover, .neumorphic-btn-h:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.neumorphic-btn:active, .neumorphic-btn-h:active {
+  transform: scale(0.98);
+  box-shadow: inset 5px 5px 10px #bebebe, inset -5px -5px 10px #ffffff;
+}
+
+[data-theme="dark"] .neumorphic-btn:active, .neumorphic-btn-h:active {
+  box-shadow: inset 5px 5px 10px #2a2a2a, inset -5px -5px 10px #3d3d3d;
+}
+
+/* Active Navigation Link Style */
+.neumorphic-btn.active, .neumorphic-btn-h.active {
+  background: var(--sidebar);
+  box-shadow: inset 5px 5px 10px #bebebe, inset -5px -5px 10px #ffffff;
+  border: 2px solid var(--highlight);
+  color: var(--highlight);
+}
+
+[data-theme="dark"] .neumorphic-btn.active, .neumorphic-btn-h.active {
+  background: var(--sidebar);
+  box-shadow: inset 5px 5px 10px #2a2a2a, inset -5px -5px 10px #3d3d3d;
+  border: 2px solid var(--highlight);
+  color: var(--highlight);
+}
+
+
+/* Modifier Classes for Button Sizes */
+.neumorphic-btn.ultrasmall {
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 10px; /* Slightly less rounded for small */
+  margin-top: 0;
+  margin-bottom: 0; /* Override base margin-bottom for smaller buttons */
+}
+.neumorphic-btn.ultrasmall:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.neumorphic-btn.small {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 12px; /* Slightly less rounded for small */
+  margin-top: 0;
+  margin-bottom: 0; /* Override base margin-bottom for smaller buttons */
+  margin-left: 20px;
+}
+
+[data-theme="dark"] .neumorphic-btn.bb1 {
+  box-shadow: 5px 5px 10px #2b2b2b, -5px -5px 16px #404040;
+}
+.neumorphic-btn.small:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.neumorphic-btn.large {
+  padding: 20px 30px;
+  font-size: 18px;
+  border-radius: 25px;
+  box-shadow: 12px 12px 20px #d1d1d1, -12px -12px 20px #ffffff;
+  margin-top: 20px; /* Keep margin for main form buttons */
+  margin-bottom: 0;
+}
+
+[data-theme="dark"] .neumorphic-btn.large {
+  box-shadow: 12px 12px 20px #2b2b2b, -12px -12px 20px #404040;
+}
+.neumorphic-btn.large:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+/* Full Width Button (if needed) */
+.neumorphic-btn.full-width {
+  width: 100%;
+  display: flex; /* Ensure flex properties apply */
+}
+.neumorphic-btn.full-width:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Crucial: Allows flex item to shrink below content size */
+  min-height: 0;
+}
+
+header {
+  background: var(--sidebar);
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+[data-theme="dark"] header {
+  background: #2a2a2a;
+}
+
+/* Grouping for village select and active village display */
+.header-left-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    flex-grow: 1; /* Allow it to grow */
+    flex-shrink: 1; /* Allow it to shrink */
+    min-width: 0; /* Crucial for flex items that might contain wide content */
+}
+
+.village-select-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.village-select-form select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  font-weight: 500;
+}
+
+/* .village-select-form button {
+  background-color: var(--highlight);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+} */
+
+[data-theme="dark"] .village-select-form select {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+/* Theme Toggle Switch */
+.theme-switch-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0; /* Ensure it doesn't shrink, maintaining its size */
+  margin-left: auto; /* Pushes it to the right, maintaining space-between */
+}
+
+.theme-switch {
+  display: inline-block;
+  height: 34px;
+  position: relative;
+  width: 60px;
+  margin-left: 10px;
+}
+
+.theme-switch input {
+  display: none;
+}
+
+.slider {
+  background-color: #ccc;
+  bottom: 0;
+  cursor: pointer;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  background-color: #4285F4;
+  bottom: 4px;
+  content: "";
+  height: 26px;
+  left: 4px;
+  position: absolute;
+  transition: 0.4s;
+  width: 26px;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #222;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.slider .icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+}
+
+.slider .sun {
+  left: 8px;
+  color: #f39c12;
+}
+
+.slider .moon {
+  right: 8px;
+  color: #f1c40f;
+}
+
+#main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Neumorphic Form Container */
+.form-glass {
+  background: var(--sidebar);
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 780px;
+  width: 100%;
+  margin: 20px auto;
+  box-shadow: 9px 9px 16px #d1d1d1, -9px -9px 16px #ffffff;
+}
+
+[data-theme="dark"] .form-glass {
+  background: var(--sidebar);
+  box-shadow: 9px 9px 16px #2b2b2b, -9px -9px 16px #404040;
+}
+
+.form-row {
+  display: flex;
+  grid-template-columns: 1fr 1fr; /* Creates two equal-width columns */
+  gap: 0 30px;
+  align-items: start; /* This is the new line that fixes the alignment */
+}
+
+.form-col {
+  flex: 1 1 45%;
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  font-weight: 300;
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+input, select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: var(--input-bg);
+  margin-bottom: 15px;
+  font-size: 15px;
+  color: var(--input-text);
+}
+
+
+
+[data-theme="dark"] input,
+[data-theme="dark"] select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+}
+
+/* Read-only input styling */
+input[readonly] {
+  background-color: var(--bg);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+[data-theme="dark"] input[readonly] {
+  background-color: #383838;
+}
+
+/* General Section and Title Styling */
+.section {
+  padding: 5px;
+}
+
+.page-title {
+  font-size: 1.6em;
+  margin-bottom: 20px;
+  color: var(--highlight);
+  text-align: center;
+}
+
+/* Form Grid for Post Payment and View Customers Search */
+.form-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: self-start;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 180px; /* Keep this for now, but be aware it can cause wrapping issues on very small screens */
+}
+
+.form-grid input {
+  max-width: none;
+}
+
+.customer-info {
+  margin-top: 16px;
+  font-size: 15px;
+  padding: 12px;
+  color: var(--highlight);
+  background: transparent;
+  border-left: 4px solid var(--highlight);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.action-buttons {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Neumorphic Raised Blocks */
+.raised-box {
+  background: var(--sidebar);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 30px;
+  box-shadow: 8px 8px 16px #d1d1d1, -8px -8px 16px #ffffff;
+}
+
+[data-theme="dark"] .raised-box {
+  box-shadow: 9px 9px 16px #2b2b2b, -9px -9px 16px #404040;
+}
+
+/* Table Enhancements */
+.scroll-table-container {
+  overflow-y: auto; /* Changed to auto for vertical scrolling */
+  overflow-x: auto; /* Allows horizontal scroll if content overflows */
+  padding: 0px;
+  background-color: var(--sidebar);
+  border-radius: 12px;
+}
+
+#tempTable, #customerTable {
+  width: 100%; /* Ensure table takes full width of its container */
+  border-collapse: collapse;
+  font-size: 15px;
+  background: transparent;
+  color: var(--text);
+  table-layout: fixed; /* Crucial: Distributes column widths evenly based on defined widths */
+}
+
+#tempTable th, #tempTable td,
+#customerTable th, #customerTable td {
+  padding: 10px 12px;
+  border: 1px solid var(--highlight);
+  text-align: center;
+  white-space: normal; /* Allow text wrapping */
+  word-wrap: break-word; /* Allows long words to break and wrap */
+  overflow: hidden; /* Hide overflowing content if word-wrap isn't enough */
+  text-overflow: ellipsis; /* Add ellipsis for overflowing text */
+}
+
+/* Specific Column Widths for #customerTable (Adjust as needed, these are examples) */
+#customerTable th:nth-child(1), /* Checkbox */
+#customerTable td:nth-child(1) {
+  width: 3%;
+}
+
+#customerTable th:nth-child(2), /* ANO */
+#customerTable td:nth-child(2) {
+  width: 7%;
+}
+
+#customerTable th:nth-child(3), /* NAME */
+#customerTable td:nth-child(3) {
+  width: 15%;
+}
+
+#customerTable th:nth-child(4), /* ADD1 */
+#customerTable td:nth-child(4) {
+  width: 15%;
+}
+
+#customerTable th:nth-child(5), /* ADD2 */
+#customerTable td:nth-child(5) {
+  width: 5%;
+}
+
+#customerTable th:nth-child(6), /* ADD3 */
+#customerTable td:nth-child(6) {
+  width: 5%;
+}
+
+#customerTable th:nth-child(7), /* FDT (Loan Start Date) */
+#customerTable td:nth-child(7) {
+  width: 9%;
+}
+
+#customerTable th:nth-child(8), /* TDT (Loan End Date) */
+#customerTable td:nth-child(8) {
+  width: 9%;
+}
+
+#customerTable th:nth-child(9), /* AMT (Loan Amount) */
+#customerTable td:nth-child(9) {
+  width: 7%;
+}
+
+#customerTable th:nth-child(10), /* PAMT (Paid Amount) */
+#customerTable td:nth-child(10) {
+  width: 7%;
+}
+
+#customerTable th:nth-child(11), /* BAMT (Balance Amount) */
+#customerTable td:nth-child(11) {
+  width: 7%;
+}
+
+#customerTable th:nth-child(12), /* DA (Daily/Weekly Amount) */
+#customerTable td:nth-child(12) {
+  width: 5%;
+}
+
+#customerTable th:nth-child(13), /* DW (Daily/Weekly) */
+#customerTable td:nth-child(13) {
+  width: 4%;
+}
+
+#customerTable th:nth-child(14), /* DS (Duration) */
+#customerTable td:nth-child(14) {
+  width: 4%;
+}
+
+#customerTable th:nth-child(15), /* PANO */
+#customerTable td:nth-child(15) {
+  width: 5%;
+}
+
+.customer-table thead th {
+    background-color: var(--highlight) !important;
+    color: white !important;
+    font-weight: bold !important;
+        /* Ensure DataTables sort icons are visible and clickable */
+    background-position: right center !important; /* Forces icon position */
+    background-repeat: no-repeat !important; /* Ensures icon is not repeated */
+    padding-right: 20px !important; /* Makes space for the icon */
+    cursor: pointer !important; /* Ensures cursor is pointer */
+}
+
+
+/* === Light Mode Table Styles === */
+
+/* Ensures all table text is readable in light mode */
+table.dataTable tbody tr {
+  color: var(--text);
+}
+
+/* DataTables Dark Mode Overrides */
+[data-theme="dark"] .dataTables_wrapper {
+  color: var(--text); /* Text color for DataTables wrapper */
+}
+
+[data-theme="dark"] .dataTables_length label,
+[data-theme="dark"] .dataTables_filter label,
+[data-theme="dark"] .dataTables_info {
+  color: var(--text); /* Text color for length, filter, info labels */
+}
+
+[data-theme="dark"] .dataTables_length select,
+[data-theme="dark"] .dataTables_filter input {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+}
+
+[data-theme="dark"] .dataTables_paginate .paginate_button {
+  background-color: var(--sidebar); /* Background for pagination buttons */
+  color: var(--text) !important; /* Text color for pagination buttons */
+  border: 1px solid var(--input-border);
+  box-shadow: 2px 2px 4px #2b2b2b, -2px -2px 4px #404040;
+}
+
+[data-theme="dark"] .dataTables_paginate .paginate_button.current,
+[data-theme="dark"] .dataTables_paginate .paginate_button.current:hover {
+  background-color: var(--highlight); /* Highlight for current page button */
+  color: white !important;
+  box-shadow: inset 2px 2px 4px #2a2a2a, inset -2px -2px 4px #3d3d3d;
+}
+
+[data-theme="dark"] .dataTables_paginate .paginate_button.disabled {
+  color: #888 !important; /* Disabled pagination button color */
+  background-color: #2c2c2c;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .dataTables_paginate .paginate_button:hover:not(.disabled) {
+  background-color: var(--highlight); /* Hover for pagination buttons */
+  color: white !important;
+}
+
+/* Dark mode styles for the table body and cells */
+[data-theme="dark"] #tempTable,
+[data-theme="dark"] #customerTable {
+  background-color: var(--sidebar); /* Ensure the main table background is dark */
+  color: var(--text); /* Ensure table text is light */
+  border-color: var(--input-border); /* Darken table borders */
+}
+
+[data-theme="dark"] #tempTable th, [data-theme="dark"] #tempTable td,
+[data-theme="dark"] #customerTable th, [data-theme="dark"] #customerTable td {
+  border-color: var(--input-border); /* Darken cell borders */
+}
+
+[data-theme="dark"] #tempTable tbody tr,
+[data-theme="dark"] #customerTable tbody tr {
+  background-color: var(--sidebar); /* Default row background */
+  color: var(--text);
+}
+
+/* Unifies dark mode table row colors to remove zebra-striping */
+[data-theme="dark"] table.dataTable tbody tr.odd,
+[data-theme="dark"] table.dataTable tbody tr.even {
+  background-color: var(--sidebar);
+}
+
+[data-theme="dark"] #tempTable tbody tr:hover,
+[data-theme="dark"] #customerTable tbody tr:hover {
+  background-color: #3a3a3a; /* Hover effect for rows */
+}
+
+
+#tempTable tfoot td {
+  font-weight: bold;
+  background-color: var(--sidebar);
+  color: var(--highlight);
+  border-top: 2px solid var(--highlight);
+}
+
+[data-theme="dark"] #tempTable tfoot td {
+  background-color: #333;
+}
+
+/* Highlight edited cells */
+.highlighted {
+  background-color: rgb(199, 93, 93);
+}
+
+[data-theme="dark"] .highlighted {
+  background-color: rgb(120, 60, 60);
+  color: #fff;
+}
+
+/* Message Styling (for success/error messages) */
+.message-box {
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.message-box.error {
+  background-color: #ffe6e6;
+  border: 1px solid #ff4d4d;
+  color: #cc0000;
+}
+
+.message-box.success {
+  background-color: #e6ffe6;
+  border: 1px solid #4dff4d;
+  color: #008000;
+}
+
+[data-theme="dark"] .message-box.error {
+  background-color: #5c0000;
+  border-color: #ff4d4d;
+  color: #ffcccc;
+}
+
+[data-theme="dark"] .message-box.success {
+  background-color: #004d00;
+  border-color: #4dff4d;
+  color: #ccffcc;
+}
+
+/* DataTables specific adjustments */
+/* Hide DataTables length and filter controls when inside .raised-box */
+.raised-box .dataTables_length,
+.raised-box .dataTables_filter {
+  display: none;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    margin-left: 0.5em;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+/* Dark mode styles for sorted DataTables columns */
+[data-theme="dark"] #tempTable th.sorting_asc,
+[data-theme="dark"] #tempTable th.sorting_desc,
+[data-theme="dark"] #customerTable th.sorting_asc,
+[data-theme="dark"] #customerTable th.sorting_desc {
+  background-color: var(--highlight); /* Use your highlight color for sorted header */
+  color: white; /* Ensure text is white on highlight */
+}
+
+[data-theme="dark"] #tempTable td.sorting_1,
+[data-theme="dark"] #customerTable td.sorting_1 {
+  background-color: #3a3a3a; /* A slightly lighter shade for the sorted column cells */
+  color: var(--text); /* Ensure text is light */
+}
+
+
+/* Summary Row Styling */
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around; /* Distribute items with space around them */
+  gap: 15px; /* Space between summary items */
+  /*margin-top: 20px;*/ /* Space above the summary row */
+  padding-top: 15px; /* Padding above the content inside the summary row */
+  border-top: 1px solid var(--input-border); /* A subtle separator */
+}
+
+[data-theme="dark"] .summary-row {
+  border-top-color: #555; /* Darker border in dark mode */
+}
+
+.summary-item {
+  flex: 1 1 auto; /* Allow items to grow and shrink, but not force wrap too early */
+  min-width: 150px; /* Minimum width for each item before wrapping */
+  text-align: center;
+  font-size: 0.95em;
+  padding: 8px 0;
+  background-color: var(--bg); /* Use background color for each item */
+  border-radius: 8px;
+  box-shadow: inset 2px 2px 5px #d1d1d1, inset -2px -2px 5px #ffffff; /* Inner shadow for neumorphic feel */
+  color: var(--text);
+}
+
+[data-theme="dark"] .summary-item {
+  background-color: #383838; /* Darker background for items in dark mode */
+  box-shadow: inset 2px 2px 5px #2b2b2b, inset -2px -2px 5px #404040;
+  color: var(--text);
+}
+
+.summary-item strong {
+  color: var(--highlight); /* Highlight the labels */
+  display: block; /* Make strong tag block to put value on new line */
+  margin-bottom: 4px;
+}
+
+.summary-item span {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+
+/* --- New styles for Search Customer page --- */
+
+/* Specific styling for editable table cells */
+#customerTable td[data-field] input,
+#paymentTable td[data-field] input {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+/* Highlight edited cells */
+.highlighted {
+  background-color: rgb(199, 93, 93) !important; /* Use a theme variable for consistency */
+  box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1), inset -1px -1px 3px rgba(255,255,255,0.2);
+}
+
+[data-theme="dark"] .highlighted {
+  background-color: rgb(120, 60, 60) !important; /* Use a theme variable for consistency */
+  box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1), inset -1px -1px 3px rgba(255,255,255,0.2);
+}
+
+/* Delete button style for table rows */
+.delete-btn {
+  color: red;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.1em;
+  transition: transform 0.2s ease;
+}
+
+.delete-btn:hover {
+  transform: scale(1.2);
+}
+
+/* Adjustments for DataTables within the new structure */
+#customerTable, #paymentTable {
+  /* Inherit general table styles, but ensure background is appropriate */
+  background-color: var(--raised-box-bg); /* Use a relevant variable if available, otherwise #fff */
+  color: var(--text);
+  /* margin-top: 20px; Consistent margin */
+}
+
+#customerTable th, #customerTable td,
+#paymentTable th, #paymentTable td,
+#postingTable th, #postingTable td {
+  padding: 10px;
+  text-align: center;
+  border: 1px solid var(--input-border); /* Use a theme variable for borders */
+}
+
+/* Footer styling for payment table */
+#paymentTable tfoot td,
+#postingTable tfoot td {
+  font-weight: bold;
+  background-color: var(--input-bg); /* Match input background for footer cells */
+  border-top: 2px solid var(--highlight); /* Stronger border for separation */
+  color: var(--text);
+}
+
+th.nosort::after {
+  display: none !important;
+}
+
+
+/* Fix for DataTables default styles overriding our neumorphic/glass design */
+#paymentTable.dataTable tbody tr,
+#postingTable.dataTable tbody tr {
+    background: transparent !important;
+    color: var(--text) !important;
+    font-weight: normal !important;
+}
+
+#paymentTable.dataTable tbody td,
+#postingTable.dataTable tbody td {
+    background: transparent !important;
+}
+
+/* Remove zebra striping */
+/* Remove zebra striping from all tables in light mode */
+table.dataTable.stripe tbody tr.odd,
+table.dataTable.display tbody tr.odd,
+table.dataTable.stripe tbody tr.even,
+table.dataTable.display tbody tr.even {
+  background-color: transparent;
+}
+
+/* Optional: You can also hide sort icons if you don't like their look */
+#paymentTable thead th.sorting:after,
+#paymentTable thead th.sorting_asc:after,
+#paymentTable thead th.sorting_desc:after,
+#postingTable thead th.sorting:after,
+#postingTable thead th.sorting_asc:after,
+#postingTable thead th.sorting_desc:after {
+    opacity: 0.5;
+}
+
+#paymentTable.dataTable,
+#postingTable.dataTable {
+    font-family: inherit !important;
+    font-size: inherit !important;
+}
+
+
+
+/* Container for action buttons (e.g., Edit, Save) */
+.action-buttons {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  display: flex; /* Arrange buttons in a row */
+  gap: 10px; /* Space between buttons */
+}
+
+/* Form grid for add payment and search form for better layout */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Responsive columns */
+  gap: 15px; /* Space between form elements */
+  align-items: self-start; /* Align items to the bottom, useful for buttons */
+  margin-bottom: 0px;
+  padding-bottom: 0px;
+}
+
+.form-grid-ppr {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Responsive columns */
+  gap: 15px; /* Space between form elements */
+  align-items: center; /* Align items to the bottom, useful for buttons */
+  margin-bottom: 0px;
+  padding-bottom: 0px;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.form-grid input[type="text"],
+.form-grid input[type="date"],
+.form-grid input[type="number"] {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+
+/* --- Styles for Post Payment Report page --- */
+
+/* Filters container styling */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px; /* Space between filter elements */
+  align-items: center;
+  margin-bottom: 10px; /* Space below the filter row */
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column; /* Stack label and input vertically */
+  font-weight: 600;
+  color: var(--text);
+  gap: 5px; /* Space between label text and input */
+  margin-right: 0; /* Override default label margin */
+}
+
+.filters input[type="text"],
+.filters input[type="date"] {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  min-width: 150px; /* Ensure inputs have a reasonable width */
+}
+
+/* DataTables Button Styling (for export buttons) */
+.dt-buttons .dt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  padding: 8px 16px; /* Smaller padding for DataTables buttons */
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--sidebar);
+  box-shadow: 5px 5px 10px #d1d1d1, -5px -5px 10px #ffffff;
+  transition: 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 10px; /* Space between buttons */
+  margin-bottom: 10px; /* Ensure buttons don't clump */
+}
+
+[data-theme="dark"] .dt-buttons .dt-button {
+  background: var(--sidebar);
+  color: var(--text);
+  box-shadow: 5px 5px 10px #2b2b2b, -5px -5px 16px #404040;
+}
+
+.dt-buttons .dt-button:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.dt-buttons .dt-button:active {
+  transform: scale(0.98);
+  box-shadow: inset 5px 5px 10px #bebebe, inset -5px -5px 10px #ffffff;
+}
+
+[data-theme="dark"] .dt-buttons .dt-button:active {
+  box-shadow: inset 5px 5px 10px #2a2a2a, inset -5px -5px 10px #3d3d3d;
+}
+
+/* Adjust DataTables elements for better integration */
+.dataTables_wrapper .dt-buttons {
+  margin-bottom: 15px; /* Space below the buttons */
+  text-align: right; /* Align buttons to the right */
+}
+
+/* Ensure footer totals are visible and styled */
+#pamtTable tfoot td {
+  font-weight: bold;
+  background-color: var(--sidebar); /* Consistent with other footers */
+  color: var(--highlight);
+  border-top: 2px solid var(--highlight);
+}
+
+[data-theme="dark"] #pamtTable tfoot td {
+  background-color: #333;
+}
+
+
+#reportTable thead th {
+  background: #d4af37;
+  color: black;
+  padding: 12px;
+  font-weight: bold;
+  text-align: left;
+}
+
+#reportTable tbody td {
+  padding: 10px;
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#reportTable tfoot td {
+  padding: 10px;
+  font-weight: bold;
+  color: #ffd700;
+  background-color: transparent;
+}
+
+
+/* Ensure highlighted-row applies correctly across all tables, including DataTables with transparent backgrounds */
+table tbody tr.highlighted-row, /* General rule for all tables */
+#paymentTable tbody tr.highlighted-row, /* Specific for paymentTable */
+#postingTable tbody tr.highlighted-row { /* Specific for postingTable */
+  background-color: rgb(199, 93,93) !important;
+}
+[data-theme="dark"] table tbody tr.highlighted-row,
+[data-theme="dark"] #paymentTable tbody tr.highlighted-row,
+[data-theme="dark"] #postingTable tbody tr.highlighted-row {
+  background-color: rgb(120, 60, 60) !important;
+}
+
+
+.highlighted-family {
+  background-color: rgb(199, 93,93) !important;
+}
+[data-theme="dark"] .highlighted-family {
+  background-color: rgb(120, 60, 60) !important;
+}
+
+/* CALENDAR CSS */
+
+/* --- Custom Calendar Styles --- */
+.calendar-wrapper {
+  display: none; /* Hidden by default */
+  position: absolute;
+  z-index: 1000;
+  background: var(--sidebar);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 8px 8px 16px #d1d1d1, -8px -8px 16px #ffffff;
+  width: 320px;
+  user-select: none;
+}
+
+[data-theme="dark"] .calendar-wrapper {
+  box-shadow: 9px 9px 16px #2b2b2b, -9px -9px 16px #404040;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.calendar-header .month-display {
+  font-weight: 600;
+  font-size: 1.1em;
+  color: var(--text);
+}
+
+.calendar-header .nav-arrow {
+  background: transparent;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.calendar-header .nav-arrow:hover {
+  background-color: var(--bg);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.calendar-grid > div {
+  text-align: center;
+  padding: 10px 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.calendar-day-name {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--highlight);
+  cursor: default !important;
+}
+
+.calendar-day {
+  color: var(--text);
+}
+
+.calendar-day:hover {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.calendar-day.other-month {
+  color: #aaa;
+  opacity: 0.5;
+}
+
+[data-theme="dark"] .calendar-day.other-month {
+    color: #888;
+}
+
+.calendar-day.selected {
+  background-color: var(--highlight);
+  color: white;
+  font-weight: bold;
+}
+
+.calendar-day.today {
+  border: 2px solid var(--highlight);
+}
+
+
+.calendar-icon {
+    cursor: pointer;
+    margin-left: 5px;
+  }
+
+.date-input {
+    width: 120px;
+  }
+
+/* --- Styles for Date Input with Icon --- */
+.date-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.date-input-wrapper input {
+  padding-right: 40px !important; /* Make space for the icon */
+  width: 100%;
+}
+
+.date-input-wrapper .calendar-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-80%);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 1.2em;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.date-input-wrapper .calendar-icon:hover {
+  opacity: 1;
+}
+
+
+/* --- On-Screen Calculator Styles --- */
+.calculator-wrapper {
+  display: none; /* Hidden by default */
+  position: fixed;
+  top: 45%;
+  left: 90%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  background: var(--sidebar);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 10px 10px 20px rgba(0,0,0,0.2);
+  z-index: 1001;
+  user-select: none;
+}
+
+[data-theme="dark"] .calculator-wrapper {
+  box-shadow: 10px 10px 20px rgba(0,0,0,0.4);
+}
+
+.calculator-header {
+  padding: 10px;
+  cursor: move;
+  text-align: center;
+  font-weight: bold;
+  color: var(--highlight);
+  background-color: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.calculator-display {
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+.calculator-display input {
+  width: 100%;
+  background: var(--bg);
+  border: none;
+  color: var(--highlight); /* Gold text */
+  font-size: 2.5em;
+  text-align: right;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: inset 4px 4px 8px #d1d1d1, inset -4px -4px 8px #ffffff;
+}
+
+[data-theme="dark"] .calculator-display input {
+  box-shadow: inset 4px 4px 8px #2b2b2b, inset -4px -4px 8px #404040;
+}
+
+.calculator-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.calculator-keys button {
+  border: none;
+  border-radius: 15px;
+  padding: 20px;
+  font-size: 1.2em;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--sidebar);
+  color: var(--text);
+  box-shadow: 6px 6px 12px #d1d1d1, -6px -6px 12px #ffffff;
+  transition: all 0.1s ease-in-out;
+}
+
+[data-theme="dark"] .calculator-keys button {
+  box-shadow: 6px 6px 12px #2a2a2a, -6px -6px 12px #3c3c3c;
+}
+
+.calculator-keys button:active {
+  box-shadow: inset 5px 5px 10px #bebebe, inset -5px -5px 10px #ffffff;
+  transform: scale(0.98);
+}
+
+[data-theme="dark"] .calculator-keys button:active {
+  box-shadow: inset 5px 5px 10px #2a2a2a, inset -5px -5px 10px #3d3d3d;
+}
+
+.calculator-keys .key-op {
+  color: var(--highlight);
+}
+
+.calculator-keys .key-equal {
+  background-color: var(--highlight);
+  color: white;
+}
+
+.calculator-keys .key-zero {
+  grid-column: span 2;
+}
+
+/* --- Styles for Top-Right Info Box --- */
+.form-glass {
+  position: relative;
+}
+
+.info-box-top-right {
+  position: absolute;
+  top: 25px;
+  right: 25px;
+  padding: 8px 12px;
+  background-color: var(--bg);
+  border-radius: 12px;
+  box-shadow: inset 2px 2px 5px #d1d1d1, inset -2px -2px 5px #ffffff;
+  color: var(--text);
+  font-size: 0.9em;
+  text-align: center;
+}
+
+[data-theme="dark"] .info-box-top-right {
+  box-shadow: inset 2px 2px 5px #2b2b2b, inset -2px -2px 5px #404040;
+}
+
+.info-box-top-right strong {
+  color: var(--highlight);
+  margin-right: 5px;
+}
+
+/* Sets a light grey background for table rows on hover in light mode */
+#customerTable tbody tr:hover,
+#paymentTable tbody tr:hover,
+#postingTable tbody tr:hover {
+    background-color: #BBA14F;
+}
+
+
+/* Styling for the info message on the add customer page */
+.info-message {
+  font-size: 0.9em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: #e6f7ff; /* Light blue background */
+  border: 1px solid #91d5ff;  /* Blue border */
+  color: #0d47a1; /* Darker blue text for readability */
+}
+
+/* Dark mode version of the message box */
+[data-theme="dark"] .info-message {
+    background-color: #1a2c3a;
+    border-color: #007bff;
+    color: #a6d8ff;
+}
+
+
+/* --- Styles for Parent Info Tooltip --- */
+.parent-info-tooltip {
+  display: none; /* Hidden by default */
+  position: absolute;
+  background-color: rgb(40, 91, 125); /* Gold background for visibility */
+  color: white; /* White text for contrast */
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 10; /* Ensure it's above other elements */
+  font-size: 0.9em;
+  max-width: 500px; /* Limit width */
+  text-align: center;
+  pointer-events: none; /* Allows clicks to pass through to elements behind it */
+  /* REMOVED: transform: translateX(-50%); */
+  /* left: 50%;  This can be removed as JS will set 'left' dynamically */
+}
+
+/* Dark mode adjustments for tooltip */
+[data-theme="dark"] .parent-info-tooltip {
+    background-color: rgb(104, 145, 173); /* Use highlight color */
+    color: white;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+
+.summary-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 20px;
+  font-size: 14px;
+  color: #5ab4cd;
+}
+
+#tempTable td.amount-paid, .amount-paid  {
+    color: #BBA14F;
+    font-weight: bold;
+}
+
+
+  #selectionSummaryPopup {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #2b2b2b;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    font-size: 14px;
+    z-index: 9999;
+    opacity: 0.95;
+    pointer-events: none;
+  }
+  .highlighted-row {
+    background-color: #d4af37 !important;
+    color: #000;
+  }
+
+
+.cumulative-amt {
+  font-weight: bold;
+  color: #469f4a;
+}
+
+.rupee-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.rupee-symbol {
+    position: absolute;
+    left: 10px;
+    font-size: 14px;
+    color: #666;
+}
+
+.rupee-input-wrapper input {
+    padding-left: 20px; /* Make space for ₹ symbol */
+}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+  <div class="summary-row">
+    <div class="summary-item">
+      <strong>Total Customers:</strong> <span id="totalCustomers">{{ total_customers }}</span>
+    </div>
+    <div class="summary-item">
+      <strong>Total Loan Amt:</strong> <span id="sumAmt" data-money>{{ sum_amt }}</span>
+    </div>
+    <div class="summary-item">
+      <strong>Total Paid Amt:</strong> <span id="sumPamt" data-money>{{ sum_pamt }}</span>
+    </div>
+    <div class="summary-item">
+      <strong>Total Balance Amt:</strong> <span id="sumBamt" data-money>{{ sum_bamt }}</span>
+    </div>
+  </div>
+{% endblock %}

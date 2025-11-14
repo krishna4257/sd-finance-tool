@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Customer Print Sheet</title>
+<style>
+    /* Global print styles */
+    @page {
+        size: A4 portrait;
+        margin: 5mm; /* Reduced margin */
+    }
+
+    html, body {
+        font-family: 'Arial', sans-serif;
+        background: #fff;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        display: block;
+        justify-content: none;
+        align-items: none;
+        padding: 5mm; /* Added a small padding to the body */
+    }
+
+    /* Main container for print content */
+    .print-container {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Headers */
+    h1 {
+        text-align: center;
+        font-size: 12pt; /* Reduced font size */
+        margin-bottom: 8pt; /* Reduced margin */
+        padding-top: 5pt;
+    }
+
+    .details-section {
+        margin-bottom: 10pt; /* Reduced margin */
+    }
+
+    .details-section h2 {
+        font-size: 12pt; /* Reduced font size */
+        margin-bottom: 5pt; /* Reduced margin */
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 2pt;
+    }
+
+    /* Details Grid for customer and loan info */
+    .details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120mm, 1fr));
+        gap: 2pt 5mm; /* Reduced gap */
+        font-size: 12pt; /* Reduced font size */
+    }
+
+    /* Loan Table */
+    .loan-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12pt; /* Reduced font size */
+        margin-top: 8pt;
+    }
+
+    .loan-table th, .loan-table td {
+        border: 1px solid #ccc;
+        padding: 3pt 5pt; /* Reduced padding */
+        text-align: left;
+    }
+
+    .loan-table th {
+        background-color: #f0f0f0;
+    }
+
+    /* Print-specific styles */
+    @media print {
+        body {
+            background: white;
+            padding: 0;
+        }
+
+        .print-container {
+            box-shadow: none;
+            margin: 0;
+            width: 100%;
+        }
+
+        /* This rule helps prevent blank pages */
+        .print-container, .details-section, .loan-table {
+            page-break-inside: avoid;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 5mm;
+        }
+
+        body::after {
+            counter-increment: page;
+            content: "Page " counter(page) " of " counter(pages);
+            position: fixed;
+            bottom: 3mm;
+            right: 5mm;
+            font-size: 12pt;
+            color: #666;
+        }
+    }
+</style>
+</head>
+<body>
+  <div class="print-container">
+    <h1>Customer Loan Details</h1>
+
+    <div class="details-section">
+      <h2>Personal Information</h2>
+      <div class="details-grid">
+        <div><strong>Account No:</strong> {{ customer.ano }}</div>
+        <div><strong>Name:</strong> {{ customer.name }}</div>
+        <div><strong>Village Name:</strong> {{ customer.village }}</div>
+      </div>
+    </div>
+
+    <div class="details-section">
+      <h2>Loan Information</h2>
+      <div class="details-grid">
+        <div><strong>Loan Start Date:</strong> {{ customer.fdt }}</div>
+        <div><strong>Loan End Date:</strong> {{ customer.tdt }}</div>
+        <div><strong>Loan Amount:</strong> ₹{{ "{:,.2f}".format(customer.amt|float) }}</div>
+        <div><strong>Amount Paid:</strong> ₹{{ "{:,.2f}".format(customer.pamt|float) }}</div>
+        <div><strong>Balance Amount:</strong> ₹{{ "{:,.2f}".format(customer.bamt|float) }}</div>
+        <div><strong>Weekly Amount:</strong> ₹{{ "{:,.2f}".format(customer.da|float) }}</div>
+        <div><strong>Duration:</strong> {{ customer.ds }} Weeks</div>
+      </div>
+    </div>
+
+    <div class="details-section">
+    <h2>Payment History</h2>
+    <table class="loan-table">
+        <thead>
+        <tr>
+            <th>Payment Date</th>
+            <th>Amount (₹)</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% set total = 0 %}
+        {% set count = 0 %}
+        {% for payment in payments %}
+            {% set amount = payment.amt | float %}
+            {% set total = total + amount %}
+            {% set count = count + 1 %}
+            <tr>
+            <td>{{ payment.pdt }}</td>
+            <td>₹{{ "{:,.2f}".format(amount) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section">
+  <h2 class="page-title">💰 Post Payments</h2>
+
+  <!-- Raised Form Box -->
+  <div class="raised-box">
+    <form id="paymentForm" class="form-grid">
+      <label><input type="text" id="pdt" placeholder="dd/mm/yyyy" required></label>
+      <label><input type="text" id="ano" placeholder="Account Number" required></label>
+      <label><input type="number" id="amt" step="0.01" placeholder="Amount" required></label>
+      <button class="neumorphic-btn small" type="submit" id="submitBtn">➕ Add</button>
+    </form>
+    <div class="summary-top">
+      <span><strong>Total Acc Numbers:</strong> <span id="totalAnotop">0</span></span>
+      &nbsp;&nbsp;
+      <span><strong>Total Amount:</strong> <span id="totalAmttop" data-money>0.00</span></span>
+    </div>
+
+    <div class="message-box error" id="errorMsg" style="display: none;"></div>
+
+    <div id="customerInfo"></div>
+      <div class="summary-row">
+        <div class="summary-item"><strong>Name:</strong> <span id="customerName"></span></div>
+        <div class="summary-item"><strong>Amount Given:</strong> <span id="customerLoanAmount" data-money></span></div>
+        <div class="summary-item"><strong>Amount Repaid:</strong> <span id="customerTotalRepaid" data-money></span></div>
+        <div class="summary-item"><strong>Outstanding:</strong> <span id="customerOutstanding" data-money></span></div>
+        <div class="summary-item"><strong>EMI AMOUNT:</strong> <span id="customerInstallmentAmount" data-money></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raised Table Box -->
+  <div class="raised-box">
+    <!-- <h3>📋 Temporary Payment Table</h3> -->
+    <div class="scroll-table-container">
+      <table id="tempTable" class="dataTable customer-table">
+        <thead>
+          <tr>
+            <th>Account Number <button onclick="sortTemp('ano')">⇅</button></th>
+            <th>Payment Date <button onclick="sortTemp('pdt')">⇅</button></th>
+            <th class="amount-paid">Amount Paid <button onclick="sortTemp('amt')">⇅</button></th>
+            <th>Cumulative Amount</th>
+            <th>Edit</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td><strong>Total Acc Number's:</strong> <span id="totalAno">0</span></td>
+            <td></td>
+            <td><strong>Total Amount:</strong> <span id="totalAmt" data-money>0.00</span></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="action-buttons">
+      <button class="neumorphic-btn small" onclick="printTemp()">🖸️ Print Table</button>
+      <button class="neumorphic-btn small" onclick="submitAllPayments()">📤 Submit All Payments</button>
+      <button class="neumorphic-btn small" onclick="resetTempTable()">🗑️ Reset Table</button>
+    </div>
+
+    <div id="successMsg" class="message-box success" style="display: none;"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/post_payment.js') }}"></script>
+{% endblock %}

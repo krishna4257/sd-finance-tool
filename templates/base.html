@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <div id="selectionSummaryPopup" style="display:none;">
+  <span id="selectedCount">0</span> rows selected — Total: ₹<span id="selectedTotal">0.00</span>
+  </div>
+<head>
+
+  <style>
+    html { visibility: hidden; }
+  </style>
+  <script>
+    (function() {
+      try {
+        const theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+      document.documentElement.style.visibility = 'visible';
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SD Finance</title>
+  <!-- Add the Favicon -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/fin_icon.png') }}">
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css"/>
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.dataTables.min.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.3.6/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.print.min.js"></script>
+  <!-- Load shared utilities first so that other scripts can access
+       global helper functions. utils.js defines parseDDMMYYYY,
+       formatDateToDDMMYYYY, currency formatting and DataTables
+       extensions. -->
+  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+
+  <!-- Main site-wide script -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="{{ url_for('static', filename='js/calculator.js') }}"></script>
+
+
+  <script>
+    (function() {
+      try {
+        const theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const themeToggle = document.getElementById('theme-toggle');
+      
+      // 1. Set the toggle switch to the correct state on page load
+      const currentTheme = localStorage.getItem('theme') || 'dark';
+      if (currentTheme === 'dark') {
+        themeToggle.checked = true;
+      }
+
+      // 2. Add a listener to change the theme when the toggle is clicked
+      themeToggle.addEventListener('change', () => {
+        const selectedTheme = themeToggle.checked ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', selectedTheme);
+        localStorage.setItem('theme', selectedTheme);
+      });
+    });
+  </script>
+
+  <script>
+    // Auto-slash for dd/mm/yyyy
+    document.getElementById('newPDT').addEventListener('input', function(e) {
+      let input = e.target.value.replace(/\D/g, ''); // Remove non-digits
+      if (input.length >= 3 && input.length <= 4)
+        input = input.slice(0,2) + '/' + input.slice(2);
+      else if (input.length > 4)
+        input = input.slice(0,2) + '/' + input.slice(2,4) + '/' + input.slice(4,8);
+      e.target.value = input;
+    });
+
+    // Attach flatpickr
+    flatpickr("#newPDT", {
+      dateFormat: "d/m/Y",
+      allowInput: true,
+      clickOpens: true,
+      defaultDate: "today",
+      wrap: false
+    });
+  </script>
+</head>
+
+<body>
+  <aside>
+    <div class="logo-container" href="dashboard.html">
+     <a href="/dashboard"> <img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"> </a>
+    </div>
+    <a class="neumorphic-btn" href="/dashboard">🏠 Dashboard</a>
+    <a class="neumorphic-btn" href="/add_customer">➕ Add Customer</a>
+    <a class="neumorphic-btn" href="/post_payment">💰 Post Payment</a>
+    <a class="neumorphic-btn" href="/view_customers">👁️ All Customers</a>
+    <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
+    <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
+  </aside>
+
+  <main>
+    <header>
+      <!-- Village Selector / Active Display -->
+            {% if not selected_file %}
+            <form method="POST" action="/dashboard" class="village-select-form">
+                <label for="village_db"><strong>Village:</strong></label>
+                <select name="village_db" id="village_db" required>
+                    <option value="">-- Select a file --</option>
+                    {% for file in files %}
+                    <option value="{{ file }}">{{ file }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="neumorphic-btn">Set</button>
+            </form>
+            <button onclick="openCreateVillageModal()" class="neumorphic-btn-h">➕ Create Village</button>
+            {% else %}
+      <div>
+        <strong>Active Village:</strong> {{ village_name or "Unknown" }}
+        <form method="POST" action="/reselect_village" style="display: inline;">
+          <button type="submit" class="neumorphic-btn-h">🔄 Reselect</button>
+        </form>
+
+        <button onclick="openEditVillageModal()" class="neumorphic-btn-h">✏️ Edit Village Name</button>
+
+      </div>
+      {% endif %}
+
+      <!-- Dark Mode Toggle -->
+      <div class="theme-switch-wrapper">
+
+
+      <!-- ADD THE CALCULATOR ICON BUTTON HERE -->
+      <button id="calculatorToggleBtn" class="neumorphic-btn" style="margin-left: auto;">
+        <i class="fas fa-calculator"></i>
+      </button>
+      <!-- END OF ADDITION -->
+
+        <label class="theme-switch">
+          <input type="checkbox" id="theme-toggle">
+          <span class="slider">
+            <span class="icon sun">☀️</span>
+            <span class="icon moon">🌙</span>
+          </span>
+        </label>
+      </div>
+    </header>
+
+    <div id="main-content">
+      {% block content %}{% endblock %}
+    </div>
+
+
+
+    <div id="editVillageModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <span onclick="closeEditVillageModal()" class="close-btn">×</span>
+        <h3>Change Village Name</h3>
+        <input type="text" id="newVillageName" placeholder="Enter new village name">
+        <button onclick="submitVillageNameChange()" class="neumorphic-btn">Change Village Name</button>
+      </div>
+    </div>
+
+    <div id="createVillageModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <span onclick="closeCreateVillageModal()" class="close-btn">×</span>
+        <h3>Create New Village Database</h3>
+        <input type="text" id="villageNumber" placeholder="Village Number (e.g. 22)">
+        <input type="text" id="villageName" placeholder="Village Name">
+        <button onclick="submitCreateVillage()" class="neumorphic-btn">Create Village</button>
+      </div>
+    </div>
+
+    <!-- ON-SCREEN CALCULATOR HTML -->
+    <div id="appCalculator" class="calculator-wrapper">
+      <div class="calculator-header">Drag Me</div>
+      <div class="calculator-display">
+        <input type="text" id="calculatorDisplay" readonly />
+      </div>
+      <div class="calculator-keys">
+        <button data-key="clear" class="key-op">C</button>
+        <button data-key="backspace" class="key-op">⌫</button>
+        <button data-key="%" class="key-op">%</button>
+        <button data-key="/" class="key-op">÷</button>
+
+        <button data-key="7">7</button>
+        <button data-key="8">8</button>
+        <button data-key="9">9</button>
+        <button data-key="*" class="key-op">×</button>
+
+        <button data-key="4">4</button>
+        <button data-key="5">5</button>
+        <button data-key="6">6</button>
+        <button data-key="-" class="key-op">−</button>
+
+        <button data-key="1">1</button>
+        <button data-key="2">2</button>
+        <button data-key="3">3</button>
+        <button data-key="+" class="key-op">+</button>
+
+        <button data-key="0" class="key-zero">0</button>
+        <button data-key=".">.</button>
+        <button data-key="=" class="key-op key-equal">=</button>
+      </div>
+    </div>
+
+  </main>
+  <!-- CUSTOM CALENDAR POP-UP HTML -->
+    <div id="customCalendar" class="calendar-wrapper">
+      <div class="calendar-header">
+        <button id="prevMonth" class="nav-arrow">&lt;</button>
+        <span id="monthDisplay" class="month-display"></span>
+        <button id="nextMonth" class="nav-arrow">&gt;</button>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

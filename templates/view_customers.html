@@ -1,0 +1,61 @@
+{% extends "dashboard.html" %}
+{% block content %}
+<h2 class="page-title">👁️ View Customers (LOANEE Table)</h2>
+
+<div class="raised-box">
+  <div class="control-row">
+    <label class="search-label">
+      <input type="text" id="searchBox" placeholder="Type account number or name...">
+    </label>
+    <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
+    <button onclick="applyParentSearch()" class="neumorphic-btn">📂 Parent Search</button>
+    <button onclick="filterYearlyReport()" class="neumorphic-btn">📅 Yearly Report</button>
+    <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
+    <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-item"><strong>Total Customers:</strong> <span id="totalCustomers">{{ total_customers }}</span></div>
+    <div class="summary-item"><strong>Total Loan Amount:</strong> <span id="sumAmt" data-money>{{ sum_amt }}</span></div>
+    <div class="summary-item"><strong>Total Paid Amount:</strong> <span id="sumPamt" data-money>{{ sum_pamt }}</span></div>
+    <div class="summary-item"><strong>Total Balance Amount:</strong> <span id="sumBamt" data-money>{{ sum_bamt }}</span></div>
+  </div>
+</div>
+
+<div class="raised-box scroll-table-container">
+  <table id="customerTable" class="dataTable customer-table"  style="width:100%;">
+    <thead>
+      <tr>
+        <th><input type="checkbox" onclick="toggleAll(this)" /></th>
+        {% for header in headers %}
+        <th>{{ header }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody id="customerTableBody">
+      {% for row in data %}
+      <tr data-ano="{{ row[0] }}">
+        <td><input type="checkbox" /></td>
+        {% for cell in row %}
+          {% set i = loop.index0 %}
+          {% set col = headers[i] %}
+          {% if col in ["AMT", "PAMT", "BAMT", "DA"] %}
+            <td class="{{ 'amount-paid' if col == 'BAMT' else '' }}" data-money>{{ cell }}</td>
+          {% else %}
+            <td>{{ cell }}</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="loader" id="dataLoader" style="display: none;">
+    <p>Loading data... please wait.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/view_customer.js') }}"></script>
+{% endblock %}

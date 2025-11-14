@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="page-title">📄 Post Payment Report</h2>
+
+<div class="form-grid-ppr filters">
+  <label>
+    ANO
+    <input type="text" id="filterAno" placeholder="Enter ANO">
+  </label>
+  <label>
+    From Date
+    <input type="text" id="filterFrom" placeholder="dd/mm/yyyy">
+  </label>
+  <label>
+    To Date
+    <input type="text" id="filterTo" placeholder="dd/mm/yyyy">
+  </label>
+  <button class="neumorphic-btn" onclick="applyFilters()">Apply</button>
+  <button class="neumorphic-btn" onclick="resetFilters()">Reset</button>
+</div>
+
+<div class="raised-box scroll-container scroll-table-wrapper">
+  <table id="tempTable" class="dataTable customer-table" data-sum-column="Amount" style="width:100%;">
+    <thead>
+      <tr>
+        <th onclick="sortReport('ano')">ANO</th>
+        <th onclick="sortReport('pdt')">Paid Date</th>
+        <th onclick="sortReport('amt')">Amount</th>
+      </tr>
+    </thead>
+    <tbody id="reportBody"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3">
+          <div class="summary-row">
+            <div class="summary-item">
+              <strong>Total Unique ANOs</strong>
+              <span id="totalAno">0</span>
+            </div>
+            <div class="summary-item">
+              <strong>Total Amount</strong>
+              <span id="totalAmt" data-money>0</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+
+
+
+<!-- Inject JSON safely from backend -->
+<script id="payment-data" type="application/json">
+  {{ payments | tojson }}
+</script>
+
+<!-- Attach JS file after injecting data -->
+<script src="{{ url_for('static', filename='js/post_payment_report.js') }}"></script>
+
+
+
+
+
+{% endblock %}

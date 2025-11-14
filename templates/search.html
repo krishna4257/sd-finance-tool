@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- 🔍 Search + Controls -->
+
+<div class="raised-box" id="customer-section">
+  <h2 class="page-title">🔍 Search/Edit Customer</h2>
+  <form method="POST" class="form-grid">
+    <label>
+      <input id="searchQuery" type="text" name="query"
+            placeholder="Enter Name or Account Number"
+            required value="{{ query or '' }}">
+    </label>
+    <button class="neumorphic-btn small" type="submit">🔍 Find</button>
+    {% if customers %}
+      <button type="button" class="neumorphic-btn small edit-customer">✏️ Edit Customer</button>
+      <button type="button" id="saveCustomerBtn" class="neumorphic-btn small" style="display:none;">💾 Save Customer</button>
+      <button type="button" class="neumorphic-btn small edit-payments">✏️ Edit Payments</button>
+      <button type="button" id="savePaymentsBtn" class="neumorphic-btn small" style="display:none;">💾 Save Payments</button>
+    {% endif %}
+  </form>
+</div>
+
+{% if customers %}
+  {% for customer in customers %}
+    <!-- 🧾 Customer Info -->
+    <div class="raised-box">
+      <table id="customerTable" class="dataTable customer-table" style="width:100%;">
+        <thead>
+          <tr>
+            {% for header in loanee_headers %}
+              <th>{{ header }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="customer-row" data-ano="{{ customer[loanee_headers.index('ANO')] }}">
+            {% for i in range(loanee_headers|length) %}
+              {% set field = loanee_headers[i] %}
+              {% if field in ['ANO', 'ADD1'] %}
+                <td data-field="{{ field }}" contenteditable="false">{{ customer[i] }}</td>
+              {% else %}
+                <td data-field="{{ field }}" contenteditable="false">{{ customer[i] }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ➕ Add Payment + 🕘 Payment History -->
+    <div class="raised-box">
+      <form id="addPaymentForm" class="form-grid" data-ano="{{ customer[loanee_headers.index('ANO')] }}" onsubmit="return addPaymentFromForm(this);">
+        <label><input type="text" id="newPDT" placeholder="Date:  dd/mm/yyyy" required></label>
+        <label><input type="number" id="newAMT" step="0.01" placeholder="Amount" required></label>
+        <button class="neumorphic-btn small" type="submit">➕ Add Payment</button>
+        <div><a href="/print_customer/{{ customer[loanee_headers.index('ANO')] }}" class="neumorphic-btn small">🖨️ Print</a></div>
+      </form>
+
+      <div class="scroll-table-container">
+        <table id="paymentTable" class="dataTable customer-table" data-sum-column="Amount" style="width:100%;">
+          <thead>
+            <tr>
+              <th>A.no</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Cumulative Amount</th>
+              <th class="nosort">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in pamt1_records[customer[loanee_headers.index('ANO')]] %}
+              <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}">
+                <td>{{ row[0] }}</td>
+                <td data-field="PDT">{{ row[1] }}</td>
+                <td data-field="AMT" contenteditable="false" data-money="{{ row[2] }}">{{ row[2] }}</td>
+                <td class="cumulative-amt" data-money></td>  <!-- New Cumulative Amount column -->
+                <td><span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2"><strong>Total Entries:</strong> <span id="anoCount"></span></td>
+              <td colspan="2"><strong>Total: <span id="totalAmt" data-money></span></strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+{% elif query is defined %}
+  <p>No results found for "{{ query }}".</p>
+{% endif %}
+
+<!-- 🔁 Search & Edit Postings -->
+
+<div class="raised-box" id="posting-section">
+  <h2 class="page-title">🛠️ Search/Edit Posting</h2>
+  <form id="postingSearchForm" class="form-grid">
+    <label>
+      <input type="text" id="searchPostingAno" placeholder="Search by A.no">
+    </label>
+    <label>
+      <input type="text" id="searchPostingDate" placeholder="Exact Date: dd/mm/yyyy">
+    </label>
+    <button type="submit" class="neumorphic-btn small">🔍 Find Postings</button>
+    <button type="button" id="bulkDateChangeBtn" class="neumorphic-btn small">🛠️ Edit All Dates</button>
+  </form>
+
+  <div class="scroll-table-container" style="margin-top: 20px;">
+    <table id="postingTable" class="dataTable customer-table" data-sum-column="Amount" style="width:100%;">
+      <thead>
+        <tr>
+          <th>A.no</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Cumulative Amount</th>
+          <th class="nosort">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        </tbody>
+      
+      <tfoot>
+        <tr>
+          <td colspan="2"><strong>Total Entries:</strong> <span id="postingEntryCount"></span></td>
+          <td colspan="2"><strong>Total: <span id="postingTotalAmt" data-money></span></strong></td>
+        </tr>
+      </tfoot>
+      </table>
+  </div>
+
+  <div class="message-box" id="postingMessageBox" style="display: none;"></div>
+</div>
+
+<!-- 🔁 Bulk Date Replace Modal -->
+<div id="dateReplaceModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="document.getElementById('dateReplaceModal').style.display='none'">×</span>
+    <h3>🔁 Replace Payment Dates</h3>
+    <input type="text" id="findDateInput" placeholder="Find Date: dd/mm/yyyy">
+    <input type="text" id="replaceDateInput" placeholder="Replace With Date: dd/mm/yyyy">
+    <button class="neumorphic-btn small" onclick="submitDateReplace()">Change</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/search.js') }}" defer></script>
+
+<!-- jQuery + DataTables -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+{% endblock %}

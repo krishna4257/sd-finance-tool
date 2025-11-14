@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="form-glass">
+  <div class="info-box-top-right">
+    <strong>Highest A.No:</strong>
+    <span id="highestAnoDisplay">{{ highest_ano }}</span>
+  </div>
+
+  <h2 class="page-title">➕ Add New Customer</h2>
+
+  <div id="message" class="message-box" style="display: none; margin-bottom: 20px;"></div>
+
+  <form id="customerForm" method="POST">
+    <div class="form-row">
+      <div class="form-col">
+        <label for="ano">Account Number</label>
+        <input id="ano" name="ano" type="text" placeholder="Account Number (ANO)" required data-tab-order="1">
+
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" placeholder="Customer Name" required data-tab-order="2">
+
+        <label for="pano">Parent A.no</label>
+        <input id="pano" name="pano" type="text" placeholder="Link to another account (optional)" data-tab-order="3">
+
+        <label for="add1">Village Name</label>
+        <input id="add1" name="add1" type="text" value="{{ village_name }}" readonly>
+
+        <label for="add2">Additional Details</label>
+        <input id="add2" name="add2" type="text" placeholder="e.g., S/O or W/O Name">
+
+        <label for="add3">Notes</label>
+        <input id="add3" name="add3" type="text" placeholder="Any additional notes">
+      </div>
+
+      <div class="form-col">
+
+        <label for="dw">Type of Plan</label>
+        <select id="dw" name="dw" required data-tab-order="4">
+          <option value="W" selected>Weekly</option>
+          <option value="M">Monthly</option>
+        </select>
+
+        <label for="ds">Duration of Loan</label>
+        <input id="ds" name="ds" type="number" required placeholder="Number of Weeks/Months" data-tab-order="5">
+
+        <label for="fdt">Loan Start Date (FDT)</label>
+        <input id="fdt" name="fdt" type="text" placeholder="dd/mm/yyyy" required data-tab-order="6">
+
+        <label for="tdt">Loan End Date (TDT)</label>
+        <input id="tdt" name="tdt" type="text" placeholder="Calculated automatically" readonly>
+
+        <label for="amt">Loan Amount</label>
+        <input id="amt" name="amt" type="number" required placeholder="Given Loan Amount" data-tab-order="7">
+
+        <label for="da">Installment Amount</label>
+        <input id="da" name="da" type="number" step="0.01" readonly placeholder="Calculated automatically">
+      </div>
+    </div>
+
+    <div class="action-buttons" style="justify-content: center; margin-top: 25px;">
+        <button class="neumorphic-btn large full-width" type="submit">Add Customer</button>
+    </div>
+  </form>
+
+    <div id="parentInfoTooltip" class="parent-info-tooltip">
+      <p id="parentInfoText"></p>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/add_customer.js') }}"></script>
+{% endblock %}
