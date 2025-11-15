@@ -2,19 +2,17 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for Google Cloud client
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy full project folder
-COPY SD_Accounting_Tool/ /app/SD_Accounting_Tool/
-COPY cloudbuild.yaml .
-COPY config.py .
+# Copy everything into the container
+COPY . /app/
 
-# Enable package-style imports
+# Ensure Python can import modules from /app
 ENV PYTHONPATH=/app
 
-# Start server
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "SD_Accounting_Tool.app:app"]
+# Start Gunicorn server
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
