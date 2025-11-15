@@ -1,0 +1,76 @@
+/* ===============================
+   Manage Files Page Styling
+   =============================== */
+
+.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.file-table th,
+.file-table td {
+    padding: 12px 14px;
+    text-align: left;
+}
+
+.file-table thead tr {
+    background: var(--btn-bg);
+    color: var(--text);
+}
+
+.file-table tbody tr {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.file-table tbody tr:hover {
+    background: var(--hover);
+}
+
+.actions-col {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Delete button highlight */
+.delete-btn {
+    background: #ff4a4a !important;
+    color: white !important;
+}
+
+/* Upload status (toast) */
+.status-box {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+
+.status-box.success {
+    background: #2ecc71;
+    color: white;
+}
+
+.status-box.error {
+    background: #e74c3c;
+    color: white;
+}
+
+.status-box.info {
+    background: #3498db;
+    color: white;
+}
+
+/* File Upload Input */
+#uploadInput {
+    margin-bottom: 10px;
+    padding: 14px;
+    width: 100%;
+    border-radius: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+}

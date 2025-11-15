@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/manage_files.css') }}">
+
+<script src="{{ url_for('static', filename='js/manage_files.js') }}"></script>
+
+<style>
+    .file-card {
+        padding: 14px;
+        margin: 10px 0;
+        border-radius: 14px;
+        background: #f3f3f3;
+        box-shadow: inset 3px 3px 6px #cfcfcf,
+                    inset -3px -3px 6px #ffffff;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-info {
+        display: flex;
+        flex-direction: column;
+        font-size: 14px;
+    }
+    .upload-box {
+        width: 100%;
+        padding: 40px;
+        text-align: center;
+        border-radius: 20px;
+        background: #f0f0f0;
+        box-shadow: 3px 3px 10px #ccc,
+                    -3px -3px 10px #fff;
+        border: 2px dashed #bbb;
+        cursor: pointer;
+        margin-bottom: 25px;
+        transition: 0.2s;
+    }
+    .upload-box.dragover {
+        background: #e3ffe7;
+        border-color: #4CAF50;
+    }
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 14px;
+        border-radius: 8px;
+        margin-left: 6px;
+    }
+</style>
+
+<h2 class="page-title">📁 Manage SQLite Files</h2>
+
+<!-- Upload area -->
+<div id="uploadBox" class="upload-box">
+    <h3>📤 Drag & Drop or Click to Upload SQLite Files</h3>
+    <p>Supports uploading multiple .sqlite files</p>
+    <input type="file" id="fileInput" accept=".sqlite" multiple hidden>
+</div>
+
+<!-- Upload status -->
+<div id="uploadStatus"></div>
+
+<hr>
+
+<h3>📂 Files Stored in GCS</h3>
+<div id="fileList"></div>
+
+<script>
+// -----------------------------
+// INIT
+// -----------------------------
+document.addEventListener("DOMContentLoaded", () => {
+    loadFiles();
+});
+
+
+// -----------------------------
+// LOAD FILE LIST
+// -----------------------------
+async function loadFiles() {
+    const container = document.getElementById("fileList");
+    container.innerHTML = "Loading...";
+
+    const res = await fetch("/api/list_files");
+    const data = await res.json();
+
+    if (!data.success) {
+        container.innerHTML = "Failed to load files.";
+        return;
+    }
+
+    if (data.files.length === 0) {
+        container.innerHTML = "<p>No files in GCS.</p>";
+        return;
+    }
+
+    container.innerHTML = "";
+
+    data.files.forEach(file => {
+        const div = document.createElement("div");
+        div.className = "file-card";
+
+        div.innerHTML = `
+            <div class="file-info">
+                <strong>${file.name}</strong>
+                <span>Size: ${file.size}</span>
+                <span>Uploaded: ${file.updated}</span>
+            </div>
+            <div>
+                <button class="neumorphic-btn btn-sm" onclick="setActive('${file.name}')">Set Active</button>
+                <button class="neumorphic-btn btn-sm" onclick="downloadFile('${file.name}')">Download</button>
+                <button class="neumorphic-btn btn-sm" style="background:#ffdddd" onclick="deleteFile('${file.name}')">Delete</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+
+// -----------------------------
+// UPLOAD FILES
+// -----------------------------
+const uploadBox = document.getElementById("uploadBox");
+const fileInput = document.getElementById("fileInput");
+
+uploadBox.addEventListener("click", () => fileInput.click());
+
+uploadBox.addEventListener("dragover", e => {
+    e.preventDefault();
+    uploadBox.classList.add("dragover");
+});
+
+uploadBox.addEventListener("dragleave", () => {
+    uploadBox.classList.remove("dragover");
+});
+
+uploadBox.addEventListener("drop", e => {
+    e.preventDefault();
+    uploadBox.classList.remove("dragover");
+    uploadFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener("change", () => {
+    uploadFiles(fileInput.files);
+});
+
+async function uploadFiles(files) {
+    const status = document.getElementById("uploadStatus");
+    status.innerHTML = "Uploading...";
+
+    const formData = new FormData();
+    for (const f of files) formData.append("files", f);
+
+    const res = await fetch("/api/upload_files", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+        status.innerHTML = "<p style='color:red'>Upload failed.</p>";
+        return;
+    }
+
+    status.innerHTML = "<p style='color:green'>Uploaded successfully!</p>";
+    loadFiles();
+}
+
+
+// -----------------------------
+// SET ACTIVE FILE
+// -----------------------------
+async function setActive(filename) {
+    const res = await fetch("/api/set_active_file", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ filename })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+        alert("Active file set!");
+    } else {
+        alert("Failed to set active file.");
+    }
+}
+
+
+// -----------------------------
+// DOWNLOAD FILE
+// -----------------------------
+function downloadFile(filename) {
+    window.location.href = `/api/download_file/${filename}`;
+}
+
+
+// -----------------------------
+// DELETE FILE
+// -----------------------------
+async function deleteFile(filename) {
+    if (!confirm(`Delete ${filename}?`)) return;
+
+    const res = await fetch("/api/delete_file", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ filename })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+        alert("Deleted.");
+        loadFiles();
+    } else {
+        alert("Delete failed.");
+    }
+}
+</script>
+
+{% endblock %}
