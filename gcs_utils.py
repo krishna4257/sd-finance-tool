@@ -12,17 +12,17 @@ from typing import List, Dict, Any, Optional
 from google.cloud import storage
 from google.api_core.exceptions import NotFound
 
-from config import GCS_BUCKET
+from config import GCS_BUCKET_NAME
 
 logger = logging.getLogger(__name__)
-logger.info("gcs_utils loaded - bucket=%s", GCS_BUCKET)
+logger.info("gcs_utils loaded - bucket=%s", GCS_BUCKET_NAME)
 
 _client = storage.Client()
 
 def _get_bucket():
-    if not GCS_BUCKET:
+    if not GCS_BUCKET_NAME:
         raise ValueError("GCS_BUCKET_NAME not set in config")
-    return _client.bucket(GCS_BUCKET)
+    return _client.bucket(GCS_BUCKET_NAME)
 
 def list_sqlite_files(full_meta: bool = False) -> List[Any]:
     bucket = _get_bucket()
@@ -48,7 +48,7 @@ def download_sqlite(filename: str, local_path: Optional[str] = None) -> str:
     blob = bucket.blob(filename)
     if not blob.exists():
         logger.error("Blob not found: %s", filename)
-        raise FileNotFoundError(f"Blob {filename} not found in bucket {GCS_BUCKET}")
+        raise FileNotFoundError(f"Blob {filename} not found in bucket {GCS_BUCKET_NAME}")
     local_path = local_path or f"/tmp/{filename}"
     # ensure directory
     os.makedirs(os.path.dirname(local_path) or "/tmp", exist_ok=True)
@@ -63,7 +63,7 @@ def upload_sqlite(local_path: str, filename: str) -> bool:
     bucket = _get_bucket()
     blob = bucket.blob(filename)
     blob.upload_from_filename(local_path)
-    logger.info("Uploaded %s -> gs://%s/%s", local_path, GCS_BUCKET, filename)
+    logger.info("Uploaded %s -> gs://%s/%s", local_path, GCS_BUCKET_NAME, filename)
     return True
 
 def delete_sqlite(filename: str) -> bool:
@@ -71,8 +71,8 @@ def delete_sqlite(filename: str) -> bool:
     blob = bucket.blob(filename)
     try:
         blob.delete()
-        logger.info("Deleted gs://%s/%s", GCS_BUCKET, filename)
+        logger.info("Deleted gs://%s/%s", GCS_BUCKET_NAME, filename)
         return True
     except NotFound:
         logger.warning("Blob not found while deleting: %s", filename)
-        raise FileNotFoundError(f"404 Blob {filename} not found in bucket {GCS_BUCKET}")
+        raise FileNotFoundError(f"404 Blob {filename} not found in bucket {GCS_BUCKET_NAME}")

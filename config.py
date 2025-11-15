@@ -8,4 +8,4 @@ SQLITE_FOLDER = os.path.join(BASE_DIR, "databases")
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "development-key")
 
-GCS_BUCKET = os.environ.get("GCS_BUCKET", "sd-finance-db")
+GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "sd-finance-db")

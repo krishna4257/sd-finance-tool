@@ -5,7 +5,7 @@ import sys
 import logging
 from typing import List, Dict, Any
 
-from config import RUN_MODE as CONFIG_RUN_MODE, GCS_BUCKET
+from config import RUN_MODE as CONFIG_RUN_MODE, GCS_BUCKET_NAME
 from gcs_utils import list_sqlite_files as gcs_list, download_sqlite, upload_sqlite, delete_sqlite
 
 RUN_MODE = os.environ.get("RUN_MODE", CONFIG_RUN_MODE or "cloud")
