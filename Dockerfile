@@ -2,25 +2,19 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies for google-cloud-storage
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
 
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY app.py .
+# Copy full project folder
+COPY SD_Accounting_Tool/ /app/SD_Accounting_Tool/
+COPY cloudbuild.yaml .
 COPY config.py .
-COPY gcs_utils.py .
-COPY database_manager.py .
 
-# Copy templates and static assets
-COPY templates/ templates/
-COPY static/ static/
+# Enable package-style imports
+ENV PYTHONPATH=/app
 
-# Expose port
-EXPOSE 8080
-
-# Start app with gunicorn
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
+# Start server
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "SD_Accounting_Tool.app:app"]
