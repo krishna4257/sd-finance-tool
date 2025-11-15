@@ -910,10 +910,26 @@ def post_payment_report():
         return redirect("/dashboard")
 
     try:
-        return render_template("post_payment_report.html")
+        # Fetch ALL postings to inject initially (optional)
+        conn = connect_db(selected_file)
+        if conn is None:
+            return "Could not connect to database", 500
+        cursor = conn.cursor()
+        cursor.execute("SELECT ANO, PDT, AMT FROM PAMT1 ORDER BY CAST(ANO AS INTEGER)")
+        rows = cursor.fetchall()
+        payments = [dict(row) for row in rows]
+
+        return render_template(
+            "post_payment_report.html",
+            payments=payments
+        )
+
     except Exception as e:
         logger.exception("Error loading post_payment_report page: %s", e)
         return "Could not load posting report page", 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route("/get_all_postings", methods=["GET"])
 def get_all_postings():
