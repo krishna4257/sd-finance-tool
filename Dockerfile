@@ -1,15 +1,16 @@
-FROM python:3.10-slim
-
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+FROM python:3.9-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y gcc libpq-dev python3-dev
-
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy entire app (VERY IMPORTANT)
+COPY . /app
 
+# Expose port
+EXPOSE 8080
+
+# Run gunicorn
 CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
