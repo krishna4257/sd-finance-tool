@@ -9,8 +9,8 @@ import os
 import sqlite3
 from typing import List, Dict, Any, Optional
 
-from .config import RUN_MODE, GCS_BUCKET_NAME
-from . import gcs_utils
+from config import RUN_MODE, GCS_BUCKET_NAME
+import gcs_utils
 
 BASE_DIR = os.path.dirname(__file__)
 LOCAL_DB_FOLDER = os.path.join(BASE_DIR, "databases")

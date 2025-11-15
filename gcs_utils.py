@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from google.cloud import storage
 from google.api_core.exceptions import NotFound
 
-from .config import GCS_BUCKET_NAME
+from config import GCS_BUCKET_NAME
 
 logger = logging.getLogger(__name__)
 logger.info("gcs_utils loaded - bucket=%s", GCS_BUCKET_NAME)

@@ -15,9 +15,9 @@ from typing import Optional, List, Dict, Any
 from flask import Flask, render_template, request, redirect, session, jsonify, send_file
 
 # package imports
-from .config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME
-from . import database_manager as db
-from . import gcs_utils
+from config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME
+import database_manager as db
+import gcs_utils
 
 # Configure logger
 logging.basicConfig(level=logging.INFO)
