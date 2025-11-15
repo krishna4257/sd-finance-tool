@@ -1,55 +1,36 @@
 """
-Application entry point for SD Finance (Cloud Run + GCS temporary storage).
-
-Mode B: Cloud mode (RUN_MODE=cloud)
-- Files are stored in GCS (configured in config.py)
-- Files are downloaded to /tmp/ when needed and uploaded back after changes
-- There is a simple file management API: list, upload, set_active, download, delete
+Application entry point for SD Finance (package-aware).
+This file expects package name SD_Accounting_Tool.
 """
 
 from __future__ import annotations
-
+from typing import cast
 import os
 import sqlite3
 import logging
-import traceback
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional, List, Dict, Any
 
-from flask import (
-    Flask, render_template, request, redirect, session, jsonify, flash, send_file
-)
-from gcs_utils import (
-    list_sqlite_files,
-    download_sqlite,
-    upload_sqlite,
-    delete_sqlite
-)
-# local imports (database_manager will use gcs_utils under the hood)
-try:
-    from .config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME  # type: ignore
-    from . import database_manager as db  # type: ignore
-except Exception:
-    # fallback when run directly
-    from config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME  # type: ignore
-    import database_manager as db  # type: ignore
+from flask import Flask, render_template, request, redirect, session, jsonify, send_file
+
+# package imports
+from .config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME
+from . import database_manager as db
+from . import gcs_utils
 
 # Configure logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Flask app with template/static folders from package base
-base_path = getattr(db, "_get_base_path", lambda: os.path.dirname(os.path.abspath(__file__)))()
+# Flask app
+base_path = os.path.dirname(os.path.abspath(__file__))
 template_folder = os.path.join(base_path, "templates")
 static_folder = os.path.join(base_path, "static")
 
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.secret_key = SECRET_KEY
 
-# -----------------------
-# Utility helpers
-# -----------------------
 
 def safe_float(val: Any) -> float:
     try:
@@ -57,10 +38,8 @@ def safe_float(val: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+
 def connect_db(filename: str) -> Optional[sqlite3.Connection]:
-    """Return sqlite3.Connection using database_manager.connect (handles download)."""
-    if not filename:
-        raise ValueError("Database filename missing")
     try:
         return db.connect(filename)
     except FileNotFoundError:
@@ -70,12 +49,15 @@ def connect_db(filename: str) -> Optional[sqlite3.Connection]:
         logger.exception("Unexpected error connecting to DB: %s", filename)
         return None
 
+
 def get_village_files() -> List[str]:
     try:
-        return db.list_village_databases()
+        # return names (not full meta) by default
+        return db.list_village_databases(full_meta=False)
     except Exception as e:
         logger.exception("Could not list village databases: %s", e)
         return []
+
 
 def get_village_name_from_db(filepath: str) -> str:
     conn = None
@@ -99,9 +81,7 @@ def get_village_name_from_db(filepath: str) -> str:
         if conn:
             conn.close()
 
-# -----------------------
-# Context processor
-# -----------------------
+
 @app.context_processor
 def inject_common_variables():
     return {
@@ -110,13 +90,11 @@ def inject_common_variables():
         "village_name": session.get("village_name", "")
     }
 
-# -----------------------
-# Routes (core + manage files)
-# -----------------------
 
 @app.route("/")
 def home():
     return redirect("/dashboard")
+
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
@@ -167,48 +145,52 @@ def dashboard():
         logger.exception("Error loading dashboard: %s", e)
         return "Something went wrong.", 500
 
+
 # -----------------------
-# Manage files endpoints (GCS-backed)
+# Manage files endpoints
 # -----------------------
 
 @app.route("/api/list_files", methods=["GET"])
 def api_list_files():
-    """List files in GCS (or local folder in local mode). Returns list of dicts."""
     try:
-        files = list_sqlite_files(full_meta=True)  # full_meta returns dicts
+        files = db.list_village_databases(full_meta=True)
         return jsonify(success=True, files=files)
     except Exception as e:
         logger.exception("Error listing files: %s", e)
         return jsonify(success=False, error=str(e)), 500
 
+
 @app.route("/api/upload_sqlite", methods=["POST"])
 def api_upload_sqlite():
-    """
-    Accept multiple files. Save to /tmp and upload to GCS via db.upload_sqlite.
-    Returns filenames uploaded.
-    """
-    if "files[]" not in request.files and "file" not in request.files:
-        return jsonify({"success": False, "error": "No files uploaded"}), 400
 
-    uploaded_files = request.files.getlist("files[]") or request.files.getlist("file")
+    # Supports both single "file" and multi "files" input
+    uploaded_files = request.files.getlist("file") or request.files.getlist("files[]")
+
+    if not uploaded_files:
+        return jsonify(success=False, error="No files uploaded"), 400
+
     uploaded_names = []
     errors = []
 
     for f in uploaded_files:
-        if not f or f.filename == "":
-            continue
-        filename = os.path.basename(f.filename or "")
-        local_tmp = f"/tmp/{filename}"
         try:
+            filename = cast(str, os.path.basename(f.filename or ""))
+            if not filename:
+                continue
+
+            local_tmp = os.path.join("/tmp/sqlite_cache", filename)
+            os.makedirs(os.path.dirname(local_tmp), exist_ok=True)
+
             f.save(local_tmp)
+
+            # Upload to GCS through database_manager
             db.upload_sqlite(local_tmp, filename)
+
             uploaded_names.append(filename)
+
         except Exception as e:
             logger.exception("Upload failed for %s: %s", filename, e)
-            errors.append({"filename": filename, "error": str(e)})
-        finally:
-            # optional: keep /tmp copy for quick reuse; do not delete here
-            pass
+            errors.append({"file": filename, "error": str(e)})
 
     return jsonify(success=(len(errors) == 0), uploaded=uploaded_names, errors=errors)
 
@@ -218,15 +200,12 @@ def api_set_active():
     filename = data.get("filename")
     if not filename:
         return jsonify(success=False, error="filename missing"), 400
-
     try:
-        # Ensure file exists in bucket (list_village_databases will show it)
-        files = db.list_village_databases()
+        files = db.list_village_databases(full_meta=False)
         if filename not in files:
             return jsonify(success=False, error="file not found"), 404
-
-        # download to /tmp (so later operations use local copy)
-        local_path = db.get_database_path(filename)  # this will download for cloud mode
+        # ensure local copy exists
+        local_path = db.get_database_path(filename)
         session["selected_file"] = filename
         session["village_name"] = filename.split(".")[0]
         return jsonify(success=True, filename=filename)
@@ -234,20 +213,20 @@ def api_set_active():
         logger.exception("Failed to set active: %s", e)
         return jsonify(success=False, error=str(e)), 500
 
+
 @app.route("/api/download_file/<filename>", methods=["GET"])
 def api_download_file(filename: str):
-    """Stream the file from /tmp (downloads first if needed)."""
     if not filename:
         return jsonify(success=False, error="filename missing"), 400
     try:
-        local_path = db.get_database_path(filename)  # ensures downloaded copy exists
+        local_path = db.get_database_path(filename)
         if not os.path.exists(local_path):
             return jsonify(success=False, error=f"local copy missing: {local_path}"), 500
-        # Use Flask send_file - set as attachment
         return send_file(local_path, as_attachment=True, download_name=filename)
     except Exception as e:
         logger.exception("Download failed for %s: %s", filename, e)
         return jsonify(success=False, error=str(e)), 500
+
 
 @app.route("/api/delete_file", methods=["POST"])
 def api_delete_file():
@@ -256,16 +235,15 @@ def api_delete_file():
     if not filename:
         return jsonify(success=False, error="filename missing"), 400
     try:
-        # Delete from GCS
-        db.delete_sqlite(filename)
-        # remove any /tmp copy
+        ok = db.delete_sqlite(filename)
+        if not ok:
+            return jsonify(success=False, error="file not found"), 404
+        tmp = os.path.join("/tmp/sqlite_cache", filename)
         try:
-            local_tmp = f"/tmp/{filename}"
-            if os.path.exists(local_tmp):
-                os.remove(local_tmp)
+            if os.path.exists(tmp):
+                os.remove(tmp)
         except Exception:
-            logger.exception("Failed to remove tmp copy for %s", filename)
-        # If the deleted file was active, clear session
+            logger.exception("Failed to remove tmp copy %s", tmp)
         if session.get("selected_file") == filename:
             session.pop("selected_file", None)
             session.pop("village_name", None)
@@ -276,11 +254,10 @@ def api_delete_file():
         logger.exception("Delete failed: %s", e)
         return jsonify(success=False, error=str(e)), 500
 
+
 # -----------------------
-# Existing app routes (payments / customers / posting reports)
-# The rest of your original routes kept unchanged. For brevity I include the
-# important ones used by your UI. Keep the rest of your routes from previous
-# app.py (post_payment, submit_post_payment, get_all_postings, etc.) unchanged.
+# Example subset of existing routes used by UI
+# (keep all your other routes from previous app unchanged when you add this file)
 # -----------------------
 
 @app.route("/post_payment", methods=["GET"])
@@ -289,6 +266,7 @@ def post_payment():
     if not selected_file:
         return redirect("/dashboard")
     return render_template("post_payment.html")
+
 
 @app.route("/get_payments_data/<filename>")
 def get_payments_data(filename: str):
@@ -309,6 +287,7 @@ def get_payments_data(filename: str):
     finally:
         if conn:
             conn.close()
+
 
 @app.route("/post_payment_report", methods=["GET"])
 def post_payment_report():
@@ -331,13 +310,8 @@ def post_payment_report():
         if conn:
             conn.close()
 
-# (Keep the rest of your existing routes unchanged: add_customer, view_customers, search, etc.)
-# For brevity those routes are not repeated here — include them unchanged in your final file.
 
-# -----------------------
-# Template filters & main
-# -----------------------
-
+# Template filter
 @app.template_filter("format_rupee")
 def format_rupee(value: Any) -> str:
     try:
@@ -345,5 +319,6 @@ def format_rupee(value: Any) -> str:
     except Exception:
         return str(value)
 
+
 if __name__ == "__main__":
-    app.run(debug=True, port=int(os.environ.get("PORT", 8080)))
+    app.run(debug=(RUN_MODE == "local"), port=int(os.environ.get("PORT", 8080)))

@@ -1,128 +1,119 @@
+"""
+database_manager.py
+
+Small abstraction for local vs cloud DB path management and simple helpers.
+This uses gcs_utils under the hood for cloud mode.
+"""
+
 import os
 import sqlite3
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-from google.cloud import storage
-from config import RUN_MODE, GCS_BUCKET_NAME
+from .config import RUN_MODE, GCS_BUCKET_NAME
+from . import gcs_utils
 
-LOCAL_DB_FOLDER = os.path.join(os.path.dirname(__file__), "databases")
+BASE_DIR = os.path.dirname(__file__)
+LOCAL_DB_FOLDER = os.path.join(BASE_DIR, "databases")
+TMP_CACHE = "/tmp/sqlite_cache"
 
-# ---------------------------
-# Helper: Local DB path
-# ---------------------------
+
+def _ensure_local_folder():
+    os.makedirs(LOCAL_DB_FOLDER, exist_ok=True)
+    os.makedirs(TMP_CACHE, exist_ok=True)
+
 
 def get_database_path(filename: str) -> str:
-    """Return local DB file path."""
-    return os.path.join(LOCAL_DB_FOLDER, filename)
+    """Return path where the database file can be accessed locally.
 
-# ---------------------------
-# LIST FILES (CLOUD & LOCAL)
-# ---------------------------
-
-def list_village_databases() -> List[str]:
+    In local mode this is the local databases folder.
+    In cloud mode this will download the file into /tmp/sqlite_cache and return that path.
     """
-    Returns list of filenames from LOCAL folder OR GCS bucket.
-    Works based on RUN_MODE.
-    """
+    _ensure_local_folder()
     if RUN_MODE == "local":
-        return [f for f in os.listdir(LOCAL_DB_FOLDER) if f.endswith(".sqlite")]
+        return os.path.join(LOCAL_DB_FOLDER, filename)
 
-    # CLOUD MODE - pull from GCS
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET_NAME)
+    # cloud mode: use /tmp cache
+    local_tmp = os.path.join(TMP_CACHE, filename)
+    if not os.path.exists(local_tmp):
+        # download into temporary cache
+        gcs_utils.download_sqlite(filename, local_tmp)
+    return local_tmp
 
-    files = []
-    for blob in bucket.list_blobs():
-        if blob.name.endswith(".sqlite"):
-            files.append(blob.name)
 
-    return files
+def list_village_databases(full_meta: bool = False) -> List[Any]:
+    """
+    Return list of files.
+    If RUN_MODE=local returns filenames (or metadata dicts if full_meta True)
+    If RUN_MODE=cloud calls gcs_utils.list_sqlite_files(full_meta=full_meta)
+    """
+    _ensure_local_folder()
+    if RUN_MODE == "local":
+        files = [f for f in os.listdir(LOCAL_DB_FOLDER) if f.endswith(".sqlite")]
+        if full_meta:
+            result = []
+            for f in files:
+                path = os.path.join(LOCAL_DB_FOLDER, f)
+                stat = os.stat(path)
+                result.append({
+                    "name": f,
+                    "size": stat.st_size,
+                    "updated": ""
+                })
+            return sorted(result, key=lambda x: int(os.path.splitext(x["name"])[0]) if os.path.splitext(x["name"])[0].isdigit() else 10**9)
+        return sorted(files, key=lambda n: int(os.path.splitext(n)[0]) if os.path.splitext(n)[0].isdigit() else 10**9)
 
-# ---------------------------
-# GCS LIST for manage_files page
-# ---------------------------
+    # cloud
+    return gcs_utils.list_sqlite_files(full_meta=full_meta)
 
-def gcs_list() -> List[Dict[str, Any]]:
-    """Return file metadata for manage_files.html"""
-
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET_NAME)
-
-    results = []
-    for blob in bucket.list_blobs():
-        if not blob.name.endswith(".sqlite"):
-            continue
-
-        results.append({
-            "name": blob.name,
-            "size": blob.size or 0,
-            "updated": blob.updated.isoformat() if blob.updated else ""
-        })
-
-    return results
-
-# ---------------------------
-# UPLOAD SQLITE to GCS
-# ---------------------------
 
 def upload_sqlite(local_path: str, filename: str) -> bool:
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET_NAME)
+    """Upload file to GCS (cloud) or copy to local folder (local)."""
+    _ensure_local_folder()
+    if RUN_MODE == "local":
+        dest = os.path.join(LOCAL_DB_FOLDER, filename)
+        # overwrite
+        import shutil
+        shutil.copyfile(local_path, dest)
+        return True
+    return gcs_utils.upload_sqlite(local_path, filename)
 
-    blob = bucket.blob(filename)
-    blob.upload_from_filename(local_path)
 
-    return True
+def download_sqlite(filename: str, local_path: Optional[str] = None) -> bool:
+    """Download from GCS (cloud) or copy from local folder (local)."""
+    _ensure_local_folder()
+    if RUN_MODE == "local":
+        src = os.path.join(LOCAL_DB_FOLDER, filename)
+        if not os.path.exists(src):
+            return False
+        dest = local_path or src
+        import shutil
+        shutil.copyfile(src, dest)
+        return True
 
-# ---------------------------
-# DOWNLOAD SQLITE TO LOCAL /tmp
-# ---------------------------
-
-def download_sqlite(filename: str, local_path: str) -> bool:
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET_NAME)
-
-    blob = bucket.blob(filename)
-    if not blob.exists():
+    # cloud mode
+    try:
+        gcs_utils.download_sqlite(filename, local_path)
+        return True
+    except FileNotFoundError:
         return False
 
-    blob.download_to_filename(local_path)
-    return True
-
-# ---------------------------
-# DELETE SQLITE FROM GCS
-# ---------------------------
 
 def delete_sqlite(filename: str) -> bool:
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET_NAME)
+    """Delete from GCS (cloud) or remove from local folder (local)."""
+    _ensure_local_folder()
+    if RUN_MODE == "local":
+        path = os.path.join(LOCAL_DB_FOLDER, filename)
+        if not os.path.exists(path):
+            return False
+        os.remove(path)
+        return True
 
-    blob = bucket.blob(filename)
-    if not blob.exists():
-        return False
+    return gcs_utils.delete_sqlite(filename)
 
-    blob.delete()
-    return True
-
-# ---------------------------
-# DB CONNECTION WRAPPER
-# ---------------------------
 
 def connect(filename: str) -> sqlite3.Connection:
-    """Connect to local or downloaded DB."""
-
-    db_path = get_database_path(filename)
-
-    if RUN_MODE == "cloud":
-        # Ensure local folder exists
-        os.makedirs("/tmp/sqlite_cache", exist_ok=True)
-
-        local_tmp = f"/tmp/sqlite_cache/{filename}"
-
-        if not os.path.exists(local_tmp):
-            download_sqlite(filename, local_tmp)
-
-        return sqlite3.connect(local_tmp)
-
-    # Local mode
-    return sqlite3.connect(db_path)
+    """Return a sqlite3.Connection to a local DB file (downloads if necessary)."""
+    path = get_database_path(filename)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn

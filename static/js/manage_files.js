@@ -1,145 +1,142 @@
+// manage_files.js
 document.addEventListener("DOMContentLoaded", () => {
+  const listContainer = document.getElementById("gcsFilesList");
+  const uploadInput = document.getElementById("gcsUploadInput");
+  const uploadBtn = document.getElementById("gcsUploadBtn");
+  const refreshBtn = document.getElementById("gcsRefreshBtn");
 
-    loadFileList();
+  async function fetchFiles() {
+    listContainer.innerHTML = "<div class='loading'>Loading files…</div>";
+    try {
+      const res = await fetch("/api/list_files");
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to list files");
+      renderFiles(data.files || []);
+    } catch (err) {
+      listContainer.innerHTML = `<div class="error">Error: ${err.message}</div>`;
+    }
+  }
 
-    // -------- Upload Handler --------
-    const uploadArea = document.getElementById("uploadArea");
-    const fileInput = document.getElementById("fileInput");
+  function renderFiles(files) {
+    if (!files || files.length === 0) {
+      listContainer.innerHTML = "<div class='empty'>No .sqlite files found in GCS</div>";
+      return;
+    }
+    listContainer.innerHTML = "";
+    files.forEach((f) => {
+      // f may be {name,size,updated} or a plain string
+      const name = (typeof f === "string") ? f : f.name;
+      const size = f.size || "undefined";
+      const updated = f.updated || "undefined";
 
-    uploadArea.addEventListener("click", () => fileInput.click());
-
-    fileInput.addEventListener("change", () => {
-        uploadFiles(fileInput.files);
+      const item = document.createElement("div");
+      item.className = "gcs-file-row";
+      item.innerHTML = `
+        <div class="meta">
+          <div class="filename">${name}</div>
+          <div class="sub">Size: ${size} &nbsp;|&nbsp; Uploaded: ${updated}</div>
+        </div>
+        <div class="actions">
+          <button class="btn set-active" data-name="${name}">Set Active</button>
+          <button class="btn download" data-name="${name}">Download</button>
+          <button class="btn delete" data-name="${name}">Delete</button>
+        </div>
+      `;
+      listContainer.appendChild(item);
     });
 
-    uploadArea.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        uploadArea.classList.add("drag-over");
+    // wire actions
+    document.querySelectorAll(".set-active").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const filename = e.currentTarget.dataset.name;
+        await setActive(filename);
+      });
     });
-
-    uploadArea.addEventListener("dragleave", () => {
-        uploadArea.classList.remove("drag-over");
+    document.querySelectorAll(".download").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const filename = e.currentTarget.dataset.name;
+        window.location = `/api/download_file/${encodeURIComponent(filename)}`;
+      });
     });
-
-    uploadArea.addEventListener("drop", (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove("drag-over");
-        uploadFiles(e.dataTransfer.files);
+    document.querySelectorAll(".delete").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const filename = e.currentTarget.dataset.name;
+        if (!confirm(`Delete ${filename} from GCS? This cannot be undone.`)) return;
+        await deleteFile(filename);
+      });
     });
-});
+  }
 
-// ----------------------
-// Load Existing Files
-// ----------------------
-
-function loadFileList() {
-    fetch("/api/list_files")
-        .then(r => r.json())
-        .then(res => {
-            if (!res.success) return;
-
-            const list = document.getElementById("filesList");
-            list.innerHTML = "";
-
-            res.files.forEach(f => {
-                const item = document.createElement("div");
-                item.className = "file-item";
-
-                item.innerHTML = `
-                    <div>
-                        <strong>${f.name}</strong><br>
-                        Size: ${formatBytes(f.size)}<br>
-                        Uploaded: ${formatDate(f.updated)}
-                    </div>
-                    <div class="file-actions">
-                        <button class="set-active-btn" onclick="setActive('${f.name}')">Set Active</button>
-                        <button class="download-btn" onclick="downloadFile('${f.name}')">Download</button>
-                        <button class="delete-btn" onclick="deleteFile('${f.name}')">Delete</button>
-                    </div>
-                `;
-
-                list.appendChild(item);
-            });
-        });
-}
-
-// ----------------------
-// File Upload
-// ----------------------
-
-function uploadFiles(files) {
-    [...files].forEach(file => {
-        const form = new FormData();
-        form.append("file", file);
-
-        fetch("/upload_sqlite", {
-            method: "POST",
-            body: form
-        })
-        .then(r => r.json())
-        .then(() => loadFileList());
-    });
-}
-
-// ----------------------
-// Set Active
-// ----------------------
-
-function setActive(filename) {
-    fetch("/api/set_active", {
+  async function setActive(filename) {
+    try {
+      const res = await fetch("/api/set_active", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ filename })
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) showMessage("Active file changed.");
-        else showMessage("Failed to set active file.");
-    });
-}
+        body: JSON.stringify({filename})
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to set active");
+      alert(`Set active: ${filename}`);
+      // refresh UI to reflect available active file
+      await fetchFiles();
+      // optionally reload page so templates show new active file
+      window.location.reload();
+    } catch (err) {
+      alert(`Failed to set active file: ${err.message}`);
+    }
+  }
 
-// ----------------------
-// Download
-// ----------------------
+  async function deleteFile(filename) {
+    try {
+      const res = await fetch("/api/delete_file", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({filename})
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Delete failed");
+      alert(`Deleted: ${filename}`);
+      await fetchFiles();
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  }
 
-function downloadFile(filename) {
-    window.location.href = `/api/download_file/${filename}`;
-}
+  uploadBtn && uploadBtn.addEventListener("click", async () => {
+    const files = uploadInput.files;
+    if (!files || files.length === 0) {
+      alert("Select one or more .sqlite files to upload");
+      return;
+    }
+    const form = new FormData();
+    // send as files[] to support multiple
+    for (let i = 0; i < files.length; i++) {
+      form.append("files[]", files[i]);
+    }
+    try {
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "Uploading...";
+      const res = await fetch("/api/upload_sqlite", {
+        method: "POST",
+        body: form
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.errors && data.errors.length ? JSON.stringify(data.errors) : data.error || "Upload failed");
+      }
+      alert("Uploaded: " + (data.uploaded || []).join(", "));
+      uploadInput.value = "";
+      await fetchFiles();
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = "Upload";
+    }
+  });
 
-// ----------------------
-// Delete
-// ----------------------
+  refreshBtn && refreshBtn.addEventListener("click", fetchFiles);
 
-function deleteFile(filename) {
-    fetch(`/api/delete_file/${filename}`, {
-        method: "DELETE"
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showMessage("Deleted successfully.");
-            loadFileList();
-        } else {
-            showMessage("Delete failed.");
-        }
-    });
-}
-
-// ----------------------
-// Helpers
-// ----------------------
-
-function formatBytes(b) {
-    if (!b) return "0 B";
-    const u = ["B","KB","MB","GB"];
-    let i = Math.floor(Math.log(b)/Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(2) + " " + u[i];
-}
-
-function formatDate(dt) {
-    return dt ? dt.replace("T", " ").split(".")[0] : "Unknown";
-}
-
-function showMessage(msg) {
-    alert(msg);
-}
+  // initial load
+  fetchFiles();
+});

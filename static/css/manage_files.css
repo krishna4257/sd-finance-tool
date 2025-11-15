@@ -1,49 +1,26 @@
-.manage-container {
-    padding: 25px;
+/* manage_files.css - minimal styles for the manage files page */
+#gcsFilesList { margin-top: 12px; }
+.gcs-file-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel-bg, #f3f3f3);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.04);
 }
-
-.upload-box {
-    border: 2px dashed #aaa;
-    padding: 30px;
-    text-align: center;
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    cursor: pointer;
-    margin-bottom: 25px;
+.gcs-file-row .meta { flex: 1; }
+.gcs-file-row .filename { font-weight: 600; color: #333; }
+.gcs-file-row .sub { font-size: 0.9rem; color: #666; margin-top: 4px; }
+.gcs-file-row .actions { display: flex; gap: 8px; }
+.btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #e7eefb;
 }
-
-.upload-box.drag-over {
-    border-color: #4a8;
-    background: rgba(50,200,150,0.1);
-}
-
-#filesList {
-    margin-top: 20px;
-}
-
-.file-item {
-    background: rgba(255,255,255,0.08);
-    margin-bottom: 12px;
-    padding: 15px;
-    border-radius: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.file-actions button {
-    margin-left: 10px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: none;
-}
-
-.set-active-btn {
-    background: #c8b458;
-}
-.download-btn {
-    background: #8ab8fa;
-}
-.delete-btn {
-    background: #ff9a9a;
-}
+.btn.delete { background: #ffdce0; }
+.btn.set-active { background: #f0ebd8; }
+.loading, .empty, .error { padding: 12px; color: #444; }
