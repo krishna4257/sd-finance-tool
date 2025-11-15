@@ -917,7 +917,8 @@ def post_payment_report():
         cursor = conn.cursor()
         cursor.execute("SELECT ANO, PDT, AMT FROM PAMT1 ORDER BY CAST(ANO AS INTEGER)")
         rows = cursor.fetchall()
-        payments = [dict(row) for row in rows]
+        # Convert DB rows → list format
+        payments = [[row["ANO"], row["PDT"], row["AMT"]] for row in rows]
 
         return render_template(
             "post_payment_report.html",
@@ -946,16 +947,18 @@ def get_all_postings():
         cursor = conn.cursor()
         cursor.execute("SELECT ANO, PDT, AMT FROM PAMT1 ORDER BY CAST(ANO AS INTEGER)")
         rows = cursor.fetchall()
-        results = [dict(row) for row in rows]
+
+        # Convert to list format [ano, pdt, amt]
+        results = [[row["ANO"], row["PDT"], row["AMT"]] for row in rows]
 
         return jsonify(success=True, data=results)
+
     except Exception as e:
         logger.exception("Error in get_all_postings: %s", e)
         return jsonify(success=False, error=str(e))
     finally:
         if conn:
             conn.close()
-
 # -----------------------
 # Template filters & main
 # -----------------------
