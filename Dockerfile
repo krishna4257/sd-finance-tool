@@ -2,18 +2,25 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies needed for Google Cloud client
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc build-essential \
- && rm -rf /var/lib/apt/lists/*
+# Install system dependencies for google-cloud-storage
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire package folder
-COPY SD_Accounting_Tool/ /app/SD_Accounting_Tool/
+# Copy application files
+COPY app.py .
+COPY config.py .
+COPY gcs_utils.py .
+COPY database_manager.py .
 
-ENV PYTHONPATH=/app
+# Copy templates and static assets
+COPY templates/ templates/
+COPY static/ static/
 
-# Use gunicorn to serve the package app
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app", "--timeout", "120", "--workers", "2"]
+# Expose port
+EXPOSE 8080
+
+# Start app with gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
