@@ -20,7 +20,12 @@ from typing import Optional, List, Dict, Any
 from flask import (
     Flask, render_template, request, redirect, session, jsonify, flash, send_file
 )
-
+from gcs_utils import (
+    list_sqlite_files,
+    download_sqlite,
+    upload_sqlite,
+    delete_sqlite
+)
 # local imports (database_manager will use gcs_utils under the hood)
 try:
     from .config import SECRET_KEY, RUN_MODE, GCS_BUCKET_NAME  # type: ignore
@@ -136,7 +141,7 @@ def dashboard():
 
         if selected_file:
             try:
-                with db.get_db_connection(selected_file) as conn:
+                with db.connect(selected_file) as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*), SUM(AMT), SUM(PAMT), SUM(BAMT) FROM LOANEE")
                     row = cursor.fetchone()
@@ -170,7 +175,7 @@ def dashboard():
 def api_list_files():
     """List files in GCS (or local folder in local mode). Returns list of dicts."""
     try:
-        files = db.list_village_databases(full_meta=True)  # full_meta returns dicts
+        files = list_sqlite_files(full_meta=True)  # full_meta returns dicts
         return jsonify(success=True, files=files)
     except Exception as e:
         logger.exception("Error listing files: %s", e)
@@ -252,7 +257,7 @@ def api_delete_file():
         return jsonify(success=False, error="filename missing"), 400
     try:
         # Delete from GCS
-        db.delete_sqlite_from_gcs(filename)
+        db.delete_sqlite(filename)
         # remove any /tmp copy
         try:
             local_tmp = f"/tmp/{filename}"

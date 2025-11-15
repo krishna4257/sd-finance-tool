@@ -1,146 +1,145 @@
-// ===============================
-// MANAGE FILES PAGE JS
-// ===============================
-
-// Auto-load file list on page load
 document.addEventListener("DOMContentLoaded", () => {
-    loadFiles();
+
+    loadFileList();
+
+    // -------- Upload Handler --------
+    const uploadArea = document.getElementById("uploadArea");
+    const fileInput = document.getElementById("fileInput");
+
+    uploadArea.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", () => {
+        uploadFiles(fileInput.files);
+    });
+
+    uploadArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadArea.classList.add("drag-over");
+    });
+
+    uploadArea.addEventListener("dragleave", () => {
+        uploadArea.classList.remove("drag-over");
+    });
+
+    uploadArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove("drag-over");
+        uploadFiles(e.dataTransfer.files);
+    });
 });
 
-// -----------------------------
-// FETCH ALL FILES FROM GCS
-// -----------------------------
-function loadFiles() {
-    fetch("/list_sqlite_files")
-        .then(res => res.json())
-        .then(data => {
-            const container = document.getElementById("fileListContainer");
+// ----------------------
+// Load Existing Files
+// ----------------------
 
-            if (!data.success) {
-                container.innerHTML = `<p class="error">Unable to load files.</p>`;
-                return;
-            }
+function loadFileList() {
+    fetch("/api/list_files")
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) return;
 
-            const files = data.files;
-            if (!files.length) {
-                container.innerHTML = `<p>No files found in Cloud Storage.</p>`;
-                return;
-            }
+            const list = document.getElementById("filesList");
+            list.innerHTML = "";
 
-            let html = `
-                <table class="file-table">
-                    <thead>
-                        <tr>
-                            <th>File Name</th>
-                            <th class="actions-col">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
+            res.files.forEach(f => {
+                const item = document.createElement("div");
+                item.className = "file-item";
 
-            files.forEach(f => {
-                html += `
-                    <tr>
-                        <td>${f}</td>
-                        <td class="actions-col">
-                            <button class="neumorphic-btn-h" onclick="downloadFile('${f}')">⬇️ Download</button>
-                            <button class="neumorphic-btn-h delete-btn" onclick="deleteFile('${f}')">🗑 Delete</button>
-                        </td>
-                    </tr>
+                item.innerHTML = `
+                    <div>
+                        <strong>${f.name}</strong><br>
+                        Size: ${formatBytes(f.size)}<br>
+                        Uploaded: ${formatDate(f.updated)}
+                    </div>
+                    <div class="file-actions">
+                        <button class="set-active-btn" onclick="setActive('${f.name}')">Set Active</button>
+                        <button class="download-btn" onclick="downloadFile('${f.name}')">Download</button>
+                        <button class="delete-btn" onclick="deleteFile('${f.name}')">Delete</button>
+                    </div>
                 `;
+
+                list.appendChild(item);
             });
-
-            html += "</tbody></table>";
-            container.innerHTML = html;
-        })
-        .catch(() => {
-            document.getElementById("fileListContainer").innerHTML =
-                `<p class="error">Error fetching files.</p>`;
         });
 }
 
+// ----------------------
+// File Upload
+// ----------------------
 
-// -----------------------------
-// UPLOAD MULTIPLE FILES
-// -----------------------------
-function uploadFiles() {
-    let input = document.getElementById("uploadInput");
-    let files = input.files;
+function uploadFiles(files) {
+    [...files].forEach(file => {
+        const form = new FormData();
+        form.append("file", file);
 
-    if (!files.length) {
-        showStatus("Please select at least one file.", "error");
-        return;
-    }
-
-    let formData = new FormData();
-    for (let f of files) {
-        formData.append("files", f);
-    }
-
-    showStatus("Uploading…", "info");
-
-    fetch("/upload_multiple_sqlite", {
-        method: "POST",
-        body: formData
-    })
-        .then(res => res.json())
-        .then(data => {
-            if (!data.success) {
-                showStatus(data.error || "Upload failed.", "error");
-                return;
-            }
-
-            showStatus(`${data.count} file(s) uploaded successfully.`, "success");
-
-            input.value = "";
-            loadFiles();
+        fetch("/upload_sqlite", {
+            method: "POST",
+            body: form
         })
-        .catch(() => {
-            showStatus("Upload error.", "error");
-        });
+        .then(r => r.json())
+        .then(() => loadFileList());
+    });
 }
 
+// ----------------------
+// Set Active
+// ----------------------
 
-// -----------------------------
-// DELETE FILE
-// -----------------------------
-function deleteFile(filename) {
-    if (!confirm(`Delete '${filename}'?`)) return;
-
-    fetch("/delete_sqlite_file", {
+function setActive(filename) {
+    fetch("/api/set_active", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ filename })
     })
-        .then(res => res.json())
-        .then(data => {
-            if (!data.success) {
-                showStatus("Delete failed: " + data.error, "error");
-                return;
-            }
-
-            showStatus(`Deleted ${filename}`, "success");
-            loadFiles();
-        });
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) showMessage("Active file changed.");
+        else showMessage("Failed to set active file.");
+    });
 }
 
+// ----------------------
+// Download
+// ----------------------
 
-// -----------------------------
-// DOWNLOAD FILE
-// -----------------------------
 function downloadFile(filename) {
-    window.location.href = `/download_sqlite_file/${filename}`;
+    window.location.href = `/api/download_file/${filename}`;
 }
 
+// ----------------------
+// Delete
+// ----------------------
 
-// -----------------------------
-// STATUS POPUP / TOAST
-// -----------------------------
-function showStatus(message, type = "info") {
-    const box = document.getElementById("uploadStatus");
-    box.className = "status-box " + type;
-    box.innerText = message;
+function deleteFile(filename) {
+    fetch(`/api/delete_file/${filename}`, {
+        method: "DELETE"
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showMessage("Deleted successfully.");
+            loadFileList();
+        } else {
+            showMessage("Delete failed.");
+        }
+    });
+}
 
-    box.style.opacity = "1";
-    setTimeout(() => (box.style.opacity = "0"), 2500);
+// ----------------------
+// Helpers
+// ----------------------
+
+function formatBytes(b) {
+    if (!b) return "0 B";
+    const u = ["B","KB","MB","GB"];
+    let i = Math.floor(Math.log(b)/Math.log(1024));
+    return (b / Math.pow(1024, i)).toFixed(2) + " " + u[i];
+}
+
+function formatDate(dt) {
+    return dt ? dt.replace("T", " ").split(".")[0] : "Unknown";
+}
+
+function showMessage(msg) {
+    alert(msg);
 }

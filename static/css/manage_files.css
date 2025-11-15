@@ -1,76 +1,49 @@
-/* ===============================
-   Manage Files Page Styling
-   =============================== */
+.manage-container {
+    padding: 25px;
+}
 
-.file-table {
-    width: 100%;
-    border-collapse: collapse;
+.upload-box {
+    border: 2px dashed #aaa;
+    padding: 30px;
+    text-align: center;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    cursor: pointer;
+    margin-bottom: 25px;
+}
+
+.upload-box.drag-over {
+    border-color: #4a8;
+    background: rgba(50,200,150,0.1);
+}
+
+#filesList {
     margin-top: 20px;
 }
 
-.file-table th,
-.file-table td {
-    padding: 12px 14px;
-    text-align: left;
-}
-
-.file-table thead tr {
-    background: var(--btn-bg);
-    color: var(--text);
-}
-
-.file-table tbody tr {
-    background: var(--card-bg);
-    border-bottom: 1px solid var(--border);
-}
-
-.file-table tbody tr:hover {
-    background: var(--hover);
-}
-
-.actions-col {
-    text-align: right;
-    white-space: nowrap;
-}
-
-/* Delete button highlight */
-.delete-btn {
-    background: #ff4a4a !important;
-    color: white !important;
-}
-
-/* Upload status (toast) */
-.status-box {
-    margin-top: 12px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-weight: 600;
-    opacity: 0;
-    transition: opacity 0.4s ease-in-out;
-}
-
-.status-box.success {
-    background: #2ecc71;
-    color: white;
-}
-
-.status-box.error {
-    background: #e74c3c;
-    color: white;
-}
-
-.status-box.info {
-    background: #3498db;
-    color: white;
-}
-
-/* File Upload Input */
-#uploadInput {
-    margin-bottom: 10px;
-    padding: 14px;
-    width: 100%;
+.file-item {
+    background: rgba(255,255,255,0.08);
+    margin-bottom: 12px;
+    padding: 15px;
     border-radius: 12px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-actions button {
+    margin-left: 10px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+.set-active-btn {
+    background: #c8b458;
+}
+.download-btn {
+    background: #8ab8fa;
+}
+.delete-btn {
+    background: #ff9a9a;
 }
