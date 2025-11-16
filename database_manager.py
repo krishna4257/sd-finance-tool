@@ -1,163 +1,210 @@
-"""
-database_manager.py
+"""Database management helpers.
 
-Small abstraction for local vs cloud DB path management and simple helpers.
-This uses gcs_utils under the hood for cloud mode.
+This module encapsulates all logic related to connecting to and
+interacting with village SQLite databases. By centralising these
+operations we avoid duplicating file handling throughout the Flask
+routes. Functions defined here should be stateless and raise
+appropriate exceptions to be handled by the caller. When updating this
+module ensure that it is only responsible for data access and not for
+rendering or business logic.
 """
+from __future__ import annotations
 
 import os
 import sqlite3
-from typing import List, Dict, Any, Optional
+import sys
+from typing import Iterable, List, Optional, Sequence, Tuple, Dict
 
-from config import RUN_MODE, GCS_BUCKET_NAME
-import gcs_utils
+# This function determines the correct base path for the application,
+# whether it's running from source or from a PyInstaller executable.
+def _get_base_path():
+    """Get the correct base path for the application."""
+    if getattr(sys, 'frozen', False):
+        # The application is frozen (PyInstaller). `sys._MEIPASS` is where
+        # bundled files are extracted.
+        # Pylance will warn about this attribute, but it is available at runtime
+        return sys._MEIPASS # type: ignore
+    else:
+        # We are running in a normal Python script
+        return os.path.dirname(os.path.abspath(__file__))
 
-BASE_DIR = os.path.dirname(__file__)
-LOCAL_DB_FOLDER = os.path.join(BASE_DIR, "databases")
-TMP_CACHE = "/tmp/sqlite_cache"
+# Define the SQLITE_FOLDER relative to the application's base path
+SQLITE_FOLDER = os.path.join(_get_base_path(), 'databases')
+
+def _extract_numeric_prefix(filename: str) -> int:
+    """Extract a numeric prefix from a filename.
+
+    Village database files are named with a numeric prefix (e.g. "12.db" or
+    "3.sqlite"). This helper isolates that number for sorting. Non
+    numeric prefixes are treated as zero so they appear last when
+    sorting.
+
+    Parameters
+    ----------
+    filename: str
+        The file name to parse.
+
+    Returns
+    -------
+    int
+        The integer value of the numeric prefix, or a large number if
+        no numeric prefix is found.
+    """
+    stem = filename.split(".")[0]
+    return int(stem) if stem.isdigit() else 10**9
 
 
-def _ensure_local_folder():
-    os.makedirs(LOCAL_DB_FOLDER, exist_ok=True)
-    os.makedirs(TMP_CACHE, exist_ok=True)
+def list_village_databases() -> List[str]:
+    """Return a sorted list of available village database file names.
+
+    Files ending with ``.db`` or ``.sqlite`` in the configured
+    :data:`~.config.SQLITE_FOLDER` directory are considered village
+    databases. Results are sorted by their numeric prefix so that
+    '10.db' appears after '2.db'. Hidden files and directories are
+    ignored. In case the configured directory does not exist, an empty
+    list is returned.
+
+    Returns
+    -------
+    List[str]
+        Sorted list of database file names.
+    """
+    # Create the folder if it doesn't exist to avoid FileNotFoundError
+    os.makedirs(SQLITE_FOLDER, exist_ok=True)
+    
+    candidates: List[str] = [
+        f for f in os.listdir(SQLITE_FOLDER)
+        if os.path.isfile(os.path.join(SQLITE_FOLDER, f))
+        and f.lower().endswith((".db", ".sqlite"))
+    ]
+    candidates.sort(key=_extract_numeric_prefix)
+    return candidates
 
 
 def get_database_path(filename: str) -> str:
-    """Return path where the database file can be accessed locally.
+    """Construct the absolute path to a database given its file name.
 
-    In local mode this is the local databases folder.
-    In cloud mode this will download the file into /tmp/sqlite_cache and return that path.
+    Parameters
+    ----------
+    filename: str
+        The base file name of the database (e.g. ``"12.db"``).
+
+    Returns
+    -------
+    str
+        An absolute path to the database file.
     """
-    _ensure_local_folder()
-    if RUN_MODE == "local":
-        return os.path.join(LOCAL_DB_FOLDER, filename)
+    return os.path.join(SQLITE_FOLDER, filename)
 
-    # cloud mode: use /tmp cache
-    local_tmp = os.path.join(TMP_CACHE, filename)
-    if not os.path.exists(local_tmp):
-        # download into temporary cache
-        gcs_utils.download_sqlite(filename, local_tmp)
-    return local_tmp
-
-
-def list_village_databases(full_meta: bool = False) -> List[Any]:
-    """
-    Return list of files.
-    If RUN_MODE=local returns filenames (or metadata dicts if full_meta True)
-    If RUN_MODE=cloud calls gcs_utils.list_sqlite_files(full_meta=full_meta)
-    """
-    _ensure_local_folder()
-    if RUN_MODE == "local":
-        files = [f for f in os.listdir(LOCAL_DB_FOLDER) if f.endswith(".sqlite")]
-        if full_meta:
-            result = []
-            for f in files:
-                path = os.path.join(LOCAL_DB_FOLDER, f)
-                stat = os.stat(path)
-                result.append({
-                    "name": f,
-                    "size": stat.st_size,
-                    "updated": ""
-                })
-            return sorted(result, key=lambda x: int(os.path.splitext(x["name"])[0]) if os.path.splitext(x["name"])[0].isdigit() else 10**9)
-        return sorted(files, key=lambda n: int(os.path.splitext(n)[0]) if os.path.splitext(n)[0].isdigit() else 10**9)
-
-    # cloud
-    return gcs_utils.list_sqlite_files(full_meta=full_meta)
-
-
-def upload_sqlite(local_path: str, filename: str) -> bool:
-    """Upload file to GCS (cloud) or copy to local folder (local)."""
-    _ensure_local_folder()
-    if RUN_MODE == "local":
-        dest = os.path.join(LOCAL_DB_FOLDER, filename)
-        # overwrite
-        import shutil
-        shutil.copyfile(local_path, dest)
-        return True
-    return gcs_utils.upload_sqlite(local_path, filename)
-
-
-def download_sqlite(filename: str, local_path: Optional[str] = None) -> bool:
-    """Download from GCS (cloud) or copy from local folder (local)."""
-    _ensure_local_folder()
-    if RUN_MODE == "local":
-        src = os.path.join(LOCAL_DB_FOLDER, filename)
-        if not os.path.exists(src):
-            return False
-        dest = local_path or src
-        import shutil
-        shutil.copyfile(src, dest)
-        return True
-
-    # cloud mode
-    try:
-        gcs_utils.download_sqlite(filename, local_path)
-        return True
-    except FileNotFoundError:
-        return False
-
-
-def delete_sqlite(filename: str) -> bool:
-    """Delete from GCS (cloud) or remove from local folder (local)."""
-    _ensure_local_folder()
-    if RUN_MODE == "local":
-        path = os.path.join(LOCAL_DB_FOLDER, filename)
-        if not os.path.exists(path):
-            return False
-        os.remove(path)
-        return True
-
-    return gcs_utils.delete_sqlite(filename)
-
-
-def update_loanee_balances(conn: sqlite3.Connection, ano: str):
-    """
-    Recalculate PAMT (total paid), BAMT (balance),
-    and DA (daily/weekly amount) for a given ANO.
-    """
-    try:
-        cur = conn.cursor()
-
-        # Fetch principal amount, duration (DS), DW (M/W)
-        cur.execute("""
-            SELECT AMT, DS, DW
-            FROM LOANEE
-            WHERE ANO = ?
-        """, (ano,))
-        row = cur.fetchone()
-        if not row:
-            return False
-
-        amt, ds, dw = row
-        amt = float(amt or 0)
-        ds = int(ds or 0)
-
-        # Calculate per-period DA again
-        da = round(amt / ds, 2) if ds > 0 else 0
-
-        # Sum all payments made
-        cur.execute("SELECT SUM(AMT) FROM PAMT1 WHERE ANO = ?", (ano,))
-        paid = cur.fetchone()[0] or 0
-
-        # Calculate remaining balance
-        bamt = round(amt - paid, 2)
-
-        cur.execute("""
-            UPDATE LOANEE
-            SET PAMT = ?, BAMT = ?, DA = ?
-            WHERE ANO = ?
-        """, (paid, bamt, da, ano))
-
-        return True
-
-    except Exception as e:
-        print("Error updating balances:", e)
-        return False
 
 def connect(filename: str) -> sqlite3.Connection:
-    """Return a sqlite3.Connection to a local DB file (downloads if necessary)."""
+    """Establish a connection to the specified SQLite database.
+
+    This function validates that the requested database exists under
+    :data:`~.config.SQLITE_FOLDER` and returns a connection with a row
+    factory configured to behave like a dictionary for convenient
+    column access by name. The caller is responsible for closing the
+    returned connection when finished.
+
+    Parameters
+    ----------
+    filename: str
+        The base file name of the database to connect to.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified database file does not exist.
+
+    Returns
+    -------
+    sqlite3.Connection
+        A connection object ready for use.
+    """
     path = get_database_path(filename)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Database file not found: {path}")
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def update_loanee_balances(conn: sqlite3.Connection, ano: str) -> None:
+    """Recalculate and persist a loan's paid and balance amounts.
+
+    Given an account number, this helper sums all payments in the
+    ``PAMT1`` table for that account, then updates the corresponding
+    ``PAMT`` (paid amount) and ``BAMT`` (balance amount) fields in the
+    ``LOANEE`` table. It does not commit the transaction; the caller
+    must commit to persist the changes.
+
+    Parameters
+    ----------
+    conn: sqlite3.Connection
+        An open database connection. The connection should be in a
+        transaction context if multiple updates are performed.
+    ano: str
+        Account number whose balances need updating.
+
+    Raises
+    ------
+    sqlite3.Error
+        If an underlying database operation fails.
+    """
+    cursor = conn.cursor()
+
+    # Calculate the total paid amount for the account. Use IFNULL to
+    # coerce NULLs into zeros so SUM operates as expected.
+    cursor.execute(
+        "SELECT SUM(IFNULL(AMT, 0)) FROM PAMT1 WHERE ANO = ?",
+        (ano,),
+    )
+    result = cursor.fetchone()
+    total_paid: float = float(result[0]) if result and result[0] is not None else 0.0
+
+    # Fetch the original loan amount from the LOANEE table.
+    cursor.execute("SELECT AMT FROM LOANEE WHERE ANO = ?", (ano,))
+    row = cursor.fetchone()
+    if row is None:
+        # Nothing to update if the loan is missing. Silent return.
+        return
+    original_amount: float = float(row[0] or 0.0)
+
+    new_balance = original_amount - total_paid
+
+    cursor.execute(
+        """
+        UPDATE LOANEE
+        SET PAMT = ?, BAMT = ?
+        WHERE ANO = ?
+        """,
+        (total_paid, new_balance, ano),
+    )
+
+    # Note: do not commit here; let the caller decide on transaction
+    # boundaries.
+
+class get_db_connection:
+    """
+    A context manager for SQLite connections.
+    It handles opening and closing the connection automatically.
+    """
+    def __init__(self, filename):
+        self.filename = filename
+        self.conn = None
+    
+    def __enter__(self):
+        self.conn = connect(self.filename)
+        return self.conn
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.conn:
+            self.conn.close()
+
+__all__ = [
+    "list_village_databases",
+    "get_database_path",
+    "connect",
+    "update_loanee_balances",
+    "get_db_connection"
+]
