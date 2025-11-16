@@ -110,6 +110,7 @@
     <a class="neumorphic-btn" href="/view_customers">👁️ All Customers</a>
     <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
     <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
+    <a href="/manage_files" class="neumorphic-btn">📂 Manage Files</a>
     </aside>
 
   <main>
@@ -130,7 +131,7 @@
             {% else %}
       <div>
         <strong>Active Village:</strong> {{ village_name or "Unknown" }}
-        <form method="POST" action="/reselect_village" style="display: inline;">
+        <form method="POST" action="/reselect" style="display: inline;">
           <button type="submit" class="neumorphic-btn-h">🔄 Reselect</button>
         </form>
 

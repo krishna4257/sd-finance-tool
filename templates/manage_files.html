@@ -1,0 +1,81 @@
+{% extends "dashboard.html" %}
+
+{% block content %}
+
+<h2 class="page-title">📂 Manage Database Files</h2>
+
+<!-- Upload Section -->
+<div class="form-card mf-card">
+    <h3 class="form-title">Upload New Files</h3>
+
+    <form action="/upload_to_gcs" method="POST" enctype="multipart/form-data" class="form-layout">
+        <div class="control-row mf-upload-row">
+            <input type="file" name="file" class="styled-input mf-upload-input">
+            <button class="neumorphic-btn mf-upload-btn">⬆ Upload</button>
+        </div>
+    </form>
+</div>
+
+<!-- Files Table Section -->
+<div class="table-wrapper mf-table-card">
+    <h3 class="table-title">Available Files in Workspace</h3>
+
+    <div class="scroll-table-container">
+        <table id="filesTable" class="dataTable customer-table mf-table">
+            <thead>
+                <tr>
+                    <th>File Name</th>
+                    <th style="width: 220px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in files %}
+                <tr class="{% if file == active_db %}highlight-row{% endif %}">
+                    <td>{{ file }}</td>
+
+                    <td>
+                        <form action="/select_gcs_file" method="POST" style="display:inline;">
+                            <input type="hidden" name="filename" value="{{ file }}">
+                            <button class="neumorphic-btn ultrasmall small-btn">Set</button>
+                        </form>
+
+                        <a href="/download_gcs/{{ file }}" class="neumorphic-btn ultrasmall small-btn">
+                            Download
+                        </a>
+
+                        <form action="/delete_from_gcs" method="POST" style="display:inline;">
+                            <input type="hidden" name="filename" value="{{ file }}">
+                            <button class="neumorphic-btn ultrasmall danger-btn small-btn">
+                                Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function () {
+
+    // Avoid duplicate initialization
+    if (!$.fn.DataTable.isDataTable('#filesTable')) {
+        $('#filesTable').DataTable({
+            paging: false,
+            searching: false,
+            info: false,
+            ordering: true,
+            autoWidth: false,
+            columnDefs: [
+                { targets: 1, orderable: false }
+            ]
+        });
+    }
+});
+</script>
+{% endblock %}

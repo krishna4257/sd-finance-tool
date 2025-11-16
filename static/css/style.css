@@ -1520,3 +1520,195 @@ table tbody tr.highlighted-row, /* General rule for all tables */
 .rupee-input-wrapper input {
     padding-left: 20px; /* Make space for ₹ symbol */
 }
+
+/*latest css updated*/
+.page-header {
+    margin-bottom: 20px;
+}
+
+.page-title {
+    color: #d4af37;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 10px;
+}
+
+.card-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.upload-form {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.file-input {
+    padding: 10px;
+    border-radius: 8px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+}
+
+.small-btn {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+}
+
+.danger-btn {
+    background: #7a1f1f !important;
+    color: white !important;
+}
+
+/* Page Title */
+.page-title {
+    text-align: center;
+    color: #d4af37;
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+/* 3D-style form card (matches Add Customer page) */
+.form-card {
+    background: #1c1c1c;
+    padding: 25px;
+    border-radius: 20px;
+    width: 80%;
+    margin: 0 auto 35px auto;
+    box-shadow: 8px 8px 16px #0f0f0f, -8px -8px 16px #2a2a2a;
+}
+
+.form-title {
+    color: #d4af37;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.form-layout {
+    display: flex;
+    flex-direction: column;
+}
+
+.input-label {
+    color: #ccc;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.input-field {
+    padding: 10px 12px;
+    width: 300px;
+    border-radius: 10px;
+    background: #2b2b2b;
+    color: white;
+    border: 1px solid #444;
+}
+
+/* Table Wrapper */
+.table-wrapper {
+    background: #1c1c1c;
+    padding: 25px;
+    border-radius: 20px;
+    width: 90%;
+    margin: 0 auto 40px auto;
+    box-shadow: 8px 8px 16px #0f0f0f, -8px -8px 16px #2a2a2a;
+}
+
+.table-title {
+    color: #d4af37;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+/* Highlight Active DB Row */
+.highlight-row {
+    background: #6c2e2e !important;
+}
+
+/* Buttons (enhanced) */
+.small-btn {
+    padding: 6px 14px !important;
+    margin: 0 4px;
+}
+
+/* Danger button */
+.danger-btn {
+    background: #9b1c1c !important;
+    color: white !important;
+}
+
+/* Responsive adjustments */
+/* =====================================================
+   MANAGE FILES PAGE FIXES (LIGHT + DARK MODE SUPPORT)
+   ===================================================== */
+
+:root {
+    --mf-card-bg: var(--bg-card, #2f2e2e);
+    --mf-surface-bg: var(--bg-surface, #2e2d2d);
+    --mf-text: var(--text-color, #333);
+    --mf-table-bg: var(--bg-table, #464545);
+    --mf-highlight: var(--row-highlight, #2b3c23);
+}
+
+/* Dark mode override using your existing class */
+body.dark-mode {
+    --mf-card-bg: #efefef;
+    --mf-surface-bg: #edeaea;
+    --mf-text: #24452b;
+    --mf-table-bg: #f5f5f5;
+    --mf-highlight: #552222;
+}
+
+/* Upload card */
+.mf-card {
+    background: var(--mf-card-bg) !important;
+    color: var(--mf-text);
+}
+
+/* Upload row */
+.mf-upload-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.mf-upload-input {
+    width: 45%;
+}
+
+.mf-upload-btn {
+    width: 45%;
+}
+
+/* Table container */
+.mf-table-card {
+    background: var(--mf-card-bg) !important;
+    color: var(--mf-text);
+}
+
+/* Table overrides */
+.mf-table {
+    background: var(--mf-table-bg) !important;
+}
+
+.mf-table tbody tr {
+    background: var(--mf-table-bg);
+}
+
+.mf-table tbody tr.highlight-row {
+    background: var(--mf-highlight) !important;
+}
+
+/* Titles */
+.mf-card .form-title,
+.mf-table-card .table-title {
+    color: var(--title-color, #c19d4c);
+}
+

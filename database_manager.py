@@ -14,7 +14,108 @@ import os
 import sqlite3
 import sys
 from typing import Iterable, List, Optional, Sequence, Tuple, Dict
+# database_manager.py
+import os
+import shutil
+from google.cloud import storage
+from werkzeug.utils import secure_filename
 
+# --- CONFIG ---
+GCS_BUCKET = os.environ.get("GCS_BUCKET")        # required
+TMP_FOLDER = "/tmp/gcs_sqlite_files"
+os.makedirs(TMP_FOLDER, exist_ok=True)
+
+
+# -------------------------
+# INTERNAL HELPERS
+# -------------------------
+def _get_client():
+    return storage.Client()
+
+
+def _safe_tmp_path(filename):
+    safe = secure_filename(filename)
+    return os.path.join(TMP_FOLDER, safe)
+
+
+# -------------------------
+# LIST FILES IN GCS
+# -------------------------
+def list_gcs_files():
+    if not GCS_BUCKET:
+        raise RuntimeError("Environment variable GCS_BUCKET not set")
+
+    client = _get_client()
+    bucket = client.bucket(GCS_BUCKET)
+
+    return [
+        blob.name
+        for blob in client.list_blobs(bucket)
+        if blob.name.endswith(".sqlite")
+    ]
+
+
+# -------------------------
+# DOWNLOAD FILE FROM GCS
+# -------------------------
+def download_from_gcs(filename):
+    client = _get_client()
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+
+    local_path = _safe_tmp_path(filename)
+    blob.download_to_filename(local_path)
+
+    os.chmod(local_path, 0o666)
+    return local_path
+
+
+# -------------------------
+# UPLOAD FILE TO GCS
+# -------------------------
+def upload_to_gcs(local_path, filename=None):
+    if filename is None:
+        filename = os.path.basename(local_path)
+
+    client = _get_client()
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+    blob.upload_from_filename(local_path)
+
+    return True
+
+
+# -------------------------
+# DELETE FILE FROM GCS
+# -------------------------
+def delete_from_gcs(filename):
+    client = _get_client()
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+    blob.delete()
+    return True
+
+
+# -------------------------
+# GET LOCAL COPY OF SELECTED DB
+# -------------------------
+def get_local_db_path(filename):
+    """
+    Ensures the selected DB exists locally (/tmp) and is downloaded from GCS.
+    returns: "/tmp/<filename>"
+    """
+    local_path = _safe_tmp_path(filename)
+    return download_from_gcs(filename)
+
+
+# -------------------------
+# CREATE A NEW EMPTY SQLITE DB
+# -------------------------
+def create_new_db(filename):
+    local_path = _safe_tmp_path(filename)
+    open(local_path, "a").close()         # create empty sqlite file
+    upload_to_gcs(local_path, filename)
+    return filename
 # This function determines the correct base path for the application,
 # whether it's running from source or from a PyInstaller executable.
 def _get_base_path():
