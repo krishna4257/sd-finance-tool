@@ -111,6 +111,50 @@ def delete_sqlite(filename: str) -> bool:
     return gcs_utils.delete_sqlite(filename)
 
 
+def update_loanee_balances(conn: sqlite3.Connection, ano: str):
+    """
+    Recalculate PAMT (total paid), BAMT (balance),
+    and DA (daily/weekly amount) for a given ANO.
+    """
+    try:
+        cur = conn.cursor()
+
+        # Fetch principal amount, duration (DS), DW (M/W)
+        cur.execute("""
+            SELECT AMT, DS, DW
+            FROM LOANEE
+            WHERE ANO = ?
+        """, (ano,))
+        row = cur.fetchone()
+        if not row:
+            return False
+
+        amt, ds, dw = row
+        amt = float(amt or 0)
+        ds = int(ds or 0)
+
+        # Calculate per-period DA again
+        da = round(amt / ds, 2) if ds > 0 else 0
+
+        # Sum all payments made
+        cur.execute("SELECT SUM(AMT) FROM PAMT1 WHERE ANO = ?", (ano,))
+        paid = cur.fetchone()[0] or 0
+
+        # Calculate remaining balance
+        bamt = round(amt - paid, 2)
+
+        cur.execute("""
+            UPDATE LOANEE
+            SET PAMT = ?, BAMT = ?, DA = ?
+            WHERE ANO = ?
+        """, (paid, bamt, da, ano))
+
+        return True
+
+    except Exception as e:
+        print("Error updating balances:", e)
+        return False
+
 def connect(filename: str) -> sqlite3.Connection:
     """Return a sqlite3.Connection to a local DB file (downloads if necessary)."""
     path = get_database_path(filename)
