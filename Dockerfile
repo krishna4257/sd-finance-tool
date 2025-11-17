@@ -19,4 +19,4 @@ COPY . .
 # Use PORT env var provided by Cloud Run (default 8080)
 ENV PORT=8080
 # Production command — assumes app.py defines `app` (Flask instance)
-CMD exec gunicorn --bind ":$PORT" --workers 2 --threads 4 --timeout 120 app:app
+CMD exec gunicorn --bind ":$PORT" --workers 4 --threads 8 --timeout 120 app:app

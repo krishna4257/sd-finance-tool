@@ -302,6 +302,7 @@ class get_db_connection:
         if self.conn:
             self.conn.close()
 
+
 __all__ = [
     "list_village_databases",
     "get_database_path",
