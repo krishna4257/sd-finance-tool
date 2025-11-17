@@ -1,13 +1,22 @@
+# Dockerfile - optimized for Cloud Run
 FROM python:3.10-slim
+
+# Install system deps (if you need: ffmpeg, libmagic, etc add here)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
+# copy only requirements first (better caching)
+COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy app source
 COPY . .
 
-ENV PYTHONUNBUFFERED=1
+# Use PORT env var provided by Cloud Run (default 8080)
 ENV PORT=8080
-
-CMD ["python", "app.py"]
+# Production command — assumes app.py defines `app` (Flask instance)
+CMD exec gunicorn --bind ":$PORT" --workers 2 --threads 4 --timeout 120 app:app
