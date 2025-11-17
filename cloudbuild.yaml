@@ -1,28 +1,21 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
-
-
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build',
-      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance:latest',
-      '.'
-    ]
+  # Step 1: Build container image
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', 'asia-south1-docker.pkg.dev/sd-finance-tool-2025/sd-repo/sd-finance-app:$COMMIT_SHA', '.']
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'push',
-      'asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance:latest'
-    ]
+  # Step 2: Push image to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', 'asia-south1-docker.pkg.dev/sd-finance-tool-2025/sd-repo/sd-finance-app:$COMMIT_SHA']
 
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args: [
-      'run', 'deploy', 'sd-finance-app',
-      '--image', 'asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance:latest',
-      '--region', 'asia-south1',
-      '--allow-unauthenticated'
-    ]
+  # Step 3: Deploy to Cloud Run
+  - name: gcr.io/cloud-builders/gcloud
+    args:
+      [
+        'run', 'deploy', 'sd-finance-app',
+        '--image=asia-south1-docker.pkg.dev/sd-finance-tool-2025/sd-repo/sd-finance-app:$COMMIT_SHA',
+        '--region=asia-south1',
+        '--allow-unauthenticated'
+      ]
 
 images:
-  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance:latest'
+  - asia-south1-docker.pkg.dev/sd-finance-tool-2025/sd-repo/sd-finance-app:$COMMIT_SHA
