@@ -1,16 +1,23 @@
-# Use Python 3.10+
-FROM python:3.10-slim
+# Use Python 3.11 slim
+FROM python:3.11-slim
 
-# Install pip dependencies
+# Install system packages
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
 WORKDIR /app
+
+# Copy application files
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files
 COPY . .
 
-# Cloud Run uses port 8080
+# Expose application port
 ENV PORT 8080
 
-# Start Fask using gunicorn
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
+# Start app
+CMD ["python", "app.py"]

@@ -1,0 +1,32 @@
+steps:
+  # Step 1: Build Docker image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/sd-finance-repo/sd-finance-image'
+      - '.'
+
+  # Step 2: Push image to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/sd-finance-repo/sd-finance-image'
+
+  # Step 3: Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - sd-finance-app
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/sd-finance-repo/sd-finance-image
+      - --region=us-central1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --service-account=cloud-run-app@$PROJECT_ID.iam.gserviceaccount.com
+      - --set-env-vars=GCS_BUCKET=sd-finance-db
+      - --set-env-vars=SECRET_KEY=prod-secret-key-here
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/sd-finance-repo/sd-finance-image
