@@ -41,11 +41,7 @@ def list_gcs_files():
         updated = blob.updated.replace(tzinfo=datetime.timezone.utc)
         is_new = (now - updated).total_seconds() < 86400
 
-        files.append({
-            "name": blob.name,
-            "size": round((blob.size or 0) / 1024 / 1024, 2),
-            "new": is_new
-        })
+        files.append(blob.name)
 
     return files
 
@@ -54,6 +50,10 @@ def list_gcs_files():
 # DOWNLOAD FILE FROM GCS
 # -------------------------
 def download_from_gcs(filename):
+    if isinstance(filename, dict):
+      filename = filename.get("name")
+
+    filename = str(filename).strip()
     client = _get_client()
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)

@@ -123,22 +123,36 @@ def dashboard():
 
     if request.method == "POST":
         selected_file = request.form.get("village_db")
+
+        # ===============================
+        # FIX #2 — ensure clean filename
+        # ===============================
         if selected_file:
-            # Save active DB name
-            session["active_db"] = selected_file
+            # In case HTML sends a dict or extra spaces
+            selected_file = str(selected_file).strip()
 
-            # Download from GCS → /tmp
-            local_path = get_local_db_path(selected_file)
-            session["active_path"] = local_path
+            # Ensure only actual filename is stored
+            # (Protects from accidental dict-like inputs)
+            if isinstance(selected_file, dict):
+                selected_file = selected_file.get("name", "")
+            # ===============================
 
-            # Get friendly village name
-            file_number = selected_file.split(".")[0]
-            vname = get_village_name_from_db(local_path)
-            session["village_name"] = f"{file_number} - {vname}"
+            if selected_file:
+                # Save active DB name
+                session["active_db"] = selected_file
 
-            return redirect("/dashboard")
+                # Download from GCS → /tmp
+                local_path = get_local_db_path(selected_file)
+                session["active_path"] = local_path
 
-    # GET mode
+                # Get friendly village name
+                file_number = selected_file.split(".")[0]
+                vname = get_village_name_from_db(local_path)
+                session["village_name"] = f"{file_number} - {vname}"
+
+                return redirect("/dashboard")
+
+    # ------------ GET MODE ------------
     active_db = session.get("active_db")
     local_path = session.get("active_path")
     village_name = session.get("village_name", "Unknown")
@@ -166,6 +180,7 @@ def dashboard():
         sum_pamt=sum_pamt,
         sum_bamt=sum_bamt,
     )
+
 
 @app.route("/reselect", methods=["POST"])
 def reselect():
