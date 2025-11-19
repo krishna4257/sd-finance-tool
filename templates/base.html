@@ -116,7 +116,7 @@
   <main>
     <header>
       <!-- Village Selector / Active Display -->
-            {% if not selected_file %}
+            {% if not session.active_db %}
             <form method="POST" action="/dashboard" class="village-select-form">
                 <label for="village_db"><strong>Village:</strong></label>
                 <select name="village_db" id="village_db" required>
