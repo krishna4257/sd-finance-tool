@@ -10,12 +10,11 @@ rendering or business logic.
 """
 from __future__ import annotations
 
+import datetime
 import os
 import sqlite3
 import sys
 from typing import Iterable, List, Optional, Sequence, Tuple, Dict
-# database_manager.py
-import os
 import shutil
 from google.cloud import storage
 from werkzeug.utils import secure_filename
@@ -42,17 +41,24 @@ def _safe_tmp_path(filename):
 # LIST FILES IN GCS
 # -------------------------
 def list_gcs_files():
-    if not GCS_BUCKET:
-        raise RuntimeError("Environment variable GCS_BUCKET not set")
-
     client = _get_client()
     bucket = client.bucket(GCS_BUCKET)
 
-    return [
-        blob.name
-        for blob in client.list_blobs(bucket)
-        if blob.name.endswith(".sqlite")
-    ]
+    files = []
+    now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+
+    for blob in bucket.list_blobs():
+        # Determine "modified within 24 hours"
+        updated = blob.updated.replace(tzinfo=datetime.timezone.utc)
+        is_new = (now - updated).total_seconds() < 86400
+
+        files.append({
+            "name": blob.name,
+            "size": round((blob.size or 0) / 1024 / 1024, 2),
+            "new": is_new
+        })
+
+    return files
 
 
 # -------------------------

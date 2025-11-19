@@ -13,8 +13,11 @@ import os
 import sqlite3
 import traceback
 import logging
+from google.cloud import storage
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from database_manager import GCS_BUCKET, _get_client
 from flask import (
     Flask, render_template, request, redirect,
     session, jsonify, flash, send_file
@@ -184,17 +187,30 @@ def manage_files():
 
 @app.route("/upload_to_gcs", methods=["POST"])
 def upload_to_gcs_route():
-    file = request.files["file"]
-    if not file or not file.filename:
-      return redirect("/manage_files")
+    if "files" not in request.files:
+        return jsonify({"error": "No files part"}), 400
 
-    filename = secure_filename(str(file.filename))
+    files = request.files.getlist("files")
+    uploaded = []
 
-    tmp_path = "/tmp/" + filename
-    file.save(tmp_path)
+    client = _get_client()
+    bucket = client.bucket(GCS_BUCKET)
 
-    upload_to_gcs(tmp_path, filename)
-    return redirect("/manage_files")
+    for f in files:
+        if not f or not f.filename:
+            continue
+        if not f.filename.lower().endswith(".sqlite"):
+            continue
+
+        filename = secure_filename(f.filename)
+        blob = bucket.blob(filename)
+
+        # Upload file to GCS
+        blob.upload_from_file(f, content_type="application/x-sqlite3")
+
+        uploaded.append(filename)
+
+    return jsonify({"uploaded": uploaded})
 
 
 @app.route("/delete_from_gcs", methods=["POST"])

@@ -8,12 +8,28 @@
 <div class="form-card mf-card">
     <h3 class="form-title">Upload New Files</h3>
 
-    <form action="/upload_to_gcs" method="POST" enctype="multipart/form-data" class="form-layout">
-        <div class="control-row mf-upload-row">
-            <input type="file" name="file" class="styled-input mf-upload-input">
-            <button class="neumorphic-btn mf-upload-btn">⬆ Upload</button>
-        </div>
-    </form>
+    <form id="gcsUploadForm" action="/upload_to_gcs" method="POST" enctype="multipart/form-data">
+
+    <div id="dropZone" class="mf-upload-input" 
+         style="border:2px dashed #666; padding:20px; text-align:center; cursor:pointer;">
+        <p>📁 Drag & Drop .sqlite files here</p>
+        <p style="font-size:12px; opacity:0.7;">or click to select multiple files</p>
+        <input type="file" name="files" id="filesInput" 
+               accept=".sqlite"
+               multiple
+               style="display:none;">
+    </div>
+
+    <div id="uploadProgressContainer" style="display:none; margin-top:15px;">
+        <progress id="uploadProgress" value="0" max="100" style="width:100%;"></progress>
+        <p id="uploadStatus" style="font-size:12px; opacity:0.7;"></p>
+    </div>
+
+    <button class="neumorphic-btn mf-upload-btn" type="submit">
+        ⬆ Upload
+    </button>
+
+</form>
 </div>
 
 <!-- Files Table Section -->
@@ -61,21 +77,75 @@
 
 {% block scripts %}
 <script>
-$(document).ready(function () {
+document.addEventListener("DOMContentLoaded", () => {
 
-    // Avoid duplicate initialization
-    if (!$.fn.DataTable.isDataTable('#filesTable')) {
-        $('#filesTable').DataTable({
-            paging: false,
-            searching: false,
-            info: false,
-            ordering: true,
-            autoWidth: false,
-            columnDefs: [
-                { targets: 1, orderable: false }
-            ]
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("filesInput");
+    const form = document.getElementById("gcsUploadForm");
+
+    // Click → trigger file select
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    // Drag over highlight
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.style.background = "rgba(255,255,255,0.1)";
+    });
+
+    // Drag leave remove highlight
+    dropZone.addEventListener("dragleave", () => {
+        dropZone.style.background = "transparent";
+    });
+
+    // Drop files
+    dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.style.background = "transparent";
+        fileInput.files = e.dataTransfer.files;
+    });
+
+    // Form submit (AJAX upload)
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const files = fileInput.files;
+        if (files.length === 0) {
+            alert("Please select at least one .sqlite file.");
+            return;
+        }
+
+        // Show progress bar container
+        document.getElementById("uploadProgressContainer").style.display = "block";
+
+        const formData = new FormData();
+        for (const f of files) {
+            if (f.name.toLowerCase().endsWith(".sqlite")) {
+                formData.append("files", f);
+            }
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/upload_to_gcs");
+
+        xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById("uploadProgress").value = percent;
+                document.getElementById("uploadStatus").innerText = percent + "% uploaded";
+            }
         });
-    }
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                window.location.reload();
+            } else {
+                alert("Upload failed!");
+            }
+        };
+
+        xhr.send(formData);
+    });
+
 });
 </script>
 {% endblock %}
