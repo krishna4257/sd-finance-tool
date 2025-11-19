@@ -94,8 +94,45 @@ def delete_from_gcs(filename):
 # -------------------------
 # GET LOCAL COPY OF SELECTED DB
 # -------------------------
+import os
+from werkzeug.utils import secure_filename
+from google.cloud import storage
+import logging
+
+TMP_FOLDER = "/tmp"
+
+
 def get_local_db_path(filename):
-    return os.path.join(TMP_FOLDER, secure_filename(filename))
+    """
+    Download filename from GCS to /tmp and return the full local path.
+    Raises RuntimeError with clear message if download fails.
+    """
+    client = _get_client()
+    bucket_name = os.environ.get("GCS_BUCKET")
+    if not bucket_name:
+        raise RuntimeError("Environment variable GCS_BUCKET not set")
+
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(filename)
+
+    safe = secure_filename(filename)
+    local_path = os.path.join(TMP_FOLDER, safe)
+
+    # Ensure tmp folder exists
+    os.makedirs(TMP_FOLDER, exist_ok=True)
+
+    try:
+        # download_to_filename will raise a google.api_core.exceptions.NotFound if blob missing
+        blob.download_to_filename(local_path)
+    except Exception as e:
+        logging.exception("Failed to download %s from bucket %s: %s", filename, bucket_name, e)
+        raise RuntimeError(f"Failed to download {filename} from GCS: {e}")
+
+    # sanity check file exists and size > 0
+    if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
+        raise RuntimeError(f"Downloaded file {local_path} missing or empty")
+
+    return local_path
 
 
 # -------------------------

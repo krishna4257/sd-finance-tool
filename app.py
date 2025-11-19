@@ -17,7 +17,7 @@ from google.cloud import storage
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from database_manager import GCS_BUCKET, _get_client
+from database_manager import GCS_BUCKET, _get_client, get_local_db_path
 from flask import (
     Flask, render_template, request, redirect,
     session, jsonify, flash, send_file
@@ -142,7 +142,13 @@ def dashboard():
                 session["active_db"] = selected_file
 
                 # Download from GCS → /tmp
-                local_path = get_local_db_path(selected_file)
+                try:
+                  local_path = get_local_db_path(selected_file)   # WILL download and return /tmp path
+                except Exception as e:
+                    # log & show error, do not try to query the DB
+                    app.logger.exception("Failed to load DB %s: %s", selected_file, e)
+                    flash(f"Could not load selected DB: {e}", "danger")
+                    return redirect("/manage_files") 
                 session["active_path"] = local_path
 
                 # Get friendly village name
@@ -167,8 +173,18 @@ def dashboard():
             row = cursor.fetchone()
             if row:
                 total_customers, sum_amt, sum_pamt, sum_bamt = row
+        except sqlite3.OperationalError as e:
+        # most common: table doesn't exist -> show friendly message & log
+           app.logger.exception("Database schema problem for %s: %s", active_db, e)
+           flash("Selected database does not appear to have the expected schema (missing tables).", "warning")
+           total_customers = sum_amt = sum_pamt = sum_bamt = 0
         except Exception as e:
-            print("Dashboard calculation error:", e)
+           app.logger.exception("Unexpected error reading DB %s: %s", active_db, e)
+        finally:
+            try:
+              conn.close()
+            except:
+               pass
 
     return render_template(
         "dashboard.html",
