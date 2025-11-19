@@ -115,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         for (const f of fileInput.files) {
             selectedFilesList.innerHTML += `
                 <div class="file-progress-item" style="margin-bottom:8px;">
-                    <strong>${f.name}</strong>
+                    <strong>${f.name}</strong>&nbsp;&nbsp;&nbsp;&nbsp;
                     <progress class="file-progress-bar" value="0" max="100" style="width:50%; height:10px;"></progress>
                 </div>
             `;

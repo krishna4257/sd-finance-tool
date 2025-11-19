@@ -2,6 +2,8 @@ from __future__ import annotations
 import datetime
 import os
 import sqlite3
+import tempfile
+from flask import jsonify
 import sys
 from typing import Iterable, List, Optional, Sequence, Tuple, Dict
 import shutil
@@ -160,43 +162,13 @@ def _get_base_path():
 SQLITE_FOLDER = os.path.join(_get_base_path(), 'databases')
 
 def _extract_numeric_prefix(filename: str) -> int:
-    """Extract a numeric prefix from a filename.
-
-    Village database files are named with a numeric prefix (e.g. "12.db" or
-    "3.sqlite"). This helper isolates that number for sorting. Non
-    numeric prefixes are treated as zero so they appear last when
-    sorting.
-
-    Parameters
-    ----------
-    filename: str
-        The file name to parse.
-
-    Returns
-    -------
-    int
-        The integer value of the numeric prefix, or a large number if
-        no numeric prefix is found.
-    """
+  
     stem = filename.split(".")[0]
     return int(stem) if stem.isdigit() else 10**9
 
 
 def list_village_databases() -> List[str]:
-    """Return a sorted list of available village database file names.
-
-    Files ending with ``.db`` or ``.sqlite`` in the configured
-    :data:`~.config.SQLITE_FOLDER` directory are considered village
-    databases. Results are sorted by their numeric prefix so that
-    '10.db' appears after '2.db'. Hidden files and directories are
-    ignored. In case the configured directory does not exist, an empty
-    list is returned.
-
-    Returns
-    -------
-    List[str]
-        Sorted list of database file names.
-    """
+   
     # Create the folder if it doesn't exist to avoid FileNotFoundError
     os.makedirs(SQLITE_FOLDER, exist_ok=True)
     
@@ -210,45 +182,10 @@ def list_village_databases() -> List[str]:
 
 
 def get_database_path(filename: str) -> str:
-    """Construct the absolute path to a database given its file name.
-
-    Parameters
-    ----------
-    filename: str
-        The base file name of the database (e.g. ``"12.db"``).
-
-    Returns
-    -------
-    str
-        An absolute path to the database file.
-    """
     return os.path.join(SQLITE_FOLDER, filename)
 
 
 def connect(filename: str) -> sqlite3.Connection:
-    """Establish a connection to the specified SQLite database.
-
-    This function validates that the requested database exists under
-    :data:`~.config.SQLITE_FOLDER` and returns a connection with a row
-    factory configured to behave like a dictionary for convenient
-    column access by name. The caller is responsible for closing the
-    returned connection when finished.
-
-    Parameters
-    ----------
-    filename: str
-        The base file name of the database to connect to.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the specified database file does not exist.
-
-    Returns
-    -------
-    sqlite3.Connection
-        A connection object ready for use.
-    """
     path = get_database_path(filename)
     if not os.path.exists(path):
         raise FileNotFoundError(f"Database file not found: {path}")
@@ -258,27 +195,7 @@ def connect(filename: str) -> sqlite3.Connection:
 
 
 def update_loanee_balances(conn: sqlite3.Connection, ano: str) -> None:
-    """Recalculate and persist a loan's paid and balance amounts.
-
-    Given an account number, this helper sums all payments in the
-    ``PAMT1`` table for that account, then updates the corresponding
-    ``PAMT`` (paid amount) and ``BAMT`` (balance amount) fields in the
-    ``LOANEE`` table. It does not commit the transaction; the caller
-    must commit to persist the changes.
-
-    Parameters
-    ----------
-    conn: sqlite3.Connection
-        An open database connection. The connection should be in a
-        transaction context if multiple updates are performed.
-    ano: str
-        Account number whose balances need updating.
-
-    Raises
-    ------
-    sqlite3.Error
-        If an underlying database operation fails.
-    """
+    
     cursor = conn.cursor()
 
     # Calculate the total paid amount for the account. Use IFNULL to
@@ -313,10 +230,7 @@ def update_loanee_balances(conn: sqlite3.Connection, ano: str) -> None:
     # boundaries.
 
 class get_db_connection:
-    """
-    A context manager for SQLite connections.
-    It handles opening and closing the connection automatically.
-    """
+   
     def __init__(self, filename):
         self.filename = filename
         self.conn = None

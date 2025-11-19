@@ -1,17 +1,8 @@
-"""
-SD Finance – Cloud-Ready Application
---------------------------------------------------
-This is the fully refactored Flask application using
-Google Cloud Storage (GCS) for all SQLite DB files.
-No local database folder is used anymore.
-
-All DBs are downloaded from GCS into /tmp, worked on,
-then synced back to GCS after any write.
-"""
 
 import os
 import sqlite3
 import traceback
+import datetime
 import logging
 from google.cloud import storage
 from werkzeug.utils import secure_filename
@@ -70,6 +61,7 @@ def sync_active_db_to_gcs():
 def get_village_name_from_db(local_path):
     """Reads village name stored in META or LOANEE table."""
     try:
+        local_path = get_active_db_path()
         conn = sqlite3.connect(local_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -113,7 +105,11 @@ def inject_layout_data():
 def home():
     return redirect("/dashboard")
 
-
+def get_active_db_path():
+    path = session.get("active_path")
+    if not path:
+        raise Exception("No active database selected.")
+    return path
 # ----------------------------------------------------
 # DASHBOARD
 # ----------------------------------------------------
@@ -167,6 +163,7 @@ def dashboard():
 
     if active_db and local_path:
         try:
+            local_path = get_active_db_path()
             conn = sqlite3.connect(local_path)
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*), SUM(AMT), SUM(PAMT), SUM(BAMT) FROM LOANEE")
@@ -218,30 +215,45 @@ def manage_files():
 
 @app.route("/upload_to_gcs", methods=["POST"])
 def upload_to_gcs_route():
+    # Expecting multiple files named "files"
     if "files" not in request.files:
         return jsonify({"error": "No files part"}), 400
 
     files = request.files.getlist("files")
+    if not files:
+        return jsonify({"error": "No files provided"}), 400
+
     uploaded = []
-
     client = _get_client()
-    bucket = client.bucket(GCS_BUCKET)
-
+    # If you need bucket from env/config, your upload_to_gcs helper should use it.
     for f in files:
-        if not f or not f.filename:
+        # filter: only .sqlite
+        filename = f.filename or ""
+        if not filename.lower().endswith(".sqlite"):
+            # skip non-sqlite files silently
             continue
-        if not f.filename.lower().endswith(".sqlite"):
-            continue
 
-        filename = secure_filename(f.filename)
-        blob = bucket.blob(filename)
+        safe_name = secure_filename(filename)
+        # create a temporary file in /tmp
+        tmp_dir = "/tmp"
+        tmp_path = os.path.join(tmp_dir, safe_name)
 
-        # Upload file to GCS
-        blob.upload_from_file(f, content_type="application/x-sqlite3")
+        try:
+            f.save(tmp_path)
+            # call your helper which uploads local file to GCS (keep its signature)
+            # here I assume upload_to_gcs(local_path, target_name) is available
+            upload_to_gcs(tmp_path, safe_name)
+            uploaded.append(safe_name)
+        except Exception as ex:
+            app.logger.exception("Failed to upload %s: %s", safe_name, ex)
+        finally:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
 
-        uploaded.append(filename)
-
-    return jsonify({"uploaded": uploaded})
+    return jsonify({"uploaded": uploaded}), 200
 
 
 @app.route("/delete_from_gcs", methods=["POST"])
@@ -250,11 +262,19 @@ def delete_from_gcs_route():
     return redirect("/manage_files")
 
 
-@app.route("/download_gcs/<filename>")
+@app.route("/download_gcs/<path:filename>")
 def download_gcs_file(filename):
-    local_path = download_from_gcs(filename)
-    return send_file(local_path, as_attachment=True, download_name=filename)
+    try:
+        # download_from_gcs should return a local filesystem path (e.g. /tmp/filename)
+        local_path = download_from_gcs(filename)
+        if not local_path or not os.path.exists(local_path):
+            app.logger.warning("download_gcs: local file not found for %s", filename)
+            return "Not found", 404
 
+        return send_file(local_path, as_attachment=True, download_name=filename)
+    except Exception as ex:
+        app.logger.exception("Error downloading %s: %s", filename, ex)
+        return "Internal server error", 500
 
 @app.route("/select_gcs_file", methods=["POST"])
 def select_gcs_file():
@@ -267,6 +287,37 @@ def select_gcs_file():
 # ----------------------------------------------------
 # ADD CUSTOMER
 # ----------------------------------------------------
+@app.route("/check_parent_link")
+def check_parent_link():
+    pano = request.args.get("pano", "").strip()
+    if not pano:
+        return jsonify({"found": False, "accounts": []})
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        # Find accounts where PARENT or PANO column matches; be permissive
+        # First try exact numeric match
+        try:
+            pano_int = int(pano)
+            cursor.execute("SELECT ANO FROM LOANEE WHERE PANO = ? OR ANO = ? LIMIT 20", (pano_int, pano_int))
+            rows = cursor.fetchall()
+        except Exception:
+            cursor.execute("SELECT ANO FROM LOANEE WHERE CAST(PANO AS TEXT) = ? OR CAST(ANO AS TEXT) = ? LIMIT 20", (pano, pano))
+            rows = cursor.fetchall()
+
+        accounts = [r["ANO"] for r in rows] if rows else []
+        return jsonify({"found": bool(accounts), "accounts": accounts})
+    except Exception as ex:
+        app.logger.exception("check_parent_link error: %s", ex)
+        return jsonify({"found": False, "accounts": []})
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.route("/add_customer", methods=["GET", "POST"])
 def add_customer():
     active_db = session.get("active_db")
@@ -343,6 +394,105 @@ def post_payment_page():
 # ----------------------------------------------------
 # POST PAYMENT
 # ----------------------------------------------------
+@app.route("/get_customer_info")
+def get_customer_info():
+    ano = request.args.get("ano", "").strip()
+    if not ano:
+        return jsonify({"error": "missing ano"}), 400
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Try to locate the row by numeric or text ANO
+        found = None
+        try:
+            ano_int = int(ano)
+            cursor.execute("SELECT * FROM LOANEE WHERE ANO = ? LIMIT 1", (ano_int,))
+            found = cursor.fetchone()
+        except Exception:
+            cursor.execute("SELECT * FROM LOANEE WHERE CAST(ANO AS TEXT) = ? LIMIT 1", (ano,))
+            found = cursor.fetchone()
+
+        if not found:
+            return jsonify({"error": "not found"}), 404
+
+        # Safe extraction of columns
+        def _getval(row, name):
+            try:
+                return row[name]
+            except Exception:
+                return None
+
+        name = _getval(found, "NAME") or ""
+        amt = _getval(found, "AMT") or 0
+        pamt = _getval(found, "PAMT") or 0
+        bamt = _getval(found, "BAMT") or 0
+        da = _getval(found, "DA") or 0
+
+        # Normalize numbers to floats (or formatted strings if you prefer)
+        try:
+            amt = float(amt or 0)
+        except Exception:
+            amt = 0.0
+        try:
+            pamt = float(pamt or 0)
+        except Exception:
+            pamt = 0.0
+        try:
+            bamt = float(bamt or 0)
+        except Exception:
+            bamt = 0.0
+
+        return jsonify({
+            "name": name,
+            "amt": amt,
+            "pamt": pamt,
+            "bamt": bamt,
+            "da": da
+        })
+    except Exception as ex:
+        app.logger.exception("get_customer_info error: %s", ex)
+        return jsonify({"error": "internal"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/check_ano_exists")
+def check_ano_exists():
+    ano = request.args.get("ano", "").strip()
+    if not ano:
+        return jsonify({"exists": False})
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Try numeric match first, then fallback to text match
+        try:
+            ano_int = int(ano)
+            cursor.execute("SELECT 1 FROM LOANEE WHERE ANO = ? LIMIT 1", (ano_int,))
+            found = cursor.fetchone() is not None
+            if found:
+                return jsonify({"exists": True})
+        except Exception:
+            # not int — fall through to text match
+            pass
+
+        cursor.execute("SELECT 1 FROM LOANEE WHERE CAST(ANO AS TEXT) = ? LIMIT 1", (ano,))
+        found = cursor.fetchone() is not None
+        return jsonify({"exists": bool(found)})
+    except Exception as ex:
+        app.logger.exception("check_ano_exists error: %s", ex)
+        return jsonify({"exists": False})
+    finally:
+        if conn:
+            conn.close()
+
 @app.route("/submit_post_payment", methods=["POST"])
 def submit_post_payment():
     active_db = session.get("active_db")
@@ -386,7 +536,52 @@ def submit_post_payment():
         traceback.print_exc()
         return jsonify(error=str(e)), 500
 
+import datetime
 
+def _find_payment_table(cursor):
+    # return table name that contains both ANO and PDT columns (if any)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [r[0] for r in cursor.fetchall()]
+    for t in tables:
+        try:
+            cursor.execute(f"PRAGMA table_info('{t}')")
+            cols = [r[1].upper() for r in cursor.fetchall()]
+            if 'ANO' in cols and 'PDT' in cols:
+                return t
+        except Exception:
+            continue
+    return None
+
+@app.route("/check_payment_exists")
+def check_payment_exists():
+    ano = request.args.get("ano", "").strip()
+    pdt = request.args.get("pdt", "").strip()  # dd/mm/yyyy expected
+    if not ano or not pdt:
+        return jsonify({"exists": False})
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        payment_table = _find_payment_table(cursor)
+        if not payment_table:
+            # can't determine payment table -> return not found to allow client to proceed
+            return jsonify({"exists": False})
+
+        # normalize date format in DB same as what is stored; we try multiple patterns
+        # assume DB stores PDT like dd/mm/yyyy (common in existing app)
+        # Query using text equality
+        cursor.execute(f"SELECT 1 FROM {payment_table} WHERE CAST(ANO AS TEXT)=? AND PDT = ? LIMIT 1", (ano, pdt))
+        found = cursor.fetchone() is not None
+        return jsonify({"exists": bool(found)})
+    except Exception as ex:
+        app.logger.exception("check_payment_exists error: %s", ex)
+        return jsonify({"exists": False})
+    finally:
+        if conn:
+            conn.close()
 # ---------- Part 2: Remaining routes (GCS-enabled) ----------
 import database_manager as db  # used for helper funcs like update_loanee_balances
 
@@ -426,20 +621,30 @@ def get_customers_data(filename):
 
 @app.route("/view_customers")
 def view_customers():
+    # --- restore top bar data ---
+    files = list_gcs_files()
     active_db = session.get("active_db")
+    village_name = session.get("village_name", "Unknown")
+
     if not active_db:
         return redirect("/dashboard")
 
     conn = None
     try:
-        conn = connect_db_from_gcs()
+        # 🔥 FIX  — always load correct local DB path
+        local_path = get_active_db_path()
+
+        conn = sqlite3.connect(local_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+
         cursor.execute("SELECT * FROM LOANEE")
         rows = cursor.fetchall()
+
+        # --- Restore original header extraction ---
         headers = [col[0] for col in cursor.description]
 
-        # Convert to list-of-lists and cast numeric fields
+        # --- Restore original field mapping ---
         col_map = {name: i for i, name in enumerate(headers)}
         amt_idx = col_map.get("AMT", -1)
         pamt_idx = col_map.get("PAMT", -1)
@@ -449,6 +654,8 @@ def view_customers():
         processed = []
         for r in rows:
             row_list = list(r)
+
+            # Convert numerics
             if amt_idx != -1:
                 row_list[amt_idx] = float(row_list[amt_idx] or 0)
             if pamt_idx != -1:
@@ -457,12 +664,14 @@ def view_customers():
                 row_list[bamt_idx] = float(row_list[bamt_idx] or 0)
             if da_idx != -1:
                 row_list[da_idx] = float(row_list[da_idx] or 0)
+
             processed.append(row_list)
 
+        # --- Restore summary calculations ---
         total_customers = len(processed)
-        sum_amt = sum(row[amt_idx] for row in processed) if processed and amt_idx != -1 else 0.0
-        sum_pamt = sum(row[pamt_idx] for row in processed) if processed and pamt_idx != -1 else 0.0
-        sum_bamt = sum(row[bamt_idx] for row in processed) if processed and bamt_idx != -1 else 0.0
+        sum_amt = sum(row[amt_idx] for row in processed) if amt_idx != -1 else 0
+        sum_pamt = sum(row[pamt_idx] for row in processed) if pamt_idx != -1 else 0
+        sum_bamt = sum(row[bamt_idx] for row in processed) if bamt_idx != -1 else 0
 
         return render_template(
             "view_customers.html",
@@ -471,16 +680,18 @@ def view_customers():
             total_customers=total_customers,
             sum_amt=sum_amt,
             sum_pamt=sum_pamt,
-            sum_bamt=sum_bamt
+            sum_bamt=sum_bamt,
+            files=files,
+            selected_file=active_db,
+            village_name=village_name
         )
 
     except Exception as e:
-        traceback.print_exc()
-        return "Something went wrong.", 500
+        print("Error in view_customers:", e)
+        return "Something went wrong loading customers.", 500
     finally:
         if conn:
             conn.close()
-
 
 @app.route("/search", methods=["GET", "POST"])
 def search_customer():
@@ -733,7 +944,7 @@ def post_payment_report():
             params.append(ano_filter)
 
         def to_db_date(d):
-            return datetime.strptime(d, "%d/%m/%Y").strftime("%Y-%m-%d")
+            return datetime.datetime.strptime(d, "%d/%m/%Y").strftime("%Y-%m-%d")
 
         if from_date and to_date:
             query += f" AND {date_transform} BETWEEN ? AND ?"
