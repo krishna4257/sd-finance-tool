@@ -1,15 +1,4 @@
-"""Database management helpers.
-
-This module encapsulates all logic related to connecting to and
-interacting with village SQLite databases. By centralising these
-operations we avoid duplicating file handling throughout the Flask
-routes. Functions defined here should be stateless and raise
-appropriate exceptions to be handled by the caller. When updating this
-module ensure that it is only responsible for data access and not for
-rendering or business logic.
-"""
 from __future__ import annotations
-
 import datetime
 import os
 import sqlite3
@@ -106,12 +95,7 @@ def delete_from_gcs(filename):
 # GET LOCAL COPY OF SELECTED DB
 # -------------------------
 def get_local_db_path(filename):
-    """
-    Ensures the selected DB exists locally (/tmp) and is downloaded from GCS.
-    returns: "/tmp/<filename>"
-    """
-    local_path = _safe_tmp_path(filename)
-    return download_from_gcs(filename)
+    return os.path.join(TMP_FOLDER, secure_filename(filename))
 
 
 # -------------------------

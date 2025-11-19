@@ -228,10 +228,8 @@ def download_gcs_file(filename):
 @app.route("/select_gcs_file", methods=["POST"])
 def select_gcs_file():
     filename = request.form["filename"]
-    local_path = get_local_db_path(filename)
-
-    session["active_db"] = filename
-    session["active_path"] = local_path
+    local_path = download_from_gcs(filename)
+    session["ACTIVE_DB"] = filename
     return redirect("/dashboard")
 
 
