@@ -323,13 +323,12 @@ def create_village():
                 DS INTEGER
             );
         """)
-
+        cursor.execute("""INSERT INTO META(key, value) VALUES ('village_name', ?)""", (village_name,))
         conn.commit()
         conn.close()
 
         # --- Upload to GCS ---
         upload_to_gcs(local_path, filename)
-        cursor.execute("""INSERT INTO META(key, value) VALUES ('village_name', ?)""", (village_name,))
         return jsonify({"success": True})
 
     except Exception as e:
