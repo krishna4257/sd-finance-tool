@@ -294,9 +294,9 @@ def create_village():
     try:
         data = request.get_json()
         number = data.get("number", "").strip()
-        village_name = data.get("name", "").strip()
+        name = data.get("name", "").strip()
 
-        if not number or not village_name:
+        if not number or not name:
             return jsonify({"success": False, "error": "Missing fields"}), 400
 
         filename = f"{number}.sqlite"
@@ -320,20 +320,16 @@ def create_village():
                 BAMT REAL,
                 DA REAL,
                 DW TEXT,
-                DS INTEGER,
-                PANO TEXT
+                DS INTEGER
             );
         """)
-        # Create META table
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS META (key TEXT PRIMARY KEY, value TEXT)
-    """)
-        cursor.execute("""INSERT INTO META(key, value) VALUES ('village_name', ?)""", (village_name,))
+
         conn.commit()
         conn.close()
 
         # --- Upload to GCS ---
         upload_to_gcs(local_path, filename)
+
         return jsonify({"success": True})
 
     except Exception as e:
