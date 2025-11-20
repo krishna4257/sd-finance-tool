@@ -1,9 +1,0 @@
-steps:
-  - name: gcr.io/cloud-builders/gcloud
-    args:
-      [
-        "run", "deploy", "sd-finance-app",
-        "--source=.",
-        "--region=asia-south1",
-        "--allow-unauthenticated"
-      ]
