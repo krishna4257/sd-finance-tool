@@ -282,8 +282,55 @@ def select_gcs_file():
     local_path = download_from_gcs(filename)
     session["ACTIVE_DB"] = filename
     return redirect("/dashboard")
+# ----------------------------------------------------
+# CREATE VILLAGE
+# ----------------------------------------------------
+@app.route("/create_village", methods=["POST"])
+def create_village():
+    try:
+        data = request.get_json()
+        number = data.get("number", "").strip()
+        name = data.get("name", "").strip()
 
+        if not number or not name:
+            return jsonify({"success": False, "error": "Missing fields"}), 400
 
+        filename = f"{number}.sqlite"
+        local_path = f"/tmp/{filename}"
+
+        # --- Create a new SQLite database with LOANEE table ---
+        conn = sqlite3.connect(local_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS LOANEE (
+                ANO INTEGER PRIMARY KEY,
+                NAME TEXT,
+                ADD1 TEXT,
+                ADD2 TEXT,
+                ADD3 TEXT,
+                FDT TEXT,
+                TDT TEXT,
+                AMT REAL,
+                PAMT REAL,
+                BAMT REAL,
+                DA REAL,
+                DW TEXT,
+                DS INTEGER
+            );
+        """)
+
+        conn.commit()
+        conn.close()
+
+        # --- Upload to GCS ---
+        upload_to_gcs(local_path, filename)
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        print("Create village error:", e)
+        return jsonify({"success": False, "error": str(e)}), 500
 # ----------------------------------------------------
 # ADD CUSTOMER
 # ----------------------------------------------------
