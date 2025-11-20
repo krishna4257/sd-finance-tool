@@ -323,6 +323,10 @@ def create_village():
                 DS INTEGER
             );
         """)
+        # Create META table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS META (key TEXT PRIMARY KEY, value TEXT)
+    """)
         cursor.execute("""INSERT INTO META(key, value) VALUES ('village_name', ?)""", (village_name,))
         conn.commit()
         conn.close()
