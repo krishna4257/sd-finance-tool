@@ -2,11 +2,11 @@
 import os
 import sqlite3
 import traceback
-import datetime
 import logging
 from google.cloud import storage
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta
+import datetime
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from database_manager import GCS_BUCKET, _get_client, get_local_db_path
 from flask import (
@@ -59,30 +59,34 @@ def sync_active_db_to_gcs():
 
 
 def get_village_name_from_db(local_path):
-    """Reads village name stored in META or LOANEE table."""
     try:
-        local_path = get_active_db_path()
         conn = sqlite3.connect(local_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute("SELECT ADD1 FROM LOANEE WHERE ADD1 IS NOT NULL AND ADD1 != '' LIMIT 1")
-        row = cursor.fetchone()
-        if row:
-            name = row["ADD1"]
-            if name.strip() and name.strip().lower() != "unknown":
-                return name
-
+        # 1) Try META table first
         cursor.execute("SELECT value FROM META WHERE key='village_name'")
         row = cursor.fetchone()
-        return row["value"] if row else "Unknown"
+        if row and row["value"].strip():
+            return row["value"].strip().upper()
+
+        # 2) Fallback → read ADD1 from first customer row (old DBs)
+        cursor.execute("SELECT ADD1 FROM LOANEE LIMIT 1")
+        row = cursor.fetchone()
+        if row and row["ADD1"].strip() and row["ADD1"].lower() != "unknown":
+            return row["ADD1"].strip().upper()
+
+        return "Unknown"
 
     except Exception as e:
-        print("Village name error:", e)
+        print("village name error:", e)
         return "Unknown"
+
     finally:
-        try: conn.close()
-        except: pass
+        try:
+            conn.close()
+        except:
+            pass
 
 
 # ----------------------------------------------------
@@ -290,9 +294,9 @@ def create_village():
     try:
         data = request.get_json()
         number = data.get("number", "").strip()
-        name = data.get("name", "").strip()
+        village_name = data.get("name", "").strip()
 
-        if not number or not name:
+        if not number or not village_name:
             return jsonify({"success": False, "error": "Missing fields"}), 400
 
         filename = f"{number}.sqlite"
@@ -325,7 +329,7 @@ def create_village():
 
         # --- Upload to GCS ---
         upload_to_gcs(local_path, filename)
-
+        cursor.execute("""INSERT INTO META(key, value) VALUES ('village_name', ?)""", (village_name,))
         return jsonify({"success": True})
 
     except Exception as e:
@@ -396,7 +400,7 @@ def add_customer():
             bamt = amt
             da = round(amt / ds, 2) if ds > 0 else 0
 
-            fdt = datetime.strptime(fdt_str, "%d/%m/%Y")
+            fdt = datetime.datetime.strptime(fdt_str, "%d/%m/%Y")
             if dw == "M":
                 tdt = fdt + relativedelta(months=ds)
             else:
