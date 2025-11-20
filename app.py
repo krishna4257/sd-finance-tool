@@ -320,7 +320,8 @@ def create_village():
                 BAMT REAL,
                 DA REAL,
                 DW TEXT,
-                DS INTEGER
+                DS INTEGER,
+                PANO TEXT
             );
         """)
         # Create META table
