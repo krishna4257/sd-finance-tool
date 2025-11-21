@@ -1,0 +1,12 @@
+<form id="loginForm" method="POST" action="/login">
+  <input name="username" placeholder="Username" required>
+  <input name="password" type="password" placeholder="Password" required>
+  <input type="hidden" name="device_id" id="device_id">
+  <button type="submit">Login</button>
+</form>
+
+<script>
+// Assign a fixed secret for each office machine
+const SYSTEM_TOKEN = "OFFICE-DEVICE-3456";   // set unique per machine
+document.getElementById('device_id').value = SYSTEM_TOKEN;
+</script>

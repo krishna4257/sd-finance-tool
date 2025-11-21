@@ -104,6 +104,11 @@
     <div class="logo-container" href="dashboard.html">
      <a href="/dashboard"> <img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"> </a>
     </div>
+    {% if session.get('user') %}
+      <div style="position: absolute; top: 15px; right: 130px; color: #fff;">
+        Logged in as: {{ session['user'] }}
+      </div>
+    {% endif %}
     <a class="neumorphic-btn" href="/dashboard">🏠 Dashboard</a>
     <a class="neumorphic-btn" href="/add_customer">➕ Add Customer</a>
     <a class="neumorphic-btn" href="/post_payment">💰 Post Payment</a>
@@ -111,6 +116,10 @@
     <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
     <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
     <a href="/manage_files" class="neumorphic-btn">📂 Manage Files</a>
+    {% if session.get('user') %}
+  <!-- existing manage files link -->
+    <a class="neumorphic-btn" href="{{ url_for('users_page') }}">User Management</a>
+    {% endif %}
     </aside>
 
   <main>
@@ -158,6 +167,14 @@
           </span>
         </label>
       </div>
+      {% if session.get('user') %}
+       <a href="{{ url_for('logout') }}"
+         class="btn btn-danger"
+         style="position: absolute; top: 15px; right: 25px; padding: 6px 12px;
+          border-radius: 6px; text-decoration: none; font-weight: 600;">
+         Logout
+       </a>
+      {% endif %}
     </header>
 
     <div id="main-content">

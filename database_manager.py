@@ -1,6 +1,7 @@
 from __future__ import annotations
 import datetime
 import os
+import logging
 import sqlite3
 import tempfile
 from flask import jsonify
@@ -9,7 +10,7 @@ from typing import Iterable, List, Optional, Sequence, Tuple, Dict
 import shutil
 from google.cloud import storage
 from werkzeug.utils import secure_filename
-
+from werkzeug.security import generate_password_hash
 # --- CONFIG ---
 GCS_BUCKET = os.environ.get("GCS_BUCKET")        # required
 TMP_FOLDER = "/tmp/gcs_sqlite_files"
@@ -28,6 +29,34 @@ def _safe_tmp_path(filename):
     return os.path.join(TMP_FOLDER, safe)
 
 
+# -------------------------
+# LOGIN / AUTH TABLES
+# -------------------------
+def init_auth_db():
+    """
+    Creates auth.sqlite in GCS if missing.
+    """
+    local_path = "/tmp/auth.sqlite"
+    try:
+        download_from_gcs("auth.sqlite", local_path) # type: ignore
+    except Exception:
+        pass  # File does not exist, we will create it
+
+    conn = sqlite3.connect(local_path)
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS USERS (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT,
+            system_id TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+    upload_to_gcs(local_path, "auth.sqlite")
 # -------------------------
 # LIST FILES IN GCS
 # -------------------------
@@ -51,6 +80,11 @@ def list_gcs_files():
 # -------------------------
 # DOWNLOAD FILE FROM GCS
 # -------------------------
+def get_auth_db_path():
+    import os
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(project_root, "local_auth", "auth.sqlite")
+
 def download_from_gcs(filename):
     if isinstance(filename, dict):
       filename = filename.get("name")
@@ -64,6 +98,7 @@ def download_from_gcs(filename):
     blob.download_to_filename(local_path)
 
     os.chmod(local_path, 0o666)
+    get_auth_db_path()
     return local_path
 
 
@@ -78,7 +113,7 @@ def upload_to_gcs(local_path, filename=None):
     bucket = client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
     blob.upload_from_filename(local_path)
-
+    get_auth_db_path()
     return True
 
 
@@ -96,11 +131,6 @@ def delete_from_gcs(filename):
 # -------------------------
 # GET LOCAL COPY OF SELECTED DB
 # -------------------------
-import os
-from werkzeug.utils import secure_filename
-from google.cloud import storage
-import logging
-
 TMP_FOLDER = "/tmp"
 
 

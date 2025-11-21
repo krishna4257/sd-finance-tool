@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <h2>User Management</h2>
+
+  <button id="btn-add" class="neumorphic-btn">Add user</button>
+
+  <table id="users-table" class="table">
+    <thead>
+      <tr><th>Username</th><th>Device ID</th><th>Notes</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Add / Edit form modal (simple) -->
+  <div id="user-modal" style="display:none;">
+    <input id="u_username" placeholder="username" /><br/>
+    <input id="u_password" placeholder="password (empty to keep)" /><br/>
+    <input id="u_system" placeholder="system id" /><br/>
+    <textarea id="u_notes" placeholder="notes"></textarea><br/>
+    <button id="u_save">Save</button>
+    <button id="u_cancel">Cancel</button>
+  </div>
+</div>
+
+<script>
+async function loadUsers(){
+  const res = await fetch('/api/users/list');
+  const users = await res.json();
+  const tbody = document.querySelector('#users-table tbody');
+  tbody.innerHTML = '';
+  users.forEach(u=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.username}</td>
+      <td>${u.system_id || ''}</td>
+      <td>${u.notes || ''}</td>
+      <td>
+        <button class="edit" data-user="${u.username}">Edit</button>
+        <button class="del" data-user="${u.username}">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.querySelectorAll('#users-table .edit').forEach(el=>{
+    el.addEventListener('click', e => openEdit(el.dataset.user));
+  });
+  document.querySelectorAll('#users-table .del').forEach(el=>{
+    el.addEventListener('click', async e => {
+      if(!confirm('Delete user '+el.dataset.user+'?')) return;
+      const r = await fetch('/api/users/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:el.dataset.user})});
+      const j = await r.json();
+      if(j.ok) loadUsers(); else alert(j.msg);
+    });
+  });
+}
+
+function showModal(data){
+  document.getElementById('user-modal').style.display = 'block';
+  document.getElementById('u_username').value = data.username || '';
+  document.getElementById('u_password').value = '';
+  document.getElementById('u_system').value = data.system_id || '';
+  document.getElementById('u_notes').value = data.notes || '';
+  document.getElementById('u_username').dataset.orig = data.username || '';
+}
+
+function hideModal(){
+  document.getElementById('user-modal').style.display = 'none';
+}
+
+function openEdit(username){
+  // find row data
+  const tr = Array.from(document.querySelectorAll('#users-table tbody tr'))
+    .find(r => r.children[0].innerText === username);
+  if(!tr) return;
+  showModal({
+    username: tr.children[0].innerText,
+    system_id: tr.children[1].innerText,
+    notes: tr.children[2].innerText
+  });
+}
+
+document.getElementById('btn-add').addEventListener('click', ()=> showModal({}));
+
+document.getElementById('u_cancel').addEventListener('click', hideModal);
+
+document.getElementById('u_save').addEventListener('click', async ()=>{
+  const orig = document.getElementById('u_username').dataset.orig || '';
+  const payload = {
+    username: orig || document.getElementById('u_username').value.trim(),
+    new_username: orig ? document.getElementById('u_username').value.trim() : undefined,
+    new_password: document.getElementById('u_password').value.trim() || undefined,
+    system_id: document.getElementById('u_system').value.trim() || undefined,
+    notes: document.getElementById('u_notes').value.trim() || undefined
+  };
+  const url = orig ? '/api/users/edit' : '/api/users/add';
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  const j = await r.json();
+  if(j.ok){
+    hideModal();
+    loadUsers();
+  } else {
+    alert(j.msg);
+  }
+});
+
+loadUsers();
+</script>
+{% endblock %}

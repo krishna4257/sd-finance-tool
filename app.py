@@ -3,15 +3,18 @@ import os
 import sqlite3
 import traceback
 import logging
+import sqlite3
+from functools import wraps
 from google.cloud import storage
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from database_manager import GCS_BUCKET, _get_client, get_local_db_path
 from flask import (
     Flask, render_template, request, redirect,
-    session, jsonify, flash, send_file
+    session, jsonify, flash, send_file, url_for
 )
 from werkzeug.utils import secure_filename
 
@@ -22,6 +25,8 @@ from database_manager import (
     upload_to_gcs,
     delete_from_gcs,
     download_from_gcs,
+    init_auth_db,
+    get_auth_db_path,
 )
 
 # Logging
@@ -34,6 +39,93 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
+# ---- AUTH helpers ----
+AUTH_GCS_NAME = "auth.sqlite"
+AUTH_LOCAL_PATH = "/tmp/auth.sqlite"
+
+LOCAL_AUTH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local_auth")
+LOCAL_AUTH_PATH = os.path.join(LOCAL_AUTH_DIR, "auth.sqlite")
+
+def ensure_local_auth_dir():
+    os.makedirs(LOCAL_AUTH_DIR, exist_ok=True)
+
+def init_auth_db():
+    """Download auth DB from GCS if exists; create local DB otherwise."""
+    ensure_local_auth_dir()
+    try:
+        download_from_gcs(AUTH_GCS_NAME, LOCAL_AUTH_PATH) # type: ignore
+        app.logger.info("Downloaded existing auth.sqlite from GCS.")
+    except Exception:
+        app.logger.info("No auth.sqlite in GCS — creating new local DB.")
+        conn = sqlite3.connect(LOCAL_AUTH_PATH)
+        c = conn.cursor()
+        c.execute("""
+          CREATE TABLE IF NOT EXISTS USERS (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            system_id TEXT,
+            notes TEXT
+          )
+        """)
+        # ---- MIGRATION: Add notes column if missing ----
+    try:
+        c.execute("ALTER TABLE USERS ADD COLUMN notes TEXT")
+    except:
+        pass  # column already exists
+        conn.commit()
+        conn.close()
+        # upload new empty DB to GCS so it exists for future ops
+        try:
+            upload_to_gcs(LOCAL_AUTH_PATH, AUTH_GCS_NAME)
+        except Exception as e:
+            app.logger.warning("Could not upload new auth DB to GCS: %s", e)
+
+def _open_auth_conn():
+    ensure_local_auth_dir()
+    # always download latest copy before any operation
+    try:
+        download_from_gcs(AUTH_GCS_NAME, LOCAL_AUTH_PATH) # type: ignore
+    except Exception:
+        # if GCS missing, init will create it next
+        app.logger.debug("auth.sqlite not in GCS before open; will use local copy or create.")
+    conn = sqlite3.connect(LOCAL_AUTH_PATH)
+    return conn
+
+def _commit_and_upload(conn):
+    conn.commit()
+    conn.close()
+    # push the updated DB back to GCS
+    upload_to_gcs(LOCAL_AUTH_PATH, AUTH_GCS_NAME)
+
+def ensure_auth_db():
+    """Download the auth DB from GCS (or create locally if missing)."""
+    try:
+        download_from_gcs(AUTH_GCS_NAME, AUTH_LOCAL_PATH) # type: ignore
+    except Exception:
+        # create new local auth DB if not present
+        conn = sqlite3.connect(AUTH_LOCAL_PATH)
+        c = conn.cursor()
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS USERS (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            system_id TEXT,
+            notes TEXT
+        )
+        """)
+        # ---- MIGRATION: Add notes column if missing ----
+    try:
+        c.execute("ALTER TABLE USERS ADD COLUMN notes TEXT")
+    except:
+        pass  # column already exists
+        conn.commit()
+        conn.close()
+        # upload new blank DB so GCS has it next time
+        try:
+            upload_to_gcs(AUTH_LOCAL_PATH, AUTH_GCS_NAME)
+        except Exception:
+            # if upload fails (no credentials locally), that's OK for local dev
+            pass
 
 # ----------------------------------------------------
 # DB HELPERS (GCS MODE)
@@ -100,13 +192,21 @@ def inject_layout_data():
         "files": list_gcs_files(),
     }
 
-
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return wrapper
 # ----------------------------------------------------
 # ROUTES
 # ----------------------------------------------------
 
 @app.route("/")
+@login_required
 def home():
+    init_auth_db()
     return redirect("/dashboard")
 
 def get_active_db_path():
@@ -115,9 +215,124 @@ def get_active_db_path():
         raise Exception("No active database selected.")
     return path
 # ----------------------------------------------------
+# ADMIN ROUTES
+# ----------------------------------------------------
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        # Only allow if logged in as any admin account in USERS table;
+        # simplest: require session['user'] to exist and be in USERS table.
+        username = session.get("user")
+        if not username:
+            flash("Please login", "danger")
+            return redirect(url_for("login"))
+        # optionally verify this username exists in auth DB:
+        conn = _open_auth_conn()
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM USERS WHERE username=?", (username,))
+        ok = bool(c.fetchone())
+        conn.close()
+        if not ok:
+            flash("Access denied", "danger")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+# --- page ---
+@app.route("/users")
+@admin_required
+def users_page():
+    users = list_users()
+    return render_template("user_management.html", users=users)
+
+# --- APIs for table actions (AJAX) ---
+@app.route("/api/users/list", methods=["GET"])
+@admin_required
+def api_users_list():
+    return jsonify(list_users())
+
+@app.route("/api/users/add", methods=["POST"])
+@admin_required
+def api_users_add():
+    payload = request.json or request.form
+    username = payload.get("username","").strip()
+    password = payload.get("password","").strip()
+    system_id = payload.get("system_id","").strip() or None
+    notes = payload.get("notes","").strip() or None
+    if not username or not password:
+        return jsonify({"ok": False, "msg": "username and password required"}), 400
+    try:
+        create_user(username, password, system_id, notes)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/users/edit", methods=["POST"])
+@admin_required
+def api_users_edit():
+    payload = request.json or request.form
+    username = payload.get("username","").strip()
+    new_username = payload.get("new_username","").strip() or None
+    new_password = payload.get("new_password","").strip() or None
+    system_id = payload.get("system_id","").strip() or None
+    notes = payload.get("notes","").strip() or None
+    try:
+        update_user(username, new_username=new_username, new_password=new_password, system_id=system_id, notes=notes)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/users/delete", methods=["POST"])
+@admin_required
+def api_users_delete():
+    payload = request.json or request.form
+    username = payload.get("username","").strip()
+    try:
+        delete_user(username)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+# ----------------------------------------------------
+# LOGIN ROUTE
+# ----------------------------------------------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    # GET -> show form
+    if request.method == "GET":
+        # If already logged in, redirect
+        if session.get("user"):
+            return redirect(url_for("dashboard"))   # change to your dashboard route name
+        return render_template("login.html")  # your login template (see uploaded file).  [oai_citation:1‡login.html](sediment://file_0000000025a47208a9568e4ca0d9194d)
+
+    # POST -> attempt login
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    # The device/system identifier. We'll read from header 'X-Device-ID' which your JS can send.
+    device_id = request.headers.get("X-Device-ID") or request.form.get("device_id")
+
+    ok, msg = check_credentials(username, password, device_id)
+    if not ok:
+        flash(msg, "danger")
+        return redirect(url_for("login"))
+
+    # Good -> set session
+    session["user"] = username
+    # optionally set last-login time etc.
+    flash("Logged in", "success")
+    return redirect(url_for("dashboard"))  # change to your main page
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("Logged out", "info")
+    return redirect(url_for("login"))
+
+
+# ----------------------------------------------------
 # DASHBOARD
 # ----------------------------------------------------
 @app.route("/dashboard", methods=["GET", "POST"])
+@login_required
 def dashboard():
     files = list_gcs_files()
 
@@ -209,6 +424,7 @@ def reselect():
 # MANAGE FILES (GCS)
 # ----------------------------------------------------
 @app.route("/manage_files")
+@login_required
 def manage_files():
     return render_template(
         "manage_files.html",
@@ -307,25 +523,38 @@ def create_village():
         cursor = conn.cursor()
 
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS LOANEE (
-                ANO INTEGER PRIMARY KEY,
-                NAME TEXT,
-                ADD1 TEXT,
-                ADD2 TEXT,
-                ADD3 TEXT,
-                FDT TEXT,
-                TDT TEXT,
-                AMT REAL,
-                PAMT REAL,
-                BAMT REAL,
-                DA REAL,
-                DW TEXT,
-                DS INTEGER
-            );
+            CREATE TABLE LOANEE (
+                ANO TEXT PRIMARY KEY, NAME TEXT, ADD1 TEXT, ADD2 TEXT, ADD3 TEXT,
+                FDT TEXT, TDT TEXT, AMT REAL, PAMT REAL, BAMT REAL,
+                DA REAL, DW TEXT, DS INTEGER, PANO TEXT
+            )
         """)
+        cursor.execute("""
+            CREATE TABLE PAMT1 (
+                ANO TEXT, PDT TEXT, AMT REAL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE EXAMT (
+                DT TEXT, AMT REAL, LAMT REAL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE META (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        cursor.execute("INSERT INTO META (key, value) VALUES (?, ?)", ("village_name", name))
+
+        # Indexes
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pamt1_ano ON PAMT1(ANO)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pamt1_pdt ON PAMT1(PDT)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pamt1_amt ON PAMT1(AMT)")
 
         conn.commit()
         conn.close()
+
 
         # --- Upload to GCS ---
         upload_to_gcs(local_path, filename)
@@ -370,6 +599,7 @@ def check_parent_link():
 
 
 @app.route("/add_customer", methods=["GET", "POST"])
+@login_required
 def add_customer():
     active_db = session.get("active_db")
     if not active_db:
@@ -436,6 +666,7 @@ def add_customer():
     return render_template("add_customer.html", highest_ano=highest_ano)
 
 @app.route("/post_payment", methods=["GET"])
+@login_required
 def post_payment_page():
     active_db = session.get("active_db")
     if not active_db:
@@ -671,6 +902,7 @@ def get_customers_data(filename):
 
 
 @app.route("/view_customers")
+@login_required
 def view_customers():
     # --- restore top bar data ---
     files = list_gcs_files()
@@ -745,6 +977,7 @@ def view_customers():
             conn.close()
 
 @app.route("/search", methods=["GET", "POST"])
+@login_required
 def search_customer():
     active_db = session.get("active_db")
     if not active_db:
@@ -967,6 +1200,7 @@ def get_payments_data(filename: str):
 
 
 @app.route("/post_payment_report", methods=["GET", "POST"])
+@login_required
 def post_payment_report():
     active_db = session.get("active_db")
     if not active_db:
@@ -1071,9 +1305,78 @@ def print_customer(ano):
         if conn:
             conn.close()
 
+# ----------------------------------------------------
+# USER MANAGEMENT PAGE
+# ----------------------------------------------------
+def list_users():
+    conn = _open_auth_conn()
+    c = conn.cursor()
+    c.execute("SELECT username, system_id, notes FROM USERS ORDER BY username")
+    rows = c.fetchall()
+    conn.close()
+    return [{"username": r[0], "system_id": r[1], "notes": r[2]} for r in rows]
+
+def create_user(username, raw_password, system_id=None, notes=None):
+    conn = _open_auth_conn()
+    c = conn.cursor()
+    pw_hash = generate_password_hash(raw_password)
+    c.execute("INSERT OR REPLACE INTO USERS (username, password_hash, system_id, notes) VALUES (?, ?, ?, ?)",
+              (username, pw_hash, system_id, notes))
+    _commit_and_upload(conn)
+
+def update_user(username, new_username=None, new_password=None, system_id=None, notes=None):
+    conn = _open_auth_conn()
+    c = conn.cursor()
+    if new_username and new_username != username:
+        # rename: careful, move password_hash over
+        c.execute("SELECT password_hash FROM USERS WHERE username=?", (username,))
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            raise ValueError("User not found")
+        pw_hash = row[0]
+        c.execute("DELETE FROM USERS WHERE username=?", (username,))
+        c.execute("INSERT OR REPLACE INTO USERS (username, password_hash, system_id, notes) VALUES (?, ?, ?, ?)",
+                  (new_username, pw_hash, system_id, notes))
+    else:
+        if new_password:
+            pw_hash = generate_password_hash(new_password)
+            c.execute("UPDATE USERS SET password_hash=? WHERE username=?", (pw_hash, username))
+        if system_id is not None:
+            c.execute("UPDATE USERS SET system_id=? WHERE username=?", (system_id, username))
+        if notes is not None:
+            c.execute("UPDATE USERS SET notes=? WHERE username=?", (notes, username))
+    _commit_and_upload(conn)
+
+def delete_user(username):
+    conn = _open_auth_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM USERS WHERE username=?", (username,))
+    _commit_and_upload(conn)
+
+def check_credentials(username, raw_password, device_id=None):
+    """Return (True, '') if ok, else (False, 'reason msg')"""
+    conn = _open_auth_conn()
+    c = conn.cursor()
+    c.execute("SELECT password_hash, system_id FROM USERS WHERE username=?", (username,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return False, "Unknown username"
+    stored_hash, allowed_system_id = row
+    if not check_password_hash(stored_hash, raw_password):
+        return False, "Invalid password"
+    # If user has a system_id set, check it must match device_id
+    if allowed_system_id and device_id and allowed_system_id != device_id:
+        return False, "This user is allowed only from a specific device"
+    if allowed_system_id and not device_id:
+        # strict: require device id header
+        return False, "Device ID header required"
+    return True, ""
 
 # ----------------------------------------------------
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
+    init_auth_db()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
