@@ -8,15 +8,70 @@
   <style>
     html { visibility: hidden; }
   </style>
-  <script>
-    (function() {
-      try {
-        const theme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch (e) {}
-      document.documentElement.style.visibility = 'visible';
-    })();
-  </script>
+ 
+<script>
+(function() {
+    try {
+        const theme = localStorage.getItem("theme") || "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+    } catch(e) {}
+
+    /* CRITICAL — SHOW THE PAGE */
+    document.documentElement.style.visibility = "visible";
+})();
+document.addEventListener("DOMContentLoaded", function () {
+
+    /* ---------------------------------------------------
+        PROFILE DROPDOWN TOGGLE
+    --------------------------------------------------- */
+    const profileBtn = document.getElementById("profile-btn");
+    const profileMenu = document.getElementById("profile-menu");
+
+    profileBtn.addEventListener("click", function (e) {
+        e.stopPropagation();                         // Prevent closing immediately
+        profileMenu.classList.toggle("show-menu");   // Toggle dropdown
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", function (e) {
+        if (!profileMenu.contains(e.target) && !profileBtn.contains(e.target)) {
+            profileMenu.classList.remove("show-menu");
+        }
+    });
+
+
+    /* ---------------------------------------------------
+        THEME TOGGLE + PROFILE COLOR SYNC
+    --------------------------------------------------- */
+    const themeToggle = document.getElementById("theme-toggle");
+    const profileCircle = document.getElementById("profile-circle");
+    const profileName = document.getElementById("profile-name");
+
+    function applyTheme(isDark) {
+        if (isDark) {
+            profileCircle.style.background = "#2b2b2b";
+            profileCircle.style.color = "#fff";
+            profileName.style.color = "#fff";
+        } else {
+            profileCircle.style.background = "#ffffff";
+            profileCircle.style.color = "#000";
+            profileName.style.color = "#000";
+        }
+    }
+
+    // Initial load theme
+    const savedTheme = localStorage.getItem("theme") || "dark";
+    const isDark = savedTheme === "dark";
+    applyTheme(isDark);
+
+    // When toggled
+    themeToggle.addEventListener("click", () => {
+        const nowDark = document.documentElement.classList.toggle("light-mode") === false; 
+        localStorage.setItem("theme", nowDark ? "dark" : "light");
+        applyTheme(nowDark);
+    });
+});
+</script>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -104,11 +159,6 @@
     <div class="logo-container" href="dashboard.html">
      <a href="/dashboard"> <img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"> </a>
     </div>
-    {% if session.get('user') %}
-      <div style="position: absolute; top: 15px; right: 130px; color: #fff;">
-        Logged in as: {{ session['user'] }}
-      </div>
-    {% endif %}
     <a class="neumorphic-btn" href="/dashboard">🏠 Dashboard</a>
     <a class="neumorphic-btn" href="/add_customer">➕ Add Customer</a>
     <a class="neumorphic-btn" href="/post_payment">💰 Post Payment</a>
@@ -118,7 +168,7 @@
     <a href="/manage_files" class="neumorphic-btn">📂 Manage Files</a>
     {% if session.get('user') %}
   <!-- existing manage files link -->
-    <a class="neumorphic-btn" href="{{ url_for('users_page') }}">User Management</a>
+    <a class="neumorphic-btn" href="{{ url_for('users_page') }}">👤 User Management</a>
     {% endif %}
     </aside>
 
@@ -166,15 +216,21 @@
             <span class="icon moon">🌙</span>
           </span>
         </label>
-      </div>
-      {% if session.get('user') %}
-       <a href="{{ url_for('logout') }}"
-         class="btn btn-danger"
-         style="position: absolute; top: 15px; right: 25px; padding: 6px 12px;
-          border-radius: 6px; text-decoration: none; font-weight: 600;">
-         Logout
-       </a>
-      {% endif %}
+        {% if session.get('user') %}
+    <!-- New profile component -->
+<div class="profile-container">
+    <div id="profile-btn" class="profile-badge">
+        <div id="profile-circle">👤</div>
+        <span id="profile-name">{{ session['user'] }}</span>
+    </div>
+
+    <div id="profile-menu">
+        <a href="/logout">Logout</a>
+    </div>
+
+</div>
+        {% endif %}
+    
     </header>
 
     <div id="main-content">

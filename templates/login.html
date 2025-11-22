@@ -1,12 +1,81 @@
-<form id="loginForm" method="POST" action="/login">
-  <input name="username" placeholder="Username" required>
-  <input name="password" type="password" placeholder="Password" required>
-  <input type="hidden" name="device_id" id="device_id">
-  <button type="submit">Login</button>
-</form>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark"> 
+<!-- You can remove data-theme if your JS switches themes automatically -->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SD Finance – Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body style="display: flex; justify-content:center; align-items:center; height:100vh;">
+
+    <!-- LOGIN CARD -->
+    <div class="form-glass" style="max-width:420px; width:90%; padding:40px; position:relative;">
+
+        <!-- Logo -->
+        <div style="text-align:center; margin-bottom:20px;">
+            <img src="{{ url_for('static', filename='images/SD_Finance.png') }}"
+                 style="width:140px; height:auto; border-radius:12px;">
+        </div>
+
+        <!-- Title -->
+        <h2 class="page-title" style="margin-bottom:25px;">Login</h2>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="message-box {{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <!-- LOGIN FORM -->
+        <form method="POST" action="/login">
+
+            <label for="username">Username</label>
+            <input type="text" name="username" required style="margin-bottom:20px;">
+
+            <label for="password">Password</label>
+            <input type="password" name="password" required style="margin-bottom:25px;">
+
+            <button class="neumorphic-btn large full-width" type="submit">
+                Login
+            </button>
+
+        </form>
+
+        <!-- Theme Switch (optional) -->
+        <div style="margin-top:25px; text-align:center;">
+            <label class="theme-switch">
+                <input type="checkbox" id="themeToggle">
+                <span class="slider">
+                    <span class="icon sun">☀</span>
+                    <span class="icon moon">🌙</span>
+                </span>
+            </label>
+        </div>
+
+    </div>
 
 <script>
-// Assign a fixed secret for each office machine
-const SYSTEM_TOKEN = "OFFICE-DEVICE-3456";   // set unique per machine
-document.getElementById('device_id').value = SYSTEM_TOKEN;
+    // OPTIONAL: Sync theme toggle with your app
+    const toggle = document.getElementById("themeToggle");
+    toggle?.addEventListener("change", () => {
+        const theme = toggle.checked ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("theme", theme);
+    });
+
+    // Load saved theme
+    const saved = localStorage.getItem("theme");
+    if (saved) {
+        document.documentElement.setAttribute("data-theme", saved);
+        if (saved === "dark") toggle.checked = true;
+    }
 </script>
+
+</body>
+</html>`
