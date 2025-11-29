@@ -281,10 +281,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 message.textContent = `Error: ${data.error}`;
                 message.className = "message-box error";
             } else {
-                message.textContent = data.message;
-                message.className = "message-box success";
+                // Show success BEFORE clearing form
+                message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
+                message.className = "message-box success success-highlight";
                 document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
-                
                 // Clear all dynamic fields to prepare for a new entry
                 document.getElementById('ano').value = '';
                 document.getElementById('name').value = '';
@@ -292,9 +292,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('add3').value = '';
                 document.getElementById('pano').value = '';
                 document.getElementById('amt').value = '';
-                // document.getElementById('dw').value = 'W';
-                // document.getElementById('ds').value = '';
-                // document.getElementById('fdt').value = '';
                 document.getElementById('tdt').value = '';
                 document.getElementById('da').value = '';
                 

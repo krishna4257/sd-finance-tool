@@ -682,7 +682,7 @@ function updateCumulativeSum(tableId) {
         return;
     }
 
-    const rows = dt.rows({ order: "applied" }).nodes();   // << THE FIX
+    const rows = dt.rows({ order: "applied" }).nodes(); 
     let cumulative = 0;
 
     rows.each(function (row) {

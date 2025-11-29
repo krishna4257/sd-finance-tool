@@ -2268,3 +2268,16 @@ body.dark-mode .mf-upload-btn {
     background-color: #8b2f2f !important;
     color: white !important;
 }
+
+.success-highlight {
+    background-color: #0c7d26 !important;
+    color: white !important;
+    padding: 8px 12px;
+    border-radius: 6px;
+    animation: fadeout 2s ease forwards;
+}
+
+@keyframes fadeout {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}

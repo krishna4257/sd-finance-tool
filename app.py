@@ -180,34 +180,35 @@ def sync_active_db_to_gcs():
 
 
 def get_village_name_from_db(local_path):
+    """
+    Returns village name from LOANEE.ADD1 (first non-empty value).
+    META table is ignored because old DBs do not contain it.
+    """
+    conn = None
     try:
         conn = sqlite3.connect(local_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # 1) Try META table first
-        cursor.execute("SELECT value FROM META WHERE key='village_name'")
-        row = cursor.fetchone()
-        if row and row["value"].strip():
-            return row["value"].strip().upper()
+        # Try LOANEE table first
+        try:
+            cursor.execute("SELECT ADD1 FROM LOANEE LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                name = (row["ADD1"] or "").strip()
+                if name and name.lower() != "unknown":
+                    return name.upper()
+        except Exception:
+            pass
 
-        # 2) Fallback → read ADD1 from first customer row (old DBs)
-        cursor.execute("SELECT ADD1 FROM LOANEE LIMIT 1")
-        row = cursor.fetchone()
-        if row and row["ADD1"].strip() and row["ADD1"].lower() != "unknown":
-            return row["ADD1"].strip().upper()
-
-        return "Unknown"
+        return "UNKNOWN"
 
     except Exception as e:
-        print("village name error:", e)
-        return "Unknown"
-
+        print("Village name fetch error:", e)
+        return "UNKNOWN"
     finally:
-        try:
+        if conn:
             conn.close()
-        except:
-            pass
 
 
 # ----------------------------------------------------
@@ -764,9 +765,11 @@ def add_customer():
             ))
 
             conn.commit()
+            cursor.execute("SELECT MAX(ANO) FROM LOANEE")
+            highest_ano = cursor.fetchone()[0]
             sync_active_db_to_gcs()
 
-            return jsonify(message="Customer added")
+            return jsonify({"message": "Customer added","highest_ano": highest_ano})
 
         except Exception as e:
             traceback.print_exc()

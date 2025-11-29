@@ -14,19 +14,17 @@
 
     <button class="neumorphic-btn small" type="submit">🔍 Find</button>
 
-    {% if customers %}
-      <button type="button" class="neumorphic-btn small edit-customer">✏️ Edit Customer</button>
-      <button type="button" id="saveCustomerBtn" class="neumorphic-btn small" style="display:none;">💾 Save</button>
+    <button type="button" class="neumorphic-btn small edit-customer">✏️ Edit Customer</button>
+    <button type="button" id="saveCustomerBtn" class="neumorphic-btn small" style="display:none;">💾 Save</button>
 
-      <button type="button" class="neumorphic-btn small edit-payments">✏️ Edit Payments</button>
-      <button type="button" id="savePaymentsBtn" class="neumorphic-btn small" style="display:none;">💾 Save</button>
-    {% endif %}
+    <button type="button" class="neumorphic-btn small edit-payments">✏️ Edit Payments</button>
+    <button type="button" id="savePaymentsBtn" class="neumorphic-btn small" style="display:none;">💾 Save</button>
   </form>
 </div>
+{% set cust = customers[0] if customers else None %}
+{% set ano = cust['ANO'] if cust else '' %}
 
-{% if customers %}
-  {% set cust = customers[0] %}
-  {% set ano = cust['ANO'] %}
+{% if cust %}
   <!-- 🧾 CUSTOMER TABLE -->
   <div class="raised-box">
     <table id="customerTable" class="dataTable customer-table" style="width:100%;">
@@ -39,14 +37,14 @@
       </thead>
 
       <tbody>
-        <tr class="customer-row" data-ano="{{ ano }}">
-          {% for idx in range(loanee_headers|length) %}
-            {% set field = loanee_headers[idx] %}
-            <td data-field="{{ field }}" contenteditable="false">
-              {{ cust[idx] }}
-            </td>
-          {% endfor %}
-        </tr>
+          <tr class="customer-row" data-ano="{{ ano }}">
+            {% for idx in range(loanee_headers|length) %}
+              {% set field = loanee_headers[idx] %}
+              <td data-field="{{ field }}" contenteditable="false">
+                  {{ cust[idx] }}
+              </td>
+            {% endfor %}
+          </tr>
       </tbody>
     </table>
   </div>
@@ -64,6 +62,7 @@
 
       <button class="neumorphic-btn small" type="button" onclick="return addPaymentFromForm(this.closest('form'))">➕ Add Payment</button>
       <div><a href="/print_customer/{{ ano }}" class="neumorphic-btn small" target="_blank">🖨️ Print</a></div>
+      <button type="button" id="bulkDateChangeBtnPayments" class="neumorphic-btn small" onclick="document.getElementById('dateReplaceModal').style.display='block'">🛠️ Edit All Dates</button>
     </form>
     
     <!-- PAYMENT TABLE -->
@@ -80,18 +79,15 @@
         </thead>
 
         <tbody>
-          {% for row in pamt1_records[ano] %}
-            <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}">
-              <td>{{ row[0] }}</td>
-              <td data-field="PDT" contenteditable="false">{{ row[1] }}</td>
-              <td data-field="AMT" contenteditable="false"
-                  data-money="{{ row[2] }}">{{ row[2] }}</td>
-              <td class="cumulative-amt"></td>
-              <td>
-                <span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span>
-              </td>
-            </tr>
-          {% endfor %}
+            {% for row in pamt1_records[ano] %}
+              <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}">
+                <td>{{ row[0] }}</td>
+                <td data-field="PDT" contenteditable="false">{{ row[1] }}</td>
+                <td data-field="AMT" contenteditable="false" data-money="{{ row[2] }}">{{ row[2] }}</td>
+                <td class="cumulative-amt"></td>
+                <td><span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span></td>
+              </tr>
+            {% endfor %}
         </tbody>
 
         <tfoot>
@@ -103,13 +99,10 @@
       </table>
     </div>
   </div>
-
-{% elif query is defined %}
-  <p>No results found for "{{ query }}".</p>
 {% endif %}
 
 <!-- 🛠️ Posting Section -->
-<div class="raised-box" id="posting-section" style="display:none;">
+<div class="raised-box" id="posting-section">
   <h2 class="page-title">🛠️ Search/Edit Posting</h2>
 
   <form id="postingSearchForm" class="form-grid">
