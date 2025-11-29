@@ -28,10 +28,10 @@
 
             <label for="username">Username</label>
             <input type="text" name="username" required style="margin-bottom:20px;">
-
+            
             <label for="password">Password</label>
             <input type="password" name="password" required style="margin-bottom:25px;">
-
+            <input type="hidden" name="device_id" id="device_id">
             <button class="neumorphic-btn large full-width" type="submit">
                 Login
             </button>
@@ -66,6 +66,17 @@
         document.documentElement.setAttribute("data-theme", saved);
         if (saved === "dark") toggle.checked = true;
     }
+    // Generate once per device & store locally
+    function getDeviceID() {
+        let id = localStorage.getItem("device_id");
+        if (!id) {
+            id = crypto.randomUUID();
+            localStorage.setItem("device_id", id);
+        }
+        return id;
+    }
+
+    document.getElementById("device_id").value = getDeviceID();
 </script>
 
 </body>
