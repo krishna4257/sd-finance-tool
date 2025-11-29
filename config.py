@@ -34,7 +34,13 @@ SQLITE_FOLDER = os.environ.get(
     "SQLITE_FOLDER",
     os.path.join(BASE_DIR, "databases"),
 )
+AUTH_BUCKET = "sd-auth-db"
+TEAM_BUCKETS = {
+    "teamA": "sd-finance-db",
+    "teamB": "ext_1"
+}
 
+GCS_DEFAULT_BUCKET = "sd-finance-db"
 # Flask requires a secret key to sign session cookies. In
 # development we provide a default, but in production it should be
 # overridden via the environment for security.

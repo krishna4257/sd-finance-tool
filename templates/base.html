@@ -39,7 +39,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-
     /* ---------------------------------------------------
         THEME TOGGLE + PROFILE COLOR SYNC
     --------------------------------------------------- */
@@ -166,7 +165,7 @@ document.addEventListener("DOMContentLoaded", function () {
     <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
     <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
     <a href="/manage_files" class="neumorphic-btn">📂 Manage Files</a>
-    {% if session.get('user') %}
+    {% if session.get('role', 'user') == 'admin' %}
   <!-- existing manage files link -->
     <a class="neumorphic-btn" href="{{ url_for('users_page') }}">👤 User Management</a>
     {% endif %}
@@ -200,15 +199,11 @@ document.addEventListener("DOMContentLoaded", function () {
       {% endif %}
 
       <!-- Dark Mode Toggle -->
+       
       <div class="theme-switch-wrapper">
-
-
-      <!-- ADD THE CALCULATOR ICON BUTTON HERE -->
-      <button id="calculatorToggleBtn" class="neumorphic-btn" style="margin-left: auto;">
-        <i class="fas fa-calculator"></i>
-      </button>
-      <!-- END OF ADDITION -->
-
+        <button id="calculatorToggleBtn" class="neumorphic-btn" style="margin-left: auto;">
+          <i class="fas fa-calculator"></i>
+        </button>
         <label class="theme-switch">
           <input type="checkbox" id="theme-toggle">
           <span class="slider">
@@ -217,20 +212,17 @@ document.addEventListener("DOMContentLoaded", function () {
           </span>
         </label>
         {% if session.get('user') %}
-    <!-- New profile component -->
-<div class="profile-container">
-    <div id="profile-btn" class="profile-badge">
-        <div id="profile-circle">👤</div>
-        <span id="profile-name">{{ session['user'] }}</span>
-    </div>
-
-    <div id="profile-menu">
-        <a href="/logout">Logout</a>
-    </div>
-
-</div>
+        <div class="profile-container">
+          <div id="profile-btn" class="profile-badge">
+               <div id="profile-circle">👤</div>
+               <span id="profile-name">{{ session['user'] }}</span>
+          </div>
+          <div id="profile-menu">
+               <a href="/logout">Logout</a>
+          </div>
+        </div>
         {% endif %}
-    
+      </div>
     </header>
 
     <div id="main-content">

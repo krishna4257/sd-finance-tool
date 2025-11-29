@@ -399,6 +399,27 @@ input:checked + .slider:before {
   min-height: 0;
 }
 
+/* Align calculator button, theme switch, and profile icon */
+.theme-switch-wrapper > * {
+    display: flex;
+    align-items: center;
+}
+
+.neumorphic-btn#calculatorToggleBtn {
+    height: 34px;              /* match theme switch height */
+    padding: 0 12px;           /* reduce size to align vertically */
+}
+
+.profile-container #profile-btn {
+    height: 34px;              /* same height */
+    display: flex;
+    align-items: center;
+}
+
+.theme-switch-wrapper {
+    gap: 10px;    /* consistent spacing between items */
+}
+
 /* Neumorphic Form Container */
 .form-glass {
   background: var(--sidebar);
@@ -1982,4 +2003,268 @@ body.dark-mode {
 
 #profile-menu a:hover {
     background: rgba(255,255,255,0.1);
+}
+
+/* Match table rows to theme */
+.data-row {
+    background: var(--bg-secondary);
+    color: var(--text-color);
+}
+
+/* Dark/light auto support */
+:root:not(.dark-mode) .data-row {
+    background: #ffffff;
+    color: #333;
+}
+
+.dark-mode .data-row {
+    background: #2b2b2b;
+    color: #fff;
+}
+
+/* Equal small buttons */
+.small-btn {
+    padding: 6px 14px;
+    font-size: 10px;
+    margin-right: 2px;
+}
+
+.delete-btn {
+    background: #b73232 !important;
+    color: #fff !important;
+}
+
+.edit-btn {
+    background: #444 !important;
+    color: #fff !important;
+}
+
+/* Rounded user table */
+.customer-table {
+    border-collapse: separate !important;
+    border-spacing: 0;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+/* Round the header */
+.customer-table thead th:first-child {
+    border-top-left-radius: 14px;
+}
+.customer-table thead th:last-child {
+    border-top-right-radius: 14px;
+}
+
+/* Round bottom corners */
+.customer-table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 14px;
+}
+.customer-table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 14px;
+}
+
+/* Put all action buttons in a clean inline row */
+.action-buttons {
+    display: flex;
+    gap: 1px;            /* spacing between buttons */
+    align-items: center;
+}
+
+/* Make Reset Device look like a normal small button */
+.reset-device-btn {
+    margin-top: 0 !important;   /* remove the vertical stacking gap */
+}
+
+/* Manage Files – Light/Dark Theme Support */
+.mf-card,
+.mf-table-card {
+    padding: 25px;
+    border-radius: 20px;
+    background: var(--sidebar);
+    box-shadow: var(--shadow-box);
+}
+
+/* Dropzone is theme-aware */
+.mf-dropzone {
+    border: 2px dashed var(--text-muted);
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: 0.2s;
+}
+.mf-dropzone:hover {
+    border-color: var(--accent);
+}
+
+/* Upload button */
+.mf-upload-btn {
+    width: 20%;
+    height: 60px;
+    font-size: 16px;
+}
+
+/* Fix table container */
+.mf-table-card .scroll-table-wrapper {
+    background: var(--sidebar);
+    border-radius: 18px;
+}
+
+/* ===== Manage Files: consistent, theme-aware layout =====
+   Add this at the *end* of style.css
+   Works for both dark & light modes (uses existing theme colors)
+*/
+
+/* sensible container sizing for the top card */
+.mf-card {
+  width: calc(100% - 120px);   /* leave side padding for the sidebar and margins */
+  max-width: 1180px;
+  margin: 20px auto;           /* center horizontally with vertical spacing */
+  padding: 22px;
+  border-radius: 18px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* upload button at right */
+  gap: 18px;
+}
+
+/* dropzone - left, flexible area */
+.mf-dropzone {
+  flex: 1 1 auto;
+  min-height: 90px;
+  padding: 22px;
+  border-radius: 12px;
+  border: 2px dashed var(--text-muted); /* uses your existing variable */
+  background: transparent;
+  display: flex;
+  align-items: center;
+  transition: border-color .18s ease, background .18s ease;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ensure hover / active state is visible in both themes */
+.mf-dropzone:hover,
+.mf-dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(255,255,255,0.02);
+}
+
+/* upload button - fixed size, same visual weight as controls */
+.mf-upload-btn {
+  flex: 0 0 180px;      /* keep a fixed width so dropzone doesn't collapse */
+  height: 56px;
+  border-radius: 10px;
+  padding: 0 18px;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--button-shadow, 0 6px 18px rgba(0,0,0,0.2));
+}
+
+/* smaller screens: stack upload button under dropzone */
+@media (max-width: 880px) {
+  .mf-card {
+    flex-direction: column;
+    gap: 12px;
+    width: calc(100% - 40px);
+  }
+  .mf-upload-btn {
+    width: 100%;
+    flex: 0 0 auto;
+    height: 52px;
+  }
+}
+
+/* table card should share same radius + look */
+.mf-table-card {
+  width: calc(100% - 120px);
+  max-width: 1180px;
+  margin: 16px auto 48px;
+  padding: 18px;
+  border-radius: 18px;
+  box-sizing: border-box;
+}
+
+/* keep wrapped table area consistent and theme-aware */
+.mf-table-card .scroll-table-wrapper,
+.mf-table-card .raised-box,
+.mf-table-card .dataTable {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel, rgba(255,255,255,0.02));
+}
+
+/* Make the inner table header rounded and keep contrast */
+.mf-table-card thead th {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+/* row highlight should use theme accent but not break light mode */
+.mf-table-card tbody tr.highlight,
+.mf-table-card tbody tr.selected {
+  background: var(--row-highlight, rgba(0,0,0,0.06));
+}
+
+/* Small control: make download/delete buttons align in a single row */
+.mf-table-card .action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* reset any inline-ish leftover margins on the reset device button */
+.reset-device-btn {
+  margin-top: 0 !important;
+}
+
+/* ===== Theme adjustments (force theme-awareness if inline styles existed) ===== */
+/* Dark mode */
+body.dark-mode .mf-card,
+body.dark-mode .mf-table-card {
+  background: #1f1f1f !important;
+  box-shadow: 8px 8px 30px rgba(0,0,0,0.6);
+}
+
+/* Light mode */
+body.light-mode .mf-card,
+body.light-mode .mf-table-card {
+  background: #ffffff !important;
+  box-shadow: 8px 8px 30px rgba(0,0,0,0.08);
+}
+
+/* ensure dropzone contrast in light mode */
+body.light-mode .mf-dropzone {
+  color: #333;
+  border-color: #d3d3d3;
+}
+body.light-mode .mf-dropzone:hover {
+  border-color: #c59b3a; /* accent-like hover in light */
+}
+
+/* ensure upload button contrast in light mode */
+body.light-mode .mf-upload-btn {
+  background: #fff;
+}
+
+/* ensure upload button contrast in dark mode */
+body.dark-mode .mf-upload-btn {
+  background: #f6f6f6; /* small inversion to match your neumorphic buttons */
+}
+
+/* fix for accidental inline-width on inner elements */
+.mf-card [style],
+.mf-table-card [style] {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.selected-row {
+    background-color: #8b2f2f !important;
+    color: white !important;
 }

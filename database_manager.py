@@ -11,17 +11,98 @@ import shutil
 from google.cloud import storage
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
+from config import GCS_DEFAULT_BUCKET, AUTH_BUCKET, TEAM_BUCKETS
 # --- CONFIG ---
-GCS_BUCKET = os.environ.get("GCS_BUCKET")        # required
 TMP_FOLDER = "/tmp/gcs_sqlite_files"
 os.makedirs(TMP_FOLDER, exist_ok=True)
 
 
-# -------------------------
-# INTERNAL HELPERS
-# -------------------------
-def _get_client():
+def _get_client() -> storage.Client:
     return storage.Client()
+
+def _get_bucket(bucket_name: str | None):
+    if not bucket_name:
+        if not GCS_DEFAULT_BUCKET:
+            raise RuntimeError("No GCS bucket specified (no session bucket and GCS_DEFAULT_BUCKET unset).")
+        bucket_name = GCS_DEFAULT_BUCKET
+    client = _get_client()
+    return client.bucket(bucket_name)
+
+# -------------------------
+# UPLOAD FILE TO GCS
+# -------------------------
+def upload_to_gcs(local_path: str, target_name: str, bucket: str | None = None) -> None:
+    b = _get_bucket(bucket)
+    blob = b.blob(target_name)
+    # Use resumable upload for larger files
+    blob.upload_from_filename(local_path)
+    return
+
+# -------------------------
+# DOWNLOAD FILE FROM GCS
+# -------------------------
+
+def download_from_gcs(object_name: str, local_path: str | None = None, bucket: str | None = None) -> str:
+    b = _get_bucket(bucket)
+    blob = b.blob(object_name)
+
+    if local_path is None:
+        # safe local path in /tmp
+        safe_name = os.path.basename(object_name)
+        local_path = os.path.join("/tmp", safe_name)
+
+    # Create containing dir
+    os.makedirs(os.path.dirname(local_path) or "/tmp", exist_ok=True)
+
+    if not blob.exists():
+        # If the object does not exist, raise to let caller handle.
+        raise FileNotFoundError(f"Object {object_name} not found in bucket {b.name}")
+
+    blob.download_to_filename(local_path)
+    return local_path
+
+
+# -------------------------
+# DELETE FILE FROM GCS
+# -------------------------
+def delete_from_gcs(object_name: str, bucket: str | None = None) -> None:
+    """Delete object from given bucket."""
+    b = _get_bucket(bucket)
+    blob = b.blob(object_name)
+    if blob.exists():
+        blob.delete()
+    else:
+        # silent if missing
+        pass
+
+# -------------------------
+# LIST FILES IN GCS
+# -------------------------
+def list_gcs_files(bucket: str | None = None):
+    """Return list of object names in bucket root (non-recursive)."""
+    b = _get_bucket(bucket)
+    # list_blobs returns an iterator; fetch names
+    return [blob.name for blob in b.list_blobs()]
+
+def get_local_db_path(filename: str, bucket: str | None = None) -> str:
+    """
+    Download filename from GCS into /tmp and return path.
+    Keep behaviour consistent with older helpers: returns /tmp/<filename>
+    """
+    safe_name = os.path.basename(filename)
+    local_path = os.path.join(TMP_FOLDER, safe_name)
+    return download_from_gcs(safe_name, local_path, bucket=bucket)
+
+# -------------------------
+# GET LOCAL COPY OF SELECTED DB
+# -------------------------
+def get_auth_db_path(local_path: str | None = None, bucket: str | None = None):
+    """
+    Use /tmp/auth.sqlite by default. If you want a persistent project-local copy use other folder.
+    """
+    if local_path:
+        return local_path
+    return os.path.join("/tmp", "auth.sqlite")
 
 
 def _safe_tmp_path(filename):
@@ -46,125 +127,19 @@ def init_auth_db():
     c = conn.cursor()
 
     c.execute("""
-        CREATE TABLE IF NOT EXISTS USERS (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT,
-            system_id TEXT
-        )
-    """)
+CREATE TABLE IF NOT EXISTS USERS (
+    username TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    system_id TEXT,
+    notes TEXT,
+    role TEXT DEFAULT 'user'
+)
+""")
 
     conn.commit()
     conn.close()
 
     upload_to_gcs(local_path, "auth.sqlite")
-# -------------------------
-# LIST FILES IN GCS
-# -------------------------
-def list_gcs_files():
-    client = _get_client()
-    bucket = client.bucket(GCS_BUCKET)
-
-    files = []
-    now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
-
-    for blob in bucket.list_blobs():
-        # Determine "modified within 24 hours"
-        updated = blob.updated.replace(tzinfo=datetime.timezone.utc)
-        is_new = (now - updated).total_seconds() < 86400
-
-        files.append(blob.name)
-
-    return files
-
-
-# -------------------------
-# DOWNLOAD FILE FROM GCS
-# -------------------------
-def get_auth_db_path():
-    import os
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(project_root, "local_auth", "auth.sqlite")
-
-def download_from_gcs(filename):
-    if isinstance(filename, dict):
-      filename = filename.get("name")
-
-    filename = str(filename).strip()
-    client = _get_client()
-    bucket = client.bucket(GCS_BUCKET)
-    blob = bucket.blob(filename)
-
-    local_path = _safe_tmp_path(filename)
-    blob.download_to_filename(local_path)
-
-    os.chmod(local_path, 0o666)
-    get_auth_db_path()
-    return local_path
-
-
-# -------------------------
-# UPLOAD FILE TO GCS
-# -------------------------
-def upload_to_gcs(local_path, filename=None):
-    if filename is None:
-        filename = os.path.basename(local_path)
-
-    client = _get_client()
-    bucket = client.bucket(GCS_BUCKET)
-    blob = bucket.blob(filename)
-    blob.upload_from_filename(local_path)
-    get_auth_db_path()
-    return True
-
-
-# -------------------------
-# DELETE FILE FROM GCS
-# -------------------------
-def delete_from_gcs(filename):
-    client = _get_client()
-    bucket = client.bucket(GCS_BUCKET)
-    blob = bucket.blob(filename)
-    blob.delete()
-    return True
-
-
-# -------------------------
-# GET LOCAL COPY OF SELECTED DB
-# -------------------------
-TMP_FOLDER = "/tmp"
-
-
-def get_local_db_path(filename):
-    """
-    Download filename from GCS to /tmp and return the full local path.
-    Raises RuntimeError with clear message if download fails.
-    """
-    client = _get_client()
-    bucket_name = os.environ.get("GCS_BUCKET")
-    if not bucket_name:
-        raise RuntimeError("Environment variable GCS_BUCKET not set")
-
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(filename)
-
-    safe = secure_filename(filename)
-    local_path = os.path.join(TMP_FOLDER, safe)
-
-    # Ensure tmp folder exists
-    os.makedirs(TMP_FOLDER, exist_ok=True)
-
-    try:
-        # download_to_filename will raise a google.api_core.exceptions.NotFound if blob missing
-        blob.download_to_filename(local_path)
-    except Exception as e:
-        logging.exception("Failed to download %s from bucket %s: %s", filename, bucket_name, e)
-        raise RuntimeError(f"Failed to download {filename} from GCS: {e}")
-
-    # sanity check file exists and size > 0
-    if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
-        raise RuntimeError(f"Downloaded file {local_path} missing or empty")
-
-    return local_path
 
 
 # -------------------------

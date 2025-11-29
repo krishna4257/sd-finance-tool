@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
       rows.forEach((row) => {
           const amtCell = row.querySelector("td[data-field='AMT']");
           if (amtCell) {
-              const amt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, '')) || 0;
+              const amt = parseFloat((amtCell?.textContent || "0").replace(/[^\d.-]/g, '')) || 0;
               totalAmt += amt;
           }
       });
@@ -381,44 +381,152 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  window.addPaymentFromForm = (form) => {
+window.addPaymentFromForm = addPaymentFromForm;
+async function addPaymentFromForm(form) {
     const ano = form.dataset.ano;
-    const pdt = document.getElementById("newPDT").value;
-    const amt = parseFloat(document.getElementById("newAMT").value || 0);
-    fetch("/add_payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ano, pdt, amt })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        const tbody = paymentTable.querySelector("tbody");
-        const newRow = document.createElement("tr");
-        newRow.dataset.ano = ano;
-        newRow.dataset.pdt = pdt;
-        newRow.innerHTML = `
-          <td>${ano}</td>
-          <td data-field="PDT">${pdt}</td>
-          <td data-field="AMT" contenteditable="false" data-money="${amt.toFixed(2)}">${amt.toFixed(2)}</td>
-          <td><span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span></td>
-        `;
-        tbody.appendChild(newRow);
-        applyGlobalMoneyFormatting(); 
+    const pdt = document.getElementById("newPDT").value.trim();
+    const amt = document.getElementById("newAMT").value.trim();
+
+    if (!pdt || !amt) {
+        alert("Please enter both date and amount.");
+        return false;
+    }
+
+    let payload = {
+        ano: ano,
+        pdt: pdt,
+        amt: amt
+    };
+    
+    try {
+        const res = await fetch("/add_payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json"},
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+            alert("Error: " + data.error);
+            return false;
+        }
+
+        // ---------- INSERT NEW ROW INTO PAYMENT TABLE (using DataTables API) ----------
+        const dt = $('#paymentTable').DataTable();
+        const newRowHtml = `
+<tr data-ano="${ano}" data-pdt="${pdt}">
+    <td data-field="ANO" contenteditable="false">${ano}</td>
+    <td data-field="PDT" contenteditable="false">${pdt}</td>
+    <td data-field="AMT" data-money="${amt}" contenteditable="false">${amt}</td>
+    <td class="cumulative-amt" data-money="0"></td>
+    <td>
+        <span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span>
+    </td>
+</tr>`;
+
+        // ---------- FIX NEW ROW STRUCTURE ----------
+        dt.row.add($(newRowHtml)).draw(false);
+
+       
+        // Recalculate cumulative + totals + customer summary
+        // Recalculate cumulative column FIRST
+        recalculatePayments();
+
+        // Recalculate DataTables-based cumulative (double safety)
+        updateCumulativeSum('paymentTable');
+
+        // Update top summary PAMT/BAMT
         updateTotalsAndLoanee();
-        form.reset();
-      } else {
-        alert("Failed to add payment: " + data.error);
-      }
+        updateCustomerSummary();
 
-      // (optional) highlight just the row we already appended:
-      $('#paymentTable tbody tr').removeClass('highlighted').removeAttr('data-selected');
-      $(newRow).addClass('highlighted').attr('data-selected', 'true');
+        // Apply formatting last
+        applyGlobalMoneyFormatting();
 
-    })
-    .catch(err => alert("Error: " + err.message));
+        // Clear form fields
+        document.getElementById("newPDT").value = "";
+        document.getElementById("newAMT").value = "";
+    } catch (err) {
+        alert("Error: " + err);
+    }
+
     return false;
-  };
+}
+
+// =========================
+// RECALCULATE PAYMENT TABLE
+// =========================
+function recalculatePayments() {
+    let rows = document.querySelectorAll("#paymentTable tbody tr");
+    let cumulative = 0;
+
+    rows.forEach(row => {
+        // Safely get AMT cell — if missing skip this row
+        let amtCell = row.querySelector("[data-field='AMT']");
+        if (!amtCell) return;
+
+        // Normalize text then parse number
+        let amtText = (amtCell.innerText || amtCell.textContent || "").replace(/[,₹\s]/g, "").replace(/[^0-9.-]/g, "");
+        let amt = parseFloat(amtText) || 0;
+
+        cumulative += amt;
+
+        let cumCell = row.querySelector(".cumulative-amt");
+        if (cumCell) {
+            // keep machine value in data-money and show formatted text
+            cumCell.setAttribute("data-money", cumulative.toFixed(2));
+            cumCell.innerText = "₹" + cumulative.toLocaleString();
+        }
+    });
+
+    // Footer totals
+    const anoCountEl = document.getElementById("anoCount");
+    if (anoCountEl) anoCountEl.innerText = rows.length;
+
+    let totalAmt = Array.from(rows).reduce((sum, r) => {
+        const c = r.querySelector("[data-field='AMT']");
+        if (!c) return sum;
+        const v = (c.innerText || c.textContent || "").replace(/[,₹\s]/g, "").replace(/[^0-9.-]/g, "");
+        return sum + (parseFloat(v) || 0);
+    }, 0);
+
+    const totalElem = document.getElementById("totalAmt");
+    if (totalElem) {
+        totalElem.setAttribute("data-money", totalAmt.toFixed(2));
+        totalElem.innerText = "₹" + totalAmt.toLocaleString();
+    }
+
+    applyGlobalMoneyFormatting();
+}
+
+
+// ===============================
+// UPDATE CUSTOMER SUMMARY (PAMT/BAMT)
+// ===============================
+function updateCustomerSummary() {
+    const customerRow = document.querySelector("#customerTable tbody tr");
+    if (!customerRow) return;
+
+    const amtCellCust = customerRow.querySelector("td[data-field='AMT']");
+    const amt = parseFloat((amtCellCust?.textContent || "").replace(/[^0-9.-]/g, "")) || 0;
+
+    const paymentRows = document.querySelectorAll("#paymentTable tbody tr");
+
+    let totalPaid = 0;
+    paymentRows.forEach(row => {
+        const cell = row.querySelector("[data-field='AMT']");
+        if (!cell) return;
+        let a = parseFloat((cell.textContent || cell.innerText || "").replace(/[^0-9.-]/g, "")) || 0;
+        totalPaid += a;
+    });
+
+    let pamtCell = customerRow.querySelector("td[data-field='PAMT']");
+    let bamtCell = customerRow.querySelector("td[data-field='BAMT']");
+
+    if (pamtCell) pamtCell.innerText = totalPaid.toLocaleString();
+    if (bamtCell) bamtCell.innerText = (amt - totalPaid).toLocaleString();
+}
+
   
   window.submitDateReplace = () => {
     const findDate = document.getElementById("findDateInput").value;
@@ -447,11 +555,15 @@ document.addEventListener("DOMContentLoaded", () => {
     let totalAmt = 0;
     rows.forEach(row => {
         const amtCell = row.querySelector("td[data-field='AMT']");
-        
-        // Get the text content, remove non-numeric characters (except for the decimal point and a leading minus sign)
-        const cleanedText = amtCell?.textContent.trim().replace(/[^\d.-]/g, '');
-        const amt = parseFloat(cleanedText) || 0; // Now this will correctly parse '2500.00'
-        
+        if (!amtCell) {
+            // Skip rows that do not contain an AMT cell (prevents null errors)
+            return;
+        }
+
+        let cleanedText = amtCell.textContent.trim().replace(/[^\d.-]/g, '');
+        let amt = parseFloat(cleanedText);
+        if (isNaN(amt)) amt = 0;
+
         if (!isNaN(amt)) totalAmt += amt;
     });
     document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
@@ -561,23 +673,35 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function updateCumulativeSum(tableId) {
-    const table = $(`#${tableId}`).DataTable();
-    const rows = table.rows({ order: 'applied' }).nodes();
+function updateCumulativeSum(tableId) {
+    let dt;
+    try {
+        dt = $(`#${tableId}`).DataTable();
+    } catch (e) {
+        console.warn("Table not initialized:", tableId);
+        return;
+    }
+
+    const rows = dt.rows({ order: "applied" }).nodes();   // << THE FIX
     let cumulative = 0;
 
-    rows.each(function(row) {
-      const amtCell = $(row).find('td[data-field="AMT"]');
-      const cumulativeCell = $(row).find('td.cumulative-amt');
-      if (amtCell.length && cumulativeCell.length) {
-        const amt = parseFloat(amtCell.text().replace(/[^0-9.-]+/g,"")) || 0;
+    rows.each(function (row) {
+        if (!row || row.classList.contains("dataTables_empty")) return;
+
+        const amtCell = row.querySelector("td[data-field='AMT']");
+        const cumCell = row.querySelector("td.cumulative-amt");
+        if (!amtCell || !cumCell) return;
+
+        const raw = amtCell.textContent.replace(/[^0-9.-]/g, "");
+        const amt = parseFloat(raw) || 0;
         cumulative += amt;
-        cumulativeCell.attr('data-money', cumulative.toFixed(2)).text(cumulative.toFixed(2));
-      }
+
+        cumCell.setAttribute("data-money", cumulative.toFixed(2));
+        cumCell.textContent = "₹" + cumulative.toLocaleString();
     });
 
-    applyGlobalMoneyFormatting();  // <- This applies ₹ symbol and commas
-  }
+    applyGlobalMoneyFormatting();
+}
 
 
 

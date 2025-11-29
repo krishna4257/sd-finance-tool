@@ -22,6 +22,11 @@ document.addEventListener("DOMContentLoaded", () => {
 function renderTable(data) {
   const tbody = document.getElementById("reportBody");
   tbody.innerHTML = "";
+  // ensure tbody is focusable
+  tbody.setAttribute("tabindex", "0");
+
+  // reset previous selection when table re-renders
+  selectedRowIndex = -1;
 
   let totalAmt = 0;
   const uniqueAno = new Set();
@@ -41,6 +46,97 @@ function renderTable(data) {
 
   document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
   document.getElementById("totalAno").textContent = uniqueAno.size;
+
+  attachRowSelection();
+}
+
+// --- Row selection + arrow navigation ---
+let selectedRowIndex = -1;
+
+function attachRowSelection() {
+    const tbody = document.getElementById("reportBody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+
+    // Ensure tbody can capture arrow keys
+    tbody.setAttribute("tabindex", "0");
+    tbody.style.outline = "none";     // hide blue focus ring
+
+    // Remove old highlight
+    rows.forEach(r => r.classList.remove("selected-row"));
+
+    // --- CLICK TO SELECT ---
+    rows.forEach((row, index) => {
+        row.addEventListener("click", () => {
+            selectRow(index);
+        });
+    });
+
+    // --- ARROW KEY SUPPORT ---
+    tbody.onkeydown = (e) => {
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (selectedRowIndex < rows.length - 1) {
+                selectRow(selectedRowIndex + 1);
+            }
+        }
+        
+        if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (selectedRowIndex > 0) {
+                selectRow(selectedRowIndex - 1);
+            }
+        }
+    };
+}
+
+  // store handler globally
+  window.__postingKeyHandler = keyHandler;
+
+  // attach ONLY to tbody so arrow keys work when tbody is focused
+  document.addEventListener("keydown", keyHandler);
+
+  // Ensure tbody gets focus when user clicks anywhere in table area
+  tbody.addEventListener("click", () => {
+      tbody.focus();
+  });
+
+  // attach click listeners (fresh each render)
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+  // make rows clickable and focusable
+  rows.forEach(r => r.setAttribute("tabindex", "0"));
+  rows.forEach((row, index) => {
+    row.addEventListener("click", () => selectRow(index));
+  });
+  tbody.setAttribute("tabindex", "-1");
+
+
+function selectRow(index) {
+    const tbody = document.getElementById("reportBody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const wrapper = document.querySelector(".scroll-table-wrapper");
+
+    if (!rows.length) return;
+
+    // Remove old highlight
+    rows.forEach(r => r.classList.remove("selected-row"));
+
+    // Apply highlight
+    const row = rows[index];
+    row.classList.add("selected-row");
+    selectedRowIndex = index;
+
+    // Scroll row into view (same as view_customer.js)
+    const rowTop = row.offsetTop;
+    const rowBottom = rowTop + row.offsetHeight;
+
+    if (wrapper) {
+        if (rowTop < wrapper.scrollTop) {
+            wrapper.scrollTop = rowTop - 20;
+        } 
+        else if (rowBottom > wrapper.scrollTop + wrapper.clientHeight) {
+            wrapper.scrollTop = rowBottom - wrapper.clientHeight + 20;
+        }
+    }
 }
 
 function applyFilters() {

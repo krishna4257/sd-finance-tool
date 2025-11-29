@@ -30,9 +30,20 @@ def create_admin():
             username TEXT PRIMARY KEY,
             password_hash TEXT NOT NULL,
             system_id TEXT,
-            notes TEXT
+            notes TEXT,
+            role TEXT DEFAULT 'user',
+            team TEXT DEFAULT 'teamA'
         )
     """)
+    try:
+       c.execute("ALTER TABLE USERS ADD COLUMN role TEXT DEFAULT 'user'")
+    except:
+       pass
+
+    try:
+       c.execute("ALTER TABLE USERS ADD COLUMN team TEXT DEFAULT 'teamA'")
+    except:
+       pass
 
     print("\n--- Create / Update Admin User ---")
     user = input("Enter admin username: ").strip()
@@ -40,13 +51,22 @@ def create_admin():
     system_id = input("Enter authorized system ID (optional): ").strip()
     notes = input("Notes (optional): ").strip()
 
+    # Ask for ROLE
+    print("\nSelect Role:")
+    print("1. admin")
+    print("2. user")
+    role_choice = input("Enter option (1/2): ").strip()
+
+    role = "admin" if role_choice == "1" else "user"
+
+    print(f"\nCreating user '{user}' with role = {role}")
     # FIX: Force use of pbkdf2 so scrypt is NOT used
     hash_pw = generate_password_hash(pw, method="pbkdf2:sha256")
 
     # Insert or update
     c.execute(
-        "INSERT OR REPLACE INTO USERS (username, password_hash, system_id, notes) VALUES (?, ?, ?, ?)",
-        (user, hash_pw, system_id, notes)
+        "INSERT OR REPLACE INTO USERS (username, password_hash, system_id, notes, role, team) VALUES (?, ?, ?, ?, ?, ?)",
+        (user, hash_pw, system_id, notes, role, "teamA" if role == 'user' else 'teamA')
     )
 
     conn.commit()
