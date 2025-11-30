@@ -62,10 +62,16 @@ def generate_system_id():
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
-app.config.update({
-    "SESSION_COOKIE_SECURE": True,
-    "SESSION_COOKIE_SAMESITE": "None"
-})
+
+@app.before_request
+def fix_cookie_domain():
+    host = request.headers.get("Host", "")
+    # Allow both domains
+    if "sivadurga.in" in host:
+        app.config["SESSION_COOKIE_DOMAIN"] = ".sivadurga.in"
+    else:
+        # Allows Cloud Run direct link to work
+        app.config["SESSION_COOKIE_DOMAIN"] = None
 # ---- AUTH helpers ----
 AUTH_GCS_NAME = "auth.sqlite"
 
