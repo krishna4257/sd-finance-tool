@@ -64,8 +64,7 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 app.config.update({
     "SESSION_COOKIE_SECURE": True,
-    "SESSION_COOKIE_SAMESITE": "None",
-    "SESSION_COOKIE_DOMAIN": ".sivadurga.in"
+    "SESSION_COOKIE_SAMESITE": "None"
 })
 # ---- AUTH helpers ----
 AUTH_GCS_NAME = "auth.sqlite"
