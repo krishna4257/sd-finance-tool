@@ -4,6 +4,35 @@ const errorSound = new Audio('static/sounds/error.mp3');
 let tempTable = JSON.parse(localStorage.getItem('postPayments') || '[]');
 let selectedDate = null;
 
+
+// --- Instant lookup mapping ---
+const CUSTOMER_MAP = {};
+window.CUSTOMERS.forEach(c => {
+    // Normalize backend keys to the frontend expected shape
+    const normalized = {
+        // ANO might be under ANO (uppercase) or ano (lowercase) or Ano
+        ano: (c.ANO !== undefined ? String(c.ANO) :
+              (c.ano !== undefined ? String(c.ano) :
+              (c.Ano !== undefined ? String(c.Ano) : ''))).trim(),
+
+        // name may be in NAME, name, or ANO1 depending on backend
+        name: (c.NAME !== undefined ? String(c.NAME) :
+               (c.name !== undefined ? String(c.name) :
+               (c.ANO1 !== undefined ? String(c.ANO1) : ''))).trim(),
+
+        // Numeric fields: convert to Number (fallback 0)
+        amt: Number(c.AMT ?? c.amt ?? 0) || 0,
+        pamt: Number(c.PAMT ?? c.pamt ?? 0) || 0,
+        bamt: Number(c.BAMT ?? c.bamt ?? 0) || 0,
+        da: Number(c.DA ?? c.da ?? 0) || 0
+    };
+
+    console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
+    if (normalized.ano) {
+        CUSTOMER_MAP[normalized.ano] = normalized;
+    }
+});
+
 // --- Helper function to show errors and play sound ---
 function showError(message) {
     const errorMsg = document.getElementById("errorMsg");
@@ -55,6 +84,7 @@ document.addEventListener('keydown', function (e) {
 
 
 function updateTable() {
+  console.log("DEBUG: updateTable() called. TempTable length:", tempTable.length, "Contents:", tempTable);
   const tbody = document.querySelector("#tempTable tbody");
   tbody.innerHTML = "";
   const uniqueAno = new Set();
@@ -265,6 +295,7 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
   if (!pdt || !ano || isNaN(amt)) return;
 
   const duplicate = tempTable.some(row => row.ano === ano && row.pdt === pdt);
+  console.log("DEBUG: Submit pressed. ANO:", ano, "PDT:", pdt, "Amount:", amt, "Duplicate:", duplicate);
   if (duplicate) {
     showError("Duplicate A.no + Date combo exists.");
     return;
@@ -280,9 +311,11 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
 document.getElementById("amt").disabled = true;
 
 document.getElementById("ano").addEventListener("keydown", function (e) {
-  if (e.key === "Enter") {
+    if (e.key !== "Enter") return;
+
     e.preventDefault();
     const ano = this.value.trim();
+    console.log("DEBUG: Enter pressed on ANO field. ANO typed:", ano);
     const pdt = document.getElementById("pdt").value.trim();
     const errorMsg = document.getElementById("errorMsg");
     const customerInfo = document.getElementById("customerInfo");
@@ -304,34 +337,41 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
         return;
     }
 
-    fetch(`/check_payment_exists?ano=${ano}&pdt=${pdt}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.exists) {
-            showError("❌ Duplicate: A payment for this A.no and Date already exists in the database.");
-            return;
-        }
-        return fetch(`/get_customer_info?ano=${ano}`);
-      })
-      .then(res => res && res.json())
-      .then(data => {
-        if (!data) return;
-        if (data.error) {
-          showError("❌ A.no not found in database!");
-        } else {
-          document.getElementById("customerName").innerText = data.name;
-          document.getElementById("customerLoanAmount").innerText = data.amt;
-          document.getElementById("customerTotalRepaid").innerText = data.pamt;
-          document.getElementById("customerOutstanding").innerText = data.bamt;
-          document.getElementById("customerInstallmentAmount").innerText = data.da;
-          customerInfo.style.display = "block";
-          amtInput.disabled = false;
-          amtInput.focus();
-        }
-      })
-      .catch(err => showError(`An error occurred: ${err.message}`));
-  }
+    // ---- INSTANT VALIDATION ----
+    const customer = CUSTOMER_MAP[ano];
+    console.log("DEBUG: Typed ANO:", ano, "Lookup result:", customer);
+    if (!customer) {
+        showError("❌ A.no not found in database!");
+        return;
+    }
+
+    // SUCCESS
+    console.log("DEBUG: Customer found, displaying info:", customer);
+    document.getElementById("customerName").innerText = customer.name;
+    document.getElementById("customerLoanAmount").innerText = customer.amt;
+    document.getElementById("customerTotalRepaid").innerText = customer.pamt;
+    document.getElementById("customerOutstanding").innerText = customer.bamt;
+    document.getElementById("customerInstallmentAmount").innerText = customer.da;
+
+    customerInfo.style.display = "block";
+    amtInput.disabled = false;
+    amtInput.focus();
 });
 
 updateTable();
 applyGlobalMoneyFormatting();
+
+// --- Auto-focus the Date (PDT) field when Post Payment page loads ---
+document.addEventListener("DOMContentLoaded", () => {
+    const pdtInput = document.getElementById("pdt");
+    if (pdtInput) {
+        pdtInput.focus();
+
+        // Place cursor at the end — Safari-safe fallback
+        const len = pdtInput.value.length;
+        try { pdtInput.setSelectionRange(len, len); } catch (e) {}
+        setTimeout(() => {
+            try { pdtInput.setSelectionRange(len, len); } catch (e) {}
+        }, 0);
+    }
+});

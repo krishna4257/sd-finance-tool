@@ -789,8 +789,42 @@ def post_payment_page():
     active_db = session.get("active_db")
     if not active_db:
         return redirect("/dashboard")
+    customers = get_all_customers()
+    return render_template("post_payment.html", customers=customers)
 
-    return render_template("post_payment.html")
+def get_all_customers():
+    """Return all customers from LOANEE table."""
+    conn = None
+    try:
+        local_path = session.get("active_path")
+        if not local_path or not os.path.exists(local_path):
+            print("❌ No active DB path in session")
+            return []
+
+        conn = sqlite3.connect(local_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM LOANEE ORDER BY CAST(ANO AS INTEGER)")
+        rows = cursor.fetchall()
+        print("✔ get_all_customers fetched:", len(rows))
+        print("\n======= DEBUG: get_all_customers() =======")
+        print("Local DB Path:", local_path)
+        print("Total Rows Fetched:", len(rows))
+
+        try:
+            anos = [row["ANO"] for row in rows]
+            print("ANO list:", anos)
+        except:
+            print("Could not list ANO values")
+
+        print("==========================================\n")
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print("get_all_customers error:", e)
+        return []
+    finally:
+        if conn:
+            conn.close()
 # ----------------------------------------------------
 # POST PAYMENT
 # ----------------------------------------------------
@@ -846,6 +880,14 @@ def get_customer_info():
         except Exception:
             bamt = 0.0
 
+        print("\n------- DEBUG: get_customer_info() -------")
+        print("Requested ANO:", ano)
+        print("Found? ->", "YES" if found else "NO")
+        if found:
+            print("Name:", name)
+            print("AMT:", amt, "PAMT:", pamt, "BAMT:", bamt)
+        print("------------------------------------------\n")
+
         return jsonify({
             "name": name,
             "amt": amt,
@@ -878,6 +920,10 @@ def check_ano_exists():
             cursor.execute("SELECT 1 FROM LOANEE WHERE ANO = ? LIMIT 1", (ano_int,))
             found = cursor.fetchone() is not None
             if found:
+                print("\n------- DEBUG: check_ano_exists() -------")
+                print("ANO Requested:", ano)
+                print("Row Exists:", found)
+                print("-----------------------------------------\n")
                 return jsonify({"exists": True})
         except Exception:
             # not int — fall through to text match
@@ -885,6 +931,10 @@ def check_ano_exists():
 
         cursor.execute("SELECT 1 FROM LOANEE WHERE CAST(ANO AS TEXT) = ? LIMIT 1", (ano,))
         found = cursor.fetchone() is not None
+        print("\n------- DEBUG: check_ano_exists() -------")
+        print("ANO Requested:", ano)
+        print("Row Exists:", found)
+        print("-----------------------------------------\n")
         return jsonify({"exists": bool(found)})
     except Exception as ex:
         app.logger.exception("check_ano_exists error: %s", ex)
@@ -1094,6 +1144,7 @@ def view_customers():
         if conn:
             conn.close()
 
+
 @app.route("/search", methods=["GET", "POST"])
 @login_required
 def search_customer():
@@ -1131,6 +1182,61 @@ def search_customer():
 
     # GET
     return render_template("search.html")
+
+
+# ----------- New /search_postings route -----------
+@app.route("/search_postings", methods=["POST"])
+@login_required
+def search_postings():
+    active_db = session.get("active_db")
+    if not active_db:
+        return jsonify(success=False, error="No DB selected")
+
+    payload = request.get_json(force=True)
+    ano = (payload.get("ano") or "").strip()
+    date = (payload.get("date") or "").strip()
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        sql = "SELECT ANO, PDT, AMT FROM PAMT1 WHERE 1=1"
+        params = []
+
+        # If user entered A.no → exact match
+        if ano:
+            sql += " AND CAST(ANO AS TEXT) = ?"
+            params.append(ano)
+
+        # If user entered Date dd/mm/yyyy → match exact PDT
+        if date:
+            sql += " AND PDT = ?"
+            params.append(date)
+
+        sql += " ORDER BY substr(PDT,7,4)||substr(PDT,4,2)||substr(PDT,1,2) ASC"
+
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+        results = []
+        for r in rows:
+            results.append({
+                "ANO": r["ANO"],
+                "PDT": r["PDT"],
+                "AMT": r["AMT"]
+            })
+
+        return jsonify(success=True, data=results)
+
+    except Exception as e:
+        print("search_postings error:", e)
+        return jsonify(success=False, error=str(e))
+
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/update_customer_and_payments", methods=["POST"])
@@ -1286,6 +1392,58 @@ def delete_payment():
         sync_active_db_to_gcs()
         return jsonify(success=True)
     except Exception as e:
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/update_posting_date_bulk", methods=["POST"]) 
+@login_required
+def update_posting_date_bulk():
+    """Bulk replace PDT values in PAMT1.
+    Expects JSON: { "find_date": "dd/mm/yyyy", "replace_date": "dd/mm/yyyy" }
+    """
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify(success=False, error="No data received"), 400
+
+    find_date = (data.get("find_date") or "").strip()
+    replace_date = (data.get("replace_date") or "").strip()
+    if not find_date or not replace_date:
+        return jsonify(success=False, error="Missing find_date or replace_date"), 400
+
+    conn = None
+    try:
+        conn = connect_db_from_gcs()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # collect affected ANO values (so balances can be recalculated per-account)
+        cursor.execute("SELECT ANO FROM PAMT1 WHERE PDT = ?", (find_date,))
+        rows = cursor.fetchall()
+        affected_anos = [r[0] for r in rows]
+
+        # perform the update
+        cursor.execute("UPDATE PAMT1 SET PDT = ? WHERE PDT = ?", (replace_date, find_date))
+
+        # attempt to refresh LOANEE balances for affected accounts
+        for ano in set(affected_anos):
+            try:
+                dbm.update_loanee_balances(conn, ano)
+            except Exception:
+                # if helper missing or fails, continue — we'll still commit the date changes
+                app.logger.exception("Failed to update balances for %s", ano)
+
+        conn.commit()
+        sync_active_db_to_gcs()
+
+        return jsonify(success=True, message=f"Updated dates for {len(rows)} rows across {len(set(affected_anos))} accounts")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
         traceback.print_exc()
         return jsonify(success=False, error=str(e))
     finally:

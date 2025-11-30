@@ -7,7 +7,7 @@
   <div class="raised-box">
     <form id="paymentForm" class="form-grid">
       <label><input type="text" id="pdt" placeholder="dd/mm/yyyy" required></label>
-      <label><input type="text" id="ano" placeholder="Account Number" required></label>
+      <label><input type="text" id="ano" pattern="[0-9]*" inputmode="numeric" placeholder="Account Number" required></label>
       <label><input type="number" id="amt" step="0.01" placeholder="Amount" required></label>
       <button class="neumorphic-btn small" type="submit" id="submitBtn">➕ Add</button>
     </form>
@@ -67,5 +67,9 @@
   </div>
 </div>
 
+
+<script>
+    window.CUSTOMERS = {{ customers | tojson | safe }};
+</script>
 <script src="{{ url_for('static', filename='js/post_payment.js') }}"></script>
 {% endblock %}

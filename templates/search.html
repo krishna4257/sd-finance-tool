@@ -62,7 +62,7 @@
 
       <button class="neumorphic-btn small" type="button" onclick="return addPaymentFromForm(this.closest('form'))">➕ Add Payment</button>
       <div><a href="/print_customer/{{ ano }}" class="neumorphic-btn small" target="_blank">🖨️ Print</a></div>
-      <button type="button" id="bulkDateChangeBtnPayments" class="neumorphic-btn small" onclick="document.getElementById('dateReplaceModal').style.display='block'">🛠️ Edit All Dates</button>
+      <button type="button" id="bulkDateChangeBtnPayments" class="neumorphic-btn small">🛠️ Edit All Dates</button>
     </form>
     
     <!-- PAYMENT TABLE -->
@@ -110,7 +110,7 @@
     <label><input type="text" id="searchPostingDate" placeholder="Exact Date: dd/mm/yyyy"></label>
 
     <button type="submit" class="neumorphic-btn small">🔍 Find</button>
-    <button type="button" id="bulkDateChangeBtn" class="neumorphic-btn small">🛠️ Edit All Dates</button>
+    <button type="button" id="bulkDateChangeBtnPosting" class="neumorphic-btn small">🛠️ Edit All Dates</button>
   </form>
 
   <div class="scroll-table-container" style="margin-top:20px;">
@@ -142,9 +142,8 @@
   <div class="modal-content">
     <span class="close-btn" onclick="document.getElementById('dateReplaceModal').style.display='none'">×</span>
     <h3>🔁 Replace Dates</h3>
-
-    <input type="text" id="findDateInput" placeholder="Find Date">
-    <input type="text" id="replaceDateInput" placeholder="Replace With">
+    <input type="text" id="findDateInput" placeholder="Find Date: dd/mm/yyyy">
+    <input type="text" id="replaceDateInput" placeholder="Replace With Date: dd/mm/yyyy">
     <button class="neumorphic-btn small" onclick="submitDateReplace()">Change</button>
   </div>
 </div>

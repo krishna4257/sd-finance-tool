@@ -16,6 +16,13 @@ $.fn.dataTable.ext.type.order['date-ddmmyyyy-pre'] = function (d) {
 document.addEventListener("DOMContentLoaded", () => {
 
   // --- Element Selectors ---
+  let activeReplaceMode = null;
+
+  function openBulkDateReplace(mode) {
+      activeReplaceMode = mode;
+      document.getElementById("dateReplaceModal").style.display = "block";
+  }
+  window.openBulkDateReplace = openBulkDateReplace;
   const customerRow = document.querySelector(".customer-row");
   const paymentTable = document.getElementById("paymentTable");
   const editCustomerBtn = document.querySelector(".edit-customer");
@@ -329,13 +336,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  // --- Logic for Bulk Date Edit Modal ---
-  const bulkDateChangeBtn = document.getElementById("bulkDateChangeBtn");
-  if(bulkDateChangeBtn) {
-    bulkDateChangeBtn.addEventListener("click", () => {
-      const modal = document.getElementById("dateReplaceModal");
-      if(modal) modal.style.display = "block";
-    });
+
+  // Fix for Payments: Ensure correct button opens modal
+  const bulkDateChangeBtnPayments = document.getElementById("bulkDateChangeBtnPayments");
+  if (bulkDateChangeBtnPayments) {
+      bulkDateChangeBtnPayments.addEventListener("click", () => {
+          openBulkDateReplace("payments");
+      });
+  }
+
+  // Fix for Posting table bulk editing
+  const bulkDateChangeBtnPosting = document.getElementById("bulkDateChangeBtnPosting");
+  if (bulkDateChangeBtnPosting) {
+      bulkDateChangeBtnPosting.addEventListener("click", () => {
+          openBulkDateReplace("posting");
+      });
   }
 
 
@@ -529,25 +544,60 @@ function updateCustomerSummary() {
 
   
   window.submitDateReplace = () => {
-    const findDate = document.getElementById("findDateInput").value;
-    const replaceDate = document.getElementById("replaceDateInput").value;
-    fetch("/update_posting_date_bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ find_date: findDate, replace_date: replaceDate })
-    })
-    .then(res => res.json())
-    .then(data => {
-      const msgBox = document.getElementById("postingMessageBox");
-      msgBox.style.display = "block";
-      msgBox.className = "message-box " + (data.success ? "success" : "error");
-      msgBox.textContent = data.message || data.error;
-      if (data.success) {
-        document.getElementById("dateReplaceModal").style.display = "none";
-        if (postingForm) postingForm.dispatchEvent(new Event("submit"));
+      const oldDate = document.getElementById("findDateInput").value.trim();
+      const newDate = document.getElementById("replaceDateInput").value.trim();
+
+      if (!oldDate || !newDate) {
+          alert("Please enter both dates.");
+          return;
       }
-    });
+
+      if (activeReplaceMode === "payments") {
+          replacePaymentDates(oldDate, newDate);
+      } else if (activeReplaceMode === "posting") {
+          replacePostingDates(oldDate, newDate);
+      }
+
+      document.getElementById("dateReplaceModal").style.display = "none";
   };
+
+  function replacePaymentDates(oldDate, newDate) {
+      const ano = document.querySelector("#addPaymentForm").dataset.ano;
+
+      fetch("/update_payment_dates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ano, oldDate, newDate })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (data.success) {
+              alert("Payment dates updated successfully!");
+              location.reload();
+          } else {
+              alert("Error: " + data.error);
+          }
+      });
+  }
+
+  function replacePostingDates(oldDate, newDate) {
+      fetch("/update_posting_date_bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ find_date: oldDate, replace_date: newDate })
+      })
+      .then(res => res.json())
+      .then(data => {
+          const msgBox = document.getElementById("postingMessageBox");
+          msgBox.style.display = "block";
+          msgBox.className = "message-box " + (data.success ? "success" : "error");
+          msgBox.textContent = data.message || data.error;
+
+          if (data.success) {
+              if (postingForm) postingForm.dispatchEvent(new Event("submit"));
+          }
+      });
+  }
 
   function updateTotalsAndLoanee() {
     if (!paymentTable) return;
