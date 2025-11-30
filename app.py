@@ -362,6 +362,7 @@ def api_users_reset_device():
 # ----------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    print("LOGIN REQUEST HOST:", request.host)
     if request.method == "GET":
         if session.get("user"):
             return redirect(url_for("dashboard"))
