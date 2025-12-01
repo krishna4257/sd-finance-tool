@@ -931,22 +931,12 @@ def check_ano_exists():
             ano_int = int(ano)
             cursor.execute("SELECT 1 FROM LOANEE WHERE ANO = ? LIMIT 1", (ano_int,))
             found = cursor.fetchone() is not None
-            if found:
-                print("\n------- DEBUG: check_ano_exists() -------")
-                print("ANO Requested:", ano)
-                print("Row Exists:", found)
-                print("-----------------------------------------\n")
-                return jsonify({"exists": True})
         except Exception:
             # not int — fall through to text match
             pass
 
         cursor.execute("SELECT 1 FROM LOANEE WHERE CAST(ANO AS TEXT) = ? LIMIT 1", (ano,))
         found = cursor.fetchone() is not None
-        print("\n------- DEBUG: check_ano_exists() -------")
-        print("ANO Requested:", ano)
-        print("Row Exists:", found)
-        print("-----------------------------------------\n")
         return jsonify({"exists": bool(found)})
     except Exception as ex:
         app.logger.exception("check_ano_exists error: %s", ex)

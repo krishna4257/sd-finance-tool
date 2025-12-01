@@ -83,7 +83,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (submitButton) submitButton.disabled = !enabled;
     }
-
+document.getElementById("ano").addEventListener("input", function () {
+    this.value = this.value.replace(/[^0-9]/g, "");
+});
     // --- A.no Duplication Check ---
     function checkAno() {
         const anoValue = anoInput.value.trim();
