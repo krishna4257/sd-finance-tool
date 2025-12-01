@@ -285,7 +285,9 @@ function submitAllPayments() {
         showError(`An error occurred: ${err.message}`);
     });
 }
-
+document.getElementById("ano").addEventListener("input", function () {
+    this.value = this.value.replace(/[^0-9]/g, "");
+});
 document.getElementById("paymentForm").addEventListener("submit", function (e) {
   e.preventDefault();
   const pdt = document.getElementById("pdt").value;
