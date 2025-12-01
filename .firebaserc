@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "sd-finance-tool-2025"
-  }
+    "default": "sd-finance-tool-2025",
+    "sivadurga": "sd-finance-tool-2025"
+  },
+  "targets": {},
+  "etags": {}
 }
