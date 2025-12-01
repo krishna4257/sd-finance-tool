@@ -38,6 +38,7 @@ import platform
 import base64
 import hashlib
 import json
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 
@@ -62,23 +63,22 @@ def generate_system_id():
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
-
-@app.before_request
-def fix_cookie_domain():
-    host = request.headers.get("Host", "")
-    # Allow both domains
-    if "sivadurga.in" in host:
-        app.config["SESSION_COOKIE_DOMAIN"] = ".sivadurga.in"
-    else:
-        # Allows Cloud Run direct link to work
-        app.config["SESSION_COOKIE_DOMAIN"] = None
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_DOMAIN="sivadurga.in"
+)
 # ---- AUTH helpers ----
 AUTH_GCS_NAME = "auth.sqlite"
 
 LOCAL_AUTH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local_auth")
 AUTH_LOCAL_PATH = os.path.join(LOCAL_AUTH_DIR, "auth.sqlite")   # <–– ONE FINAL LOCATION
 
-
+@app.before_request
+def force_https():
+    if request.headers.get("X-Forwarded-Proto", "http") == "http":
+        return redirect(request.url.replace("http://", "https://", 1), code=301)
 
 def ensure_local_auth_dir():
     os.makedirs(LOCAL_AUTH_DIR, exist_ok=True)
