@@ -83,9 +83,17 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (submitButton) submitButton.disabled = !enabled;
     }
-document.getElementById("ano").addEventListener("input", function () {
+const anoField = document.getElementById("ano");
+anoField.addEventListener("input", function () {
     this.value = this.value.replace(/[^0-9]/g, "");
 });
+if (!anoField.value || anoField.value.trim() === "") {
+    const displayHighest = document.getElementById("highestAnoDisplay");
+    if (displayHighest) {
+        const highestVal = parseInt(displayHighest.textContent.trim(), 10) || 0;
+        anoField.value = String(highestVal + 1);
+    }
+}
     // --- A.no Duplication Check ---
     function checkAno() {
         const anoValue = anoInput.value.trim();
@@ -259,58 +267,76 @@ document.getElementById("ano").addEventListener("input", function () {
 
     // --- Form Submission Logic (Centralized Function) ---
     function submitForm() {
-        // ✅ CRITICAL: Prevent re-submission if already submitting
-        if (isSubmitting) {
-            console.log("Submission already in progress. Ignoring request.");
-            return;
-        }
+        if (isSubmitting) return;
+        isSubmitting = true;
 
-        isSubmitting = true; // ✅ Set the flag to true
-        
         const formData = new FormData(form);
-        
-        message.textContent = "Saving...";
+        // Ensure ANO is included since input lacks a "name" attribute
+        formData.set("ano", document.getElementById("ano").value.trim());
+        const payload = {};
+        for (const [k, v] of formData.entries()) payload[k] = v;
+
+        message.style.display = "block";
         message.className = "message-box";
-        message.style.display = 'block';
+        message.textContent = "Saving...";
 
-        fetch("/add_customer", {
-            method: "POST",
-            body: formData
+        // Send form as application/x-www-form-urlencoded so Flask request.form picks it up
+        const urlEncoded = new URLSearchParams(payload).toString();
+
+        fetch('/add_customer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: urlEncoded
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                message.textContent = `Error: ${data.error}`;
-                message.className = "message-box error";
-            } else {
-                // Show success BEFORE clearing form
-                message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
-                message.className = "message-box success success-highlight";
-                document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
-                // Clear all dynamic fields to prepare for a new entry
-                document.getElementById('ano').value = '';
-                document.getElementById('name').value = '';
-                document.getElementById('add2').value = '';
-                document.getElementById('add3').value = '';
-                document.getElementById('pano').value = '';
-                document.getElementById('amt').value = '';
-                document.getElementById('tdt').value = '';
-                document.getElementById('da').value = '';
-                
-                if (parentInfoTooltip) parentInfoTooltip.style.display = 'none';
-
-                setFormFieldsEnabled(false); // Disable form again
-                anoInput.focus(); // Move cursor back to the A.no field
-                
-                loanFieldsSet = false; // Reset the loop state
+        .then(async (res) => {
+          // attempt to read response text on non-ok for better error message
+          if (!res.ok) {
+            const txt = await res.text();
+            // Try to JSON-parse text for nicer error messages if server sent JSON
+            try {
+              const parsed = JSON.parse(txt);
+              throw new Error(parsed.error || txt || 'Server error');
+            } catch (e) {
+              throw new Error(txt || 'Server error');
             }
+          }
+          return res.json();
         })
-        .catch(err => {
-            message.textContent = `A network error occurred: ${err.message}`;
-            message.className = "message-box error";
+        .then((data) => {
+          if (data.error) {
+            message.className = 'message-box error';
+            message.textContent = 'Error: ' + data.error;
+            return;
+          }
+
+          message.className = 'message-box success success-highlight';
+          message.textContent = data.message || ('✔️ Customer ' + (data.new_ano || '') + ' added');
+
+          if (typeof data.highest_ano !== 'undefined') {
+            const highest = parseInt(data.highest_ano, 10) || 0;
+            const display = document.getElementById('highestAnoDisplay');
+            const anoInput = document.getElementById('ano');
+
+            if (display) display.textContent = String(highest);
+            if (anoInput) anoInput.value = String(highest + 1);
+          }
+
+          form.querySelectorAll('input:not([readonly])[name]').forEach(inp => {
+            if (inp.id !== 'ano' && inp.id !== 'ds' && inp.id !== 'fdt' && inp.id !== 'dw') {
+                inp.value = '';
+            }
+          });
+
+          const anoInputField = document.getElementById('ano');
+          if (anoInputField) anoInputField.focus();
+
+        })
+        .catch((err) => {
+          message.className = 'message-box error';
+          message.textContent = 'Error: ' + err.message;
         })
         .finally(() => {
-            isSubmitting = false; // ✅ Reset the flag regardless of outcome
+          isSubmitting = false;
         });
     }
 

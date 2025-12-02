@@ -4,6 +4,11 @@ import sqlite3
 import traceback
 import logging
 import sqlite3
+import uuid
+import platform
+import base64
+import hashlib
+import json
 from functools import wraps
 from google.cloud import storage
 from werkzeug.utils import secure_filename
@@ -33,15 +38,6 @@ from config import TEAM_BUCKETS, AUTH_BUCKET, GCS_DEFAULT_BUCKET
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import uuid
-import platform
-import base64
-import hashlib
-import json
-from werkzeug.middleware.proxy_fix import ProxyFix
-
-
-
 def generate_system_id():
     """Generate stable system fingerprint."""
     machine_id = hex(uuid.getnode())
@@ -63,22 +59,11 @@ def generate_system_id():
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-app.config.update(
-    SESSION_COOKIE_SECURE=True,
-    SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_DOMAIN="sivadurga.in"
-)
+
 # ---- AUTH helpers ----
 AUTH_GCS_NAME = "auth.sqlite"
-
 LOCAL_AUTH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local_auth")
 AUTH_LOCAL_PATH = os.path.join(LOCAL_AUTH_DIR, "auth.sqlite")   # <–– ONE FINAL LOCATION
-
-@app.before_request
-def force_https():
-    if request.headers.get("X-Forwarded-Proto", "http") == "http":
-        return redirect(request.url.replace("http://", "https://", 1), code=301)
 
 def ensure_local_auth_dir():
     os.makedirs(LOCAL_AUTH_DIR, exist_ok=True)
@@ -192,7 +177,7 @@ def sync_active_db_to_gcs():
 
 def get_village_name_from_db(local_path):
     """
-    Returns village name from LOANEE.ADD1 (first non-empty value).
+    Returns village name from LOANEE.ADD1 (firstate non-empty value).
     META table is ignored because old DBs do not contain it.
     """
     conn = None
@@ -667,13 +652,7 @@ def create_village():
                 DT TEXT, AMT REAL, LAMT REAL
             )
         """)
-        cursor.execute("""
-            CREATE TABLE META (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        """)
-        cursor.execute("INSERT INTO META (key, value) VALUES (?, ?)", ("village_name", name))
+        cursor.execute("""INSERT INTO LOANEE (ADD1) VALUES (?)""", (name,))
 
         # Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pamt1_ano ON PAMT1(ANO)")
@@ -685,7 +664,8 @@ def create_village():
 
 
         # --- Upload to GCS ---
-        upload_to_gcs(local_path, filename)
+        user_bucket = session.get("bucket") or os.environ.get("GCS_DEFAULT_BUCKET")
+        upload_to_gcs(local_path, filename, bucket=user_bucket)
 
         return jsonify({"success": True})
 
@@ -776,9 +756,14 @@ def add_customer():
                 amt, pamt, bamt, da, dw, ds, pano
             ))
 
+            
+            cursor.execute("SELECT MAX(CAST(ANO AS INTEGER)) FROM LOANEE")
+            h = cursor.fetchone()[0]
+            try:
+                highest_ano = int(h) if h is not None else 0
+            except Exception:
+                highest_ano = 0
             conn.commit()
-            cursor.execute("SELECT MAX(ANO) FROM LOANEE")
-            highest_ano = cursor.fetchone()[0]
             sync_active_db_to_gcs()
 
             return jsonify({"message": "Customer added","highest_ano": highest_ano})
@@ -1677,4 +1662,4 @@ def check_credentials(username, raw_password, device_id=None):
 # ----------------------------------------------------
 if __name__ == "__main__":
     init_auth_db()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    app.run(host="0.0.0.0", port=8080, debug=True)

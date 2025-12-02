@@ -244,15 +244,21 @@ function submitCreateVillage() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ number: num, name: name })
   })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      alert("Village created successfully.");
-      closeCreateVillageModal();
-    } else {
-      alert("Error: " + data.error);
+  .then(async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error("Server error: " + text);
     }
-  });
+
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || "Village creation failed");
+    }
+
+    alert("Village created successfully!");
+    closeCreateVillageModal();
+  })
+  .catch(err => alert("Error: " + err.message));
 }
 
 
