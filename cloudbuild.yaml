@@ -1,17 +1,11 @@
-steps:
-  - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance-app:$COMMIT_SHA", "."]
-
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance-app:$COMMIT_SHA"]
-
-  - name: gcr.io/cloud-builders/gcloud
-    args: [
-      "run", "deploy", "sd-finance-app",
-      "--image=asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance-app:$COMMIT_SHA",
-      "--region=asia-south1",
-      "--allow-unauthenticated"
-    ]
-
-images:
-  - asia-south1-docker.pkg.dev/$PROJECT_ID/sd-repo/sd-finance-app:$COMMIT_SHA
+- name: gcr.io/cloud-builders/gcloud
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      gcloud components install beta --quiet
+      gcloud run deploy sd-finance-tool \
+        --image=$IMAGE \
+        --region=asia-southeast1 \
+        --platform=managed \
+        --allow-unauthenticated
