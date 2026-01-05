@@ -11,16 +11,23 @@ import shutil
 from google.cloud import storage
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
-from config import GCS_DEFAULT_BUCKET, AUTH_BUCKET, TEAM_BUCKETS
+from config import ENV_MODE, GCS_DEFAULT_BUCKET, AUTH_BUCKET, TEAM_BUCKETS,LOCAL_DB_DIR
+
+# Ensure local database directory exists (local mode)
+os.makedirs(LOCAL_DB_DIR, exist_ok=True)
 # --- CONFIG ---
 TMP_FOLDER = "/tmp/gcs_sqlite_files"
 os.makedirs(TMP_FOLDER, exist_ok=True)
 
 
 def _get_client() -> storage.Client:
+    if ENV_MODE != "cloud":
+        raise RuntimeError("GCS client requested in LOCAL mode")
     return storage.Client()
 
 def _get_bucket(bucket_name: str | None):
+    if ENV_MODE != "cloud":
+        raise RuntimeError("GCS bucket access in LOCAL mode")
     if not bucket_name:
         if not GCS_DEFAULT_BUCKET:
             raise RuntimeError("No GCS bucket specified (no session bucket and GCS_DEFAULT_BUCKET unset).")
@@ -43,6 +50,10 @@ def upload_to_gcs(local_path: str, target_name: str, bucket: str | None = None) 
 # -------------------------
 
 def download_from_gcs(object_name: str, local_path: str | None = None, bucket: str | None = None) -> str:
+    if ENV_MODE != "cloud":
+        raise RuntimeError(
+            "download_from_gcs() called in LOCAL mode — this should not happen"
+        )
     b = _get_bucket(bucket)
     blob = b.blob(object_name)
 
@@ -79,17 +90,39 @@ def delete_from_gcs(object_name: str, bucket: str | None = None) -> None:
 # LIST FILES IN GCS
 # -------------------------
 def list_gcs_files(bucket: str | None = None):
+    if ENV_MODE != "cloud":
+        raise RuntimeError("list_gcs_files called in LOCAL mode")
     """Return list of object names in bucket root (non-recursive)."""
     b = _get_bucket(bucket)
     # list_blobs returns an iterator; fetch names
     return [blob.name for blob in b.list_blobs()]
 
+def list_local_db_files():
+    """
+    List local SQLite database files for LOCAL mode
+    """
+    return [
+        f for f in os.listdir(SQLITE_FOLDER)
+        if f.lower().endswith(".sqlite")
+    ]
+
 def get_local_db_path(filename: str, bucket: str | None = None) -> str:
+    safe_name = os.path.basename(filename)
+
+    if ENV_MODE == "local":
+        local_path = os.path.join(SQLITE_FOLDER, safe_name)
+
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(
+                f"Local database not found: {local_path}"
+            )
+
+        return local_path
+    
     """
     Download filename from GCS into /tmp and return path.
     Keep behaviour consistent with older helpers: returns /tmp/<filename>
     """
-    safe_name = os.path.basename(filename)
     local_path = os.path.join(TMP_FOLDER, safe_name)
     return download_from_gcs(safe_name, local_path, bucket=bucket)
 
@@ -173,6 +206,11 @@ def _extract_numeric_prefix(filename: str) -> int:
 
 
 def list_village_databases() -> List[str]:
+    if ENV_MODE == "local":
+        return [
+            f for f in os.listdir(LOCAL_DB_DIR)
+            if f.endswith(".sqlite")
+        ]
    
     # Create the folder if it doesn't exist to avoid FileNotFoundError
     os.makedirs(SQLITE_FOLDER, exist_ok=True)
@@ -187,6 +225,8 @@ def list_village_databases() -> List[str]:
 
 
 def get_database_path(filename: str) -> str:
+    if ENV_MODE == "local":
+        return os.path.join(LOCAL_DB_DIR, f"{village_id}.sqlite") # type: ignore
     return os.path.join(SQLITE_FOLDER, filename)
 
 

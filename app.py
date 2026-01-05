@@ -21,6 +21,7 @@ import database_manager as dbm
 from database_manager import (
     list_gcs_files,
     get_local_db_path,
+    list_local_db_files,
     upload_to_gcs,
     delete_from_gcs,
     download_from_gcs,
@@ -28,7 +29,7 @@ from database_manager import (
     get_auth_db_path,
     _get_client,
 )
-from config import TEAM_BUCKETS, AUTH_BUCKET, GCS_DEFAULT_BUCKET
+from config import ENV_MODE, TEAM_BUCKETS, AUTH_BUCKET, GCS_DEFAULT_BUCKET
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -278,7 +279,10 @@ def admin_required(f):
 @app.route("/")
 @login_required
 def home():
-    init_auth_db()
+    if ENV_MODE == "cloud":
+     init_auth_db()
+    else:
+      print("⚠️ LOCAL mode: skipping GCS auth DB initialization")
     return redirect("/dashboard")
 
 def get_active_db_path():
@@ -470,7 +474,10 @@ def dashboard():
     bucket = session["bucket"]
 
     # Implementation kept similar to your original code
-    files = list_gcs_files(bucket=bucket)
+    if ENV_MODE == "local":
+      files = list_local_db_files()
+    else:
+      files = list_gcs_files(bucket=bucket)
     if request.method == "POST":
         selected_file = request.form.get("village_db", "").strip()
         if selected_file:
@@ -535,7 +542,11 @@ def reselect():
 @app.route("/manage_files")
 @login_required
 def manage_files():
-    return render_template("manage_files.html", files=dbm.list_gcs_files(bucket=session.get("bucket")))
+    if ENV_MODE == "local":
+      files = dbm.list_local_db_files()
+    else:
+      files = dbm.list_gcs_files(bucket=session.get("bucket"))
+    return render_template("manage_files.html", files=files)
 
 @app.route("/upload_to_gcs", methods=["POST"])
 @login_required
@@ -1075,7 +1086,11 @@ def get_customers_data(filename):
 @login_required
 def view_customers():
     # --- restore top bar data ---
-    files = list_gcs_files()
+    if ENV_MODE == "local":
+        files = dbm.list_local_db_files()
+    else:
+        files = list_gcs_files()
+        
     active_db = session.get("active_db")
     village_name = session.get("village_name", "Unknown")
 
@@ -1676,5 +1691,8 @@ def check_credentials(username, raw_password, device_id=None):
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
-    init_auth_db()
+    if ENV_MODE == "cloud":
+      init_auth_db()
+    else:
+      print("⚠️ LOCAL mode: skipping GCS auth DB initialization")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
