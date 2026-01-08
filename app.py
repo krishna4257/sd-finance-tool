@@ -29,6 +29,8 @@ from database_manager import (
     get_auth_db_path,
     _get_client,
 )
+from db import init_db
+from config import POSTGRES_URI
 from config import ENV_MODE, TEAM_BUCKETS, AUTH_BUCKET, GCS_DEFAULT_BUCKET
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +42,8 @@ import base64
 import hashlib
 import json
 
-
+# Initialize SQLAlchemy (does NOT replace SQLite yet)
+init_db(POSTGRES_URI)
 
 def generate_system_id():
     """Generate stable system fingerprint."""
