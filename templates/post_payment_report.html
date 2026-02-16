@@ -18,35 +18,62 @@
   </label>
   <button class="neumorphic-btn" onclick="applyFilters()">Apply</button>
   <button class="neumorphic-btn" onclick="resetFilters()">Reset</button>
+  <button id="tableViewBtn" class="neumorphic-btn small">🧩 Table View</button>
 </div>
 
-<div class="raised-box scroll-container scroll-table-wrapper">
-  <table id="tempTable" class="dataTable customer-table" data-sum-column="Amount" style="width:100%;">
-    <thead>
-      <tr>
-        <th onclick="sortReport('ano')">ANO</th>
-        <th onclick="sortReport('pdt')">Paid Date</th>
-        <th onclick="sortReport('amt')">Amount</th>
-      </tr>
-    </thead>
-    <tbody id="reportBody"></tbody>
-    <tfoot>
-      <tr>
-        <td colspan="3">
-          <div class="summary-row">
-            <div class="summary-item">
-              <strong>Total Unique ANOs</strong>
-              <span id="totalAno">0</span>
+<div class="raised-box">
+  <div class="customer-table-wrapper ">
+    <table id="postingTable" class="dataTable customer-table">
+      <thead>
+        <tr>
+          {% for h in headers %}
+            <th>{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in payments %}
+        <tr>
+          {% for h in headers %}
+            {% if h == "amt" %}
+              <td data-money>{{ row[h] }}</td>
+            {% else %}
+              <td>{{ row[h] }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+
+      <tfoot>
+        <tr>
+          <td colspan="{{ headers|length }}">
+            <div class="summary-row">
+              <div class="summary-item">
+                <strong>Total Unique ANOs</strong>
+                <span id="totalAno">0</span>
+              </div>
+              <div class="summary-item">
+                <strong>Total Amount</strong>
+                <span id="totalAmt" data-money>0</span>
+              </div>
             </div>
-            <div class="summary-item">
-              <strong>Total Amount</strong>
-              <span id="totalAmt" data-money>0</span>
-            </div>
-          </div>
-        </td>
-      </tr>
-    </tfoot>
-  </table>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- Column selector modal (REUSED) -->
+<div id="columnModal" class="column-modal hidden">
+  <div class="column-modal-content">
+    <h3>📋 Select Columns</h3>
+    <div id="columnCheckboxList" class="column-list"></div>
+    <div class="modal-actions">
+      <button id="closeColumnModal" class="neumorphic-btn small">Close</button>
+    </div>
+  </div>
 </div>
 
 

@@ -557,6 +557,8 @@ input[readonly] {
   padding: 0px;
   background-color: var(--sidebar);
   border-radius: 12px;
+  max-width: 100%;
+  position: relative;
 }
 
 #tempTable, #customerTable {
@@ -565,7 +567,6 @@ input[readonly] {
   font-size: 15px;
   background: transparent;
   color: var(--text);
-  table-layout: fixed; /* Crucial: Distributes column widths evenly based on defined widths */
 }
 
 #tempTable th, #tempTable td,
@@ -2044,7 +2045,6 @@ body.dark-mode {
     border-collapse: separate !important;
     border-spacing: 0;
     border-radius: 14px;
-    overflow: hidden;
 }
 
 /* Round the header */
@@ -2194,10 +2194,16 @@ body.dark-mode {
 .mf-table-card .raised-box,
 .mf-table-card .dataTable {
   border-radius: 12px;
-  overflow: hidden;
   background: var(--panel, rgba(255,255,255,0.02));
 }
+.mf-table-card .scroll-table-wrapper,
+.mf-table-card .dataTable {
+  overflow: hidden; /* OK */
+}
 
+.mf-table-card .raised-box {
+  overflow: visible; /* ✅ IMPORTANT */
+}
 /* Make the inner table header rounded and keep contrast */
 .mf-table-card thead th {
   border-top-left-radius: 10px;
@@ -2280,4 +2286,271 @@ body.dark-mode .mf-upload-btn {
 @keyframes fadeout {
     0% { opacity: 1; }
     100% { opacity: 0; }
+}
+
+
+.customer-table {
+  min-width: 1800px; /* keep your width */
+  table-layout: auto;
+}
+
+.customer-table th,
+.customer-table td {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.customer-table th:nth-child(3),
+.customer-table td:nth-child(3) {
+  width: 90px;
+  max-width: 90px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+
+/* === FIX: Proper dual-axis scrolling + frozen header for customer table === */
+
+/* Outer wrapper controls BOTH scrollbars and keeps them visible */
+.customer-table-wrapper {
+  max-height: calc(100vh - 300px); /* keeps scrollbars near top */
+  overflow: auto;                 /* enables horizontal + vertical scroll */
+  position: relative;
+}
+
+/* Ensure table width drives horizontal scrolling */
+.customer-table {
+  min-width: 1800px;     /* keep your current width */
+  table-layout: auto;    /* prevents column stretching */
+}
+
+/* Prevent column wrapping */
+.customer-table th,
+.customer-table td {
+  white-space: nowrap;
+}
+/* Sticky header */
+.customer-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--highlight); /* SAME gold */
+}
+
+/* Column selector modal */
+.column-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+
+.column-modal.hidden {
+  display: none;
+}
+
+.column-modal-content {
+  background: var(--sidebar);
+  padding: 25px;
+  border-radius: 18px;
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.column-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;              /* tighter vertical spacing */
+  margin-top: 12px;
+}
+
+.column-item {
+  display: grid;
+  grid-template-columns: 18px auto; /* checkbox + label close together */
+  align-items: center;
+  column-gap: 8px;                  /* controls checkbox–text gap */
+  padding: 2px 0;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.column-item label {
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.column-item input[type="checkbox"] {
+  margin: 0;
+  padding: 0;
+  transform: scale(0.9);
+}
+
+.modal-actions {
+  margin-top: 20px;
+  text-align: center;
+}
+
+/* =====================================================
+   POST PAYMENT REPORT – COLUMN WIDTH FIX
+   Keeps columns tight and removes empty spacing
+   ===================================================== */
+
+/* Override aggressive customer-table rules ONLY for posting table */
+#postingTable {
+  min-width: unset !important;     /* 🔥 remove forced width */
+  width: 100%;
+  table-layout: fixed;             /* 🔥 allow equal, compact columns */
+}
+
+/* Allow columns to shrink naturally */
+#postingTable th,
+#postingTable td {
+  white-space: nowrap;             /* keep dates/numbers clean */
+  padding: 8px 10px;               /* tighter padding */
+}
+
+/* Column-specific sizing (balanced + readable) */
+#postingTable th:nth-child(1),
+#postingTable td:nth-child(1) {     /* ANO */
+  width: 90px;
+}
+
+#postingTable th:nth-child(2),
+#postingTable td:nth-child(2) {     /* Paid Date */
+  width: 140px;
+}
+
+#postingTable th:nth-child(3),
+#postingTable td:nth-child(3) {     /* Amount */
+  width: 110px;
+}
+
+/* Any extra columns added later */
+#postingTable th:nth-child(n+4),
+#postingTable td:nth-child(n+4) {
+  width: 120px;
+}
+
+
+/* Prevent empty stretching */
+.customer-table-wrapper {
+  overflow-x: auto;
+}
+
+/* =====================================================
+   POST PAYMENT REPORT – RESPONSIVE FLUID TABLE
+   ===================================================== */
+
+/* Wrapper should expand naturally with screen size */
+#postingTable {
+  width: 100%;
+  max-width: 100%;
+  table-layout: auto;          /* fluid layout */
+}
+
+/* Let columns grow/shrink with viewport */
+#postingTable th,
+#postingTable td {
+  white-space: nowrap;
+  padding: 10px 14px;
+}
+
+/* Balanced minimum widths (prevents squashed look) */
+#postingTable th:nth-child(1),
+#postingTable td:nth-child(1) {   /* ANO */
+  min-width: 90px;
+}
+
+#postingTable th:nth-child(2),
+#postingTable td:nth-child(2) {   /* Paid Date */
+  min-width: 140px;
+}
+
+#postingTable th:nth-child(3),
+#postingTable td:nth-child(3) {   /* Amount */
+  min-width: 120px;
+  text-align: right;
+}
+
+/* Any extra columns */
+#postingTable th:nth-child(n+4),
+#postingTable td:nth-child(n+4) {
+  min-width: 140px;
+}
+
+/* Ensure container uses full available width */
+.customer-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Improve large-screen appearance */
+@media (min-width: 1200px) {
+  #postingTable th,
+  #postingTable td {
+    padding: 12px 18px;
+  }
+}
+
+/* Improve small-screen behavior */
+@media (max-width: 768px) {
+  #postingTable th,
+  #postingTable td {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+}
+
+/* ---------------- USER MENU ---------------- */
+.user-profile {
+    position: relative;
+    display: inline-block;
+    margin-left: 20px;
+}
+
+.user-trigger {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-icon {
+    font-size: 18px;
+}
+
+.username {
+    font-weight: 500;
+}
+
+.user-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 35px;
+    background: var(--card-bg);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    min-width: 120px;
+    z-index: 999;
+}
+
+.user-dropdown a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    padding: 8px;
+}
+
+.user-dropdown a:hover {
+    background: rgba(255,255,255,0.05);
 }

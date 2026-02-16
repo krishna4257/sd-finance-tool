@@ -111,7 +111,20 @@ document.addEventListener("DOMContentLoaded", function () {
       } catch (e) {}
     })();
   </script>
+  <script>
+  function toggleUserMenu() {
+    const menu = document.getElementById("userDropdown");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+  }
 
+// Close dropdown when clicking outside
+  document.addEventListener("click", function(e) {
+    const profile = document.querySelector(".user-profile");
+    if (profile && !profile.contains(e.target)) {
+        document.getElementById("userDropdown").style.display = "none";
+    }
+  });
+  </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const themeToggle = document.getElementById('theme-toggle');
@@ -147,7 +160,6 @@ document.addEventListener("DOMContentLoaded", function () {
       dateFormat: "d/m/Y",
       allowInput: true,
       clickOpens: true,
-      defaultDate: "today",
       wrap: false
     });
   </script>
@@ -160,14 +172,16 @@ document.addEventListener("DOMContentLoaded", function () {
     </div>
     <a class="neumorphic-btn" href="/dashboard">🏠 Dashboard</a>
     <a class="neumorphic-btn" href="/add_customer">➕ Add Customer</a>
-    <a class="neumorphic-btn" href="/post_payment">💰 Post Payment</a>
-    <a class="neumorphic-btn" href="/view_customers">👁️ All Customers</a>
-    <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
+    <a class="neumorphic-btn" href="/post_payment">💰 Add Payment</a>
+    <a class="neumorphic-btn" href="{{ url_for('view_customers') }}">👁️ Customers</a>
     <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
-    <a href="/manage_files" class="neumorphic-btn">📂 Manage Files</a>
-    {% if session.get('role', 'user') == 'admin' %}
-  <!-- existing manage files link -->
-    <a class="neumorphic-btn" href="{{ url_for('users_page') }}">👤 User Management</a>
+    {% if session.level in ['admin', 'mgmt'] %}
+    <a href="/village" class="neumorphic-btn">🏘️ Village</a>
+    <a href="/employee" class="neumorphic-btn">👤 Employee</a>
+    {% endif %}
+    <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
+    {% if session.level == "admin" %}
+    <a class="neumorphic-btn" href="/users">👥 User Management</a>
     {% endif %}
     </aside>
 
@@ -176,16 +190,14 @@ document.addEventListener("DOMContentLoaded", function () {
       <!-- Village Selector / Active Display -->
             {% if not session.active_db %}
             <form method="POST" action="/dashboard" class="village-select-form">
-                <label for="village_db"><strong>Village:</strong></label>
-                <select name="village_db" id="village_db" required>
-                    <option value="">-- Select a file --</option>
-                    {% for file in files %}
-                    <option value="{{ file }}">{{ file }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="neumorphic-btn">Set</button>
+                <select id="employeeSelect"></select>
+                <select id="villageSelect"></select>
+                <button id="setContextBtn" type="button" class="neumorphic-btn">Set</button>
             </form>
+            {% if session.level in ['admin', 'mgmt'] %}
             <button onclick="openCreateVillageModal()" class="neumorphic-btn-h">➕ Create Village</button>
+            <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp1')">➕ Add Employee</button>
+            {% endif %}
             {% else %}
       <div>
         <strong>Active Village:</strong> {{ village_name or "Unknown" }}
@@ -211,15 +223,17 @@ document.addEventListener("DOMContentLoaded", function () {
             <span class="icon moon">🌙</span>
           </span>
         </label>
-        {% if session.get('user') %}
-        <div class="profile-container">
-          <div id="profile-btn" class="profile-badge">
-               <div id="profile-circle">👤</div>
-               <span id="profile-name">{{ session['user'] }}</span>
-          </div>
-          <div id="profile-menu">
-               <a href="/logout">Logout</a>
-          </div>
+        <!-- USER MENU -->
+        {% if session.get("user_id") %}
+        <div class="user-profile">
+            <div class="user-trigger" onclick="toggleUserMenu()">
+                <span class="user-icon">👤</span>
+                <span class="username">{{ session.get("username") }}</span>
+            </div>
+
+            <div id="userDropdown" class="user-dropdown">
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
         </div>
         {% endif %}
       </div>
@@ -240,15 +254,79 @@ document.addEventListener("DOMContentLoaded", function () {
       </div>
     </div>
 
+    
     <div id="createVillageModal" class="modal" style="display: none;">
-      <div class="modal-content">
-        <span onclick="closeCreateVillageModal()" class="close-btn">×</span>
-        <h3>Create New Village Database</h3>
-        <input type="text" id="villageNumber" placeholder="Village Number (e.g. 22)">
-        <input type="text" id="villageName" placeholder="Village Name">
-        <button onclick="submitCreateVillage()" class="neumorphic-btn">Create Village</button>
-      </div>
+  <div class="modal-content">
+
+    <h3>Create Village</h3>
+
+    <!-- ===================== -->
+    <!-- Village Details -->
+    <!-- ===================== -->
+    <div class="form-group">
+      <input id="villageCode" placeholder="Village Code" />
+      <small id="villageCodeError" class="error-text" style="display:none;">
+        Village code already exists
+      </small>
+      <input id="villageName" placeholder="Village Name" />
+      <small id="villageNameError" class="error-text" style="display:none;">
+        Village name already exists
+      </small>
+      <input id="district" placeholder="District" />
+      <input id="pincode" placeholder="Pincode" />
+      <select id="state">
+         <option value="">-- Select State --</option>
+         <option value="ANDHRA PRADESH">ANDHRA PRADESH</option>
+         <option value="TELANGANA">TELANGANA</option>
+         <option value="KARNATAKA">KARNATAKA</option>
+         <option value="MAHARASHTRA">MAHARASHTRA</option>
+         <option value="ODISHA">ODISHA</option>
+         <option value="GUJARAT">GUJARAT</option>
+      </select>
     </div>
+
+    <hr />
+
+    <!-- ===================== -->
+    <!-- Employee 1 (Mandatory) -->
+    <!-- ===================== -->
+    <h4>Primary Employee (Mandatory)</h4>
+
+    <select id="emp1Select">
+      <option value="">-- Select Employee --</option>
+    </select>
+    <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp1')">
+      ➕ Add Employee
+    </button>
+
+    <hr />
+
+    <!-- ===================== -->
+    <!-- Employee 2 (Optional) -->
+    <!-- ===================== -->
+    <h4>Secondary Employee (Optional)</h4>
+
+    <select id="emp2Select">
+      <option value="">-- Optional --</option>
+    </select>
+    <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp2')">
+      ➕ Add Employee
+    </button>
+
+    <!-- ===================== -->
+    <!-- Actions -->
+    <!-- ===================== -->
+    <div class="modal-actions">
+      <button onclick="submitCreateVillage()" class="neumorphic-btn-h">
+        Create Village
+      </button>
+      <button onclick="closeCreateVillageModal()" class="neumorphic-btn-h">
+        Cancel
+      </button>
+    </div>
+
+  </div>
+</div>
 
     <!-- ON-SCREEN CALCULATOR HTML -->
     <div id="appCalculator" class="calculator-wrapper">
@@ -280,6 +358,37 @@ document.addEventListener("DOMContentLoaded", function () {
         <button data-key="0" class="key-zero">0</button>
         <button data-key=".">.</button>
         <button data-key="=" class="key-op key-equal">=</button>
+      </div>
+    </div>
+
+    <!-- Add Employee Modal -->
+    <div id="addEmployeeModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span onclick="closeAddEmployeeModal()" class="close-btn">×</span>
+        <h3>Add New Employee</h3>
+
+        <input id="empName" placeholder="Employee Name" />
+        <input id="empPhone" placeholder="Phone Number" />
+        <input id="empCity" placeholder="City" />
+        <input id="empJoiningDate" type="date" />
+        <select id="empLevel">
+          <option value="">-- Level --</option>
+          <option value="admin">ADMIN</option>
+          <option value="mgmt">MGMT</option>
+          <option value="j">J</option>
+          <option value="m">M</option>
+          <option value="s">S</option>
+        </select>
+        <input id="empState" placeholder="State" />
+
+        <div class="modal-actions">
+          <button onclick="submitAddEmployee()" class="neumorphic-btn-h">
+            Save Employee
+          </button>
+          <button onclick="closeAddEmployeeModal()" class="neumorphic-btn-h">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
 

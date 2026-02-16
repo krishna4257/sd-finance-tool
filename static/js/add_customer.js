@@ -31,37 +31,25 @@ document.addEventListener('DOMContentLoaded', function () {
     const anoInput = document.getElementById('ano');
     const nameInput = document.getElementById('name');
     const panoInput = document.getElementById('pano');
-    const dwInput = document.getElementById('dw');
-    const dsInput = document.getElementById('ds');
-    const fdtInput = document.getElementById('fdt');
-    // Load saved values from localStorage (only if empty)
-    if (!dwInput.value && localStorage.getItem("saved_dw")) {
-        dwInput.value = localStorage.getItem("saved_dw");
-    }
-    if (!dsInput.value && localStorage.getItem("saved_ds")) {
-        dsInput.value = localStorage.getItem("saved_ds");
-    }
-    if (!fdtInput.value && localStorage.getItem("saved_fdt")) {
-        fdtInput.value = localStorage.getItem("saved_fdt");
-    }
-    const tdtInput = document.getElementById('tdt');
-    const amtInput = document.getElementById('amt');
-    const daInput = document.getElementById('da');
+    const typeInput = document.getElementById('type');
+    const periodInput = document.getElementById('period');
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+    const totalAmountInput = document.getElementById('total_amount');
+    const installmentAmountInput = document.getElementById('installment_amount');
     const submitButton = form.querySelector('button[type="submit"]');
-
-    dwInput.addEventListener("change", () => {
-        localStorage.setItem("saved_dw", dwInput.value);
-    });
-    dsInput.addEventListener("input", () => {
-        localStorage.setItem("saved_ds", dsInput.value);
-    });
-    fdtInput.addEventListener("input", () => {
-        localStorage.setItem("saved_fdt", fdtInput.value);
-    });
 
 
     // List of all form fields (excluding readonly) for focus management and state control.
-    const fields = [anoInput, nameInput, panoInput, dwInput, dsInput, fdtInput, amtInput];
+    const fields = [
+      anoInput,
+      nameInput,
+      panoInput,
+      typeInput,
+      periodInput,
+      startDateInput,
+      totalAmountInput
+    ];
 
     // State variable to track if loan fields have been set,
     // enabling the conditional tab loop.
@@ -86,47 +74,35 @@ document.addEventListener('DOMContentLoaded', function () {
 document.getElementById("ano").addEventListener("input", function () {
     this.value = this.value.replace(/[^0-9]/g, "");
 });
-    // --- A.no Duplication Check ---
+   
     function checkAno() {
-        const anoValue = anoInput.value.trim();
-        message.style.display = 'none';
-        setFormFieldsEnabled(false); // Disable form while checking
+    const ano = anoInput.value.trim();
+    if (!ano) return;
 
-        if (anoValue === '') {
-            return;
-        }
-
-        fetch(`/check_ano_exists?ano=${anoValue}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.exists) {
-                    message.textContent = `❌ Account Number ${anoValue} already exists. Please enter a new one.`;
-                    message.className = "message-box error";
-                    message.style.display = 'block';
-                    anoInput.focus();
-                } else {
-                    message.style.display = 'none';
-                    setFormFieldsEnabled(true);
-                    nameInput.focus(); // Focus on name input after successful check
-                }
-            })
-            .catch(err => {
-                console.error("Error checking ANO:", err);
-                message.textContent = `Error checking A.no: ${err.message}`;
+    fetch(`/check_ano_exists?ano=${ano}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.exists) {
+                message.textContent = "❌ Account number already exists";
                 message.className = "message-box error";
-                message.style.display = 'block';
+                message.style.display = "block";
                 setFormFieldsEnabled(false);
-            });
-    }
-
-    anoInput.addEventListener('blur', checkAno);
-    anoInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            checkAno();
-        }
-    });
-
+                anoInput.focus();
+            } else {
+                message.style.display = "none";
+                setFormFieldsEnabled(true);   // ✅ THIS IS THE KEY LINE
+                nameInput.focus();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            message.textContent = "Error checking account number";
+            message.className = "message-box error";
+            message.style.display = "block";
+        });
+}
+anoInput.addEventListener("blur", checkAno);
+anoInput.addEventListener("change", checkAno);
     // --- Dynamic Enter Key Loop ---
     function handleEnterKeyLoop(e) {
         if (e.key === 'Enter') {
@@ -137,8 +113,8 @@ document.getElementById("ano").addEventListener("input", function () {
 
             if (currentIndex === -1) return;
 
-            const tabOrderFull = [nameInput, panoInput, dwInput, dsInput, fdtInput, amtInput];
-            const tabOrderSimplified = [nameInput, panoInput, amtInput];
+            const tabOrderFull = [anoInput, nameInput, panoInput, typeInput, periodInput, startDateInput, totalAmountInput];
+            const tabOrderSimplified = [nameInput, panoInput, totalAmountInput];
             const currentTabOrder = loanFieldsSet ? tabOrderSimplified : tabOrderFull;
 
             const nextIndex = currentTabOrder.indexOf(e.target) + 1;
@@ -154,7 +130,7 @@ document.getElementById("ano").addEventListener("input", function () {
                 return;
             }
 
-            if (e.target === fdtInput) {
+            if (e.target === startDateInput) {
                 loanFieldsSet = true;
             }
             
@@ -168,38 +144,35 @@ document.getElementById("ano").addEventListener("input", function () {
 
     // --- Loan Field Calculation ---
     function calculateLoanFields() {
-        const ds = parseInt(dsInput.value);
-        const amt = parseFloat(amtInput.value);
-        const fdt = fdtInput.value;
-        const dw = dwInput.value;
+        const period = parseInt(periodInput.value);
+        const amount = parseFloat(totalAmountInput.value);
+        const start = startDateInput.value;
+        const type = typeInput.value;
 
-        if (fdt && ds && dw) {
-            const startDate = parseDDMMYYYY(fdt);
+        if (start && period && type) {
+            const startDate = parseDDMMYYYY(start);
             if (startDate) {
                 let endDate = new Date(startDate);
-                if (dw === 'W') {
-                    endDate.setDate(endDate.getDate() + (ds * 7));
+                if (type === 'W') {
+                    endDate.setDate(endDate.getDate() + (period * 7));
                 } else {
-                    endDate.setMonth(endDate.getMonth() + ds);
+                    endDate.setMonth(endDate.getMonth() + period);
                 }
-                tdtInput.value = formatDateToDDMMYYYY(endDate);
-            } else {
-                tdtInput.value = '';
+                endDateInput.value = formatDateToDDMMYYYY(endDate);
             }
         } else {
-            tdtInput.value = '';
+            endDateInput.value = '';
         }
 
-        if (!isNaN(amt) && !isNaN(ds) && ds > 0) {
-            daInput.value = (amt / ds).toFixed(2);
+        if (!isNaN(amount) && !isNaN(period) && period > 0) {
+            installmentAmountInput.value = (amount / period).toFixed(2);
         } else {
-            daInput.value = '';
+            installmentAmountInput.value = '';
         }
     }
     
-    [dwInput, dsInput, fdtInput, amtInput].forEach(input => {
-        if (input) input.addEventListener('input', calculateLoanFields);
-    });
+    [typeInput, periodInput, startDateInput, totalAmountInput]
+  .forEach(el => el.addEventListener('input', calculateLoanFields));
 
     // --- Parent Link Check ---
     if (panoInput && parentInfoTooltip && parentInfoText) {
@@ -287,19 +260,24 @@ document.getElementById("ano").addEventListener("input", function () {
                 message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
                 message.className = "message-box success success-highlight";
                 document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
+                anoInput.value = data.highest_ano + 1;
                 // Clear all dynamic fields to prepare for a new entry
                 document.getElementById('ano').value = '';
                 document.getElementById('name').value = '';
-                document.getElementById('add2').value = '';
-                document.getElementById('add3').value = '';
+                document.getElementById('aadhar_number').value = '';
                 document.getElementById('pano').value = '';
-                document.getElementById('amt').value = '';
-                document.getElementById('tdt').value = '';
-                document.getElementById('da').value = '';
+                document.getElementById('total_amount').value = '';
+                document.getElementById('start_date').value = '';
+                document.getElementById('end_date').value = '';
+                document.getElementById('installment_amount').value = '';
+                document.getElementById('longitude').value = '';
+                document.getElementById('latitude').value = '';
+                
                 
                 if (parentInfoTooltip) parentInfoTooltip.style.display = 'none';
 
                 setFormFieldsEnabled(false); // Disable form again
+                window.location.reload();
                 anoInput.focus(); // Move cursor back to the A.no field
                 
                 loanFieldsSet = false; // Reset the loop state
@@ -321,21 +299,16 @@ document.getElementById("ano").addEventListener("input", function () {
     });
     
     // --- Initial State ---
-    setFormFieldsEnabled(false);
+    setFormFieldsEnabled(true);
     anoInput.focus();
 
+    const highestAno = parseInt(
+      document.getElementById("highestAnoDisplay")?.innerText || "0",
+      10
+    );
 
-    dwInput.addEventListener("change", () => {
-        localStorage.setItem("saved_dw", dwInput.value);
-    });
-
-    dsInput.addEventListener("input", () => {
-        localStorage.setItem("saved_ds", dsInput.value);
-    });
-
-    fdtInput.addEventListener("input", () => {
-        localStorage.setItem("saved_fdt", fdtInput.value);
-    });
-
+    if (!isNaN(highestAno)) {
+      anoInput.value = highestAno + 1;
+    }
 
 });

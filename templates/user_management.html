@@ -1,5 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+/* Fix Device ID overflow only for User Management table */
+#users-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#users-table th,
+#users-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Specifically handle Device ID column (3rd column) */
+#users-table td:nth-child(3),
+#users-table th:nth-child(3) {
+    max-width: 260px;
+    word-break: break-all;
+    white-space: normal;
+}
+</style>
 
 <h2 class="page-title">User Management</h2>
 
@@ -7,50 +28,44 @@
     <button id="btn-add" class="neumorphic-btn">+ Add User</button>
 </div>
 
-<div class="raised-box scroll-table-wrapper">
-    <table id="users-table" class="dataTable customer-table" style="width:100%;">
+<div class="raised-box">
+  <div class="customer-table-wrapper">
+    <table id="users-table" class="dataTable customer-table">
         <thead>
             <tr>
                 <th>Username</th>
+                <th>Employee</th>
                 <th>Device ID</th>
-                <th>Notes</th>
                 <th>Role</th>
-                <th>Team</th>
+                <th>Status</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
+  </div>
 </div>
 
 <!-- Modal -->
-<div id="user-modal" class="raised-box" 
-     style="display:none; padding:20px; max-width:400px; margin:auto;">
+<div id="user-modal" class="raised-box"
+     style="display:none; padding:25px; max-width:450px; margin:auto;">
+
+    <label>Employee</label>
+    <select id="u_employee" class="input"></select>
 
     <label>Username</label>
-    <input id="u_username" class="input" placeholder="username">
+    <input id="u_username" class="input">
 
     <label>Password</label>
-    <input id="u_password" class="input" placeholder="password (empty to keep)">
+    <input id="u_password" type="password" class="input">
 
-    <label>Device ID</label>
-    <input id="u_system" class="input" placeholder="system id">
+    <label>Role (Auto from Employee)</label>
+    <input id="u_role_display" class="input" disabled>
 
-    <label>Notes</label>
-    <textarea id="u_notes" class="input" placeholder="notes"></textarea>
+    <label>Assigned Villages (Auto)</label>
+    <select id="u_villages_display" class="input" multiple disabled style="height:120px;"></select>
 
-    <label>Role</label>
-    <select id="u_role" class="input">
-        <option value="user">User</option>
-        <option value="admin">Admin</option>
-    </select>
-    <label>Team</label>
-    <select id="u_team" class="input">
-       <option value="teamA">Team A</option>
-       <option value="teamB">Team B</option>
-    </select>
-    
-    <div style="margin-top:10px;">
+    <div style="margin-top:15px;">
         <button id="u_save" class="neumorphic-btn">Save</button>
         <button id="u_cancel" class="neumorphic-btn">Cancel</button>
     </div>
@@ -58,6 +73,28 @@
 
 
 <script>
+async function loadEmployees() {
+    const res = await fetch('/api/employees');
+    const data = await res.json();
+    const select = document.getElementById("u_employee");
+    select.innerHTML = '';
+    data.forEach(e => {
+        select.innerHTML += `<option value="${e.eid}">${e.name}</option>`;
+    });
+}
+
+document.getElementById("btn-add").onclick = async () => {
+    await loadEmployees();
+
+    // Reset form
+    document.getElementById("u_username").value = "";
+    document.getElementById("u_password").value = "";
+    document.getElementById("u_role_display").value = "";
+    document.getElementById("u_villages_display").innerHTML = "";
+
+    document.getElementById("user-modal").style.display = "block";
+};
+
 async function loadUsers(){
     const res = await fetch('/api/users/list');
     const users = await res.json();
@@ -69,151 +106,127 @@ async function loadUsers(){
         const tr = document.createElement('tr');
         tr.classList.add("data-row");
 
-        // IMPORTANT: store role for edit popup
-        tr.dataset.role = u.role || "user";
-
         tr.innerHTML = `
             <td>${u.username}</td>
-            <td>${u.system_id || ''}</td>
-            <td>${u.notes || ''}</td>
+            <td>${u.employee_name || '-'}</td>
+            <td>${u.device_id || '-'}</td>
             <td>${u.role}</td>
-            <td>${u.team || "teamA"}</td>
+            <td>${u.is_active ? 'Active' : 'Disabled'}</td>
             <td class="action-buttons">
-                <button class="neumorphic-btn small edit" data-user="${u.username}">Edit</button>
-                <button class="neumorphic-btn small delete-btn" data-user="${u.username}">Delete</button>
-                <button class="neumorphic-btn small reset-device reset-device-btn" data-user="${u.username}">Device</button>
+                <button class="neumorphic-btn small toggle-status-btn" data-id="${u.id}" data-active="${u.is_active}">
+                    ${u.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+                ${u.role !== 'admin' ? `
+                    <button class="neumorphic-btn small reset-device-btn" data-id="${u.id}">
+                        Reset Device
+                    </button>
+                ` : ``}
+                <button class="neumorphic-btn small delete-btn" data-id="${u.id}">
+                    Delete
+                </button>
             </td>
         `;
+
         tbody.appendChild(tr);
     });
 
-    document.querySelectorAll('.edit').forEach(el=>{
-        el.onclick = () => openEdit(el.dataset.user);
-    });
+    document.querySelectorAll('.delete-btn').forEach(btn=>{
+        btn.onclick = async () => {
+            if(!confirm("Delete user?")) return;
 
-    document.querySelectorAll('.delete-btn').forEach(el=>{
-        el.onclick = async () => {
-            if(!confirm("Delete user " + el.dataset.user + "?")) return;
             const r = await fetch('/api/users/delete', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({username: el.dataset.user})
+                body: JSON.stringify({id: btn.dataset.id})
             });
+
             const j = await r.json();
             if(j.ok) loadUsers();
         };
     });
 
-    document.querySelectorAll('.reset-device').forEach(el => {
-          el.onclick = async () => {
-             if (!confirm("Reset device for " + el.dataset.user + "?")) return;
-             const res = await fetch('/api/users/reset_device', {
-                 method: "POST",
-                 headers: {"Content-Type": "application/json"},
-                 body: JSON.stringify({username: el.dataset.user})
-             });
-             const j = await res.json();
-             if (j.ok) loadUsers();
-             else alert(j.msg);
+    document.querySelectorAll('.reset-device-btn').forEach(btn=>{
+        btn.onclick = async () => {
+            if(!confirm("Reset device?")) return;
+
+            const r = await fetch('/api/users/reset_device', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({id: btn.dataset.id})
+            });
+
+            const j = await r.json();
+            if(j.ok) loadUsers();
+        };
+    });
+
+    document.querySelectorAll('.toggle-status-btn').forEach(btn=>{
+        btn.onclick = async () => {
+
+            const isActive = btn.dataset.active === "true";
+
+            if(!confirm(isActive ? "Deactivate this user?" : "Activate this user?")) return;
+
+            const r = await fetch('/api/users/toggle_status', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({id: btn.dataset.id})
+            });
+
+            const j = await r.json();
+            if(j.ok) loadUsers();
+            else alert(j.msg);
         };
     });
 }
 
-function showModal(data){
-    document.getElementById("user-modal").style.display = "block";
 
-    document.getElementById("u_username").value = data.username || "";
-    document.getElementById("u_password").value = "";
-    document.getElementById("u_system").value = data.system_id || "";
-    document.getElementById("u_notes").value = data.notes || "";
-
-    document.getElementById("u_role").value = data.role || "user";
-    document.getElementById("u_team").value = data.team || "teamA";
-    document.getElementById("u_username").dataset.orig = data.username || "";
-}
-
-function hideModal(){
+document.getElementById("u_cancel").onclick = () => {
     document.getElementById("user-modal").style.display = "none";
-}
-
-function openEdit(username){
-    const row = [...document.querySelectorAll("#users-table tbody tr")]
-        .find(r => r.children[0].innerText === username);
-
-    showModal({
-        username: row.children[0].innerText,
-        system_id: row.children[1].innerText,
-        notes: row.children[2].innerText,
-        role: row.dataset.role,
-        team: row.dataset.team || "teamA"
-    });
-}
-
-document.getElementById("btn-add").onclick = () => showModal({});
-
-document.getElementById("u_cancel").onclick = hideModal;
+};
 
 document.getElementById("u_save").onclick = async () => {
-    const orig = document.getElementById("u_username").dataset.orig || "";
-    const username = document.getElementById("u_username").value.trim();
-    const password = document.getElementById("u_password").value.trim();
-    const system_id = document.getElementById("u_system").value.trim();
-    const notes = document.getElementById("u_notes").value.trim();
-    const role = document.getElementById("u_role").value.trim();
-    const team = document.getElementById("u_team").value.trim();
-    let payload = {};
 
-    if (!orig) {
-        // ---------------------
-        // CREATE NEW USER
-        // ---------------------
-        if (!username || !password) {
-            alert("Username & Password required");
-            return;
-        }
+    const payload = {
+        username: document.getElementById("u_username").value,
+        password: document.getElementById("u_password").value,
+        employee_id: document.getElementById("u_employee").value
+    };
 
-        payload = {
-            username: username,
-            password: password,         // <-- FIXED
-            system_id: system_id,
-            notes: notes,
-            role: role,
-            team: team
-        };
-
-    } else {
-        // ---------------------
-        // EDIT EXISTING USER
-        // ---------------------
-        payload = {
-            username: orig,
-            new_username: username !== orig ? username : undefined,
-            new_password: password || undefined,  // only update if provided
-            system_id: system_id || undefined,
-            notes: notes || undefined,
-            role: role || undefined,
-            team: team || undefined
-        };
-    }
-
-    // Clean undefined fields
-    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-
-    const url = orig ? "/api/users/edit" : "/api/users/add";
-
-    const res = await fetch(url, {
+    const res = await fetch("/api/users/add", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload)
     });
 
     const j = await res.json();
+
     if (j.ok) {
-        hideModal();
-        loadUsers();
+        location.reload();
     } else {
-        alert(j.msg || "Error saving user");
+        alert(j.msg);
     }
+};
+
+document.getElementById("u_employee").onchange = async function () {
+
+    const eid = this.value;
+
+    // Fetch employee level
+    const empRes = await fetch(`/api/employee_level?eid=${eid}`);
+    const empData = await empRes.json();
+    document.getElementById("u_role_display").value = empData.level || "";
+
+    // Fetch villages automatically
+    const villageRes = await fetch(`/api/villages_by_employee?eid=${eid}`);
+    const villages = await villageRes.json();
+
+    const select = document.getElementById("u_villages_display");
+    select.innerHTML = "";
+
+    villages.forEach(v => {
+        select.innerHTML += `<option selected>${v.name}</option>`;
+    });
 };
 
 loadUsers();

@@ -22,7 +22,7 @@
   </form>
 </div>
 {% set cust = customers[0] if customers else None %}
-{% set ano = cust['ANO'] if cust else '' %}
+{% set ano = cust['ano'] if cust else '' %}
 
 {% if cust %}
   <!-- 🧾 CUSTOMER TABLE -->
@@ -37,14 +37,14 @@
       </thead>
 
       <tbody>
-          <tr class="customer-row" data-ano="{{ ano }}">
-            {% for idx in range(loanee_headers|length) %}
-              {% set field = loanee_headers[idx] %}
-              <td data-field="{{ field }}" contenteditable="false">
-                  {{ cust[idx] }}
+          <tr class="customer-row" data-cid="{{ cust['cid'] }}" data-ano="{{ cust['ano'] }}">
+            {% for field in loanee_headers %}
+              <td data-field="{{ field }}"
+                  contenteditable="{{ 'false' if field == 'cid' else 'false' }}">
+                {{ cust.get(field, '') }}
               </td>
             {% endfor %}
-          </tr>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -80,7 +80,7 @@
 
         <tbody>
             {% for row in pamt1_records[ano] %}
-              <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}">
+              <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}" data-pid="{{ row[3] }}">
                 <td>{{ row[0] }}</td>
                 <td data-field="PDT" contenteditable="false">{{ row[1] }}</td>
                 <td data-field="AMT" contenteditable="false" data-money="{{ row[2] }}">{{ row[2] }}</td>

@@ -1,0 +1,102 @@
+{% extends "dashboard.html" %}
+{% block content %}
+<style>
+/* Fix only employee table layout */
+#employeeTable {
+  min-width: unset !important;   /* remove 1800px forcing */
+  width: 100%;
+  table-layout: auto;
+}
+
+/* Fix name column width (no wrapping, clean look with horizontal scroll) */
+#employeeTable td[data-field="name"],
+#employeeTable th:nth-child(3) {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+</style>
+
+<h2 class="page-title">👨‍💼 Employee Table</h2>
+
+<div class="raised-box">
+  <div class="control-row">
+    <label class="search-label">
+      <input type="text" id="searchBox" placeholder="Search employee name or code...">
+    </label>
+
+    <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
+    <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
+    <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
+    <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-item">
+      <strong>Total Employees:</strong>
+      <span id="totalCount">{{ total_employees }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="raised-box">
+  <div class="customer-table-wrapper">
+    <table id="employeeTable" class="dataTable customer-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" onclick="toggleAll(this)" /></th>
+          {% for header in headers %}
+          <th>{{ header }}</th>
+          {% endfor %}
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody id="employeeTableBody">
+        {% for row in data %}
+        <tr>
+          <td><input type="checkbox" /></td>
+
+          {% for col in headers %}
+            <td data-field="{{ col }}">{{ row[col] }}</td>
+          {% endfor %}
+
+          <td class="action-buttons">
+            <button class="neumorphic-btn ultrasmall edit-btn"
+                    onclick="enableEdit(this)">
+              Edit
+            </button>
+            <button class="neumorphic-btn ultrasmall danger-btn"
+                    onclick="deleteEmployee('{{ row.eid }}')">
+              Delete
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Column Modal -->
+<div id="columnModal" class="column-modal hidden">
+  <div class="column-modal-content">
+    <h3>📋 Select Columns</h3>
+    <div id="columnCheckboxList" class="column-list"></div>
+    <div class="modal-actions">
+      <button id="closeColumnModal" class="neumorphic-btn small">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/employee.js') }}"></script>
+{% endblock %}

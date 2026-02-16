@@ -10,22 +10,13 @@ const CUSTOMER_MAP = {};
 window.CUSTOMERS.forEach(c => {
     // Normalize backend keys to the frontend expected shape
     const normalized = {
-        // ANO might be under ANO (uppercase) or ano (lowercase) or Ano
-        ano: (c.ANO !== undefined ? String(c.ANO) :
-              (c.ano !== undefined ? String(c.ano) :
-              (c.Ano !== undefined ? String(c.Ano) : ''))).trim(),
-
-        // name may be in NAME, name, or ANO1 depending on backend
-        name: (c.NAME !== undefined ? String(c.NAME) :
-               (c.name !== undefined ? String(c.name) :
-               (c.ANO1 !== undefined ? String(c.ANO1) : ''))).trim(),
-
-        // Numeric fields: convert to Number (fallback 0)
-        amt: Number(c.AMT ?? c.amt ?? 0) || 0,
-        pamt: Number(c.PAMT ?? c.pamt ?? 0) || 0,
-        bamt: Number(c.BAMT ?? c.bamt ?? 0) || 0,
-        da: Number(c.DA ?? c.da ?? 0) || 0
-    };
+  ano: String(c.ano).trim(),
+  name: c.name,
+  amt: Number(c.total_amount) || 0,
+  pamt: Number(c.paid_amount) || 0,
+  bamt: Number(c.balance_amount) || 0,
+  da: Number(c.installment_amount) || 0
+};
 
     console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
     if (normalized.ano) {
@@ -40,6 +31,12 @@ function showError(message) {
     errorMsg.style.display = "block";
     // Play the sound, catching potential browser errors
     errorSound.play().catch(e => console.warn("Could not play error sound:", e));
+}
+
+function ddmmyyyyToIso(dateStr) {
+  // "10/01/2026" → "2026-01-10"
+  const [dd, mm, yyyy] = dateStr.split('/');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 document.addEventListener('click', function(e) {
@@ -262,11 +259,17 @@ function submitAllPayments() {
     alert("There are no payments to submit.");
     return;
   }
+  
+  const payload = tempTable.map(row => ({
+  ano: Number(row.ano),
+  pdt: row.pdt,          // 👈 backend expects dd/mm/yyyy
+  amt: Number(row.amt)
+}));
 
   fetch("/submit_post_payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(tempTable)
+    body: JSON.stringify(payload)
   })
     .then(res => {
       if (!res.ok) {

@@ -1,6 +1,6 @@
 {% extends "dashboard.html" %}
 {% block content %}
-<h2 class="page-title">👁️ View Customers (LOANEE Table)</h2>
+<h2 class="page-title">👁️ Customers Table</h2>
 
 <div class="raised-box">
   <div class="control-row">
@@ -12,6 +12,7 @@
     <button onclick="filterYearlyReport()" class="neumorphic-btn">📅 Yearly Report</button>
     <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
     <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
+    <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
   </div>
 
   <div class="summary-row">
@@ -22,36 +23,44 @@
   </div>
 </div>
 
-<div class="raised-box scroll-table-container">
-  <table id="customerTable" class="dataTable customer-table"  style="width:100%;">
-    <thead>
-      <tr>
-        <th><input type="checkbox" onclick="toggleAll(this)" /></th>
-        {% for header in headers %}
-        <th>{{ header }}</th>
+<div class="raised-box">
+  <div class="customer-table-wrapper">
+    <table id="customerTable" class="dataTable customer-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" onclick="toggleAll(this)" /></th>
+          {% for header in headers %}
+          <th>{{ header }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody id="customerTableBody">
+        {% for row in data %}
+        <tr>
+          <td><input type="checkbox" /></td>
+          {% for col in headers %}
+            {% set cell = row[col] %}
+            {% if col in ["total_amount","paid_amount","balance_amount","installment_amount"] %}
+              <td class="{{ 'amount-paid' if col == 'balance_amount' else '' }}" data-money>{{ cell }}</td>
+            {% else %}
+              <td>{{ cell }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
         {% endfor %}
-      </tr>
-    </thead>
-    <tbody id="customerTableBody">
-      {% for row in data %}
-      <tr data-ano="{{ row[0] }}">
-        <td><input type="checkbox" /></td>
-        {% for cell in row %}
-          {% set i = loop.index0 %}
-          {% set col = headers[i] %}
-          {% if col in ["AMT", "PAMT", "BAMT", "DA"] %}
-            <td class="{{ 'amount-paid' if col == 'BAMT' else '' }}" data-money>{{ cell }}</td>
-          {% else %}
-            <td>{{ cell }}</td>
-          {% endif %}
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div id="columnModal" class="column-modal hidden">
+  <div class="column-modal-content">
+    <h3>📋 Select Columns</h3>
 
-  <div class="loader" id="dataLoader" style="display: none;">
-    <p>Loading data... please wait.</p>
+    <div id="columnCheckboxList" class="column-list"></div>
+
+    <div class="modal-actions">
+      <button id="closeColumnModal" class="neumorphic-btn small">Close</button>
+    </div>
   </div>
 </div>
 {% endblock %}

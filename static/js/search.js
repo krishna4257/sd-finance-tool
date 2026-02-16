@@ -93,12 +93,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     saveCustomerBtn.addEventListener("click", () => {
-      const updatedData = {};
-      customerRow.querySelectorAll("td[data-field]").forEach((td) => {
-        updatedData[td.dataset.field] = td.textContent.trim();
+      const updatedData = {
+         cid: customerRow.dataset.cid
+      };
+
+      customerRow.querySelectorAll("td[data-field]").forEach(td => {
+          updatedData[td.dataset.field] = td.textContent.trim();
       });
 
-      fetch("/update_customer_and_payments", {
+      fetch("/api/customer/update_pg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "customer", data: updatedData })
@@ -130,37 +133,50 @@ document.addEventListener("DOMContentLoaded", () => {
       savePaymentsBtn.style.display = "inline-block";
     });
 
-    savePaymentsBtn.addEventListener("click", () => {
-      const updatedPayments = [];
-      document.querySelectorAll("#paymentTable tbody tr").forEach((row) => {
-        const ano = row.dataset.ano;
-        const pdt = row.dataset.pdt;
-        const amtCell = row.querySelector("td[data-field='AMT']");
-        if (amtCell) {
-          const amt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, '')) || 0;
-          updatedPayments.push({ ano, pdt, amt });
-        }
-      });
+    savePaymentsBtn.addEventListener("click", async () => {
+  const rows = document.querySelectorAll("#paymentTable tbody tr");
 
-      fetch("/update_customer_and_payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "payments", data: updatedPayments })
-      })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          document.querySelectorAll("td[data-field='AMT']").forEach((cell) => {
-            cell.setAttribute("contenteditable", "false");
-          });
-          savePaymentsBtn.style.display = "none";
-          editPaymentsBtn.style.display = "inline-block";
-        } else {
-          alert("Payment update failed: " + data.error);
-        }
-      })
-      .catch((err) => alert("Error: " + err.message));
+  for (const row of rows) {
+    const ano = row.dataset.ano;
+    const oldPdt = row.dataset.pdt;              // already YYYY-MM-DD
+    const newPdt = row.querySelector("td[data-field='PDT']").textContent.trim();   // user edited YYYY-MM-DD
+    const amtCell = row.querySelector("td[data-field='AMT']");
+    if (!amtCell) continue;
+
+    const amt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, "")) || 0;
+
+    const payload = {
+      data: {
+        ano: ano,
+        old_pdt: oldPdt,
+        pdt: newPdt,   // use new date value from user input
+        amt: amt
+      }
+    };
+
+    const res = await fetch("/api/payment/update_pg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
+
+    const result = await res.json();
+    if (!result.success) {
+      alert("Payment update failed: " + result.error);
+      return;
+    }
+  }
+
+  // UI reset
+  document.querySelectorAll("td[data-field='AMT']").forEach(td =>
+    td.setAttribute("contenteditable", "false")
+  );
+
+  savePaymentsBtn.style.display = "none";
+  editPaymentsBtn.style.display = "inline-block";
+
+  alert("Payments updated successfully");
+});
   }
 
   // --- Logic for: Edit/Save individual rows in Posting Table ---
@@ -189,15 +205,19 @@ document.addEventListener("DOMContentLoaded", () => {
           } else {
               const originalPdt = row.dataset.pdt;
               const ano = row.cells[0].textContent.trim();
-              const newPdt = pdtCell.textContent.trim();
+              const newPdt = toISO(pdtCell.textContent.trim());
               const newAmt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, '')) || 0;
 
-              fetch("/update_customer_and_payments", {
+              fetch("/api/payment/update_pg", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  type: "payment_posting_update",
-                  data: { ano: ano, original_pdt: originalPdt, new_pdt: newPdt, new_amt: newAmt }
+                  data: {
+                    ano: row.dataset.ano,
+                    old_pdt: toISO(row.dataset.pdt),
+                    pdt: toISO(pdtCell.textContent.trim()),
+                    amt: newAmt
+                  }
                 })
               })
               .then(res => res.json())
@@ -369,6 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data.success) {
         row.remove();
         updateTotalsAndLoanee();
+        updateCumulativeSum('paymentTable');
       } else {
         alert("Failed to delete: " + data.error);
       }
@@ -390,6 +411,8 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(data => {
       if (data.success) {
         el.closest("tr").remove();
+        updatePostingTableTotals();
+        updateCumulativeSum('postingTable');
       } else {
         alert("Delete failed: " + data.error);
       }
@@ -562,23 +585,24 @@ function updateCustomerSummary() {
   };
 
   function replacePaymentDates(oldDate, newDate) {
-      const ano = document.querySelector("#addPaymentForm").dataset.ano;
-
-      fetch("/update_payment_dates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ano, oldDate, newDate })
-      })
-      .then(res => res.json())
-      .then(data => {
-          if (data.success) {
-              alert("Payment dates updated successfully!");
-              location.reload();
-          } else {
-              alert("Error: " + data.error);
-          }
-      });
-  }
+    fetch("/update_payment_date_bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            find_date: oldDate,
+            replace_date: newDate
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert("Payment dates updated successfully");
+            location.reload();
+        } else {
+            alert("Error: " + data.error);
+        }
+    });
+}
 
   function replacePostingDates(oldDate, newDate) {
       fetch("/update_posting_date_bulk", {
@@ -753,7 +777,10 @@ function updateCumulativeSum(tableId) {
     applyGlobalMoneyFormatting();
 }
 
-
+function toISO(dmy) {
+  const [d, m, y] = dmy.split("/");
+  return `${y}-${m}-${d}`;
+}
 
   // Initial call after table is ready
   updateCumulativeSum('paymentTable');

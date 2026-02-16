@@ -1,81 +1,29 @@
-# create_admin.py
-
-import os
-import sqlite3
 from werkzeug.security import generate_password_hash
-from database_manager import download_from_gcs, upload_to_gcs
+from db import get_pg_connection
 
 def create_admin():
-    # Store auth DB inside project folder
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    db_folder = os.path.join(project_root, "local_auth")
-    os.makedirs(db_folder, exist_ok=True)
+    password = "Jaya@3579"
 
-    local_path = os.path.join(db_folder, "auth.sqlite")
-    print("Using local auth DB at:", local_path)
-
-    # Try loading existing DB from GCS
-    try:
-        download_from_gcs("auth.sqlite", local_path) # type: ignore
-        print("Downloaded existing auth.sqlite from GCS")
-    except:
-        print("No auth DB found in GCS. Creating new one locally.")
-
-    conn = sqlite3.connect(local_path)
-    c = conn.cursor()
-
-    # Ensure USERS table exists
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS USERS(
-            username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            system_id TEXT,
-            notes TEXT,
-            role TEXT DEFAULT 'user',
-            team TEXT DEFAULT 'teamA'
-        )
-    """)
-    try:
-       c.execute("ALTER TABLE USERS ADD COLUMN role TEXT DEFAULT 'user'")
-    except:
-       pass
-
-    try:
-       c.execute("ALTER TABLE USERS ADD COLUMN team TEXT DEFAULT 'teamA'")
-    except:
-       pass
-
-    print("\n--- Create / Update Admin User ---")
-    user = input("Enter admin username: ").strip()
-    pw = input("Enter admin password: ").strip()
-    system_id = input("Enter authorized system ID (optional): ").strip()
-    notes = input("Notes (optional): ").strip()
-
-    # Ask for ROLE
-    print("\nSelect Role:")
-    print("1. admin")
-    print("2. user")
-    role_choice = input("Enter option (1/2): ").strip()
-
-    role = "admin" if role_choice == "1" else "user"
-
-    print(f"\nCreating user '{user}' with role = {role}")
-    # FIX: Force use of pbkdf2 so scrypt is NOT used
-    hash_pw = generate_password_hash(pw, method="pbkdf2:sha256")
-
-    # Insert or update
-    c.execute(
-        "INSERT OR REPLACE INTO USERS (username, password_hash, system_id, notes, role, team) VALUES (?, ?, ?, ?, ?, ?)",
-        (user, hash_pw, system_id, notes, role, "teamA" if role == 'user' else 'teamA')
+    # 👇 FORCE PBKDF2 instead of scrypt
+    hashed = generate_password_hash(
+        password,
+        method="pbkdf2:sha256",
+        salt_length=16
     )
 
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO users (username, password_hash, employee_id, is_admin)
+        VALUES (%s, %s, %s, %s)
+    """, ("jayakrishna", hashed, 6, True))
+
     conn.commit()
+    cur.close()
     conn.close()
 
-    # Upload new auth DB to GCS
-    upload_to_gcs(local_path, "auth.sqlite")
-
-    print("\nAdmin created & uploaded successfully.")
+    print("Admin created successfully")
 
 if __name__ == "__main__":
     create_admin()

@@ -1,5 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
+import psycopg2
+import os
 
 # Base class for all ORM models
 Base = declarative_base()
@@ -21,3 +23,12 @@ def init_db(database_url: str):
         future=True,
     )
     SessionLocal.configure(bind=engine)
+
+def get_pg_connection():
+    return psycopg2.connect(
+        host=os.environ.get("DB_HOST"),
+        database=os.environ.get("DB_NAME"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        port=os.environ.get("DB_PORT", "5432")
+    )
