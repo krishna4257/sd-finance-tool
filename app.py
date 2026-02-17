@@ -23,7 +23,8 @@ from db import get_pg_connection, init_db
 from config import POSTGRES_URI
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
+from dotenv import load_dotenv
+load_dotenv()
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

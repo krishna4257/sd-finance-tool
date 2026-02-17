@@ -69,6 +69,7 @@ pyasn1==0.6.1
 pyasn1_modules==0.4.2
 Pygments==2.19.2
 python-dateutil==2.8.2
+python-dotenv==1.2.1
 pytz==2024.2
 pyzmq==27.1.0
 referencing==0.36.2

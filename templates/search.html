@@ -27,7 +27,8 @@
 {% if cust %}
   <!-- 🧾 CUSTOMER TABLE -->
   <div class="raised-box">
-    <table id="customerTable" class="dataTable customer-table" style="width:100%;">
+    <div class="scroll-table-container">
+      <table id="customerTable" class="dataTable customer-table" style="min-width:1200px;">
       <thead>
         <tr>
           {% for h in loanee_headers %}
@@ -46,7 +47,8 @@
             {% endfor %}
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
 
   <!-- ➕ ADD PAYMENT + PAYMENT HISTORY -->
