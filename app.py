@@ -92,6 +92,12 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+
+@app.route("/admin/monitor")
+def admin_monitor():
+    if session.get("username") != "jayakrishna":
+        return redirect(url_for("login"))
+    return render_template("monitor.html")
 # ----------------------------------------------------
 # CONTEXT SELECTION APIs (Postgres) - top bar dropdowns
 # ----------------------------------------------------

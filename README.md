@@ -1,7 +1,11 @@
 # SD_Accounting_Tool
 
-git add .
-git commit -m "changes in view"
-git push
 
 
+Internet
+   ↓
+Nginx (port 80/443)
+   ↓
+Gunicorn (8 workers)
+   ↓
+Postgres (localhost only)
