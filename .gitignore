@@ -212,3 +212,5 @@ data/
 .env
 account.json
 *.json
+
+procedures.txt

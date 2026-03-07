@@ -44,6 +44,19 @@ def generate_system_id():
 
     hash_bytes = hashlib.sha256(combined.encode()).digest()
     return base64.b64encode(hash_bytes).decode()
+
+def generate_mobile_token(user_id):
+    """Generate a mobile authentication token."""
+    token_data = {
+        "user_id": user_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "nonce": str(uuid.uuid4())
+    }
+    token_string = json.dumps(token_data)
+    token_bytes = token_string.encode()
+    hash_digest = hashlib.sha256(token_bytes).digest()
+    token = base64.b64encode(hash_digest).decode()
+    return token
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
@@ -735,6 +748,50 @@ def customer_exists_by_ano_and_vid(ano, vid):
     cur.close()
     conn.close()
     return exists
+
+# ----------------------------------------------------
+# ROUTES - mobile app
+# ----------------------------------------------------
+
+@app.post("/api/mobile/login")
+def mobile_login():
+
+    data = request.json
+    if not data:
+        return {"error": "invalid"}, 401
+    
+    username = data.get("username")
+    password = data.get("password")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id,password_hash,is_active
+        FROM users
+        WHERE username=%s
+    """,(username,))
+
+    user = cur.fetchone()
+
+    if not user:
+        return {"error":"invalid"},401
+
+    user_id,password_hash,is_active = user
+
+    if not is_active:
+        return {"error":"inactive"},403
+
+    if not check_password_hash(password_hash,password):
+        return {"error":"invalid"},401
+
+    token = generate_mobile_token(user_id)
+
+    return {
+        "token":token,
+        "user_id":user_id,
+        "username":username
+    }
 
 # ----------------------------------------------------
 # ROUTES - postgre
