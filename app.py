@@ -793,6 +793,33 @@ def mobile_login():
         "username":username
     }
 
+@app.get("/api/mobile/villages")
+def mobile_villages():
+
+    user_id = request.headers.get("X-User")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT v.vid, v.village_name, v.village_code
+        FROM village v
+        JOIN users u ON u.employee_id = %s
+        WHERE v.emp1 = u.employee_id OR v.emp2 = u.employee_id
+    """, (user_id,))
+
+    villages = cur.fetchall()
+
+    result = [
+        {
+            "vid": v[0],
+            "name": v[1],
+            "code": v[2]
+        }
+        for v in villages
+    ]
+
+    return {"villages": result}
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
