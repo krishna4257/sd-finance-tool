@@ -820,6 +820,56 @@ def mobile_villages():
     ]
 
     return {"villages": result}
+
+@app.get("/api/mobile/customers")
+def mobile_customers():
+
+    vid = request.args.get("vid")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM customer
+        WHERE vid = %s
+    """, (vid,))
+
+    columns = [desc[0] for desc in cur.description] if cur.description else []
+
+    rows = cur.fetchall()
+
+    customers = []
+
+    for r in rows:
+        customers.append(dict(zip(columns, r)))
+
+    return {"customers": customers}
+
+@app.get("/api/mobile/payments")
+def mobile_payments():
+
+    vid = request.args.get("vid")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM payment
+        WHERE vid = %s
+    """, (vid,))
+
+    columns = [desc[0] for desc in cur.description] if cur.description else []
+
+    rows = cur.fetchall()
+
+    payments = []
+
+    for r in rows:
+        payments.append(dict(zip(columns, r)))
+
+    return {"payments": payments}
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
