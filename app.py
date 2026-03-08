@@ -20,6 +20,7 @@ from config import POSTGRES_URI
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
+from itsdangerous import URLSafeTimedSerializer
 load_dotenv()
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +58,13 @@ def generate_mobile_token(user_id):
     hash_digest = hashlib.sha256(token_bytes).digest()
     token = base64.b64encode(hash_digest).decode()
     return token
+
+def verify_mobile_token(token):
+    try:
+        data = serializer.loads(token, max_age=86400*30)  # 30 days
+        return data["user_id"]
+    except Exception:
+        return None
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
@@ -796,30 +804,45 @@ def mobile_login():
 @app.get("/api/mobile/villages")
 def mobile_villages():
 
-    user_id = request.headers.get("X-User")
+    auth = request.headers.get("Authorization")
+
+    if not auth:
+        return {"error": "missing token"}, 401
+
+    token = auth.split(" ")[1]
+
+    user_id = verify_mobile_token(token)
+
+    if not user_id:
+        return {"error": "invalid token"}, 401
+
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT v.vid, v.village_name, v.village_code
-        FROM village v
-        JOIN users u ON u.employee_id = %s
-        WHERE v.emp1 = u.employee_id OR v.emp2 = u.employee_id
-    """, (user_id,))
+        SELECT vid, village_name, district
+        FROM village
+        WHERE emp1 = %s OR emp2 = %s
+        ORDER BY village_name
+    """, (user_id, user_id))
 
     villages = cur.fetchall()
 
-    result = [
-        {
-            "vid": v[0],
-            "name": v[1],
-            "code": v[2]
-        }
-        for v in villages
-    ]
+    cur.close()
+    conn.close()
 
-    return {"villages": result}
+
+    return {
+        "villages": [
+            {
+                "vid": v[0],
+                "village_name": v[1],
+                "district": v[2]
+            }
+            for v in villages
+        ]
+    }
 
 @app.get("/api/mobile/customers")
 def mobile_customers():
@@ -2255,3 +2278,4 @@ def update_payment_date_bulk():
 # ----------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
