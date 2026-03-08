@@ -47,10 +47,12 @@ def generate_system_id():
     return base64.b64encode(hash_bytes).decode()
 
 def generate_mobile_token(user_id, eid):
-    token = serializer.dumps({
+    payload = {
         "user_id": user_id,
         "eid": eid
-    })
+    }
+
+    token = serializer.dumps(payload)
     return token
 
 def verify_mobile_token(token):
@@ -64,7 +66,7 @@ def verify_mobile_token(token):
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
-
+serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 limiter = Limiter(get_remote_address, app=app)
 
 @app.before_request
@@ -2276,4 +2278,3 @@ def update_payment_date_bulk():
 # ----------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-    serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
