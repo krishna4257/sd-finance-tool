@@ -46,23 +46,17 @@ def generate_system_id():
     hash_bytes = hashlib.sha256(combined.encode()).digest()
     return base64.b64encode(hash_bytes).decode()
 
-def generate_mobile_token(user_id):
-    """Generate a mobile authentication token."""
-    token_data = {
+def generate_mobile_token(user_id, eid):
+    token = serializer.dumps({
         "user_id": user_id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "nonce": str(uuid.uuid4())
-    }
-    token_string = json.dumps(token_data)
-    token_bytes = token_string.encode()
-    hash_digest = hashlib.sha256(token_bytes).digest()
-    token = base64.b64encode(hash_digest).decode()
+        "eid": eid
+    })
     return token
 
 def verify_mobile_token(token):
     try:
-        data = serializer.loads(token, max_age=86400*30)  # 30 days
-        return data["user_id"]
+        data = serializer.loads(token, max_age=86400*30)
+        return data
     except Exception:
         return None
 # ----------------------------------------------------
@@ -792,29 +786,35 @@ def mobile_login():
 
     if not check_password_hash(password_hash,password):
         return {"error":"invalid"},401
-
-    token = generate_mobile_token(user_id)
+    
+    cur.execute("SELECT eid FROM employee WHERE eid IN (SELECT employee_id FROM users WHERE id = %s)", (user_id,))
+    result = cur.fetchone()
+    if not result:
+        return {"error":"employee not found"},401
+    eid = result[0]
+    token = generate_mobile_token(user_id, eid)
 
     return {
         "token":token,
         "user_id":user_id,
-        "username":username
+        "username":username,
+        "eid": eid
     }
 
 @app.get("/api/mobile/villages")
 def mobile_villages():
-    print("HEADERS:", dict(request.headers))
 
     token = request.headers.get("X-Mobile-Token")
 
     if not token:
         return {"error": "missing token"}, 401
 
-    user_id = 1
+    data = verify_mobile_token(token)
 
-    if not user_id:
+    if not data:
         return {"error": "invalid token"}, 401
 
+    eid = data["eid"]
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -824,13 +824,12 @@ def mobile_villages():
         FROM village
         WHERE emp1 = %s OR emp2 = %s
         ORDER BY village_name
-    """, (user_id, user_id))
+    """, (eid, eid))
 
     villages = cur.fetchall()
 
     cur.close()
     conn.close()
-
 
     return {
         "villages": [
