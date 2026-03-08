@@ -803,13 +803,12 @@ def mobile_login():
 
 @app.get("/api/mobile/villages")
 def mobile_villages():
+    print("HEADERS:", dict(request.headers))
 
-    auth = request.headers.get("Authorization")
+    token = request.headers.get("X-Mobile-Token")
 
-    if not auth:
+    if not token:
         return {"error": "missing token"}, 401
-
-    token = auth.split(" ")[1]
 
     user_id = verify_mobile_token(token)
 
