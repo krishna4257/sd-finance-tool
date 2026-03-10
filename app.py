@@ -893,6 +893,50 @@ def mobile_payments():
         payments.append(dict(zip(columns, r)))
 
     return {"payments": payments}
+
+@app.route("/api/mobile/customer_feed", methods=["POST"])
+def create_customer_feed():
+
+    data = request.json
+
+    local_uuid = str(uuid.uuid4())
+    device_id = request.headers.get("Device-Id", "mobile")
+    if not data:
+        return jsonify({"error": "invalid request body"}), 400
+    vid = data.get("vid")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+
+    payload = json.dumps(data)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO customer_feed
+        (
+            local_uuid,
+            device_id,
+            vid,
+            payload,
+            latitude,
+            longitude,
+            status,
+            submitted_at
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,'pending',NOW())
+    """, (
+        local_uuid,
+        device_id,
+        vid,
+        payload,
+        latitude,
+        longitude
+    ))
+
+    conn.commit()
+
+    return jsonify({"status":"ok"})
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
