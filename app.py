@@ -944,7 +944,7 @@ def payment_feed_batch():
     data = request.json
 
     if not data:
-        return jsonify({"error": "invalid request body"}), 400
+        return jsonify({"error": "invalid request"}), 400
 
     payments = data.get("payments", [])
     vid = data.get("vid")
@@ -957,40 +957,50 @@ def payment_feed_batch():
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    inserted = 0
+    total_records = len(payments)
 
-    for payment in payments:
-
-        local_uuid = str(uuid.uuid4())
-        payload = json.dumps(payment)
-
-        cur.execute("""
-            INSERT INTO payment_feed_batch
-            (
-                local_uuid,
-                device_id,
-                vid,
-                eid,
-                payload,
-                status,
-                submitted_at
-            )
-            VALUES (%s,%s,%s,%s,%s,'pending',NOW())
-        """, (
-            local_uuid,
-            device_id,
-            vid,
+    # create batch
+    cur.execute("""
+        INSERT INTO payment_feed_batch (
             eid,
-            payload
-        ))
+            vid,
+            device_id,
+            total_records,
+            status,
+            submitted_at
+        )
+        VALUES (%s,%s,%s,%s,'pending',NOW())
+        RETURNING batch_id
+    """, (eid, vid, device_id, total_records))
 
-        inserted += 1
+    batch_id = cur.fetchone()[0] # type: ignore
+
+    # insert payment items
+    for p in payments:
+        cur.execute("""
+            INSERT INTO payment_feed_items (
+                batch_id,
+                ano,
+                cid,
+                amount,
+                payment_date,
+                status
+            )
+            VALUES (%s,%s,%s,%s,%s,'pending')
+        """, (
+            batch_id,
+            p.get("ano"),
+            p.get("cid"),
+            p.get("amt"),
+            p.get("pdate")
+        ))
 
     conn.commit()
 
     return jsonify({
         "status": "ok",
-        "payments_received": inserted
+        "batch_id": batch_id,
+        "payments_received": total_records
     })
 # ----------------------------------------------------
 # ROUTES - postgre
