@@ -937,6 +937,61 @@ def create_customer_feed():
     conn.commit()
 
     return jsonify({"status":"ok"})
+
+@app.route("/api/mobile/payment_feed_batch", methods=["POST"])
+def payment_feed_batch():
+
+    data = request.json
+
+    if not data:
+        return jsonify({"error": "invalid request body"}), 400
+
+    payments = data.get("payments", [])
+    vid = data.get("vid")
+    eid = data.get("eid")
+    device_id = data.get("device_id", "mobile")
+
+    if not payments:
+        return jsonify({"error": "no payments provided"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    inserted = 0
+
+    for payment in payments:
+
+        local_uuid = str(uuid.uuid4())
+        payload = json.dumps(payment)
+
+        cur.execute("""
+            INSERT INTO payment_feed_batch
+            (
+                local_uuid,
+                device_id,
+                vid,
+                eid,
+                payload,
+                status,
+                submitted_at
+            )
+            VALUES (%s,%s,%s,%s,%s,'pending',NOW())
+        """, (
+            local_uuid,
+            device_id,
+            vid,
+            eid,
+            payload
+        ))
+
+        inserted += 1
+
+    conn.commit()
+
+    return jsonify({
+        "status": "ok",
+        "payments_received": inserted
+    })
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
