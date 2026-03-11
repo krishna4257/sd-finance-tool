@@ -940,14 +940,14 @@ def create_customer_feed():
 
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
+
     try:
         data = request.json
-        print("PAYMENT REQUEST:", data)
 
-        payments = data.get("payments", [])# type: ignore
+        payments = data.get("payments", []) # type: ignore
         vid = data.get("vid") # type: ignore
-        eid = data.get("eid")# type: ignore
-        device_id = data.get("device_id", "mobile")# type: ignore
+        eid = data.get("eid") # type: ignore
+        device_id = data.get("device_id", "mobile") # type: ignore
 
         if not payments:
             return jsonify({"error": "no payments provided"}), 400
@@ -957,6 +957,7 @@ def payment_feed_batch():
 
         total_records = len(payments)
 
+        # create batch
         cur.execute("""
             INSERT INTO payment_feed_batch (
                 eid,
@@ -972,23 +973,25 @@ def payment_feed_batch():
 
         batch_id = cur.fetchone()[0] # type: ignore
 
+        # insert each payment as JSON payload
         for p in payments:
+
+            local_uuid = str(uuid.uuid4())
+            payload = json.dumps(p)
+
             cur.execute("""
                 INSERT INTO payment_feed_items (
                     batch_id,
-                    ano,
-                    cid,
-                    amount,
-                    payment_date,
-                    status
+                    local_uuid,
+                    payload,
+                    status,
+                    created_at
                 )
-                VALUES (%s,%s,%s,%s,%s,'pending')
+                VALUES (%s,%s,%s,'pending',NOW())
             """, (
                 batch_id,
-                p.get("ano"),
-                p.get("cid"),
-                p.get("amt"),
-                p.get("pdate")
+                local_uuid,
+                payload
             ))
 
         conn.commit()
