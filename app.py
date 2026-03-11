@@ -895,55 +895,42 @@ def mobile_payments():
     return {"payments": payments}
 
 @app.route("/api/mobile/customer_feed", methods=["POST"])
-def create_customer_feed():
+def customer_feed():
 
     data = request.json
-
-    local_uuid = str(uuid.uuid4())
-    device_id = request.headers.get("Device-Id", "mobile")
-    if not data:
-        return jsonify({"error": "invalid request body"}), 400
-    vid = data.get("vid")
-    eid = data.get("eid")
-    latitude = data.get("latitude")
-    longitude = data.get("longitude")
-    status = data.get("status")
-    submitted_at = data.get("submitted_at")
-
-    payload = json.dumps(data)
-
     conn = get_pg_connection()
     cur = conn.cursor()
+    payload = json.dumps(data)
+
+    local_uuid = data.get("local_uuid") # type: ignore
+    device_id = data.get("device_id") # type: ignore
+    eid = data.get("eid") # type: ignore
+    vid = data.get("vid") # type: ignore
+    status = data.get("status") # type: ignore
+    latitude = data.get("latitude") # type: ignore
+    longitude = data.get("longitude") # type: ignore
+    gps_accuracy = data.get("gps_accuracy") # type: ignore
 
     cur.execute("""
         INSERT INTO customer_feed
-        (
-            local_uuid,
-            device_id,
-            vid,
-            eid,
-            payload,
-            latitude,
-            longitude,
-            status,
-            submitted_at
-        )
-        VALUES (%s,%s,%s,%s,%s,%s,'pending',NOW())
-    """, (
+        (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """,
+    (
         local_uuid,
         device_id,
-        vid,
         eid,
+        vid,
+        status,
         payload,
         latitude,
         longitude,
-        status,
-        submitted_at,
+        gps_accuracy
     ))
 
     conn.commit()
 
-    return jsonify({"status":"ok"})
+    return jsonify({"status": "ok"})
 
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
