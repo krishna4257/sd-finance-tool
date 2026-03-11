@@ -904,6 +904,7 @@ def create_customer_feed():
     if not data:
         return jsonify({"error": "invalid request body"}), 400
     vid = data.get("vid")
+    eid = data.get("eid")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
 
@@ -918,6 +919,7 @@ def create_customer_feed():
             local_uuid,
             device_id,
             vid,
+            eid,
             payload,
             latitude,
             longitude,
@@ -929,6 +931,7 @@ def create_customer_feed():
         local_uuid,
         device_id,
         vid,
+        eid,
         payload,
         latitude,
         longitude
@@ -1495,6 +1498,131 @@ def update_village():
         cur.close()
         conn.close()
 
+@app.route("/feed")
+def feed():
+    print("Accessing feed...")
+    vid = session.get("village_id")
+    if not vid:
+        return redirect("/dashboard")
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    # CUSTOMER FEED
+    cur.execute("""
+        SELECT
+            feed_id,
+            payload->>'ano' AS ano,
+            payload->>'name' AS name,
+            payload->>'type' AS type,
+            status
+        FROM customer_feed
+        WHERE vid = %s AND status='pending'
+        ORDER BY feed_id DESC
+    """, (vid,))
+
+    customers = cur.fetchall()
+
+
+    # PAYMENT FEED
+    cur.execute("""
+        SELECT
+            pfi.feed_id,
+            pfi.payload->>'ano' AS ano,
+            pfi.payload->>'pdt' AS pdt,
+            pfi.payload->>'amt' AS amt,
+            pfb.status
+        FROM payment_feed_items pfi
+        JOIN payment_feed_batch pfb
+        ON pfi.batch_id = pfb.batch_id
+        WHERE pfb.vid = %s
+        ORDER BY pfi.feed_id DESC
+    """, (vid,))
+
+    payments = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "feed.html",
+        customers=customers,
+        payments=payments
+    )
+
+
+@app.post("/feed/customer/accept/<feed_id>")
+def accept_customer(feed_id):
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT payload
+        FROM customer_feed
+        WHERE feed_id = %s
+    """, (feed_id,))
+
+    row = cur.fetchone()
+    data = row[0]     # type: ignore # JSON payload
+
+
+    cur.execute("""
+        INSERT INTO customer
+        (
+            ano,
+            name,
+            vid,
+            start_date,
+            end_date,
+            total_amount,
+            paid_amount,
+            balance_amount,
+            installment_amount,
+            type,
+            period,
+            pano,
+            aadhar_number,
+            notes,
+            latitude,
+            longitude,
+            eid
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """,
+    (
+        data["ano"],
+        data["name"],
+        data["vid"],
+        data["start_date"],
+        data["end_date"],
+        data["total_amount"],
+        data["paid_amount"],
+        data["balance_amount"],
+        data["installment_amount"],
+        data["type"],
+        data["period"],
+        data["pano"],
+        data["aadhar_number"],
+        data["notes"],
+        data["latitude"],
+        data["longitude"],
+        data["eid"]
+    ))
+
+
+    cur.execute("""
+        UPDATE customer_feed
+        SET status = 'accepted'
+        WHERE feed_id = %s
+    """, (feed_id,))
+
+
+    conn.commit()
+    conn.close()
+
+    return {"success": True}
+
+    return {"success":True}
 # ----------- NEW: Postgres-based customer update route -----------
 @app.route("/api/customer/update_pg", methods=["POST"])
 @login_required

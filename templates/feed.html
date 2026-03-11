@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2 class="page-title">📥 Feed Queue</h2>
+
+<div class="raised-box">
+<h3>Customer Feed</h3>
+
+<table class="customer-table">
+<thead>
+<tr>
+<th>ANO</th>
+<th>Name</th>
+<th>Village</th>
+<th>Type</th>
+<th>Status</th>
+<th>Actions</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for row in customers %}
+<tr>
+<td>{{ row.ano }}</td>
+<td>{{ row.name }}</td>
+<td>{{ row.vid }}</td>
+<td>{{ row.type }}</td>
+<td>{{ row.status }}</td>
+
+<td>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="acceptCustomer('{{row.feed_id}}')">
+✅ Accept
+</button>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="editCustomer('{{row.feed_id}}')">
+✏️ Edit
+</button>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="rejectCustomer('{{row.feed_id}}')">
+❌ Reject
+</button>
+
+</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+</div>
+
+
+
+<div class="raised-box">
+<h3>Payment Feed</h3>
+
+<table class="customer-table">
+<thead>
+<tr>
+<th>A.no</th>
+<th>Date</th>
+<th>Amount</th>
+<th>Status</th>
+<th>Actions</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for row in payments %}
+<tr>
+<td>{{ row.ano }}</td>
+<td>{{ row.pdt }}</td>
+<td data-money>{{ row.amt }}</td>
+<td>{{ row.status }}</td>
+
+<td>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="acceptPayment('{{row.feed_id}}')">
+✅ Accept
+</button>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="editPayment('{{row.feed_id}}')">
+✏️ Edit
+</button>
+
+<button class="neumorphic-btn ultrasmall"
+onclick="rejectPayment('{{row.feed_id}}')">
+❌ Reject
+</button>
+
+</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+</div>
+
+<script src="{{ url_for('static', filename='js/feed.js') }}"></script>
+
+{% endblock %}
