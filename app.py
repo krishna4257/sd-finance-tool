@@ -976,7 +976,7 @@ def payment_feed_batch():
         # insert each payment as JSON payload
         for p in payments:
 
-            local_uuid = str(uuid.uuid4())
+            local_uuid = p.get("local_uuid")
             payload = json.dumps(p)
 
             cur.execute("""
