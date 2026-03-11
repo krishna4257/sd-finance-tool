@@ -907,6 +907,8 @@ def create_customer_feed():
     eid = data.get("eid")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
+    status = data.get("status")
+    submitted_at = data.get("submitted_at")
 
     payload = json.dumps(data)
 
@@ -934,7 +936,9 @@ def create_customer_feed():
         eid,
         payload,
         latitude,
-        longitude
+        longitude,
+        status,
+        submitted_at,
     ))
 
     conn.commit()
