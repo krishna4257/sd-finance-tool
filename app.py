@@ -940,68 +940,68 @@ def create_customer_feed():
 
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
+    try:
+        data = request.json
+        print("PAYMENT REQUEST:", data)
 
-    data = request.json
+        payments = data.get("payments", [])# type: ignore
+        vid = data.get("vid") # type: ignore
+        eid = data.get("eid")# type: ignore
+        device_id = data.get("device_id", "mobile")# type: ignore
 
-    if not data:
-        return jsonify({"error": "invalid request"}), 400
+        if not payments:
+            return jsonify({"error": "no payments provided"}), 400
 
-    payments = data.get("payments", [])
-    vid = data.get("vid")
-    eid = data.get("eid")
-    device_id = data.get("device_id", "mobile")
+        conn = get_pg_connection()
+        cur = conn.cursor()
 
-    if not payments:
-        return jsonify({"error": "no payments provided"}), 400
+        total_records = len(payments)
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
-    total_records = len(payments)
-
-    # create batch
-    cur.execute("""
-        INSERT INTO payment_feed_batch (
-            eid,
-            vid,
-            device_id,
-            total_records,
-            status,
-            submitted_at
-        )
-        VALUES (%s,%s,%s,%s,'pending',NOW())
-        RETURNING batch_id
-    """, (eid, vid, device_id, total_records))
-
-    batch_id = cur.fetchone()[0] # type: ignore
-
-    # insert payment items
-    for p in payments:
         cur.execute("""
-            INSERT INTO payment_feed_items (
-                batch_id,
-                ano,
-                cid,
-                amount,
-                payment_date,
-                status
+            INSERT INTO payment_feed_batch (
+                eid,
+                vid,
+                device_id,
+                total_records,
+                status,
+                submitted_at
             )
-            VALUES (%s,%s,%s,%s,%s,'pending')
-        """, (
-            batch_id,
-            p.get("ano"),
-            p.get("cid"),
-            p.get("amt"),
-            p.get("pdate")
-        ))
+            VALUES (%s,%s,%s,%s,'pending',NOW())
+            RETURNING batch_id
+        """, (eid, vid, device_id, total_records))
 
-    conn.commit()
+        batch_id = cur.fetchone()[0] # type: ignore
 
-    return jsonify({
-        "status": "ok",
-        "batch_id": batch_id,
-        "payments_received": total_records
-    })
+        for p in payments:
+            cur.execute("""
+                INSERT INTO payment_feed_items (
+                    batch_id,
+                    ano,
+                    cid,
+                    amount,
+                    payment_date,
+                    status
+                )
+                VALUES (%s,%s,%s,%s,%s,'pending')
+            """, (
+                batch_id,
+                p.get("ano"),
+                p.get("cid"),
+                p.get("amt"),
+                p.get("pdate")
+            ))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "ok",
+            "batch_id": batch_id,
+            "payments_received": total_records
+        })
+
+    except Exception as e:
+        print("PAYMENT API ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
