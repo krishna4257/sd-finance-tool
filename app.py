@@ -988,6 +988,7 @@ def payment_feed_batch():
                     created_at
                 )
                 VALUES (%s,%s,%s,'pending',NOW())
+                ON CONFLICT (local_uuid) DO NOTHING
             """, (
                 batch_id,
                 local_uuid,
