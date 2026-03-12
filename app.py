@@ -903,10 +903,10 @@ def customer_feed():
     payload = json.dumps(data)
 
     local_uuid = data.get("local_uuid") # type: ignore
-    device_id = data.get("device_id") # type: ignore
+    device_id = data.get("device_id", "mobile") # type: ignore
     eid = data.get("eid") # type: ignore
     vid = data.get("vid") # type: ignore
-    status = data.get("status") # type: ignore
+    status = data.get("status", "pending") # type: ignore
     latitude = data.get("latitude") # type: ignore
     longitude = data.get("longitude") # type: ignore
     gps_accuracy = data.get("gps_accuracy") # type: ignore
