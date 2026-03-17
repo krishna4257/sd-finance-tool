@@ -32,7 +32,7 @@
 <td>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="acceptCustomer('{{row.feed_id}}')">
+onclick="accept('{{ row[0] }}')">
 ✅ Accept
 </button>
 
@@ -82,17 +82,17 @@ onclick="rejectCustomer('{{row.feed_id}}')">
 <td>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="acceptPayment('{{row.feed_id}}')">
+onclick="acceptPayment('{{ row[0] }}')">
 ✅ Accept
 </button>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="editPayment('{{row.feed_id}}')">
+onclick="editPayment('{{ row.feed_payment_id }}')">
 ✏️ Edit
 </button>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="rejectPayment('{{row.feed_id}}')">
+onclick="rejectPayment('{{ row.feed_payment_id }}')">
 ❌ Reject
 </button>
 

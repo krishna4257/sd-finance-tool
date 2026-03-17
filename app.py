@@ -1,6 +1,7 @@
 import os
 import traceback
 import logging
+
 import uuid
 import platform
 import base64
@@ -896,47 +897,83 @@ def mobile_payments():
 
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
+    try:
+        payload_json = request.form.get("payload")
+        data = json.loads(payload_json) # type: ignore
 
-    data = request.json
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    payload = json.dumps(data)
+        conn = get_pg_connection()
+        cur = conn.cursor()
 
-    local_uuid = data.get("local_uuid") # type: ignore
-    device_id = data.get("device_id", "mobile") # type: ignore
-    eid = data.get("eid") # type: ignore
-    vid = data.get("vid") # type: ignore
-    status = data.get("status", "pending") # type: ignore
-    latitude = data.get("latitude") # type: ignore
-    longitude = data.get("longitude") # type: ignore
-    gps_accuracy = data.get("gps_accuracy") # type: ignore
+        local_uuid = data.get("local_uuid")
+        device_id = data.get("device_id", "mobile")
+        eid = data.get("eid")
+        vid = data.get("vid")
+        status = data.get("status", "pending")
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        gps_accuracy = data.get("gps_accuracy")
+        
+        customer_payload = data.get("payload")
 
-    cur.execute("""
-        INSERT INTO customer_feed
-        (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """,
-    (
-        local_uuid,
-        device_id,
-        eid,
-        vid,
-        status,
-        payload,
-        latitude,
-        longitude,
-        gps_accuracy
-    ))
+        if isinstance(customer_payload, str):
+           customer_payload = json.loads(customer_payload)
+        ano = customer_payload.get("ano")
+        payload = json.dumps(data)
+        print("VID:", vid, "ANO:", ano)
+        # 1️⃣ Insert into customer_feed
+        cur.execute("""
+            INSERT INTO customer_feed
+            (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (local_uuid) DO NOTHING
+        """, (
+            local_uuid,
+            device_id,
+            eid,
+            vid,
+            status,
+            payload,
+            latitude,
+            longitude,
+            gps_accuracy
+        ))
 
-    conn.commit()
+        # 2️⃣ Read images
+        aadhar_file = request.files.get("aadhar_photo")
+        house_file = request.files.get("house_photo")
 
-    return jsonify({"status": "ok"})
+        aadhar_bytes = aadhar_file.read() if aadhar_file else None
+        house_bytes = house_file.read() if house_file else None
+
+        # 3️⃣ Insert into customer_docs
+        if aadhar_bytes or house_bytes:
+            cur.execute("""
+                INSERT INTO customer_docs (vid, ano, aadhar_photo, house_photo)
+                VALUES (%s,%s,%s,%s)
+                ON CONFLICT (vid, ano)
+                DO UPDATE SET
+                    aadhar_photo = EXCLUDED.aadhar_photo,
+                    house_photo = EXCLUDED.house_photo
+            """, (
+                vid,
+                ano,
+                aadhar_bytes,
+                house_bytes
+            ))
+
+        conn.commit()
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        print("ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
 
     try:
-        data = request.json
+        data = request.json # type: ignore
 
         payments = data.get("payments", []) # type: ignore
         vid = data.get("vid") # type: ignore
@@ -1492,7 +1529,7 @@ def update_village():
 @app.route("/feed")
 def feed():
     print("Accessing feed...")
-    vid = session.get("village_id")
+    vid = session.get("vid")
     if not vid:
         return redirect("/dashboard")
     conn = get_pg_connection()
@@ -1512,24 +1549,21 @@ def feed():
     """, (vid,))
 
     customers = cur.fetchall()
-
-
     # PAYMENT FEED
     cur.execute("""
-        SELECT
-            pfi.feed_id,
-            pfi.payload->>'ano' AS ano,
-            pfi.payload->>'pdt' AS pdt,
-            pfi.payload->>'amt' AS amt,
-            pfb.status
-        FROM payment_feed_items pfi
-        JOIN payment_feed_batch pfb
-        ON pfi.batch_id = pfb.batch_id
-        WHERE pfb.vid = %s
-        ORDER BY pfi.feed_id DESC
-    """, (vid,))
+    SELECT
+        feed_payment_id,
+        payload->>'ano' AS ano,
+        payload->>'amt' AS amt,
+        payload->>'pdate' AS pdt,
+        status
+    FROM payment_feed_items
+    WHERE status='pending'
+    ORDER BY feed_payment_id DESC
+""")
 
     payments = cur.fetchall()
+    
 
     conn.close()
 
@@ -1553,8 +1587,18 @@ def accept_customer(feed_id):
     """, (feed_id,))
 
     row = cur.fetchone()
-    data = row[0]     # type: ignore # JSON payload
+    print("ROW:", row)
 
+    if not row:
+        return {"success": False, "error": "Feed not found"}
+    
+    data = row[0]     # type: ignore # JSON payload
+    print("PAYLOAD:", data)
+    loan_type = data.get("type")
+    if loan_type == "weekly":
+        loan_type = "W"
+    elif loan_type == "monthly":
+        loan_type = "M"
 
     cur.execute("""
         INSERT INTO customer
@@ -1581,23 +1625,23 @@ def accept_customer(feed_id):
         (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """,
     (
-        data["ano"],
-        data["name"],
-        data["vid"],
-        data["start_date"],
-        data["end_date"],
-        data["total_amount"],
-        data["paid_amount"],
-        data["balance_amount"],
-        data["installment_amount"],
-        data["type"],
-        data["period"],
-        data["pano"],
-        data["aadhar_number"],
-        data["notes"],
-        data["latitude"],
-        data["longitude"],
-        data["eid"]
+        data.get("ano"),
+        data.get("name"),
+        data.get("vid"),
+        data.get("start_date"),
+        data.get("end_date"),
+        data.get("total_amount"),
+        data.get("paid_amount"),
+        data.get("balance_amount"),
+        data.get("installment_amount"),
+        loan_type,
+        data.get("period"),
+        data.get("pano"),
+        data.get("aadhar_number"),
+        data.get("notes"),
+        data.get("latitude"),
+        data.get("longitude"),
+        data.get("eid")
     ))
 
 
@@ -1607,13 +1651,102 @@ def accept_customer(feed_id):
         WHERE feed_id = %s
     """, (feed_id,))
 
+    
+
+
+    conn.commit()
+    conn.close()
+
+    return {"success":True}
+
+@app.post("/feed/payment/accept/<feed_payment_id>")
+def accept_payment(feed_payment_id):
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    # 1️⃣ Get payload
+    cur.execute("""
+        SELECT payload
+        FROM payment_feed_items
+        WHERE feed_payment_id = %s
+    """, (feed_payment_id,))
+
+    row = cur.fetchone()
+
+    if not row:
+        return {"success": False, "error": "Feed not found"}
+
+    data = row[0]
+
+    ano = data.get("ano")
+    vid = data.get("vid")
+    eid = data.get("eid")
+    amt = data.get("amt")
+    pdate = data.get("pdate")
+
+    # 2️⃣ Get customer
+    cur.execute("""
+        SELECT cid, total_amount
+        FROM customer
+        WHERE ano = %s AND vid = %s
+    """, (ano, vid))
+
+    cust = cur.fetchone()
+
+    if not cust:
+        return {"success": False, "error": "Customer not found"}
+
+    cid, total_amt = cust
+
+    # 3️⃣ Insert payment
+    cur.execute("""
+        INSERT INTO payment
+        (cid, vid, eid, ano, amt, payment_date)
+        VALUES (%s,%s,%s,%s,%s,%s)
+    """, (
+        cid,
+        vid,
+        eid,
+        ano,
+        amt,
+        pdate
+    ))
+
+    # 4️⃣ Recalculate balance
+    cur.execute("""
+        SELECT COALESCE(SUM(amt),0)
+        FROM payment
+        WHERE cid = %s
+    """, (cid,))
+
+    paid_amt = cur.fetchone()[0] # type: ignore
+
+    balance = total_amt - paid_amt
+
+    cur.execute("""
+        UPDATE customer
+        SET
+            paid_amount = %s,
+            balance_amount = %s
+        WHERE cid = %s
+    """, (
+        paid_amt,
+        balance,
+        cid
+    ))
+
+    # 5️⃣ Mark feed accepted
+    cur.execute("""
+        UPDATE payment_feed_items
+        SET status='accepted'
+        WHERE feed_payment_id = %s
+    """, (feed_payment_id,))
 
     conn.commit()
     conn.close()
 
     return {"success": True}
-
-    return {"success":True}
 # ----------- NEW: Postgres-based customer update route -----------
 @app.route("/api/customer/update_pg", methods=["POST"])
 @login_required
