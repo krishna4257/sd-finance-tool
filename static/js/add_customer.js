@@ -264,7 +264,7 @@ anoInput.addEventListener("change", checkAno);
                 // Clear all dynamic fields to prepare for a new entry
                 document.getElementById('ano').value = '';
                 document.getElementById('name').value = '';
-                document.getElementById('aadhar_number').value = '';
+                document.getElementById('aadhaar_number').value = '';
                 document.getElementById('pano').value = '';
                 document.getElementById('total_amount').value = '';
                 document.getElementById('start_date').value = '';

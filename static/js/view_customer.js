@@ -178,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "cid",
     "vid",
     "created_at",
-    "aadhar_number",
+    "aadhaar_number",
     "latitude",
     "longitude",
     "eid"

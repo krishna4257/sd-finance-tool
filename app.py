@@ -621,7 +621,7 @@ def get_all_customers_by_context(eid, vid):
   period,
   pano,
   created_at,
-  aadhar_number,
+  aadhaar_number,
   notes,
   latitude,
   longitude,
@@ -652,7 +652,7 @@ ORDER BY ano;
             "period": r[11],
             "pano": r[12],
             "created_at": r[13],
-            "aadhar_number": r[14],
+            "aadhaar_number": r[14],
             "notes": r[15],
             "latitude": r[16],
             "longitude": r[17],
@@ -715,7 +715,7 @@ def insert_customer(data):
                     start_date, end_date,
                     total_amount, paid_amount, balance_amount, installment_amount,
                     type, period,
-                    aadhar_number, notes,
+                    aadhaar_number, notes,
                     latitude, longitude
                 )
                 VALUES (
@@ -723,7 +723,7 @@ def insert_customer(data):
                     %(start_date)s, %(end_date)s,
                     %(total_amount)s, %(paid_amount)s, %(balance_amount)s, %(installment_amount)s,
                     %(type)s, %(period)s,
-                    %(aadhar_number)s, %(notes)s,
+                    %(aadhaar_number)s, %(notes)s,
                     %(latitude)s, %(longitude)s
                 )
                 RETURNING cid
@@ -939,25 +939,25 @@ def customer_feed():
         ))
 
         # 2️⃣ Read images
-        aadhar_file = request.files.get("aadhar_photo")
+        aadhaar_file = request.files.get("aadhaar_photo")
         house_file = request.files.get("house_photo")
 
-        aadhar_bytes = aadhar_file.read() if aadhar_file else None
+        aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
         house_bytes = house_file.read() if house_file else None
 
         # 3️⃣ Insert into customer_docs
-        if aadhar_bytes or house_bytes:
+        if aadhaar_bytes or house_bytes:
             cur.execute("""
-                INSERT INTO customer_docs (vid, ano, aadhar_photo, house_photo)
+                INSERT INTO customer_docs (vid, ano, aadhaar_photo, house_photo)
                 VALUES (%s,%s,%s,%s)
                 ON CONFLICT (vid, ano)
                 DO UPDATE SET
-                    aadhar_photo = EXCLUDED.aadhar_photo,
+                    aadhaar_photo = EXCLUDED.aadhaar_photo,
                     house_photo = EXCLUDED.house_photo
             """, (
                 vid,
                 ano,
-                aadhar_bytes,
+                aadhaar_bytes,
                 house_bytes
             ))
 
@@ -1125,7 +1125,7 @@ def add_customer():
             "installment_amount": installment_amount,
             "type": loan_type,
             "period": period,
-            "aadhar_number": data.get("aadhar_number") or None,
+            "aadhaar_number": data.get("aadhaar_number") or None,
             "notes": data.get("notes") or None,
             "latitude": data.get("latitude") or None,
             "longitude": data.get("longitude") or None,
@@ -1170,7 +1170,7 @@ def view_customers():
         "total_amount", "paid_amount",
         "balance_amount", "installment_amount",
         "type", "period", "pano",
-        "created_at", "aadhar_number",
+        "created_at", "aadhaar_number",
         "notes", "latitude", "longitude", "eid"
     ]
 
@@ -1615,7 +1615,7 @@ def accept_customer(feed_id):
             type,
             period,
             pano,
-            aadhar_number,
+            aadhaar_number,
             notes,
             latitude,
             longitude,
@@ -1637,7 +1637,7 @@ def accept_customer(feed_id):
         loan_type,
         data.get("period"),
         data.get("pano"),
-        data.get("aadhar_number"),
+        data.get("aadhaar_number"),
         data.get("notes"),
         data.get("latitude"),
         data.get("longitude"),

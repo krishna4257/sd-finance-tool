@@ -3,7 +3,7 @@
 
 def get_pg_connection():
     return psycopg2.connect(
-        host="192.168.1.45",      # Ubuntu server IP
+        host="192.168.1.213",      # Ubuntu server IP
         database="sd_finance",     # confirmed from DBeaver
         user="sd_user",
         port="5432"
