@@ -819,6 +819,17 @@ def mobile_villages():
 
     eid = data["eid"]
 
+    # Fetch employee name once
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
+    emp_row = cur.fetchone()
+    employee_name = emp_row[0] if emp_row else ""
+    
+    cur.close()
+    conn.close()
+
     conn = get_pg_connection()
     cur = conn.cursor()
 
@@ -839,7 +850,8 @@ def mobile_villages():
             {
                 "vid": v[0],
                 "village_name": v[1],
-                "district": v[2]
+                "district": v[2],
+                "employee_name": employee_name
             }
             for v in villages
         ]
