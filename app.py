@@ -918,7 +918,7 @@ def customer_feed():
         if isinstance(customer_payload, str):
            customer_payload = json.loads(customer_payload)
         ano = customer_payload.get("ano")
-        payload = json.dumps(data)
+        payload = json.dumps(customer_payload)
         print("VID:", vid, "ANO:", ano)
         # 1️⃣ Insert into customer_feed
         cur.execute("""
