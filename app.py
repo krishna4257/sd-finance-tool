@@ -861,15 +861,24 @@ def mobile_villages():
 def mobile_customers():
 
     vid = request.args.get("vid")
+    updated_after = request.args.get("updated_after")
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM customer
-        WHERE vid = %s
-    """, (vid,))
+    if updated_after:
+        cur.execute("""
+            SELECT *
+            FROM customer
+            WHERE vid = %s
+              AND (created_at > %s OR COALESCE(updated_at, created_at) > %s)
+        """, (vid, updated_after, updated_after))
+    else:
+        cur.execute("""
+            SELECT *
+            FROM customer
+            WHERE vid = %s
+        """, (vid,))
 
     columns = [desc[0] for desc in cur.description] if cur.description else []
 
@@ -886,15 +895,24 @@ def mobile_customers():
 def mobile_payments():
 
     vid = request.args.get("vid")
+    updated_after = request.args.get("updated_after")
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM payment
-        WHERE vid = %s
-    """, (vid,))
+    if updated_after:
+        cur.execute("""
+            SELECT *
+            FROM payment
+            WHERE vid = %s
+              AND (created_at > %s OR updated_at > %s)
+        """, (vid, updated_after))
+    else:
+        cur.execute("""
+            SELECT *
+            FROM payment
+            WHERE vid = %s
+        """, (vid,))
 
     columns = [desc[0] for desc in cur.description] if cur.description else []
 
