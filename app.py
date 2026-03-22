@@ -863,15 +863,29 @@ def mobile_customers():
     vid = request.args.get("vid")
     updated_after = request.args.get("updated_after")
 
+    if updated_after:
+        try:
+            ua_dt = datetime.fromisoformat(updated_after)
+            if ua_dt.tzinfo is None:
+                # assume client sends UTC if no tz
+                ua_dt = ua_dt.replace(tzinfo=None)
+            updated_after = ua_dt.isoformat()
+        except Exception:
+            pass
+
     conn = get_pg_connection()
     cur = conn.cursor()
+    cur.execute("SET TIME ZONE 'UTC'")
 
     if updated_after:
         cur.execute("""
             SELECT *
             FROM customer
             WHERE vid = %s
-              AND (created_at > %s OR COALESCE(updated_at, created_at) > %s)
+              AND (
+                created_at > (%s::timestamptz AT TIME ZONE 'UTC')
+                OR COALESCE(updated_at, created_at) > (%s::timestamptz AT TIME ZONE 'UTC')
+              )
         """, (vid, updated_after, updated_after))
     else:
         cur.execute("""
@@ -897,16 +911,30 @@ def mobile_payments():
     vid = request.args.get("vid")
     updated_after = request.args.get("updated_after")
 
+    if updated_after:
+        try:
+            ua_dt = datetime.fromisoformat(updated_after)
+            if ua_dt.tzinfo is None:
+                # assume client sends UTC if no tz
+                ua_dt = ua_dt.replace(tzinfo=None)
+            updated_after = ua_dt.isoformat()
+        except Exception:
+            pass
+
     conn = get_pg_connection()
     cur = conn.cursor()
+    cur.execute("SET TIME ZONE 'UTC'")
 
     if updated_after:
         cur.execute("""
             SELECT *
             FROM payment
             WHERE vid = %s
-              AND (created_at > %s OR updated_at > %s)
-        """, (vid, updated_after))
+              AND (
+                created_at > (%s::timestamptz AT TIME ZONE 'UTC')
+                OR updated_at > (%s::timestamptz AT TIME ZONE 'UTC')
+              )
+        """, (vid, updated_after, updated_after))
     else:
         cur.execute("""
             SELECT *
@@ -933,6 +961,7 @@ def customer_feed():
 
         conn = get_pg_connection()
         cur = conn.cursor()
+        cur.execute("SET TIME ZONE 'UTC'")
 
         local_uuid = data.get("local_uuid")
         device_id = data.get("device_id", "mobile")
@@ -1681,8 +1710,7 @@ def accept_customer(feed_id):
         WHERE feed_id = %s
     """, (feed_id,))
 
-    
-
+    cur.execute("SET TIME ZONE 'UTC'")
 
     conn.commit()
     conn.close()
@@ -1777,6 +1805,7 @@ def accept_payment(feed_payment_id):
     conn.close()
 
     return {"success": True}
+
 # ----------- NEW: Postgres-based customer update route -----------
 @app.route("/api/customer/update_pg", methods=["POST"])
 @login_required
