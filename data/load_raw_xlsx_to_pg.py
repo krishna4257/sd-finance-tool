@@ -1,6 +1,8 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 from pathlib import Path
+import psycopg2
+from psycopg2.extras import execute_values
 
 # ============================================================
 # CONFIG
@@ -19,6 +21,31 @@ engine = create_engine(
     future=True,
     pool_pre_ping=True
 )
+
+# ============================================================
+# BULK INSERT HELPER
+# ============================================================
+
+def bulk_insert_fast(table_name: str, df: pd.DataFrame):
+    if df.empty:
+        return
+
+    conn = psycopg2.connect(PG_URL.replace("postgresql+psycopg2://", "postgresql://"))
+    cur = conn.cursor()
+
+    columns = list(df.columns)
+    values = [tuple(x) for x in df.to_numpy()]
+
+    query = f"""
+        INSERT INTO {table_name} ({",".join(columns)})
+        VALUES %s
+    """
+
+    execute_values(cur, query, values, page_size=CHUNK_SIZE)
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # ============================================================
 # RAW TABLE COLUMN DEFINITIONS (EXACT MATCH)
@@ -146,14 +173,7 @@ def load_raw_customer():
         rows = len(df)
         total_rows += rows
 
-        df.to_sql(
-            "raw_customer",
-            engine,
-            if_exists="append",
-            index=False,
-            method="multi",
-            chunksize=CHUNK_SIZE,
-        )
+        bulk_insert_fast("raw_customer", df)
 
         print(f"   ↳ inserted {rows} rows")
 
@@ -176,6 +196,16 @@ def load_raw_payment():
         df = normalize_columns(df)
         df = drop_unnamed_columns(df)
 
+        # ✅ CLEAN ano column (IMPORTANT FIX)
+        if "ano" in df.columns:
+            df["ano"] = (
+                df["ano"]
+                .astype(str)
+                .str.replace(r"\.0$", "", regex=True)   # remove .0
+                .str.replace(r"\.$", "", regex=True)    # remove trailing .
+                .str.strip()
+            )
+
         # ✅ pdt → payment_date
         if "pdt" in df.columns:
             df["payment_date"] = df["pdt"]
@@ -190,14 +220,7 @@ def load_raw_payment():
         rows = len(df)
         total_rows += rows
 
-        df.to_sql(
-            "raw_payment",
-            engine,
-            if_exists="append",
-            index=False,
-            method="multi",
-            chunksize=CHUNK_SIZE,
-        )
+        bulk_insert_fast("raw_payment", df)
 
         print(f"   ↳ inserted {rows} rows")
 
@@ -230,14 +253,7 @@ def load_raw_employee():
     df = align_columns(df, RAW_EMPLOYEE_COLUMNS)
     df = nan_to_none(df)
 
-    df.to_sql(
-        "raw_employee",
-        engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=1000,
-    )
+    bulk_insert_fast("raw_employee", df)
 
     print(f"✅ raw_employee loaded ({len(df)} rows)")
 
@@ -254,14 +270,7 @@ def load_raw_village():
     df = align_columns(df, RAW_VILLAGE_COLUMNS)
     df = nan_to_none(df)
 
-    df.to_sql(
-        "raw_village",
-        engine,
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=1000,
-    )
+    bulk_insert_fast("raw_village", df)
 
     print(f"✅ raw_village loaded ({len(df)} rows)")
 

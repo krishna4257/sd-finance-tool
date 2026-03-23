@@ -1,5 +1,5 @@
 ⸻
--> To connect to server vis terminal - ssh jayakrishna@192.168.1.45 -> ssh -L 19999:localhost:19999 jayakrishna@192.168.1.45
+-> To connect to server vis terminal - ssh jayakrishna@192.168.1.45 -> ssh -L 19999:localhost:19999 jayakrishna@192.168.1.213
 
 def get_pg_connection():
     return psycopg2.connect(

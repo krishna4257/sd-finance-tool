@@ -1,7 +1,6 @@
 import os
 import traceback
 import logging
-
 import uuid
 import platform
 import base64
@@ -10,7 +9,7 @@ import json
 from functools import wraps
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from flask import (
     Flask, render_template, request, redirect,
@@ -61,6 +60,26 @@ def verify_mobile_token(token):
         data = serializer.loads(token, max_age=86400*30)
         return data
     except Exception:
+        return None
+    
+
+def parse_mobile_timestamp(ts):
+    if not ts:
+        return None
+    try:
+        # Mobile sends IST but without timezone → force IST
+        dt = datetime.fromisoformat(ts)
+
+        # If no timezone → assume IST
+        if dt.tzinfo is None:
+            ist_offset = timedelta(hours=5, minutes=30)
+            dt = dt.replace(tzinfo=timezone(ist_offset))
+
+        # Convert to UTC (Postgres compares internally in UTC)
+        return dt.astimezone(timezone.utc)
+
+    except Exception as e:
+        print("Timestamp parse error:", e)
         return None
 # ----------------------------------------------------
 # FLASK APP SETUP
@@ -861,11 +880,12 @@ def mobile_villages():
 def mobile_customers():
 
     vid = request.args.get("vid")
-    updated_after = request.args.get("updated_after")
+    updated_after_raw = request.args.get("updated_after")
+    updated_after = parse_mobile_timestamp(updated_after_raw)
 
     if updated_after:
         try:
-            ua_dt = datetime.fromisoformat(updated_after)
+            ua_dt = datetime.fromisoformat(updated_after) # type: ignore
             if ua_dt.tzinfo is None:
                 # assume client sends UTC if no tz
                 ua_dt = ua_dt.replace(tzinfo=None)
@@ -909,11 +929,12 @@ def mobile_customers():
 def mobile_payments():
 
     vid = request.args.get("vid")
-    updated_after = request.args.get("updated_after")
+    updated_after_raw = request.args.get("updated_after")
+    updated_after = parse_mobile_timestamp(updated_after_raw)
 
     if updated_after:
         try:
-            ua_dt = datetime.fromisoformat(updated_after)
+            ua_dt = datetime.fromisoformat(updated_after) # type: ignore
             if ua_dt.tzinfo is None:
                 # assume client sends UTC if no tz
                 ua_dt = ua_dt.replace(tzinfo=None)
