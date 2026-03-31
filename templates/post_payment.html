@@ -19,7 +19,7 @@
 
     <div class="message-box error" id="errorMsg" style="display: none;"></div>
 
-    <div id="customerInfo"></div>
+    <div id="customerInfo">
       <div class="summary-row">
         <div class="summary-item"><strong>Name:</strong> <span id="customerName"></span></div>
         <div class="summary-item"><strong>Amount Given:</strong> <span id="customerLoanAmount" data-money></span></div>
@@ -68,7 +68,7 @@
 </div>
 
 <script>
-  window.CUSTOMERS = {{ customers | tojson | safe }};
+  window.CUSTOMERS = JSON.parse('{{ customers | tojson | safe }}');
 </script>
 <script src="{{ url_for('static', filename='js/post_payment.js') }}"></script>
 {% endblock %}

@@ -21,6 +21,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
+import requests
 load_dotenv()
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -130,11 +131,6 @@ def admin_required(f):
     return wrapper
 
 
-@app.route("/admin/monitor")
-def admin_monitor():
-    if session.get("username") != "jayakrishna":
-        return redirect(url_for("login"))
-    return render_template("monitor.html")
 # ----------------------------------------------------
 # CONTEXT SELECTION APIs (Postgres) - top bar dropdowns
 # ----------------------------------------------------
@@ -190,6 +186,8 @@ def api_employees():
 @login_required
 def api_villages():
     eid = request.args.get("eid")
+    if not eid or eid == "undefined":
+        eid = None
     user_level = session.get("level")
     user_villages = session.get("villages", [])
 
@@ -311,45 +309,15 @@ def api_villages_by_employee():
 @login_required
 def get_context():
     return jsonify({
-        "eid": session.get("eid"),
         "vid": session.get("vid")
     })
 
-def resolve_emp1_for_context(vid, selected_eid):
-    """
-    Always return emp1 for a village, even if emp2 was selected
-    """
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT emp1, emp2
-        FROM village
-        WHERE vid = %s
-    """, (vid,))
-
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if not row:
-        return selected_eid  # fallback (should never happen)
-
-    emp1, emp2 = row
-
-    # If selected employee is emp2 → normalize to emp1
-    if selected_eid == emp2:
-        return emp1
-
-    # If selected employee is emp1 → keep as is
-    return emp1
 
 @app.route("/set_context", methods=["POST"])
 @login_required
 def set_context():
     data = request.get_json()
     vid = int(data.get("vid"))
-    selected_eid = int(data.get("eid"))
     user_level = session.get("level")
     allowed_villages = session.get("villages", [])
 
@@ -357,27 +325,39 @@ def set_context():
         if vid not in allowed_villages:
            return jsonify(success=False, error="Unauthorized village"), 403
 
-    # 🔑 Normalize employee
-    eid = resolve_emp1_for_context(vid, selected_eid)
-
-    session["vid"] = vid
-    session["eid"] = eid
-    
-    # 🔽 FETCH HUMAN-READABLE NAMES FROM DB
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT village_name FROM village WHERE vid = %s", (vid,))
-    result = cur.fetchone()
-    village_name = result[0] if result else "Unknown"
+    # fetch eid + village_name together
+    cur.execute("""
+        SELECT emp1, village_name
+        FROM village
+        WHERE vid = %s
+    """, (vid,))
 
+    row = cur.fetchone()
+
+    if not row:
+        cur.close()
+        conn.close()
+        return jsonify(success=False, error="Invalid village"), 400
+
+    eid = row[0]
+    village_name = row[1]
+
+    # fetch employee name
     cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
     result = cur.fetchone()
     employee_name = result[0] if result else "Unknown"
 
-    # 🔽 STORE IN SESSION (THIS IS WHAT YOU ASKED)
+    # store session
+    session["vid"] = vid
+    session["eid"] = eid
     session["village_name"] = village_name
     session["employee_name"] = employee_name
+
+    cur.close()
+    conn.close()
     return jsonify(success=True)
 
 @app.route("/reset_context", methods=["POST"])
@@ -413,6 +393,7 @@ STATE_CODE_MAP = {
     "ODISHA": 15,
     "GUJARAT": 16,
 }
+
 @app.route("/api/create_village", methods=["POST"])
 @login_required
 @admin_required
@@ -620,7 +601,7 @@ def get_customer_info_by_ano(ano, vid):
         "da": float(row[4] or 0)
     }
 
-def get_all_customers_by_context(eid, vid):
+def get_all_customers_by_context(vid):
     conn = get_pg_connection()
     cur = conn.cursor()
 
@@ -646,9 +627,9 @@ def get_all_customers_by_context(eid, vid):
   longitude,
   eid
 FROM customer
-WHERE eid = %s AND vid = %s
+WHERE vid = %s
 ORDER BY ano;
-    """, (eid, vid))
+    """, (vid, ))
 
     rows = cur.fetchall()
     cur.close()
@@ -836,28 +817,25 @@ def mobile_villages():
     if not data:
         return {"error": "invalid token"}, 401
 
+    user_id = data["user_id"]
     eid = data["eid"]
 
-    # Fetch employee name once
+    # Fetch employee name
     conn = get_pg_connection()
     cur = conn.cursor()
 
     cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
     emp_row = cur.fetchone()
     employee_name = emp_row[0] if emp_row else ""
-    
-    cur.close()
-    conn.close()
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
+    # 🔹 Fetch villages from user_village_access
     cur.execute("""
-        SELECT vid, village_name, district
-        FROM village
-        WHERE emp1 = %s OR emp2 = %s
-        ORDER BY village_name
-    """, (eid, eid))
+        SELECT v.vid, v.village_name, v.district
+        FROM user_village_access uva
+        JOIN village v ON v.vid = uva.village_id
+        WHERE uva.user_id = %s
+        ORDER BY v.village_name
+    """, (user_id,))
 
     villages = cur.fetchall()
 
@@ -1121,11 +1099,11 @@ def payment_feed_batch():
 # ROUTES - postgre
 # ----------------------------------------------------
 
-def get_dashboard_totals(vid, eid=None):
+def get_dashboard_totals(vid):
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    if eid:
+    if vid:
         cur.execute("""
             SELECT
                 COUNT(*),
@@ -1133,10 +1111,8 @@ def get_dashboard_totals(vid, eid=None):
                 COALESCE(SUM(c.paid_amount), 0),
                 COALESCE(SUM(c.balance_amount), 0)
             FROM customer c
-            JOIN village v ON v.vid = c.vid
             WHERE c.vid = %s
-              AND (v.emp1 = %s OR v.emp2 = %s)
-        """, (vid, eid, eid))
+        """, (vid,))
     else:
         cur.execute("""
             SELECT
@@ -1168,7 +1144,7 @@ def add_customer():
     vid = session.get("vid")
     eid = session.get("eid")
 
-    if not vid or not eid:
+    if not vid:
         return redirect("/dashboard")
 
     if request.method == "POST":
@@ -1232,16 +1208,15 @@ def add_customer():
 @app.route("/view_customers")
 @login_required
 def view_customers():
-    eid = session.get("eid")
     vid = session.get("vid")
 
     # ❗ Enforce context
-    if not eid or not vid:
-        flash("Please select Employee and Village from Dashboard first", "warning")
+    if not vid:
+        flash("Please select Village from Dashboard first", "warning")
         return redirect(url_for("dashboard"))
 
     # 🔹 Fetch ALL customers for context
-    rows = get_all_customers_by_context(eid, vid)
+    rows = get_all_customers_by_context(vid)
 
 
     headers = [
@@ -1255,7 +1230,7 @@ def view_customers():
     ]
 
     # ✅ Use same aggregation logic as dashboard
-    totals = get_dashboard_totals(vid, eid)
+    totals = get_dashboard_totals(vid)
 
     total_customers = totals["total_customers"]
     sum_amt = totals["sum_amt"]
@@ -1288,10 +1263,9 @@ def check_ano_exists():
 @login_required
 def post_payment_report():
     vid = session.get("vid")
-    eid = session.get("eid")
 
-    if not vid or not eid:
-        flash("Please select Employee and Village first", "warning")
+    if not vid:
+        flash("Please select Village first", "warning")
         return redirect(url_for("dashboard"))
 
     conn = get_pg_connection()
@@ -1309,9 +1283,8 @@ def post_payment_report():
             vid
         FROM payment
         WHERE vid = %s
-          AND eid = %s
         ORDER BY payment_date DESC, pid DESC
-    """, (vid, eid))
+    """, (vid,))
 
     rows = cur.fetchall()
     # cur.description can be None for some drivers or edge cases; guard against that
@@ -1335,10 +1308,9 @@ def post_payment_report():
 @login_required
 def post_payment_page():
     vid = session.get("vid")
-    eid = session.get("eid")
 
-    if not vid or not eid:
-        flash("Please select Employee and Village first", "warning")
+    if not vid:
+        flash("Please select Village first", "warning")
         return redirect("/dashboard")
 
     conn = get_pg_connection()
@@ -1423,7 +1395,7 @@ def submit_post_payment():
     vid = session.get("vid")
     eid = session.get("eid")
 
-    if not vid or not eid:
+    if not vid:
         return jsonify(error="Context not set"), 400
 
     rows = request.get_json()
@@ -1500,10 +1472,9 @@ def submit_post_payment():
 @login_required
 def search_customer():
     vid = session.get("vid")
-    eid = session.get("eid")
 
-    if not vid or not eid:
-        flash("Please select Employee and Village first", "warning")
+    if not vid:
+        flash("Please select Village first", "warning")
         return redirect("/dashboard")
 
     customers = []
@@ -1894,9 +1865,8 @@ def update_payment_pg():
         return jsonify(success=False, error="Missing data"), 400
 
     vid = session.get("vid")
-    eid = session.get("eid")
 
-    if not vid or not eid:
+    if not vid:
         return jsonify(success=False, error="Context not set"), 400
 
     ano = data.get("ano")
@@ -1970,7 +1940,7 @@ def add_payment():
     
     vid = session.get("vid")
     eid = session.get("eid")
-    if not vid or not eid:
+    if not vid:
        return jsonify(success=False, error="Context not set"), 400
 
     data = request.get_json()
@@ -2040,10 +2010,9 @@ def delete_payment():
         cur.execute("""
             DELETE FROM payment
             WHERE vid = %s
-              AND eid = %s
               AND ano = %s
               AND payment_date = %s
-        """, (vid, session.get("eid"), ano, pdt))
+        """, (vid, ano, pdt))
 
         if cur.rowcount == 0:
             conn.rollback()
@@ -2510,6 +2479,29 @@ def add_user():
             RETURNING id
         """, (username, hashed, employee_id))
 
+        result = cur.fetchone()
+        if not result:
+            conn.rollback()
+            return jsonify(ok=False, msg="Failed to create user")
+        
+        new_user_id = result[0]
+
+        # 🔹 Assign villages to user in user_village_access
+        cur.execute("""
+            SELECT vid
+            FROM village
+            WHERE emp1 = %s OR emp2 = %s
+        """, (employee_id, employee_id))
+
+        village_rows = cur.fetchall()
+
+        for v in village_rows:
+            cur.execute("""
+                INSERT INTO user_village_access (user_id, village_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+            """, (new_user_id, v[0]))
+
         conn.commit()
         return jsonify(ok=True)
 
@@ -2617,9 +2609,8 @@ def toggle_user_status():
 @login_required
 def dashboard():
     vid = session.get("vid")
-    eid = session.get("eid")
     # ✅ NO CONTEXT → SHOW ZERO DASHBOARD
-    if not vid and not eid:
+    if not vid:
         if request.args.get("partial"):
             return render_template(
                 "dashboard.html",
@@ -2635,9 +2626,7 @@ def dashboard():
             sum_pamt=0,
             sum_bamt=0,
         )
-    print("DEBUG DASHBOARD SESSION → vid:", session.get("vid"), "eid:", session.get("eid"))
-    # Defensive log before dashboard totals
-    print("DASHBOARD QUERY USING → vid:", vid, "eid:", eid)
+    print("DEBUG DASHBOARD SESSION → vid:", session.get("vid"))
     totals = {
         "total_customers": 0,
         "sum_amt": 0,
@@ -2652,7 +2641,7 @@ def dashboard():
             if vid not in allowed_villages:
                 return redirect("/dashboard")
 
-        totals = get_dashboard_totals(vid, eid)
+        totals = get_dashboard_totals(vid)
 
     return render_template(
          "dashboard.html",

@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch("/get_context")
       .then(r => r.json())
       .then(ctx => {
-        if (!ctx.eid || !ctx.vid){
+        if (!ctx.vid){
           isContextReady = false;
           return;
         } 
@@ -101,8 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
         isContextReady = false;
         empSelect.disabled = true;
         villageSelect.disabled = true;  
-        empSelect.value = ctx.eid;
-        lastSelectedEmployee = ctx.eid;
+        lastSelectedVillage = ctx.vid;
 
         fetch(`/api/villages?eid=${ctx.eid}`)
           .then(r => r.json())
@@ -127,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
     empSelect.addEventListener("change", () => {
       if (isSyncingContext || contextLocked || isDashboardRefreshing) return;
 
-      const eid = empSelect.value;
+      const eid = empSelect.value || null;
       lastSelectedEmployee = eid;
       if (!eid) return;
 
@@ -210,18 +209,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // SET MODE
-      const eid = empSelect.value;
+      const eid = empSelect.value || null;
       const vid = villageSelect.value;
 
       if (!eid || !vid) {
-        alert("Please select both Employee and Village");
+        alert("Please select Village");
         return;
       }
 
       fetch("/set_context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eid, vid })
+        body: JSON.stringify({vid })
       })
       .then(() => {
         contextLocked = true;
