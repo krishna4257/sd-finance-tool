@@ -20,6 +20,12 @@
     word-break: break-all;
     white-space: normal;
 }
+
+#users-table td:nth-child(5) {
+    white-space: normal;
+    word-break: break-word;
+    max-width: 300px;
+}
 </style>
 
 <h2 class="page-title">User Management</h2>
@@ -37,6 +43,7 @@
                 <th>Employee</th>
                 <th>Device ID</th>
                 <th>Role</th>
+                <th>Assigned Villages</th>
                 <th>Status</th>
                 <th>Actions</th>
             </tr>
@@ -71,8 +78,56 @@
     </div>
 </div>
 
+<!-- Village Assignment Modal -->
+<div id="village-modal"
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.6); z-index:999; justify-content:center; align-items:center;">
+
+    <div class="raised-box"
+         style="padding:20px; width:780px; max-height:85vh; overflow:hidden;">
+
+        <h3 style="margin-bottom:15px;">Assign Villages</h3>
+
+        <input type="text" id="village-search" class="input"
+               placeholder="Search villages..." style="margin-bottom:10px;">
+
+        <div style="margin-bottom:10px;">
+            <button id="select-all" class="neumorphic-btn small">Select All</button>
+            <button id="clear-all" class="neumorphic-btn small">Clear All</button>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center; margin-top:10px;">
+
+    <div style="flex:1;">
+        <h4 id="all-count">All Villages (0)</h4>
+        <div id="all-villages-list"
+             style="max-height:260px; overflow:auto; border:1px solid #444; padding:6px; border-radius:6px;"></div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:6px;">
+        <button id="move-right" class="neumorphic-btn small">&gt;&gt;</button>
+        <button id="move-left" class="neumorphic-btn small">&lt;&lt;</button>
+    </div>
+
+    <div style="flex:1;">
+        <h4 id="selected-count">Selected Villages (0)</h4>
+        <div id="selected-villages-list"
+             style="max-height:260px; overflow:auto; border:1px solid #444; padding:6px; border-radius:6px;"></div>
+    </div>
+
+</div>
+
+        <div style="margin-top:15px; text-align:right;">
+            <button id="village-save" class="neumorphic-btn">Save</button>
+            <button id="village-cancel" class="neumorphic-btn">Cancel</button>
+        </div>
+
+    </div>
+</div>
+
 
 <script>
+let selectedUserId = null;
 async function loadEmployees() {
     const res = await fetch('/api/employees');
     const data = await res.json();
@@ -111,39 +166,93 @@ async function loadUsers(){
             <td>${u.employee_name || '-'}</td>
             <td>${u.device_id || '-'}</td>
             <td>${u.role}</td>
+            <td>${(u.villages || []).map(v => `${v.vid} - ${v.name} - ${v.district}`).join('<br>') || '-'}</td>
             <td>${u.is_active ? 'Active' : 'Disabled'}</td>
             <td class="action-buttons">
                 <button class="neumorphic-btn small toggle-status-btn" data-id="${u.id}" data-active="${u.is_active}">
                     ${u.is_active ? 'Deactivate' : 'Activate'}
                 </button>
-                ${u.role !== 'admin' ? `
+                ${u.role === 'mgmt' ? `
                     <button class="neumorphic-btn small reset-device-btn" data-id="${u.id}">
                         Reset Device
                     </button>
                 ` : ``}
-                <button class="neumorphic-btn small delete-btn" data-id="${u.id}">
-                    Delete
+                <button class="neumorphic-btn small edit-villages-btn" data-id="${u.id}">
+                     ${(u.villages && u.villages.length > 0) ? 'Edit Villages' : 'Add Villages'}
                 </button>
             </td>
         `;
 
         tbody.appendChild(tr);
     });
+    
 
-    document.querySelectorAll('.delete-btn').forEach(btn=>{
-        btn.onclick = async () => {
-            if(!confirm("Delete user?")) return;
+document.querySelectorAll('.edit-villages-btn').forEach(btn=>{
+    btn.onclick = async () => {
+        selectedUserId = btn.dataset.id;
 
-            const r = await fetch('/api/users/delete', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({id: btn.dataset.id})
-            });
+        // Load all villages
+        const vRes = await fetch('/api/villages');
+        const allVillages = await vRes.json();
 
-            const j = await r.json();
-            if(j.ok) loadUsers();
+        // Use already loaded villages from users list
+        const user = users.find(x => x.id == selectedUserId);
+        const assignedSet = new Set((user?.villages || []).map(v => v.vid));
+
+        const allContainer = document.getElementById("all-villages-list");
+        const selectedContainer = document.getElementById("selected-villages-list");
+
+        allContainer.innerHTML = "";
+        selectedContainer.innerHTML = "";
+
+        allVillages.forEach(v => {
+            const html = `
+<label style="display:grid; grid-template-columns: 20px 70px 1fr 90px; align-items:center; gap:6px; padding:4px 6px; border-radius:4px; cursor:pointer; font-size:13px;">
+    <input type="checkbox" value="${v.vid}" style="margin:0;">
+    <span style="font-weight:600;">${v.vid}</span>
+    <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${v.name || ''}</span>
+    <span style="color:#aaa; font-size:11px; text-align:right;">${v.district || ''}</span>
+</label>
+`;
+
+            if (assignedSet.has(v.vid)) {
+                selectedContainer.innerHTML += html;
+            } else {
+                allContainer.innerHTML += html;
+            }
+        });
+
+        const updateCounts = () => {
+            document.getElementById("all-count").innerText = `All Villages (${allContainer.children.length})`;
+            document.getElementById("selected-count").innerText = `Selected Villages (${selectedContainer.children.length})`;
         };
-    });
+
+        updateCounts();
+
+        document.getElementById("move-right").onclick = () => {
+            const checked = allContainer.querySelectorAll('input:checked');
+            checked.forEach(cb => {
+                const label = cb.parentElement;
+                cb.checked = false;
+                selectedContainer.appendChild(label);
+            });
+            updateCounts();
+        };
+
+        document.getElementById("move-left").onclick = () => {
+            const checked = selectedContainer.querySelectorAll('input:checked');
+            checked.forEach(cb => {
+                const label = cb.parentElement;
+                cb.checked = false;
+                allContainer.appendChild(label);
+            });
+            updateCounts();
+        };
+
+        const modal = document.getElementById("village-modal");
+        modal.style.display = "flex";
+    };
+});
 
     document.querySelectorAll('.reset-device-btn').forEach(btn=>{
         btn.onclick = async () => {
@@ -183,6 +292,32 @@ async function loadUsers(){
 
 document.getElementById("u_cancel").onclick = () => {
     document.getElementById("user-modal").style.display = "none";
+};
+
+document.getElementById("village-cancel").onclick = () => {
+    document.getElementById("village-modal").style.display = "none";
+};
+
+document.getElementById("village-save").onclick = async () => {
+
+    const selected = Array.from(
+        document.querySelectorAll('#selected-villages-list input')
+    ).map(cb => cb.value);
+
+    const res = await fetch('/api/users/update_villages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: selectedUserId, village_ids: selected })
+    });
+
+    const j = await res.json();
+
+    if (j.ok) {
+        document.getElementById("village-modal").style.display = "none";
+        loadUsers();
+    } else {
+        alert(j.msg || "Failed to update villages");
+    }
 };
 
 document.getElementById("u_save").onclick = async () => {
@@ -227,6 +362,31 @@ document.getElementById("u_employee").onchange = async function () {
     villages.forEach(v => {
         select.innerHTML += `<option selected>${v.name}</option>`;
     });
+};
+
+document.getElementById("village-search").oninput = function () {
+    const term = this.value.toLowerCase();
+    document.querySelectorAll("#all-villages-list label").forEach(label => {
+        label.style.display = label.innerText.toLowerCase().includes(term) ? "grid" : "none";
+    });
+};
+
+document.getElementById("select-all").onclick = () => {
+    document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = true);
+};
+
+document.getElementById("clear-all").onclick = () => {
+    document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = false);
+};
+
+</script>
+
+<script>
+// Optional: background click closes modal
+document.getElementById("village-modal").onclick = function(e) {
+    if (e.target.id === "village-modal") {
+        this.style.display = "none";
+    }
 };
 
 loadUsers();

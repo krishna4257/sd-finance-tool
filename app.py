@@ -2438,6 +2438,26 @@ def list_users():
         """, (user_id,))
         device = cur.fetchone()
 
+        # Fetch assigned villages
+        cur.execute("""
+            SELECT v.vid, v.village_name, v.district
+            FROM user_village_access uva
+            JOIN village v ON v.vid = uva.village_id
+            WHERE uva.user_id = %s
+            ORDER BY v.village_name
+        """, (user_id,))
+
+        village_rows = cur.fetchall()
+
+        villages = [
+            {
+                "vid": v[0],
+                "name": v[1],
+                "district": v[2]
+            }
+            for v in village_rows
+        ]
+
         users.append({
             "id": user_id,
             "username": username,
@@ -2445,7 +2465,8 @@ def list_users():
             "employee_name": emp_name,
             "role": level,
             "device_id": device[0] if device else "",
-            "is_active": is_active
+            "is_active": is_active,
+            "villages": villages
         })
 
     cur.close()
@@ -2574,6 +2595,9 @@ def reset_user_device():
         cur.close()
         conn.close()
 
+# ----------------------------------------------------
+# Toggle user status
+# ----------------------------------------------------
 @app.route("/api/users/toggle_status", methods=["POST"])
 @admin_required
 def toggle_user_status():
@@ -2591,6 +2615,48 @@ def toggle_user_status():
             WHERE id = %s
             RETURNING is_active
         """, (user_id,))
+
+        conn.commit()
+        return jsonify(ok=True)
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify(ok=False, msg=str(e))
+
+    finally:
+        cur.close()
+        conn.close()
+
+# ----------------------------------------------------
+# Update user's village access
+# ----------------------------------------------------
+@app.route("/api/users/update_villages", methods=["POST"])
+@login_required
+@admin_required
+def update_user_villages():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    village_ids = data.get("village_ids", [])
+
+    if not user_id:
+        return jsonify(ok=False, msg="Missing user_id")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # 🔹 Remove existing mappings
+        cur.execute("""
+            DELETE FROM user_village_access
+            WHERE user_id = %s
+        """, (user_id,))
+
+        # 🔹 Insert new mappings
+        for vid in village_ids:
+            cur.execute("""
+                INSERT INTO user_village_access (user_id, village_id)
+                VALUES (%s, %s)
+            """, (user_id, vid))
 
         conn.commit()
         return jsonify(ok=True)
