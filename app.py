@@ -22,6 +22,7 @@ from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
 import requests
+import base64
 load_dotenv()
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -1046,22 +1047,6 @@ def payment_feed_batch():
 
         total_records = len(payments)
 
-        # create batch
-        cur.execute("""
-            INSERT INTO payment_feed_batch (
-                eid,
-                vid,
-                device_id,
-                total_records,
-                status,
-                submitted_at
-            )
-            VALUES (%s,%s,%s,%s,'pending',NOW())
-            RETURNING batch_id
-        """, (eid, vid, device_id, total_records))
-
-        batch_id = cur.fetchone()[0] # type: ignore
-
         # insert each payment as JSON payload
         for p in payments:
 
@@ -1070,16 +1055,14 @@ def payment_feed_batch():
 
             cur.execute("""
                 INSERT INTO payment_feed_items (
-                    batch_id,
                     local_uuid,
                     payload,
                     status,
                     created_at
                 )
-                VALUES (%s,%s,%s,'pending',NOW())
+                VALUES (%s,%s,'pending',NOW())
                 ON CONFLICT (local_uuid) DO NOTHING
             """, (
-                batch_id,
                 local_uuid,
                 payload
             ))
@@ -1088,7 +1071,6 @@ def payment_feed_batch():
 
         return jsonify({
             "status": "ok",
-            "batch_id": batch_id,
             "payments_received": total_records
         })
 
@@ -1589,17 +1571,64 @@ def feed():
     # CUSTOMER FEED
     cur.execute("""
         SELECT
-            feed_id,
-            payload->>'ano' AS ano,
-            payload->>'name' AS name,
-            payload->>'type' AS type,
-            status
-        FROM customer_feed
-        WHERE vid = %s AND status='pending'
-        ORDER BY feed_id DESC
+            cf.feed_id,
+            cf.payload,
+            cf.status,
+            cf.vid,
+            (cf.payload->>'ano')::INT AS ano,
+            cf.payload->>'name' AS name,
+            cf.payload->>'type' AS type,
+            cd.aadhaar_photo,
+            cd.house_photo
+        FROM customer_feed cf
+        LEFT JOIN customer_docs cd
+          ON cd.vid = cf.vid
+         AND cd.ano = (cf.payload->>'ano')::INT
+        WHERE cf.vid = %s AND cf.status='pending'
+        ORDER BY cf.feed_id DESC
     """, (vid,))
 
-    customers = cur.fetchall()
+    rows = cur.fetchall()
+    columns = [desc[0] for desc in cur.description] # type: ignore
+
+    customers = []
+    for r in rows:
+        row_dict = dict(zip(columns, r))
+
+        payload = row_dict.get("payload")
+
+        # ✅ Normalize payload
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+        elif payload is None:
+            payload = {}
+
+        # ✅ Flatten payload into row_dict (VERY IMPORTANT)
+        row_dict.update({
+            "ano": payload.get("ano"),
+            "name": payload.get("name"),
+            "pano": payload.get("pano"),
+            "type": payload.get("type"),
+            "period": payload.get("period"),
+            "start_date": payload.get("start_date"),
+            "end_date": payload.get("end_date"),
+            "total_amount": payload.get("total_amount"),
+            "installment_amount": payload.get("installment_amount"),
+            "aadhaar_number": payload.get("aadhaar_number"),
+            "notes": payload.get("notes"),
+            "latitude": payload.get("latitude"),
+            "longitude": payload.get("longitude"),
+            "eid": payload.get("eid"),
+            "vid": payload.get("vid"),
+        })
+
+        # keep payload also (optional)
+        row_dict["payload"] = payload
+
+        customers.append(row_dict)
     # PAYMENT FEED
     cur.execute("""
     SELECT
@@ -1613,7 +1642,10 @@ def feed():
     ORDER BY feed_payment_id DESC
 """)
 
-    payments = cur.fetchall()
+    rows = cur.fetchall()
+    columns = [desc[0] for desc in cur.description] # type: ignore
+
+    payments = [dict(zip(columns, r)) for r in rows]
     
 
     conn.close()
@@ -1709,6 +1741,7 @@ def accept_customer(feed_id):
 
     return {"success":True}
 
+
 @app.post("/feed/payment/accept/<feed_payment_id>")
 def accept_payment(feed_payment_id):
 
@@ -1789,14 +1822,130 @@ def accept_payment(feed_payment_id):
     # 5️⃣ Mark feed accepted
     cur.execute("""
         UPDATE payment_feed_items
-        SET status='accepted'
+        SET status='accepted',
+            review_by = %s,
+            review_at = NOW()
         WHERE feed_payment_id = %s
-    """, (feed_payment_id,))
+    """, (session.get("user_id"), feed_payment_id))
 
     conn.commit()
     conn.close()
 
     return {"success": True}
+
+# ----------- Batch accept payments -----------
+@app.post("/feed/payment/accept_batch")
+def accept_payment_batch():
+
+    data = request.get_json()
+    ids = data.get("ids", [])
+    # ✅ Ensure IDs are integers (fix bigint = text error)
+    try:
+        ids = [int(i) for i in ids]
+    except Exception:
+        return {"success": False, "error": "Invalid IDs format"}
+
+    if not ids:
+        return {"success": False, "error": "No payments selected"}
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # 1️⃣ Fetch all selected payloads
+        cur.execute("""
+            SELECT payload
+            FROM payment_feed_items
+            WHERE feed_payment_id = ANY(%s::bigint[])
+        """, (ids,))
+
+        rows = cur.fetchall()
+
+        if not rows:
+            return {"success": False, "error": "No valid payments found"}
+
+        insert_values = []
+        customer_map = {}
+
+        # 2️⃣ Prepare bulk insert
+        for r in rows:
+            p = r[0]
+
+            ano = p.get("ano")
+            vid = p.get("vid")
+            eid = p.get("eid")
+            amt = p.get("amt")
+            pdate = p.get("pdate")
+
+            # fetch customer only once per ano
+            if ano not in customer_map:
+                cur.execute("""
+                    SELECT cid, total_amount
+                    FROM customer
+                    WHERE ano = %s AND vid = %s
+                """, (ano, vid))
+
+                cust = cur.fetchone()
+                if not cust:
+                    continue
+
+                customer_map[ano] = cust
+
+            cid, total_amt = customer_map[ano]
+
+            insert_values.append((cid, vid, eid, ano, amt, pdate))
+
+        if not insert_values:
+            return {"success": False, "error": "No valid payments to insert"}
+
+        # 3️⃣ BULK INSERT (single query)
+        args_str = ",".join(cur.mogrify("(%s,%s,%s,%s,%s,%s)", v).decode() for v in insert_values)
+
+        cur.execute(f"""
+            INSERT INTO payment (cid, vid, eid, ano, amt, payment_date)
+            VALUES {args_str}
+        """)
+
+        # 4️⃣ Update customers (optimized)
+        for ano, (cid, total_amt) in customer_map.items():
+
+            cur.execute("""
+                SELECT COALESCE(SUM(amt),0)
+                FROM payment
+                WHERE cid = %s
+            """, (cid,))
+
+            paid_amt = cur.fetchone()[0] # type: ignore
+            balance = total_amt - paid_amt
+
+            cur.execute("""
+                UPDATE customer
+                SET paid_amount = %s,
+                    balance_amount = %s
+                WHERE cid = %s
+            """, (paid_amt, balance, cid))
+
+        # 5️⃣ Mark all as accepted
+        cur.execute("""
+            UPDATE payment_feed_items
+            SET status = 'accepted',
+                review_by = %s,
+                review_at = NOW()
+            WHERE feed_payment_id = ANY(%s::bigint[])
+        """, (session.get("user_id"), ids))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": f"{len(insert_values)} payments inserted"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return {"success": False, "error": str(e)}
 
 # ----------- NEW: Postgres-based customer update route -----------
 @app.route("/api/customer/update_pg", methods=["POST"])
@@ -2771,7 +2920,11 @@ def update_payment_date_bulk():
         cur.close()
         conn.close()
 
-
+@app.template_filter('b64encode')
+def b64encode_filter(data):
+    if not data:
+        return ""
+    return base64.b64encode(data).decode('utf-8')
 
 # ----------------------------------------------------
 # RUN APP

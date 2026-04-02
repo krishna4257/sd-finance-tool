@@ -7,51 +7,75 @@
 <div class="raised-box">
 <h3>Customer Feed</h3>
 
-<table class="customer-table">
-<thead>
+<div style="overflow:auto; max-height:520px; border-radius:12px;">
+<table class="customer-table" style="min-width:1400px;">
+<thead style="position:sticky; top:0; z-index:2; background:#caa95a;">
 <tr>
 <th>ANO</th>
 <th>Name</th>
+<th>Pano</th>
 <th>Village</th>
 <th>Type</th>
+<th>Period</th>
+<th>Start Date</th>
+<th>End Date</th>
+<th>Total Amount</th>
+<th>Installment</th>
+<th>Aadhaar</th>
+<th>Notes</th>
+<th>Latitude</th>
+<th>Longitude</th>
 <th>Status</th>
 <th>Actions</th>
 </tr>
 </thead>
 
 <tbody>
-
 {% for row in customers %}
 <tr>
 <td>{{ row.ano }}</td>
 <td>{{ row.name }}</td>
+<td>{{ row.pano }}</td>
 <td>{{ row.vid }}</td>
 <td>{{ row.type }}</td>
+<td>{{ row.period }}</td>
+<td>{{ row.start_date }}</td>
+<td>{{ row.end_date }}</td>
+<td>₹{{ row.total_amount }}</td>
+<td>₹{{ row.installment_amount }}</td>
+<td>{{ row.aadhaar_number }}</td>
+<td>{{ row.notes }}</td>
+<td>{{ row.latitude }}</td>
+<td>{{ row.longitude }}</td>
 <td>{{ row.status }}</td>
 
-<td>
+<td style="white-space:nowrap;">
 
 <button class="neumorphic-btn ultrasmall"
-onclick="accept('{{ row[0] }}')">
-✅ Accept
-</button>
+onclick="accept('{{ row.feed_id }}')">✅ Accept</button>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="editCustomer('{{row.feed_id}}')">
-✏️ Edit
-</button>
+onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
+
+{% if row.aadhaar_photo %}
+<button class="neumorphic-btn ultrasmall"
+onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Aadhar</button>
+{% endif %}
+
+{% if row.house_photo %}
+<button class="neumorphic-btn ultrasmall"
+onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 House</button>
+{% endif %}
 
 <button class="neumorphic-btn ultrasmall"
-onclick="rejectCustomer('{{row.feed_id}}')">
-❌ Reject
-</button>
+onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
 
 </td>
 </tr>
 {% endfor %}
-
 </tbody>
 </table>
+</div>
 </div>
 
 
@@ -59,9 +83,60 @@ onclick="rejectCustomer('{{row.feed_id}}')">
 <div class="raised-box">
 <h3>Payment Feed</h3>
 
-<table class="customer-table">
+<div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+    <select id="groupBy" class="neumorphic-input ultrasmall" style="width:auto; min-width:140px;">
+        <option value="none">None</option>
+        <option value="date">Group by Date</option>
+        <option value="ano">Group by ANO</option>
+    </select>
+
+    <input id="groupInput" class="neumorphic-input ultrasmall" 
+           placeholder="Enter value" 
+           style="display:none; width:160px;" />
+
+    <button class="neumorphic-btn ultrasmall" onclick="selectAllPayments()">Select All</button>
+    <button id="acceptBtn" class="neumorphic-btn ultrasmall" onclick="acceptSelected()">✅ Accept Selected</button>
+
+    <div style="margin-left:auto; font-weight:bold;">
+        Total: ₹<span id="selectedTotal">0</span>
+    </div>
+</div>
+
+<style>
+/* Fix excessive spacing in Payment Feed table */
+.customer-table th,
+.customer-table td {
+    padding: 6px 8px !important;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.customer-table th {
+    text-align: left;
+}
+
+.customer-table td {
+    vertical-align: middle;
+}
+
+/* Reduce checkbox column width */
+.customer-table th:first-child,
+.customer-table td:first-child {
+    width: 40px;
+    text-align: center;
+}
+
+/* Prevent columns from stretching too much */
+.customer-table {
+    table-layout: fixed;
+    width: 100%;
+}
+</style>
+<div style="overflow:auto; max-height:420px; border-radius:12px;">
+<table class="customer-table" style="min-width:800px;">
 <thead>
 <tr>
+<th style="width:40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
 <th>A.no</th>
 <th>Date</th>
 <th>Amount</th>
@@ -73,10 +148,11 @@ onclick="rejectCustomer('{{row.feed_id}}')">
 <tbody>
 
 {% for row in payments %}
-<tr>
+<tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
+<td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
 <td>{{ row.ano }}</td>
 <td>{{ row.pdt }}</td>
-<td data-money>{{ row.amt }}</td>
+<td data-money="{{ row.amt }}">₹{{ row.amt }}</td>
 <td>{{ row.status }}</td>
 
 <td>
@@ -103,7 +179,228 @@ onclick="rejectPayment('{{ row.feed_payment_id }}')">
 </tbody>
 </table>
 </div>
+<div id="toast" style="
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    background:#333;
+    color:#fff;
+    padding:10px 16px;
+    border-radius:8px;
+    display:none;
+    z-index:9999;
+    font-size:14px;">
+</div>
+</div>
+
+<div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+    <div style="position:relative; background:#222; padding:10px; border-radius:10px;">
+        <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">❌</span>
+        <img id="modalImage" style="max-width:500px; max-height:500px; border-radius:8px;">
+    </div>
+</div>
+
+<script>
+function openImageModal(type, base64){
+    const modal = document.getElementById("imageModal");
+    const img = document.getElementById("modalImage");
+    img.src = "data:image/jpeg;base64," + base64;
+    modal.style.display = "flex";
+}
+
+function closeImageModal(){
+    document.getElementById("imageModal").style.display = "none";
+}
+</script>
+
+<script>
+function setButtonLoading(btn, isLoading){
+    if(!btn) return;
+    if(isLoading){
+        btn.dataset.originalText = btn.innerText;
+        btn.innerText = "Processing...";
+        btn.disabled = true;
+    } else {
+        btn.innerText = btn.dataset.originalText || "Done";
+        btn.disabled = false;
+    }
+}
+
+function showSuccessBanner(msg){
+    let banner = document.getElementById("successBanner");
+    if(!banner){
+        banner = document.createElement("div");
+        banner.id = "successBanner";
+        banner.style.position = "fixed";
+        banner.style.top = "20px";
+        banner.style.right = "20px";
+        banner.style.background = "#28a745";
+        banner.style.color = "#fff";
+        banner.style.padding = "12px 18px";
+        banner.style.borderRadius = "8px";
+        banner.style.zIndex = "9999";
+        banner.style.fontSize = "14px";
+        document.body.appendChild(banner);
+    }
+    banner.innerText = msg;
+    banner.style.display = "block";
+    setTimeout(()=> banner.style.display = "none", 3000);
+}
+</script>
 
 <script src="{{ url_for('static', filename='js/feed.js') }}"></script>
+
+<script>
+function toggleAll(source){
+    document.querySelectorAll('.pay-checkbox').forEach(cb => {
+        cb.checked = source.checked;
+    });
+    updateTotalPayment();
+}
+
+function selectAllPayments(){
+    const checkboxes = document.querySelectorAll('.pay-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    updateTotalPayment();
+}
+
+function updateTotalPayment(){
+    let total = 0;
+
+    const container = document.querySelectorAll('.raised-box')[1];
+    const checkboxes = container.querySelectorAll('.pay-checkbox');
+
+    checkboxes.forEach(cb => {
+        if(cb.checked){
+            const row = cb.closest('tr');
+            let raw = row.querySelector('[data-money]').getAttribute('data-money') || "0";
+            total += parseFloat(raw || 0);
+        }
+    });
+
+    const totalEl = container.querySelector('#selectedTotal');
+    if(totalEl){
+        totalEl.innerText = total.toLocaleString('en-IN');
+    }
+}
+
+function showToast(msg){
+    const t = document.getElementById("toast");
+    t.innerText = msg;
+    t.style.display = "block";
+    setTimeout(()=> t.style.display = "none", 3000);
+}
+
+function acceptSelected(){
+    const btn = document.getElementById("acceptBtn");
+    const selected = [];
+
+    document.querySelectorAll('.pay-checkbox:checked').forEach(cb => {
+        selected.push(cb.value);
+    });
+
+    if(selected.length === 0){
+        showToast("Select at least one payment");
+        return;
+    }
+
+    // disable button + show loading
+    btn.disabled = true;
+    const originalText = btn.innerText;
+    btn.innerText = "Processing...";
+
+    fetch("/feed/payment/accept_batch", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ids: selected })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success){
+            showToast(data.message);
+            setTimeout(()=> location.reload(), 1000);
+        } else {
+            showToast(data.error || "Failed");
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast("Error processing payments");
+        btn.disabled = false;
+        btn.innerText = originalText;
+    });
+}
+
+
+const groupByEl = document.getElementById('groupBy');
+const groupInput = document.getElementById('groupInput');
+
+groupByEl.addEventListener('change', function(){
+    const type = this.value;
+
+    // reset input + selections
+    groupInput.value = '';
+    document.querySelectorAll('.pay-checkbox').forEach(cb => cb.checked = false);
+    updateTotalPayment();
+
+    if(type === 'none'){
+        groupInput.style.display = 'none';
+    } else {
+        groupInput.style.display = 'inline-block';
+        groupInput.placeholder = type === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter ANO';
+    }
+});
+
+groupInput.addEventListener('input', function(){
+    const type = groupByEl.value;
+    const value = this.value.trim();
+
+    if(!value) return;
+
+    const rows = document.querySelectorAll('.customer-table')[1].querySelectorAll('tbody tr');
+
+    rows.forEach(row => {
+        const match = row.dataset[type] == value;
+        const cb = row.querySelector('.pay-checkbox');
+        cb.checked = match;
+    });
+
+    updateTotalPayment();
+});
+
+document.addEventListener("DOMContentLoaded", function(){
+    updateTotalPayment();
+});
+
+function accept(feedId){
+    const btn = event.target;
+
+    setButtonLoading(btn, true);
+
+    fetch(`/feed/customer/accept/${feedId}`, {
+        method: "POST"
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success){
+            showSuccessBanner("Customer inserted successfully");
+            showToast("Inserted into main table");
+            setTimeout(()=> location.reload(), 800);
+        } else {
+            showToast(data.error || "Failed");
+            setButtonLoading(btn, false);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast("Error processing request");
+        setButtonLoading(btn, false);
+    });
+}
+</script>
 
 {% endblock %}
