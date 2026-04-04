@@ -7,8 +7,8 @@
 <div class="raised-box">
 <h3>Customer Feed</h3>
 
-<div style="overflow:auto; max-height:520px; border-radius:12px;">
-<table class="customer-table" style="min-width:1400px;">
+<div class="customer-table-wrapper">
+<table class="customer-table customer-feed-table">
 <thead style="position:sticky; top:0; z-index:2; background:#caa95a;">
 <tr>
 <th>ANO</th>
@@ -31,7 +31,8 @@
 </thead>
 
 <tbody>
-{% for row in customers %}
+{% set cust_list = customers if customers else customer_feed %}
+{% for row in cust_list %}
 <tr>
 <td>{{ row.ano }}</td>
 <td>{{ row.name }}</td>
@@ -73,6 +74,13 @@ onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
 </td>
 </tr>
 {% endfor %}
+{% if not cust_list %}
+<tr>
+  <td colspan="16" style="text-align:center; padding:20px;">
+    No data available in table
+  </td>
+</tr>
+{% endif %}
 </tbody>
 </table>
 </div>
@@ -102,37 +110,7 @@ onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
     </div>
 </div>
 
-<style>
-/* Fix excessive spacing in Payment Feed table */
-.customer-table th,
-.customer-table td {
-    padding: 6px 8px !important;
-    font-size: 13px;
-    white-space: nowrap;
-}
-
-.customer-table th {
-    text-align: left;
-}
-
-.customer-table td {
-    vertical-align: middle;
-}
-
-/* Reduce checkbox column width */
-.customer-table th:first-child,
-.customer-table td:first-child {
-    width: 40px;
-    text-align: center;
-}
-
-/* Prevent columns from stretching too much */
-.customer-table {
-    table-layout: fixed;
-    width: 100%;
-}
-</style>
-<div style="overflow:auto; max-height:420px; border-radius:12px;">
+<div class="customer-table-wrapper">
 <table class="customer-table" style="min-width:800px;">
 <thead>
 <tr>

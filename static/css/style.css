@@ -2288,12 +2288,6 @@ body.dark-mode .mf-upload-btn {
     100% { opacity: 0; }
 }
 
-
-.customer-table {
-  min-width: 1800px; /* keep your width */
-  table-layout: auto;
-}
-
 .customer-table th,
 .customer-table td {
   white-space: nowrap;
@@ -2324,11 +2318,6 @@ body.dark-mode .mf-upload-btn {
   table-layout: auto;    /* prevents column stretching */
 }
 
-/* Prevent column wrapping */
-.customer-table th,
-.customer-table td {
-  white-space: nowrap;
-}
 /* Sticky header */
 .customer-table thead th {
   position: sticky;
@@ -2488,8 +2477,10 @@ body.dark-mode .mf-upload-btn {
 /* Ensure container uses full available width */
 .customer-table-wrapper {
   width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  position: relative;
+  border-radius: 12px;
 }
 
 /* Improve large-screen appearance */
@@ -2553,4 +2544,249 @@ body.dark-mode .mf-upload-btn {
 
 .user-dropdown a:hover {
     background: rgba(255,255,255,0.05);
+}
+
+/* ===== STATUS BADGES ===== */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.08),
+              inset -2px -2px 4px rgba(255,255,255,0.6);
+}
+
+/* Active */
+.status-active {
+  background: #e6f7ff;
+  color: #0077b6;
+}
+
+/* Closed */
+.status-closed {
+  background: #e6ffe6;
+  color: #2e7d32;
+}
+
+/* Defaulted */
+.status-defaulted {
+  background: #ffe6e6;
+  color: #c62828;
+}
+
+/* Written off */
+.status-written_off {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .status-active {
+  background: #0d2c3a;
+  color: #4fc3f7;
+}
+[data-theme="dark"] .status-closed {
+  background: #1b3a1b;
+  color: #66bb6a;
+}
+[data-theme="dark"] .status-defaulted {
+  background: #3a1b1b;
+  color: #ef5350;
+}
+[data-theme="dark"] .status-written_off {
+  background: #3a2a1b;
+  color: #ffa726;
+}
+
+/* ===== CUSTOMER TABLE ALIGNMENT FIX ===== */
+
+/* Let table adjust naturally */
+#customerTable {
+  table-layout: fixed;
+  width: max-content;
+  min-width: 1600px; /* keeps scroll stable */
+}
+
+/* Ensure all columns align properly */
+#customerTable th,
+#customerTable td {
+  vertical-align: middle;
+  text-align: center;
+}
+
+/* Fix status column width (important for badge) */
+#customerTable th[data-field="status"],
+#customerTable td[data-field="status"] {
+  min-width: 120px;
+}
+
+/* Prevent layout break when new columns added */
+#customerTable th,
+#customerTable td {
+  min-width: 90px;
+}
+
+/* Improve readability */
+#customerTable td {
+  padding: 10px 14px;
+}
+
+/* ===== TABLE UI CONSISTENCY ===== */
+
+/* Smooth row look */
+.customer-table tbody tr {
+  transition: all 0.15s ease;
+}
+
+/* Hover = highlight color (already used) */
+.customer-table tbody tr:hover {
+  transform: scale(1.002);
+}
+
+/* Selected row (already used in JS) */
+.customer-table tbody tr.highlighted {
+  background: var(--highlight) !important;
+  color: #000;
+}
+
+/* Cumulative column styling */
+.cumulative-amt {
+  font-weight: 600;
+  color: var(--highlight);
+}
+
+/* Action column tighter */
+.customer-table td:last-child {
+  min-width: 80px;
+}
+
+#customerTable th,
+#customerTable td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#customerTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+#customerTable thead th {
+  background: var(--highlight);
+}
+/* =====================================================
+   USER MANAGEMENT TABLE – MATCH CUSTOMER TABLE UI
+   ===================================================== */
+ 
+/* Apply same base styling */
+#userTable {
+  width: max-content;
+  min-width: 1400px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+ 
+/* Header styling same as customer table */
+#userTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: var(--highlight);
+  color: white;
+  text-align: center;
+  padding: 10px 14px;
+}
+ 
+/* Cell styling */
+#userTable th,
+#userTable td {
+  text-align: center;
+  vertical-align: middle;
+  padding: 10px 14px;
+  border: 1px solid var(--input-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 100px;
+}
+
+/* Fix: Dark mode row background for user table */
+[data-theme="dark"] #userTable tbody tr {
+  background-color: var(--sidebar) !important;
+  color: var(--text);
+}
+
+[data-theme="dark"] #userTable {
+  background-color: var(--sidebar) !important;
+}
+
+/* Also fix any inherited white backgrounds */
+[data-theme="dark"] #userTable td {
+  background-color: transparent !important;
+}
+
+/* 🔥 FORCE FIX: DataTables overriding dark mode (user table body turning white) */
+[data-theme="dark"] table.dataTable tbody td,
+[data-theme="dark"] table.dataTable tbody th {
+  background-color: transparent !important;
+  color: var(--text) !important;
+}
+
+[data-theme="dark"] table.dataTable {
+  background-color: var(--sidebar) !important;
+}
+
+[data-theme="dark"] .dataTables_wrapper table {
+  background-color: var(--sidebar) !important;
+}
+
+[data-theme="dark"] .dataTables_wrapper tbody tr {
+  background-color: var(--sidebar) !important;
+}
+ 
+/* Wrapper same scroll behavior */
+.user-table-wrapper {
+  width: 100%;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  position: relative;
+  border-radius: 12px;
+}
+ 
+/* Hover + interaction like customer table */
+#userTable tbody tr:hover {
+  background-color: var(--highlight);
+  color: #000;
+  transform: scale(1.002);
+  transition: all 0.15s ease;
+}
+
+[data-theme="dark"] #userTable tbody tr:hover {
+  background-color: #3a3a3a !important;
+  color: var(--text);
+}
+ 
+/* Selected / active row */
+#userTable tbody tr.selected-row {
+  background-color: var(--highlight) !important;
+  color: #000 !important;
+}
+ 
+/* Action buttons alignment */
+#userTable .action-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+ 
+/* Fix buttons inside table */
+#userTable button {
+  padding: 4px 10px;
+  font-size: 12px;
 }

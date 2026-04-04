@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const postingSection = document.getElementById("posting-section");
   const postingForm = document.getElementById("postingSearchForm");
   const postingTableBody = document.querySelector("#postingTable tbody");
+  const closeAccountBtn = document.getElementById("closeAccountBtn");
 
   function stripToNumber(text) {
     return text.replace(/[^\d.-]/g, '');
@@ -84,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (editCustomerBtn && customerRow && saveCustomerBtn) {
     editCustomerBtn.addEventListener("click", () => {
       customerRow.querySelectorAll("td[data-field]").forEach((td) => {
-        if (!["ANO", "ADD1"].includes(td.dataset.field)) {
+        if (!["ANO", "ADD1", "status"].includes(td.dataset.field)) {
           td.setAttribute("contenteditable", "true");
         }
       });
@@ -177,6 +178,81 @@ document.addEventListener("DOMContentLoaded", () => {
 
   alert("Payments updated successfully");
 });
+  }
+
+  // --- Logic for: Close Customer Account ---
+  // Disable Close Account button if already closed/defaulted/written_off
+  if (closeAccountBtn && customerRow) {
+    const statusCell = customerRow.querySelector("td[data-field='status']");
+    if (statusCell) {
+      const status = statusCell.textContent.trim().toLowerCase();
+      if (["closed", "defaulted", "written_off", "written off"].includes(status)) {
+        closeAccountBtn.disabled = true;
+        closeAccountBtn.textContent = "🔒 Already Closed";
+        closeAccountBtn.style.opacity = "0.6";
+        closeAccountBtn.style.cursor = "not-allowed";
+      }
+    }
+  }
+  if (closeAccountBtn && customerRow) {
+    closeAccountBtn.addEventListener("click", async () => {
+      const statusCell = customerRow.querySelector("td[data-field='status']");
+      const currentStatus = statusCell ? statusCell.textContent.trim().toLowerCase() : "";
+
+      if (["closed", "defaulted", "written_off", "written off"].includes(currentStatus)) {
+        alert("Account already closed");
+        return;
+      }
+      const cid = customerRow.dataset.cid;
+
+      const balanceCell = customerRow.querySelector("td[data-field='balance_amount']");
+      if (!balanceCell) {
+        alert("Balance not found");
+        return;
+      }
+
+      const balance = parseFloat(balanceCell.textContent.replace(/[^0-9.-]/g, "")) || 0;
+
+      let action = null;
+
+      if (balance > 0) {
+        const confirmDefault = confirm("Balance > 0. Mark as DEFAULTED?");
+        if (!confirmDefault) return;
+        action = "defaulted";
+      } else if (balance < 0) {
+        const confirmWriteOff = confirm("Balance < 0. Mark as WRITTEN OFF?");
+        if (!confirmWriteOff) return;
+        action = "written_off";
+      }
+
+      try {
+        closeAccountBtn.disabled = true;
+        const originalText = closeAccountBtn.textContent;
+        closeAccountBtn.textContent = "⏳ Processing...";
+
+        const res = await fetch("/api/customer/close_account_pg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cid, action })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          closeAccountBtn.textContent = "✅ Closed";
+          alert("Account closed successfully: " + data.status);
+          location.reload();
+        } else {
+          alert("Error: " + data.error);
+          closeAccountBtn.disabled = false;
+          closeAccountBtn.textContent = originalText;
+        }
+      } catch (err) {
+        alert("Request failed: " + err.message);
+        closeAccountBtn.disabled = false;
+        closeAccountBtn.textContent = originalText;
+      }
+    });
   }
 
   // --- Logic for: Edit/Save individual rows in Posting Table ---

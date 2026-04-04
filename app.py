@@ -1197,36 +1197,90 @@ def view_customers():
         flash("Please select Village from Dashboard first", "warning")
         return redirect(url_for("dashboard"))
 
-    # 🔹 Fetch ALL customers for context
-    rows = get_all_customers_by_context(vid)
+    # 🔹 NEW: mode toggle (active / closed)
+    mode = request.args.get("mode", "active")  # default = active
 
+    conn = get_pg_connection()
+    cur = conn.cursor()
 
-    headers = [
-        "cid", "ano", "name", "vid",
-        "start_date", "end_date",
-        "total_amount", "paid_amount",
-        "balance_amount", "installment_amount",
-        "type", "period", "pano",
-        "created_at", "aadhaar_number",
-        "notes", "latitude", "longitude", "eid"
-    ]
+    if mode == "closed":
+        cur.execute("""
+            SELECT
+                cid,
+                ano,
+                name,
+                vid,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                pano,
+                created_at,
+                aadhaar_number,
+                notes,
+                latitude,
+                longitude,
+                eid,
+                status
+            FROM closed_cust_account
+            WHERE vid = %s
+            ORDER BY ano
+        """, (vid,))
+    else:
+        cur.execute("""
+            SELECT
+                cid,
+                ano,
+                name,
+                vid,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                pano,
+                created_at,
+                aadhaar_number,
+                notes,
+                latitude,
+                longitude,
+                eid,
+                'active' AS status
+            FROM customer
+            WHERE vid = %s
+            ORDER BY ano
+        """, (vid,))
 
-    # ✅ Use same aggregation logic as dashboard
-    totals = get_dashboard_totals(vid)
+    rows = cur.fetchall()
+    headers = [desc[0] for desc in cur.description] # type: ignore
 
-    total_customers = totals["total_customers"]
-    sum_amt = totals["sum_amt"]
-    sum_pamt = totals["sum_pamt"]
-    sum_bamt = totals["sum_bamt"]
+    cur.close()
+    conn.close()
+
+    data = [dict(zip(headers, r)) for r in rows]
+
+    # 🔹 Recalculate totals based on mode
+    total_customers = len(data)
+    sum_amt = sum(float(r["total_amount"] or 0) for r in data)
+    sum_pamt = sum(float(r["paid_amount"] or 0) for r in data)
+    sum_bamt = sum(float(r["balance_amount"] or 0) for r in data)
 
     return render_template(
         "view_customers.html",
         headers=headers,
-        data=rows,
+        data=data,
         total_customers=total_customers,
         sum_amt=sum_amt,
         sum_pamt=sum_pamt,
-        sum_bamt=sum_bamt
+        sum_bamt=sum_bamt,
+        mode=mode  # 🔹 pass to frontend for toggle button
     )
 
 @app.route("/check_ano_exists")
@@ -1464,7 +1518,8 @@ def search_customer():
     loanee_headers = [
         "cid", "ano", "name",
         "total_amount", "paid_amount",
-        "balance_amount", "installment_amount", "type", "period", "created_at"
+        "balance_amount", "installment_amount",
+        "type", "period", "created_at", "status"
     ]
 
     if request.method == "POST":
@@ -1473,18 +1528,34 @@ def search_customer():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # 🔍 Search by A.no OR Name (within context)
+        # 🔍 Search by A.no OR Name (within context), across both active and closed accounts
         cur.execute("""
-            SELECT
-                cid, ano, name,
-                total_amount, paid_amount,
-                balance_amount, installment_amount, type, period, created_at
-            FROM customer
-            WHERE vid = %s
-              AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+            (
+                SELECT
+                    cid, ano, name,
+                    total_amount, paid_amount,
+                    balance_amount, installment_amount,
+                    type, period, created_at,
+                    'active' AS status
+                FROM customer
+                WHERE vid = %s
+                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+            )
+            UNION ALL
+            (
+                SELECT
+                    cid, ano, name,
+                    total_amount, paid_amount,
+                    balance_amount, installment_amount,
+                    type, period, created_at,
+                    status
+                FROM closed_cust_account
+                WHERE vid = %s
+                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+            )
             ORDER BY ano
             LIMIT 1
-        """, (vid, query, f"%{query}%"))
+        """, (vid, query, f"%{query}%", vid, query, f"%{query}%"))
 
         row = cur.fetchone()
 
@@ -1492,13 +1563,20 @@ def search_customer():
             cust = dict(zip(loanee_headers, row))
             customers = [cust]
 
-            # 🔹 Fetch payments for this customer
+            # 🔹 Fetch payments for this customer (from both payment and closed_cust_payment)
             cur.execute("""
                 SELECT ano, payment_date, amt
                 FROM payment
                 WHERE cid = %s
+
+                UNION ALL
+
+                SELECT ano, payment_date, amt
+                FROM closed_cust_payment
+                WHERE cid = %s
+
                 ORDER BY payment_date
-            """, (cust["cid"],))
+            """, (cust["cid"], cust["cid"]))
 
             pamt1_records[cust["ano"]] = cur.fetchall()
 
@@ -1512,6 +1590,116 @@ def search_customer():
         pamt1_records=pamt1_records,
         query=request.form.get("query") if request.method == "POST" else ""
     )
+
+@app.route("/api/customer/close_account_pg", methods=["POST"])
+@login_required
+def close_customer_account_pg():
+    try:
+        data = request.get_json()
+        cid = data.get("cid")
+        action = data.get("action")  # 'defaulted' or 'written_off' or None
+
+        if not cid:
+            return jsonify({"success": False, "error": "Missing customer id"})
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # 🔒 Lock row (prevents race conditions)
+        cur.execute("""
+            SELECT total_amount, paid_amount, balance_amount, status
+            FROM customer
+            WHERE cid = %s
+            FOR UPDATE
+        """, (cid,))
+
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify({"success": False, "error": "Customer not found"})
+
+        total_amount, paid_amount, balance_amount, current_status = row
+
+        # -------------------------------
+        # 🧠 STATUS DECISION LOGIC
+        # -------------------------------
+        if balance_amount == 0:
+            final_status = "closed"
+
+        elif balance_amount > 0:
+            if action != "defaulted":
+                conn.rollback()
+                return jsonify({
+                    "success": False,
+                    "error": "Balance > 0. Must mark as defaulted."
+                })
+            final_status = "defaulted"
+
+        else:  # balance_amount < 0
+            if action != "written_off":
+                conn.rollback()
+                return jsonify({
+                    "success": False,
+                    "error": "Balance < 0. Must mark as written_off."
+                })
+            final_status = "written_off"
+
+        # -------------------------------
+        # 📦 MOVE DATA (NOT COPY)
+        # -------------------------------
+
+        # 1️⃣ Move customer (explicit columns to avoid mismatch)
+        cur.execute("""
+            INSERT INTO closed_cust_account (
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid, status,
+                closed_by, closed_at
+            )
+            SELECT
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid, %s,
+                %s, NOW() AT TIME ZONE 'Asia/Kolkata'
+            FROM customer
+            WHERE cid = %s
+        """, (final_status, session.get("employee_id"), cid))
+
+        # 2️⃣ Move payments (explicit columns)
+        cur.execute("""
+            INSERT INTO closed_cust_payment (
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            )
+            SELECT
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            FROM payment
+            WHERE cid = %s
+        """, (cid,))
+
+
+        # 4️⃣ Delete from active tables (this makes it MOVE)
+        cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
+        cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "status": final_status
+        })
+
+    except Exception as e:
+        conn.rollback()
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route("/api/update_village", methods=["POST"])
 @login_required
@@ -1636,11 +1824,13 @@ def feed():
         payload->>'ano' AS ano,
         payload->>'amt' AS amt,
         payload->>'pdate' AS pdt,
+        payload->>'vid' AS vid,
         status
     FROM payment_feed_items
     WHERE status='pending'
+      AND (payload->>'vid')::INT = %s
     ORDER BY feed_payment_id DESC
-""")
+""", (vid,))
 
     rows = cur.fetchall()
     columns = [desc[0] for desc in cur.description] # type: ignore
@@ -1663,6 +1853,12 @@ def accept_customer(feed_id):
     conn = get_pg_connection()
     cur = conn.cursor()
 
+    # Safety check: ensure logged-in employee
+    logged_user = session.get("employee_id")
+
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
+
     cur.execute("""
         SELECT payload
         FROM customer_feed
@@ -1676,6 +1872,12 @@ def accept_customer(feed_id):
         return {"success": False, "error": "Feed not found"}
     
     data = row[0]     # type: ignore # JSON payload
+    # Ensure payload is dict
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            return {"success": False, "error": "Invalid payload format"}
     print("PAYLOAD:", data)
     loan_type = data.get("type")
     if loan_type == "weekly":
@@ -1727,12 +1929,13 @@ def accept_customer(feed_id):
         data.get("eid")
     ))
 
-
     cur.execute("""
         UPDATE customer_feed
-        SET status = 'accepted'
+        SET status = 'accepted',
+            reviewed_by = %s,
+            reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
         WHERE feed_id = %s
-    """, (feed_id,))
+    """, (logged_user, feed_id))
 
     cur.execute("SET TIME ZONE 'UTC'")
 
@@ -1747,6 +1950,12 @@ def accept_payment(feed_payment_id):
 
     conn = get_pg_connection()
     cur = conn.cursor()
+
+    # Safety check: ensure logged-in employee
+    logged_user = session.get("employee_id")
+
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
 
     # 1️⃣ Get payload
     cur.execute("""
@@ -1824,9 +2033,9 @@ def accept_payment(feed_payment_id):
         UPDATE payment_feed_items
         SET status='accepted',
             review_by = %s,
-            review_at = NOW()
+            review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
         WHERE feed_payment_id = %s
-    """, (session.get("user_id"), feed_payment_id))
+    """, (logged_user, feed_payment_id))
 
     conn.commit()
     conn.close()
@@ -1850,6 +2059,12 @@ def accept_payment_batch():
 
     conn = get_pg_connection()
     cur = conn.cursor()
+
+    # Safety check: ensure logged-in employee
+    logged_user = session.get("employee_id")
+
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
 
     try:
         # 1️⃣ Fetch all selected payloads
@@ -1930,9 +2145,9 @@ def accept_payment_batch():
             UPDATE payment_feed_items
             SET status = 'accepted',
                 review_by = %s,
-                review_at = NOW()
+                review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
             WHERE feed_payment_id = ANY(%s::bigint[])
-        """, (session.get("user_id"), ids))
+        """, (logged_user, ids))
 
         conn.commit()
         conn.close()

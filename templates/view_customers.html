@@ -13,6 +13,13 @@
     <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
     <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
     <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
+    <button id="toggleCustomerModeBtn" class="neumorphic-btn">
+      {% if mode == 'closed' %}
+        🔓 Show Active Customers
+      {% else %}
+        🔒 Show Closed Customers
+      {% endif %}
+    </button>
   </div>
 
   <div class="summary-row">
@@ -24,26 +31,30 @@
 </div>
 
 <div class="raised-box">
-  <div class="customer-table-wrapper">
-    <table id="customerTable" class="dataTable customer-table">
+  <div class="customer-table-wrapper app-table-wrapper">
+    <table id="customerTable" class="customer-table">
       <thead>
         <tr>
           <th><input type="checkbox" onclick="toggleAll(this)" /></th>
           {% for header in headers %}
-          <th>{{ header }}</th>
+          <th class="table-header">{{ header }}</th>
           {% endfor %}
         </tr>
       </thead>
       <tbody id="customerTableBody">
         {% for row in data %}
-        <tr>
+        <tr class="table-row">
           <td><input type="checkbox" /></td>
           {% for col in headers %}
             {% set cell = row[col] %}
             {% if col in ["total_amount","paid_amount","balance_amount","installment_amount"] %}
-              <td class="{{ 'amount-paid' if col == 'balance_amount' else '' }}" data-money>{{ cell }}</td>
+              <td class="table-cell {{ 'amount-paid' if col == 'balance_amount' else '' }}" data-money>{{ cell }}</td>
+            {% elif col == 'status' %}
+              <td class="table-cell">
+                <span class="status-badge status-{{ cell|lower|replace(' ', '-') }}">{{ cell }}</span>
+              </td>
             {% else %}
-              <td>{{ cell }}</td>
+              <td class="table-cell">{{ cell }}</td>
             {% endif %}
           {% endfor %}
         </tr>
@@ -67,4 +78,19 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/view_customer.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const toggleBtn = document.getElementById("toggleCustomerModeBtn");
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", function () {
+      const currentMode = "{{ mode }}";
+      const nextMode = currentMode === "closed" ? "active" : "closed";
+
+      // 🔁 Reload with new mode
+      window.location.href = `/view_customers?mode=${nextMode}`;
+    });
+  }
+});
+</script>
 {% endblock %}
