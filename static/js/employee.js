@@ -82,6 +82,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   updateSummary();
+
 });
 
 /* ===== EDIT + SAVE ===== */
@@ -125,23 +126,92 @@ function enableEdit(btn) {
   }
 }
 
-/* ===== DELETE ===== */
+/* ===== TOGGLE EMPLOYEE STATUS ===== */
 
-function deleteEmployee(eid) {
+function toggleEmployeeStatus(eid, btn) {
 
-  if (!confirm("Delete this employee?")) return;
-
-  fetch("/api/delete_employee", {
+  fetch("/api/employee/toggle_status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ eid })
   })
   .then(res => res.json())
   .then(data => {
-    if (data.success) {
-      location.reload();
-    } else {
-      alert("Delete failed");
+
+    if (!data.success) {
+      alert(data.error || "Failed");
+      return;
     }
+
+    const row = btn.closest("tr");
+
+    const statusCell = row.querySelector(".status-cell");
+
+    const isActive = data.status === "active";
+
+    if (isActive) {
+      statusCell.innerHTML = '<span class="status-badge active">Active</span>';
+      btn.innerText = "Deactivate";
+      btn.classList.remove("activate-btn");
+      btn.classList.add("deactivate-btn");
+    } else {
+      statusCell.innerHTML = '<span class="status-badge inactive">Inactive</span>';
+      btn.innerText = "Activate";
+      btn.classList.remove("deactivate-btn");
+      btn.classList.add("activate-btn");
+    }
+
+    // ✅ Ensure row becomes visible immediately after status change
+    row.style.display = "";
+
+    // ✅ Update snapshot text so search/filter works correctly after activation
+    const snapshotItem = Array.from(document.querySelectorAll("#employeeTableBody tr"))
+      .map(r => ({ row: r, text: r.innerText.toLowerCase() }))
+      .find(d => d.row === row);
+
+    if (snapshotItem) {
+      snapshotItem.text = row.innerText.toLowerCase();
+    }
+
+    // 🔥 Refresh employee dropdown (hide inactive)
+    if (typeof refreshEmployeeDropdown === "function") {
+      refreshEmployeeDropdown();
+    }
+
+    // 🔥 If currently selected employee becomes inactive → reset context
+    const employeeSelect = document.getElementById("employeeSelect");
+    if (employeeSelect && employeeSelect.value == eid && !isActive) {
+      fetch("/reset_context", { method: "POST" })
+        .then(() => {
+          employeeSelect.value = "";
+        });
+    }
+  })
+  .catch(err => {
+    alert("Request failed: " + err.message);
   });
+}
+
+/* ===== REFRESH EMPLOYEE DROPDOWN ===== */
+
+function refreshEmployeeDropdown() {
+  const employeeSelect = document.getElementById("employeeSelect");
+
+  if (!employeeSelect) return;
+
+  fetch("/api/employees")  // backend must return ONLY active employees
+    .then(res => res.json())
+    .then(data => {
+      employeeSelect.innerHTML = '<option value="">-- Select Employee --</option>';
+
+      data.forEach(emp => {
+        const opt = document.createElement("option");
+        opt.value = emp.eid;
+        opt.textContent = emp.name;
+        employeeSelect.appendChild(opt);
+      });
+    })
+    .catch(err => {
+      console.error("Employee dropdown refresh failed:", err);
+    });
 }

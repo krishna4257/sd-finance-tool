@@ -531,10 +531,12 @@ input[readonly] {
 }
 
 .action-buttons {
-  margin-top: 20px;
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap; /* prevent vertical stacking */
+  margin: 0;
 }
 
 /* Neumorphic Raised Blocks */
@@ -544,6 +546,7 @@ input[readonly] {
   padding: 24px;
   margin-bottom: 30px;
   box-shadow: 8px 8px 16px #d1d1d1, -8px -8px 16px #ffffff;
+  overflow: visible; /* 🔥 REQUIRED FIX */
 }
 
 [data-theme="dark"] .raised-box {
@@ -570,14 +573,14 @@ input[readonly] {
 }
 
 #tempTable th, #tempTable td,
-#customerTable th, #customerTable td {
+#customerTable th, #customerTable td,
+#villageTable th, #villageTable td,
+#employeeTable th, #employeeTable td {
   padding: 10px 12px;
-  border: 1px solid var(--highlight);
+  border: 1px solid var(--input-border);
   text-align: center;
-  white-space: normal; /* Allow text wrapping */
-  word-wrap: break-word; /* Allows long words to break and wrap */
-  overflow: hidden; /* Hide overflowing content if word-wrap isn't enough */
-  text-overflow: ellipsis; /* Add ellipsis for overflowing text */
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 /* Specific Column Widths for #customerTable (Adjust as needed, these are examples) */
@@ -727,12 +730,15 @@ table.dataTable tbody tr {
 }
 
 [data-theme="dark"] #tempTable th, [data-theme="dark"] #tempTable td,
-[data-theme="dark"] #customerTable th, [data-theme="dark"] #customerTable td {
-  border-color: var(--input-border); /* Darken cell borders */
+[data-theme="dark"] #customerTable th, [data-theme="dark"] #customerTable td,
+[data-theme="dark"] #villageTable th, [data-theme="dark"] #villageTable td,
+[data-theme="dark"] #employeeTable th, [data-theme="dark"] #employeeTable td {
+  border-color: var(--input-border);
 }
 
 [data-theme="dark"] #tempTable tbody tr,
-[data-theme="dark"] #customerTable tbody tr {
+[data-theme="dark"] #customerTable tbody tr,
+[data-theme="dark"] #villageTable tbody tr {
   background-color: var(--sidebar); /* Default row background */
   color: var(--text);
 }
@@ -996,10 +1002,12 @@ table.dataTable.display tbody tr.even {
 
 /* Container for action buttons (e.g., Edit, Save) */
 .action-buttons {
-  margin-top: 20px;
-  margin-bottom: 10px;
-  display: flex; /* Arrange buttons in a row */
-  gap: 10px; /* Space between buttons */
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  margin: 0;
 }
 
 /* Form grid for add payment and search form for better layout */
@@ -1435,6 +1443,7 @@ table tbody tr.highlighted-row, /* General rule for all tables */
 
 /* Sets a light grey background for table rows on hover in light mode */
 #customerTable tbody tr:hover,
+#villageTable tbody tr:hover,
 #paymentTable tbody tr:hover,
 #postingTable tbody tr:hover {
     background-color: #BBA14F;
@@ -2066,8 +2075,10 @@ body.dark-mode {
 /* Put all action buttons in a clean inline row */
 .action-buttons {
     display: flex;
-    gap: 1px;            /* spacing between buttons */
+    gap: 6px;
     align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
 }
 
 /* Make Reset Device look like a normal small button */
@@ -2307,8 +2318,9 @@ body.dark-mode .mf-upload-btn {
 
 /* Outer wrapper controls BOTH scrollbars and keeps them visible */
 .customer-table-wrapper {
-  max-height: calc(100vh - 300px); /* keeps scrollbars near top */
-  overflow: auto;                 /* enables horizontal + vertical scroll */
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  overflow-x: auto;
   position: relative;
 }
 
@@ -2322,8 +2334,9 @@ body.dark-mode .mf-upload-btn {
 .customer-table thead th {
   position: sticky;
   top: 0;
-  z-index: 100;
-  background-color: var(--highlight); /* SAME gold */
+  z-index: 999;
+  background-color: var(--highlight);
+  background-clip: padding-box;
 }
 
 /* Column selector modal */
@@ -2559,10 +2572,30 @@ body.dark-mode .mf-upload-btn {
               inset -2px -2px 4px rgba(255,255,255,0.6);
 }
 
-/* Active */
-.status-active {
+/* Unified Active Badge (used across customers + village) */
+.status-active,
+.active-badge,
+.badge-active,
+.village-active {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
   background: #e6f7ff;
   color: #0077b6;
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.08),
+              inset -2px -2px 4px rgba(255,255,255,0.6);
+}
+
+[data-theme="dark"] .status-active,
+[data-theme="dark"] .active-badge,
+[data-theme="dark"] .badge-active,
+[data-theme="dark"] .village-active {
+  background: #0d2c3a;
+  color: #4fc3f7;
 }
 
 /* Closed */
@@ -2583,11 +2616,6 @@ body.dark-mode .mf-upload-btn {
   color: #ef6c00;
 }
 
-/* Dark mode support */
-[data-theme="dark"] .status-active {
-  background: #0d2c3a;
-  color: #4fc3f7;
-}
 [data-theme="dark"] .status-closed {
   background: #1b3a1b;
   color: #66bb6a;
@@ -2612,9 +2640,12 @@ body.dark-mode .mf-upload-btn {
 
 /* Ensure all columns align properly */
 #customerTable th,
-#customerTable td {
+#customerTable td,
+#villageTable th,
+#villageTable td {
   vertical-align: middle;
   text-align: center;
+
 }
 
 /* Fix status column width (important for badge) */
@@ -2687,10 +2718,15 @@ body.dark-mode .mf-upload-btn {
 #userTable {
   width: max-content;
   min-width: 1400px;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
 }
- 
+
+/* 🔥 FIX: allow actions column to expand */
+#userTable td:last-child {
+  white-space: normal;
+  min-width: 220px;
+}
 /* Header styling same as customer table */
 #userTable thead th {
   position: sticky;
@@ -2713,6 +2749,7 @@ body.dark-mode .mf-upload-btn {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 100px;
+  height: 100%;
 }
 
 /* Fix: Dark mode row background for user table */
@@ -2783,10 +2820,180 @@ body.dark-mode .mf-upload-btn {
   gap: 6px;
   justify-content: center;
   align-items: center;
+  flex-wrap: nowrap;
+  height: 100%;            /* 🔥 makes it stretch with row */
+}
+
+#userTable td:last-child {
+  height: 100%;
+}
+
+/* 🔥 Ensure action cell stretches fully with row height */
+#userTable tbody tr {
+  height: auto;
+}
+
+#userTable tbody td {
+  vertical-align: middle;
 }
  
 /* Fix buttons inside table */
 #userTable button {
-  padding: 4px 10px;
+  padding: 6px 12px;
   font-size: 12px;
+  margin: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#villageTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  background: var(--highlight);
+}
+
+#villageTable {
+  border-collapse: separate;
+}
+
+/* 🔥 FIX: proper alignment + consistent layout for village table */
+#villageTable {
+  border-collapse: collapse !important;
+  width: 100%;
+}
+
+#villageTable td:last-child {
+  padding: 8px 10px; /* match other columns */
+}
+
+/* Ensure action buttons don't break row height */
+#villageTable td .action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  height: 100%;
+}
+
+/* Remove extra spacing from buttons */
+#villageTable td .action-buttons button {
+  margin: 0 !important;
+}
+
+/* 🔥 Light mode consistency with customer table */
+#villageTable tbody tr {
+  background-color: var(--sidebar);
+  color: var(--text);
+}
+
+/* Remove zebra/uneven row effect */
+#villageTable.dataTable tbody tr.odd,
+#villageTable.dataTable tbody tr.even {
+  background-color: var(--sidebar);
+}
+
+/* Hover same as customer table */
+#villageTable tbody tr:hover {
+  background-color: var(--highlight);
+  color: #000;
+}
+
+/* === Employee Activate / Deactivate Buttons === */
+
+/* Deactivate = Red */
+.deactivate-btn {
+  background-color: #e74c3c !important;
+  color: white !important;
+}
+
+/* === EMPLOYEE TABLE GRID FIX === */
+#employeeTable {
+  border-collapse: collapse !important;
+  width: 100%;
+}
+
+#employeeTable tbody tr {
+  background-color: var(--sidebar);
+}
+
+#employeeTable tbody tr:hover {
+  background-color: var(--highlight);
+  color: #000;
+}
+
+[data-theme="dark"] #employeeTable tbody tr {
+  background-color: var(--sidebar);
+}
+
+[data-theme="dark"] #employeeTable tbody tr:hover {
+  background-color: #3a3a3a;
+  color: var(--text);
+}
+
+/* Ensure DataTables doesn't remove borders */
+#employeeTable.dataTable tbody td {
+  border: 1px solid var(--input-border) !important;
+}
+
+[data-theme="dark"] #employeeTable.dataTable tbody td {
+  border: 1px solid var(--input-border) !important;
+}
+
+/* ===== USER TABLE ACTION BUTTON FIX ===== */
+#userTable .table-btn {
+  margin-left: 0 !important;   /* remove global button offset */
+}
+
+#userTable .action-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;           /* prevent stacking */
+}
+
+#userTable .action-buttons button {
+  white-space: nowrap;
+}
+
+.village-item {
+  display: grid;
+  grid-template-columns: 20px 70px 1fr 90px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.village-item .vid { font-weight: 600; }
+.village-item .vname {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.village-item .vdistrict {
+  color: #aaa;
+  font-size: 11px;
+  text-align: right;
+}
+
+.user-modal,
+.modal-overlay {
+    display: none;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
 }

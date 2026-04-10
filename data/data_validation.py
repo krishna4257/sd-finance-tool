@@ -27,6 +27,23 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
+def write_excel_safe(df, path, chunk_size=1000000):
+    if df.empty:
+        return
+
+    try:
+        engine = "xlsxwriter"
+        __import__("xlsxwriter")
+    except ImportError:
+        print("⚠️ xlsxwriter not installed, falling back to openpyxl")
+        engine = "openpyxl"
+
+    with pd.ExcelWriter(path, engine=engine) as writer:
+        for i, start in enumerate(range(0, len(df), chunk_size)):
+            chunk = df.iloc[start:start+chunk_size]
+            sheet_name = f"part_{i+1}"
+            chunk.to_excel(writer, sheet_name=sheet_name, index=False)
+
 # ============================================================
 # LOAD DATA
 # ============================================================
@@ -62,8 +79,10 @@ for col in date_cols:
             dayfirst=True
         )
 
+amount_col = "amount" if "amount" in payment_df.columns else "amt"
+
 payment_df["amount_num"] = pd.to_numeric(
-    payment_df.get("amount"),
+    payment_df.get(amount_col),
     errors="coerce"
 )
 
@@ -83,10 +102,7 @@ customer_nulls = parsed[
     parsed[mandatory_cols].isnull().any(axis=1)
 ]
 
-customer_nulls.to_excel(
-    OUT_DIR / "customer_nulls.xlsx",
-    index=False
-)
+write_excel_safe(customer_nulls, OUT_DIR / "customer_nulls.xlsx")
 
 # ============================================================
 # 2️⃣ CUSTOMER PARSE ISSUES
@@ -115,10 +131,7 @@ for col in date_cols:
             parse_issues.append(bad)
 
 if parse_issues:
-    pd.concat(parse_issues).to_excel(
-        OUT_DIR / "customer_parse_issues.xlsx",
-        index=False
-    )
+    write_excel_safe(pd.concat(parse_issues), OUT_DIR / "customer_parse_issues.xlsx")
 
 # ============================================================
 # 3️⃣ CUSTOMER OUTLIERS (THRESHOLD-BASED)
@@ -126,17 +139,11 @@ if parse_issues:
 
 da_outliers = parsed[parsed["da_num"] > 10000]
 if not da_outliers.empty:
-    da_outliers.to_excel(
-        OUT_DIR / "customer_outlier_da_high.xlsx",
-        index=False
-    )
+    write_excel_safe(da_outliers, OUT_DIR / "customer_outlier_da_high.xlsx")
 
 amt_outliers = parsed[parsed["amt_num"] > 200000]
 if not amt_outliers.empty:
-    amt_outliers.to_excel(
-        OUT_DIR / "customer_outlier_amt_high.xlsx",
-        index=False
-    )
+    write_excel_safe(amt_outliers, OUT_DIR / "customer_outlier_amt_high.xlsx")
 
 # ============================================================
 # 4️⃣ CUSTOMER RULE ISSUES
@@ -144,25 +151,21 @@ if not amt_outliers.empty:
 
 negative_balance = parsed[parsed["bamt_num"] < -3000]
 if not negative_balance.empty:
-    negative_balance.to_excel(
-        OUT_DIR / "customer_rule_negative_balance.xlsx",
-        index=False
-    )
+    write_excel_safe(negative_balance, OUT_DIR / "customer_rule_negative_balance.xlsx")
 
 # ============================================================
 # 5️⃣ PAYMENT NULLS & PARSE ISSUES
 # ============================================================
 
 payment_nulls = payment_df[payment_df.isnull().any(axis=1)]
-payment_nulls.to_excel(
-    OUT_DIR / "payment_nulls.xlsx",
-    index=False
-)
+write_excel_safe(payment_nulls, OUT_DIR / "payment_nulls.xlsx")
 
 payment_parse_issues = []
 
+amount_col = "amount" if "amount" in payment_df.columns else "amt"
+
 bad_amt = payment_df[
-    payment_df["amount"].notna() &
+    payment_df[amount_col].notna() &
     payment_df["amount_num"].isna()
 ]
 if not bad_amt.empty:
@@ -180,10 +183,7 @@ if not bad_date.empty:
     )
 
 if payment_parse_issues:
-    pd.concat(payment_parse_issues).to_excel(
-        OUT_DIR / "payment_parse_issues.xlsx",
-        index=False
-    )
+    write_excel_safe(pd.concat(payment_parse_issues), OUT_DIR / "payment_parse_issues.xlsx")
 
 # ============================================================
 # 6️⃣ PAYMENT OUTLIERS (ONLY ONE RULE)
@@ -191,10 +191,7 @@ if payment_parse_issues:
 
 payment_high_amt = payment_df[payment_df["amount_num"] > 50000]
 if not payment_high_amt.empty:
-    payment_high_amt.to_excel(
-        OUT_DIR / "payment_outlier_high_amount.xlsx",
-        index=False
-    )
+    write_excel_safe(payment_high_amt, OUT_DIR / "payment_outlier_high_amount.xlsx")
 
 # ============================================================
 # 7️⃣ DUPLICATES
@@ -210,9 +207,11 @@ if not dup_cust.empty:
         dup_cust.assign(issue="Duplicate customer key")
     )
 
+amount_col = "amount" if "amount" in payment_df.columns else "amt"
+
 dup_pay = payment_df[
     payment_df.duplicated(
-        ["source_file", "ano", "payment_date", "amount"],
+        ["source_file", "ano", "payment_date", amount_col],
         keep=False
     )
 ]
@@ -222,10 +221,7 @@ if not dup_pay.empty:
     )
 
 if duplicates:
-    pd.concat(duplicates).to_excel(
-        OUT_DIR / "duplicates.xlsx",
-        index=False
-    )
+    write_excel_safe(pd.concat(duplicates), OUT_DIR / "duplicates.xlsx")
 
 # ============================================================
 # 8️⃣ SUMMARY
@@ -245,7 +241,7 @@ summary = pd.DataFrame([
 ])
 
 summary.columns = ["metric", "count"]
-summary.to_excel(OUT_DIR / "summary_report.xlsx", index=False)
+write_excel_safe(summary, OUT_DIR / "summary_report.xlsx")
 
 print("✅ Data quality analysis completed")
 print("📁 Reports saved to:", OUT_DIR)

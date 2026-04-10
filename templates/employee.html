@@ -19,6 +19,22 @@
   text-overflow: ellipsis;
 }
 
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.status-badge.active {
+  background: #2ecc71;
+  color: white;
+}
+
+.status-badge.inactive {
+  background: #e74c3c;
+  color: white;
+}
+
 </style>
 
 <h2 class="page-title">👨‍💼 Employee Table</h2>
@@ -45,12 +61,12 @@
 
 <div class="raised-box">
   <div class="customer-table-wrapper">
-    <table id="employeeTable" class="dataTable customer-table">
+    <table id="employeeTable" class="customer-table">
       <thead>
         <tr>
           <th><input type="checkbox" onclick="toggleAll(this)" /></th>
           {% for header in headers %}
-          <th>{{ header }}</th>
+          <th class="table-header">{{ header }}</th>
           {% endfor %}
           <th>Actions</th>
         </tr>
@@ -58,22 +74,33 @@
 
       <tbody id="employeeTableBody">
         {% for row in data %}
-        <tr>
+        <tr class="table-row">
           <td><input type="checkbox" /></td>
 
           {% for col in headers %}
-            <td data-field="{{ col }}">{{ row[col] }}</td>
+            {% if col == 'is_active' %}
+            <td class="table-cell status-cell">
+              <span class="status-badge status-{{ 'active' if row[col] else 'inactive' }}">
+                {{ 'Active' if row[col] else 'Inactive' }}
+              </span>
+            </td>
+            {% else %}
+            <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
+            {% endif %}
           {% endfor %}
 
-          <td class="action-buttons">
-            <button class="neumorphic-btn ultrasmall edit-btn"
-                    onclick="enableEdit(this)">
-              Edit
-            </button>
-            <button class="neumorphic-btn ultrasmall danger-btn"
-                    onclick="deleteEmployee('{{ row.eid }}')">
-              Delete
-            </button>
+          <td class="table-cell">
+            <div class="action-buttons">
+              <button class="neumorphic-btn ultrasmall edit-btn"
+                      onclick="enableEdit(this)">
+                Edit
+              </button>
+              {% set is_active = row.get('is_active') %}
+              <button class="neumorphic-btn ultrasmall {{ 'deactivate-btn' if is_active else 'activate-btn' }}"
+                      onclick="toggleEmployeeStatus('{{ row.eid }}', this)">
+                {{ 'Deactivate' if is_active else 'Activate' }}
+              </button>
+            </div>
           </td>
         </tr>
         {% endfor %}

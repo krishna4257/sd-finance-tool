@@ -51,52 +51,124 @@ INSERT INTO stage_employee (
     state
 )
 SELECT DISTINCT ON (emp_id)
+    -- ensure deterministic pick
+    -- (keeps first row per emp_id)
     emp_id::int              AS eid,
     name,
     number                   AS phone_number,
     city,
-    to_date(joining_year, 'DD-MM-YYYY') AS joining_date,
+    CASE 
+        WHEN length(regexp_replace(joining_year, '[^0-9]', '', 'g')) = 4 
+        THEN to_date(regexp_replace(joining_year, '[^0-9]', '', 'g') || '-01-01', 'YYYY-MM-DD')
+        WHEN length(regexp_replace(joining_year, '[^0-9]', '', 'g')) = 8 
+        THEN to_date(regexp_replace(joining_year, '[^0-9]', '', 'g'), 'DDMMYYYY')
+        ELSE NULL
+    END AS joining_date,
     LOWER(level)             AS level,
     state
 FROM raw_employee
 WHERE emp_id IS NOT NULL
+ORDER BY emp_id
 """, "stage_employee loaded")
 
 print("stage_employee count:", count("stage_employee"))
+print("raw_employee remaining:", count("raw_employee"))
 
 # ============================================================
-# STEP 2 — STAGE_VILLAGE (UNCHANGED)
+# STEP 2 — STAGE_VILLAGE
 # ============================================================
 
-print("\n🚀 STEP 1: Loading stage_employee")
+print("\n🚀 STEP 2: Loading stage_village")
 
 run("""
-INSERT INTO stage_employee (
-    eid,
-    name,
-    phone_number,
-    city,
-    joining_date,
-    level,
-    state
+INSERT INTO stage_village (
+    vid,
+    village_code,
+    village_name,
+    district,
+    pincode,
+    state,
+    emp1,
+    emp2,
+    source_file
 )
-SELECT DISTINCT ON (emp_id)
-    emp_id::int              AS eid,
-    name,
-    number                   AS phone_number,
-    city,
-    to_date(joining_year, 'DD-MM-YYYY') AS joining_date,
-    LOWER(level)             AS level,
-    state
-FROM raw_employee
-WHERE emp_id IS NOT NULL
-""", "stage_employee loaded")
+SELECT
+    NULLIF(regexp_replace(vid::text, '[^0-9]', '', 'g'), '')::int,
+    new_village_code AS village_code,
+    new_village_name AS village_name,
+    district,
+    NULLIF(regexp_replace(pincode, '[^0-9]', '', 'g'), '')::int,
+    state_name AS state,
+    NULLIF(regexp_replace(emp1, '[^0-9]', '', 'g'), '')::int,
+    NULLIF(regexp_replace(emp2, '[^0-9]', '', 'g'), '')::int,
+    NULLIF(regexp_replace(evid, '[^0-9]', '', 'g'), '')::int AS source_file
+FROM raw_village
+WHERE NULLIF(regexp_replace(vid::text, '[^0-9]', '', 'g'), '') ~ '^[0-9]+$'
+""", "stage_village loaded")
 
-print("stage_employee count:", count("stage_employee"))
+print("stage_village count:", count("stage_village"))
+print("raw_village remaining:", count("raw_village"))
 
 # ============================================================
-# STEP 3 — STAGE_CUSTOMER (UNCHANGED)
+# Add safe_to_date function before STEP 3
 # ============================================================
+
+run("""
+CREATE OR REPLACE FUNCTION safe_to_date(input TEXT)
+RETURNS DATE AS $$
+BEGIN
+    RETURN to_date(input, 'DDMMYYYY');
+EXCEPTION WHEN others THEN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+""", "safe_to_date function created")
+
+# ============================================================
+# Add bad_customer_data table and insert bad customer rows
+# ============================================================
+
+run("""
+CREATE TABLE IF NOT EXISTS bad_customer_data AS
+SELECT * FROM raw_customer WHERE false
+""")
+
+run("""
+INSERT INTO bad_customer_data
+SELECT *
+FROM raw_customer rc
+WHERE
+    regexp_replace(rc.ano, '[^0-9]', '', 'g') !~ '^[0-9]+$'
+    OR rc.name IS NULL OR rc.name = ''
+    OR safe_to_date(regexp_replace(rc.fdt, '[^0-9]', '', 'g')) IS NULL
+    OR (
+        regexp_replace(rc.tdt, '[^0-9]', '', 'g') <> ''
+        AND safe_to_date(regexp_replace(rc.tdt, '[^0-9]', '', 'g')) IS NULL
+    )
+    OR NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '') IS NULL
+""", "Bad customer rows captured")
+
+# ============================================================
+# STEP 3 — STAGE_CUSTOMER (MODIFIED WHERE clause)
+# ============================================================
+
+print("\n🔍 Checking invalid customer rows (before insert)")
+print("Invalid ANO:", scalar("""
+SELECT COUNT(*) FROM raw_customer
+WHERE regexp_replace(ano, '[^0-9]', '', 'g') !~ '^[0-9]+$'
+"""))
+
+print("Invalid start dates:", scalar("""
+SELECT COUNT(*) FROM raw_customer
+WHERE safe_to_date(regexp_replace(fdt, '[^0-9]', '', 'g')) IS NULL
+AND regexp_replace(fdt, '[^0-9]', '', 'g') <> ''
+"""))
+
+print("Invalid end dates:", scalar("""
+SELECT COUNT(*) FROM raw_customer
+WHERE safe_to_date(regexp_replace(tdt, '[^0-9]', '', 'g')) IS NULL
+AND regexp_replace(tdt, '[^0-9]', '', 'g') <> ''
+"""))
 
 print("\n🚀 STEP 3: Loading stage_customer")
 
@@ -114,42 +186,127 @@ INSERT INTO stage_customer (
     type,
     period,
     pano,
-    source_file,
-    eid
+    eid,
+    aadhaar_number,
+    notes,
+    latitude,
+    longitude
 )
 SELECT
-    rc.ano::int,
+    regexp_replace(rc.ano, '[^0-9]', '', 'g')::int,
     rc.name,
     sv.vid,
 
-    -- Dates (DD/MM/YYYY safe)
-    to_date(rc.fdt, 'DD/MM/YYYY') AS start_date,
-    to_date(rc.tdt, 'DD/MM/YYYY') AS end_date,
+    CASE
+        WHEN regexp_replace(rc.fdt, '[^0-9]', '', 'g') ~ '^[0-9]{8}$'
+             AND substring(regexp_replace(rc.fdt, '[^0-9]', '', 'g') from 3 for 2)::int BETWEEN 1 AND 12
+             AND substring(regexp_replace(rc.fdt, '[^0-9]', '', 'g') from 1 for 2)::int BETWEEN 1 AND 31
+        THEN safe_to_date(regexp_replace(rc.fdt, '[^0-9]', '', 'g'))
+        ELSE NULL
+    END,
+    CASE
+        WHEN regexp_replace(rc.tdt, '[^0-9]', '', 'g') ~ '^[0-9]{8}$'
+             AND substring(regexp_replace(rc.tdt, '[^0-9]', '', 'g') from 3 for 2)::int BETWEEN 1 AND 12
+             AND substring(regexp_replace(rc.tdt, '[^0-9]', '', 'g') from 1 for 2)::int BETWEEN 1 AND 31
+        THEN safe_to_date(regexp_replace(rc.tdt, '[^0-9]', '', 'g'))
+        ELSE NULL
+    END,
 
-    rc.amt::numeric,
-    rc.pamt::numeric,
-    rc.bamt::numeric,
-    rc.da::numeric,
+    NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '')::numeric,
+    NULLIF(regexp_replace(rc.pamt, '[^0-9.]', '', 'g'), '')::numeric,
+    NULLIF(regexp_replace(rc.bamt, '[^0-9.]', '', 'g'), '')::numeric,
+    NULLIF(regexp_replace(rc.da, '[^0-9.]', '', 'g'), '')::numeric,
     rc.dw,
     rc.ds::int,
     rc.pano,
 
-    -- 🔥 NORMALIZED source_file (INT)
-    REPLACE(rc.source_file, '.sqlite', '')::int AS source_file,
+    se.eid,
 
-    se.eid
+    NULL,  -- aadhaar_number
+    NULL,  -- notes
+    NULL,  -- latitude
+    NULL   -- longitude
+
 FROM raw_customer rc
 JOIN stage_village sv
-  ON REPLACE(rc.source_file, '.sqlite', '')::int = sv.source_file
+  ON NULLIF(regexp_replace(rc.source_file, '[^0-9]', '', 'g'), '')::int = sv.source_file
 LEFT JOIN stage_employee se
   ON se.eid = sv.emp1
+WHERE regexp_replace(rc.ano, '[^0-9]', '', 'g') ~ '^[0-9]+$'
+
+-- skip NULL / empty critical fields
+AND rc.name IS NOT NULL
+AND rc.name <> ''
+
+-- skip invalid start_date
+AND safe_to_date(regexp_replace(rc.fdt, '[^0-9]', '', 'g')) IS NOT NULL
+
+-- skip invalid end_date (if present)
+AND (
+    regexp_replace(rc.tdt, '[^0-9]', '', 'g') = ''
+    OR safe_to_date(regexp_replace(rc.tdt, '[^0-9]', '', 'g')) IS NOT NULL
+)
+
+-- skip invalid amounts
+AND NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '') IS NOT NULL
+
+-- skip duplicate customers (same ano + source_file)
+AND (regexp_replace(rc.ano, '[^0-9]', '', 'g'), rc.source_file) IN (
+    SELECT ano_clean, source_file
+    FROM (
+        SELECT 
+            regexp_replace(ano, '[^0-9]', '', 'g') AS ano_clean,
+            source_file,
+            COUNT(*) AS cnt
+        FROM raw_customer
+        GROUP BY ano_clean, source_file
+        HAVING COUNT(*) = 1
+    ) t
+)
 """, "stage_customer loaded")
 
 print("stage_customer count:", count("stage_customer"))
+print("raw_customer remaining:", count("raw_customer"))
+
 
 # ============================================================
-# STEP 4 — STAGE_PAYMENT (FINAL FIXED VERSION)
+# STEP 4 — STAGE_PAYMENT (FINAL FIXED VERSION, MODIFIED WHERE clause)
 # ============================================================
+
+run("CREATE INDEX IF NOT EXISTS idx_raw_payment_ano ON raw_payment(ano)")
+run("CREATE INDEX IF NOT EXISTS idx_stage_payment_ano ON stage_payment(ano)")
+
+print("\n🔍 RAW PAYMENT STATS")
+print("Total raw_payment rows:", count("raw_payment"))
+print("Valid payment_date rows:", scalar("""
+SELECT COUNT(*) FROM raw_payment
+WHERE safe_to_date(regexp_replace(payment_date, '[^0-9]', '', 'g')) IS NOT NULL
+"""))
+print("Invalid payment_date rows:", scalar("""
+SELECT COUNT(*) FROM raw_payment
+WHERE safe_to_date(regexp_replace(payment_date, '[^0-9]', '', 'g')) IS NULL
+"""))
+
+run("""
+CREATE TABLE IF NOT EXISTS bad_payment_data AS
+SELECT * FROM raw_payment WHERE false
+""")
+
+run("""
+INSERT INTO bad_payment_data (
+    ano,
+    payment_date,
+    amt,
+    source_file
+)
+SELECT
+    ano,
+    payment_date,
+    amt,
+    source_file
+FROM raw_payment
+WHERE safe_to_date(regexp_replace(payment_date, '[^0-9]', '', 'g')) IS NULL
+""", "Bad payment rows captured")
 
 print("\n🚀 STEP 4: Loading stage_payment (SAFE MODE)")
 
@@ -160,40 +317,58 @@ print("\n🚀 STEP 4: Loading stage_payment (SAFE MODE)")
 # (2 rows)
 
 run("""
-    BEGIN
-    UPDATE raw_payment
-    SET ano = regexp_replace(ano, '[^0-9]', '', 'g')
-    WHERE ano IN ('3186+', '413.');
-    COMMIT;
+UPDATE raw_payment
+SET ano = regexp_replace(ano, '[^0-9]', '', 'g')
+WHERE ano ~ '[^0-9]';
 """, "Cleaned special characters from ano in raw_payment")
 
 # 4.1 Load ALL raw payments
 run("""
 INSERT INTO stage_payment (
-    ano, payment_date, amt, source_file, cid, vid, eid, source_file_id
+    ano,
+    payment_date,
+    amt
 )
 SELECT
     rp.ano::int,
-    to_date(rp.payment_date, 'DD/MM/YYYY'),
-    rp.amt::numeric,
-    rp.source_file,
-    NULL,
-    NULL,
-    NULL,
-    rp.source_file_id
+    safe_to_date(regexp_replace(rp.payment_date, '[^0-9]', '', 'g')),
+    rp.amt::numeric
 FROM raw_payment rp
+WHERE rp.ano ~ '^[0-9]+$'
+
+-- valid date only
+AND safe_to_date(regexp_replace(rp.payment_date, '[^0-9]', '', 'g')) IS NOT NULL
+
+-- skip null/invalid amount
+AND NULLIF(regexp_replace(rp.amt::text, '[^0-9.]', '', 'g'), '') IS NOT NULL
+
+-- skip duplicates (ano + date + amt)
+AND NOT EXISTS (
+    SELECT 1
+    FROM raw_payment rp2
+    WHERE rp2.ano = rp.ano
+    AND regexp_replace(rp2.payment_date, '[^0-9]', '', 'g') = regexp_replace(rp.payment_date, '[^0-9]', '', 'g')
+    AND rp2.amt = rp.amt
+    GROUP BY rp2.ano, regexp_replace(rp2.payment_date, '[^0-9]', '', 'g'), rp2.amt
+    HAVING COUNT(*) > 1
+)
 """, "All raw payments loaded")
 
-print("stage_payment count:", count("stage_payment"))
+print("Loaded into stage_payment:", count("stage_payment"))
+
 
 # 4.2 Populate VID + EID from raw_village
 run("""
 UPDATE stage_payment sp
 SET
-    vid = rv.vid,
-    eid = rv.emp1::int
-FROM raw_village rv
-WHERE sp.source_file_id = rv.evid::int
+    vid = sv.vid,
+    eid = sv.emp1
+FROM raw_payment rp
+JOIN stage_village sv
+  ON REPLACE(rp.source_file, '.sqlite', '')::int = sv.source_file
+WHERE
+    sp.ano = rp.ano::int
+    AND sp.payment_date = to_date(NULLIF(rp.payment_date, ''), 'DD/MM/YYYY')
 """, "VID & EID populated")
 
 # 4.3 Populate CID using (ano + vid)
@@ -207,6 +382,8 @@ WHERE
     AND sp.vid = sc.vid
 """, "CID populated")
 
+print("raw_payment remaining:", count("raw_payment"))
+
 # ============================================================
 # STEP 5 — MOVE UNMATCHED PAYMENTS
 # ============================================================
@@ -219,15 +396,26 @@ AS SELECT * FROM stage_payment WHERE false
 """)
 
 run("""
-INSERT INTO old_stage_payment
-SELECT * FROM stage_payment
+INSERT INTO old_stage_payment (
+    ano,
+    payment_date,
+    amt,
+    vid,
+    eid,
+    cid
+)
+SELECT
+    ano,
+    payment_date,
+    amt,
+    vid,
+    eid,
+    cid
+FROM stage_payment
 WHERE cid IS NULL OR vid IS NULL OR eid IS NULL
 """, "Unmatched rows archived")
 
-run("""
-DELETE FROM stage_payment
-WHERE cid IS NULL OR vid IS NULL OR eid IS NULL
-""", "Unmatched rows removed from stage_payment")
+
 
 # ============================================================
 # DATA QUALITY CHECKS
@@ -260,5 +448,23 @@ checks = {
 
 for name, sql in checks.items():
     print(f"{name}: {scalar(sql)}")
+
+# ============================================================
+# FINAL TABLE COUNTS (RAW vs STAGE)
+# ============================================================
+
+print("\n📊 FINAL ROW COUNTS")
+
+tables = [
+    ("raw_employee", "stage_employee"),
+    ("raw_village", "stage_village"),
+    ("raw_customer", "stage_customer"),
+    ("raw_payment", "stage_payment")
+]
+
+for raw_tbl, stage_tbl in tables:
+    raw_cnt = count(raw_tbl)
+    stage_cnt = count(stage_tbl)
+    print(f"{raw_tbl}: {raw_cnt} | {stage_tbl}: {stage_cnt}")
 
 print("\n🎉 STAGING PIPELINE COMPLETED SUCCESSFULLY")

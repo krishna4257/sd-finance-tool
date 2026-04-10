@@ -24,13 +24,13 @@
 </div>
 
 <div class="raised-box">
-  <div class="customer-table-wrapper">
-    <table id="villageTable" class="dataTable customer-table">
+  <div class="customer-table-wrapper app-table-wrapper">
+    <table id="villageTable" class="customer-table">
       <thead>
         <tr>
           <th><input type="checkbox" onclick="toggleAll(this)" /></th>
           {% for header in headers %}
-          <th>{{ header }}</th>
+          <th class="table-header">{{ header }}</th>
           {% endfor %}
           <th>Actions</th>
         </tr>
@@ -38,27 +38,78 @@
 
       <tbody id="villageTableBody">
         {% for row in data %}
-        <tr>
+        <tr class="table-row {% if row['status'] == 'inactive' %}inactive-row{% endif %}">
           <td><input type="checkbox" /></td>
 
           {% for col in headers %}
-            <td data-field="{{ col }}">{{ row[col] }}</td>
+            {% if col == 'status' %}
+              <td class="table-cell">
+                <span class="status-badge status-{{ row[col]|lower }}">{{ row[col] }}</span>
+              </td>
+            {% else %}
+              <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
+            {% endif %}
           {% endfor %}
 
-          <td class="action-buttons">
-            <button class="neumorphic-btn ultrasmall edit-btn"
-                    onclick="enableEdit(this)">
-              Edit
-            </button>
-            <button class="neumorphic-btn ultrasmall danger-btn"
-                    onclick="deleteVillage('{{ row.vid }}')">
-              Delete
-            </button>
+          <td class="table-cell">
+            <div class="action-buttons">
+              <button class="neumorphic-btn ultrasmall edit-btn"
+                      onclick="openEditModal(this)">
+                Edit
+              </button>
+
+              {% if row['status'] == 'active' %}
+                <button class="neumorphic-btn ultrasmall danger-btn"
+                        onclick="toggleVillageStatus('{{ row.vid }}', this)">
+                  Inactivate
+                </button>
+              {% else %}
+                <button class="neumorphic-btn ultrasmall"
+                        onclick="toggleVillageStatus('{{ row.vid }}', this)">
+                  Activate
+                </button>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+<!-- Edit Village Modal -->
+<div id="editVillageModal" class="column-modal hidden">
+  <div class="column-modal-content">
+    <h3>✏️ Edit Village</h3>
+
+    <div class="form-group">
+      <label>VID</label>
+      <input type="text" id="edit_vid" readonly>
+    </div>
+
+    <div class="form-group">
+      <label>Village Code</label>
+      <input type="text" id="edit_village_code">
+    </div>
+
+    <div class="form-group">
+      <label>Village Name</label>
+      <input type="text" id="edit_village_name">
+    </div>
+
+    <div class="form-group">
+      <label>Employee 1</label>
+      <select id="edit_emp1"></select>
+    </div>
+
+    <div class="form-group">
+      <label>Employee 2</label>
+      <select id="edit_emp2"></select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="neumorphic-btn small" onclick="saveVillageEdit()">Save</button>
+      <button class="neumorphic-btn small" onclick="closeEditModal()">Cancel</button>
+    </div>
   </div>
 </div>
 

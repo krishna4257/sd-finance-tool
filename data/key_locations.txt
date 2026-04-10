@@ -1,1 +1,0 @@
-git folder location in ubuntu serve :- cd /srv/sd_fin

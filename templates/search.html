@@ -25,9 +25,12 @@
             id="closeAccountBtn"
             data-status="{{ cust['status'] if cust else '' }}"
             class="neumorphic-btn small"
-            style="background:#8b0000; color:#fff;"
-            {% if cust and cust['status'] in ['closed', 'defaulted', 'written_off'] %}disabled{% endif %}>
-      🔒 Close Account
+            style="background:#8b0000; color:#fff;">
+      {% if cust and cust['status'] in ['closed', 'defaulted', 'written_off'] %}
+        ♻️ Retrieve
+      {% else %}
+        🔒 Close Account
+      {% endif %}
     </button>
   </form>
 </div>

@@ -181,16 +181,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Logic for: Close Customer Account ---
-  // Disable Close Account button if already closed/defaulted/written_off
+  // Disable/enable Close Account button based on status; enable "Retrieve" for closed/defaulted/written_off
   if (closeAccountBtn && customerRow) {
     const statusCell = customerRow.querySelector("td[data-field='status']");
     if (statusCell) {
       const status = statusCell.textContent.trim().toLowerCase();
+
       if (["closed", "defaulted", "written_off", "written off"].includes(status)) {
-        closeAccountBtn.disabled = true;
-        closeAccountBtn.textContent = "🔒 Already Closed";
-        closeAccountBtn.style.opacity = "0.6";
-        closeAccountBtn.style.cursor = "not-allowed";
+        closeAccountBtn.disabled = false;
+        closeAccountBtn.textContent = "♻️ Retrieve";
+        closeAccountBtn.classList.add("retrieve-btn");
       }
     }
   }
@@ -200,7 +200,44 @@ document.addEventListener("DOMContentLoaded", () => {
       const currentStatus = statusCell ? statusCell.textContent.trim().toLowerCase() : "";
 
       if (["closed", "defaulted", "written_off", "written off"].includes(currentStatus)) {
-        alert("Account already closed");
+        // 🔥 RETRIEVE FLOW
+        try {
+          closeAccountBtn.disabled = true;
+          const originalText = closeAccountBtn.textContent;
+          closeAccountBtn.textContent = "⏳ Retrieving...";
+
+          const res = await fetch("/api/customer/retrieve_account_pg", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cid: customerRow.dataset.cid })
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            alert("Customer retrieved successfully");
+
+            // ✅ Update status cell immediately
+            const statusCell = customerRow.querySelector("td[data-field='status']");
+            if (statusCell) {
+              statusCell.textContent = "active";
+            }
+
+            // ✅ Update button back to Close Account
+            closeAccountBtn.disabled = false;
+            closeAccountBtn.textContent = "🔒 Close Account";
+            closeAccountBtn.classList.remove("retrieve-btn");
+          } else {
+            alert("Error: " + data.error);
+            closeAccountBtn.disabled = false;
+            closeAccountBtn.textContent = originalText;
+          }
+        } catch (err) {
+          alert("Request failed: " + err.message);
+          closeAccountBtn.disabled = false;
+          closeAccountBtn.textContent = originalText;
+        }
+
         return;
       }
       const cid = customerRow.dataset.cid;

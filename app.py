@@ -154,6 +154,7 @@ def api_employees():
             cur.execute("""
                 SELECT eid, name
                 FROM employee
+                WHERE is_active = TRUE
                 ORDER BY name
             """)
 
@@ -168,6 +169,8 @@ def api_employees():
                 JOIN employee e
                   ON e.eid = v.emp1 OR e.eid = v.emp2
                 WHERE v.vid = ANY(%s)
+                  AND v.status = 'active'
+                  AND e.is_active = TRUE
                 ORDER BY e.name
             """, (allowed_villages,))
 
@@ -177,6 +180,59 @@ def api_employees():
             {"eid": r[0], "name": r[1]}
             for r in rows
         ])
+
+    finally:
+        cur.close()
+        conn.close()
+@app.route("/api/employee/toggle_status", methods=["POST"])
+@login_required
+@admin_required
+def toggle_employee_status():
+    data = request.get_json()
+    eid = data.get("eid")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # prevent deactivate if assigned to village
+        cur.execute("""
+            SELECT 1 FROM village
+            WHERE emp1 = %s OR emp2 = %s
+            LIMIT 1
+        """, (eid, eid))
+
+        assigned = cur.fetchone()
+
+        cur.execute("""
+            SELECT is_active FROM employee WHERE eid = %s
+        """, (eid,))
+        current = cur.fetchone()
+
+        if not current:
+            return jsonify(success=False, error="Employee not found")
+
+        is_active = current[0]
+
+        if is_active and assigned:
+            return jsonify(success=False, error="Employee assigned to village")
+
+        cur.execute("""
+            UPDATE employee
+            SET is_active = NOT is_active
+            WHERE eid = %s
+            RETURNING is_active
+        """, (eid,))
+
+        new_status = cur.fetchone()[0] # type: ignore
+
+        conn.commit()
+
+        return jsonify(success=True, status="active" if new_status else "inactive")
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify(success=False, error=str(e))
 
     finally:
         cur.close()
@@ -202,13 +258,14 @@ def api_villages():
                 cur.execute("""
                     SELECT vid, village_name
                     FROM village
-                    WHERE emp1 = %s OR emp2 = %s
+                    WHERE (emp1 = %s OR emp2 = %s)
+                      AND status = 'active'
                     ORDER BY village_name
                 """, (eid, eid))
             else:
                 cur.execute("""
                     SELECT vid, village_name
-                    FROM village
+                    FROM village WHERE status = 'active'
                     ORDER BY village_name
                 """)
 
@@ -221,6 +278,7 @@ def api_villages():
                 SELECT vid, village_name
                 FROM village
                 WHERE vid = ANY(%s)
+                  AND status = 'active'
                 ORDER BY village_name
             """, (user_villages,))
 
@@ -249,6 +307,7 @@ def api_village_employees():
         FROM village v
         JOIN employee e ON e.eid = v.emp1 OR e.eid = v.emp2
         WHERE v.vid = %s
+          AND e.is_active = TRUE
         ORDER BY e.name
     """, (vid,))
 
@@ -288,11 +347,14 @@ def api_villages_by_employee():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT vid, village_name
-        FROM village
-        WHERE emp1 = %s OR emp2 = %s
-        ORDER BY village_name
-    """, (eid, eid))
+        SELECT v.vid, v.village_name
+        FROM village v
+        JOIN employee e ON e.eid = %s
+        WHERE (v.emp1 = %s OR v.emp2 = %s)
+          AND v.status = 'active'
+          AND e.is_active = TRUE
+        ORDER BY v.village_name
+    """, (eid, eid, eid))
 
     rows = cur.fetchall()
 
@@ -334,6 +396,7 @@ def set_context():
         SELECT emp1, village_name
         FROM village
         WHERE vid = %s
+          AND status = 'active'
     """, (vid,))
 
     row = cur.fetchone()
@@ -341,7 +404,7 @@ def set_context():
     if not row:
         cur.close()
         conn.close()
-        return jsonify(success=False, error="Invalid village"), 400
+        return jsonify(success=False, error="Inactive or invalid village"), 400
 
     eid = row[0]
     village_name = row[1]
@@ -413,13 +476,12 @@ def api_create_village():
     cur.execute("""
         SELECT 1
         FROM village
-        WHERE village_code = %s
-          AND village_name = %s
-          AND emp1 = %s
+        WHERE
+            LOWER(village_code) = LOWER(%s)
+            OR LOWER(village_name) = LOWER(%s)
     """, (
         data["village_code"],
-        data["village_name"],
-        data["emp1_eid"]
+        data["village_name"]
     ))
 
     if cur.fetchone():
@@ -466,9 +528,9 @@ def api_create_village():
             vid, village_code, village_name,
             district, pincode, state,
             emp1, emp2,
-            created_at, source_file
+            created_at, source_file, status
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,'active')
     """, (
         vid,
         data["village_code"],
@@ -514,8 +576,8 @@ def api_create_employee():
             return jsonify(success=False, error="Employee already exists")
 
         cur.execute("""
-            INSERT INTO employee (eid, name, phone_number, city, joining_date, level, state)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO employee (eid, name, phone_number, city, joining_date, level, state, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
             RETURNING eid
         """, (
             new_eid,
@@ -544,6 +606,7 @@ def api_create_employee():
         conn.close()
 
 @app.route("/api/village/check")
+@login_required
 def api_check_village():
     code = request.args.get("code")
     name = request.args.get("name")
@@ -552,15 +615,16 @@ def api_check_village():
     conn = get_pg_connection()
     cur = conn.cursor()
 
-
     cur.execute("""
         SELECT 1
         FROM village
-        WHERE village_code = %s
-          AND village_name = %s
-          AND emp1 = %s
+        WHERE (
+            LOWER(village_code) = LOWER(%s)
+            OR LOWER(village_name) = LOWER(%s)
+        )
+          AND vid != %s
         LIMIT 1
-    """, (code, name, emp1))
+    """, (code, name, request.args.get("vid")))
 
     exists = cur.fetchone() is not None
     cur.close()
@@ -717,7 +781,8 @@ def insert_customer(data):
                     total_amount, paid_amount, balance_amount, installment_amount,
                     type, period,
                     aadhaar_number, notes,
-                    latitude, longitude
+                    latitude, longitude,
+                    status
                 )
                 VALUES (
                     %(ano)s, %(name)s, %(pano)s, %(vid)s, %(eid)s,
@@ -725,7 +790,8 @@ def insert_customer(data):
                     %(total_amount)s, %(paid_amount)s, %(balance_amount)s, %(installment_amount)s,
                     %(type)s, %(period)s,
                     %(aadhaar_number)s, %(notes)s,
-                    %(latitude)s, %(longitude)s
+                    %(latitude)s, %(longitude)s,
+                    'open'
                 )
                 RETURNING cid
             """, data)
@@ -755,6 +821,29 @@ def customer_exists_by_ano_and_vid(ano, vid):
     conn.close()
     return exists
 
+def recalc_customer_balance(cur, cid):
+    cur.execute("SELECT total_amount FROM customer WHERE cid = %s", (cid,))
+    row = cur.fetchone()
+    if not row:
+        return
+
+    total_amt = row[0]
+
+    cur.execute("""
+        SELECT COALESCE(SUM(amt), 0)
+        FROM payment
+        WHERE cid = %s
+    """, (cid,))
+
+    paid_amt = cur.fetchone()[0]
+    balance_amt = total_amt - paid_amt
+
+    cur.execute("""
+        UPDATE customer
+        SET paid_amount = %s,
+            balance_amount = %s
+        WHERE cid = %s
+    """, (paid_amt, balance_amt, cid))
 # ----------------------------------------------------
 # ROUTES - mobile app
 # ----------------------------------------------------
@@ -1473,16 +1562,8 @@ def submit_post_payment():
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (cid, vid, eid, ano, amt, payment_date))
 
-            # 🔹 Update balances
-            new_paid = paid_amt + amt
-            new_balance = total_amt - new_paid
-
-            cur.execute("""
-                UPDATE customer
-                SET paid_amount = %s,
-                    balance_amount = %s
-                WHERE cid = %s
-            """, (new_paid, new_balance, cid))
+            # 🔹 Recalculate balances (centralized logic)
+            recalc_customer_balance(cur, cid)
 
             submitted += 1
 
@@ -1591,6 +1672,7 @@ def search_customer():
         query=request.form.get("query") if request.method == "POST" else ""
     )
 
+
 @app.route("/api/customer/close_account_pg", methods=["POST"])
 @login_required
 def close_customer_account_pg():
@@ -1684,7 +1766,6 @@ def close_customer_account_pg():
             WHERE cid = %s
         """, (cid,))
 
-
         # 4️⃣ Delete from active tables (this makes it MOVE)
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
@@ -1700,6 +1781,71 @@ def close_customer_account_pg():
         conn.rollback()
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+
+
+# ------------------ NEW: Retrieve closed/defaulted/written_off account ------------------
+@app.route("/api/customer/retrieve_account_pg", methods=["POST"])
+@login_required
+def retrieve_customer_account_pg():
+    try:
+        data = request.get_json()
+        cid = data.get("cid")
+
+        if not cid:
+            return jsonify({"success": False, "error": "Missing customer id"})
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # 1️⃣ Move customer BACK to customer table
+        cur.execute("""
+            INSERT INTO customer (
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid
+            )
+            SELECT
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid
+            FROM closed_cust_account
+            WHERE cid = %s
+        """, (cid,))
+
+        # 2️⃣ Move payments BACK
+        cur.execute("""
+            INSERT INTO payment (
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            ) OVERRIDING SYSTEM VALUE
+            SELECT
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            FROM closed_cust_payment
+            WHERE cid = %s
+        """, (cid,))
+
+        # 3️⃣ Delete from closed tables
+        cur.execute("DELETE FROM closed_cust_payment WHERE cid = %s", (cid,))
+        cur.execute("DELETE FROM closed_cust_account WHERE cid = %s", (cid,))
+
+        conn.commit()
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/api/update_village", methods=["POST"])
 @login_required
@@ -1719,18 +1865,12 @@ def update_village():
             SET
               village_code = %s,
               village_name = %s,
-              district = %s,
-              pincode = %s,
-              state = %s,
               emp1 = %s,
               emp2 = %s
             WHERE vid = %s
         """, (
             data.get("village_code"),
             data.get("village_name"),
-            data.get("district"),
-            data.get("pincode"),
-            data.get("state"),
             data.get("emp1"),
             data.get("emp2"),
             vid
@@ -1848,6 +1988,7 @@ def feed():
 
 
 @app.post("/feed/customer/accept/<feed_id>")
+@login_required
 def accept_customer(feed_id):
 
     conn = get_pg_connection()
@@ -1904,10 +2045,11 @@ def accept_customer(feed_id):
             notes,
             latitude,
             longitude,
-            eid
+            eid,
+            status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
     """,
     (
         data.get("ano"),
@@ -1940,12 +2082,14 @@ def accept_customer(feed_id):
     cur.execute("SET TIME ZONE 'UTC'")
 
     conn.commit()
+    cur.close()
     conn.close()
 
     return {"success":True}
 
 
 @app.post("/feed/payment/accept/<feed_payment_id>")
+@login_required
 def accept_payment(feed_payment_id):
 
     conn = get_pg_connection()
@@ -1974,8 +2118,8 @@ def accept_payment(feed_payment_id):
     ano = data.get("ano")
     vid = data.get("vid")
     eid = data.get("eid")
-    amt = data.get("amt")
-    pdate = data.get("pdate")
+    amt = Decimal(str(data.get("amt")))
+    pdate = datetime.fromisoformat(data.get("pdate")).date()
 
     # 2️⃣ Get customer
     cur.execute("""
@@ -2006,27 +2150,7 @@ def accept_payment(feed_payment_id):
     ))
 
     # 4️⃣ Recalculate balance
-    cur.execute("""
-        SELECT COALESCE(SUM(amt),0)
-        FROM payment
-        WHERE cid = %s
-    """, (cid,))
-
-    paid_amt = cur.fetchone()[0] # type: ignore
-
-    balance = total_amt - paid_amt
-
-    cur.execute("""
-        UPDATE customer
-        SET
-            paid_amount = %s,
-            balance_amount = %s
-        WHERE cid = %s
-    """, (
-        paid_amt,
-        balance,
-        cid
-    ))
+    recalc_customer_balance(cur, cid)
 
     # 5️⃣ Mark feed accepted
     cur.execute("""
@@ -2038,12 +2162,14 @@ def accept_payment(feed_payment_id):
     """, (logged_user, feed_payment_id))
 
     conn.commit()
+    cur.close()
     conn.close()
 
     return {"success": True}
 
 # ----------- Batch accept payments -----------
 @app.post("/feed/payment/accept_batch")
+@login_required
 def accept_payment_batch():
 
     data = request.get_json()
@@ -2089,8 +2215,8 @@ def accept_payment_batch():
             ano = p.get("ano")
             vid = p.get("vid")
             eid = p.get("eid")
-            amt = p.get("amt")
-            pdate = p.get("pdate")
+            amt = Decimal(str(p.get("amt")))
+            pdate = datetime.fromisoformat(p.get("pdate")).date()
 
             # fetch customer only once per ano
             if ano not in customer_map:
@@ -2124,21 +2250,7 @@ def accept_payment_batch():
         # 4️⃣ Update customers (optimized)
         for ano, (cid, total_amt) in customer_map.items():
 
-            cur.execute("""
-                SELECT COALESCE(SUM(amt),0)
-                FROM payment
-                WHERE cid = %s
-            """, (cid,))
-
-            paid_amt = cur.fetchone()[0] # type: ignore
-            balance = total_amt - paid_amt
-
-            cur.execute("""
-                UPDATE customer
-                SET paid_amount = %s,
-                    balance_amount = %s
-                WHERE cid = %s
-            """, (paid_amt, balance, cid))
+            recalc_customer_balance(cur, cid)
 
         # 5️⃣ Mark all as accepted
         cur.execute("""
@@ -2239,7 +2351,7 @@ def update_payment_pg():
         new_pdt = datetime.fromisoformat(data["pdt"]).date()
     except Exception as ex:
         return jsonify(success=False, error=f"Invalid date format: {ex}"), 400
-    amt = data.get("amt")
+    amt = Decimal(str(data.get("amt")))
 
     if not all([ano, old_pdt, new_pdt, amt]):
         return jsonify(success=False, error="Missing required fields"), 400
@@ -2270,22 +2382,7 @@ def update_payment_pg():
 
         cid, total_amt = row
 
-        cur.execute("""
-            SELECT COALESCE(SUM(amt), 0)
-            FROM payment
-            WHERE cid = %s
-        """, (cid,))
-        result = cur.fetchone()
-        paid_amt = result[0] if result else 0
-
-        balance_amt = total_amt - paid_amt
-
-        cur.execute("""
-            UPDATE customer
-            SET paid_amount = %s,
-                balance_amount = %s
-            WHERE cid = %s
-        """, (paid_amt, balance_amt, cid))
+        recalc_customer_balance(cur, cid)
 
         conn.commit()
         return jsonify(success=True)
@@ -2333,14 +2430,7 @@ def add_payment():
         VALUES (%s,%s,%s,%s,%s,%s)
     """, (cid, vid, eid, ano, amt, pdt))
 
-    new_paid = paid_amt + amt
-    new_balance = Decimal(total_amt) - new_paid
-
-    cur.execute("""
-        UPDATE customer
-        SET paid_amount=%s, balance_amount=%s
-        WHERE cid=%s
-    """, (new_paid, new_balance, cid))
+    recalc_customer_balance(cur, cid)
 
     conn.commit()
     cur.close()
@@ -2393,22 +2483,7 @@ def delete_payment():
         if row:
             cid, total_amt = row
 
-            cur.execute("""
-                SELECT COALESCE(SUM(amt), 0)
-                FROM payment
-                WHERE cid = %s
-            """, (cid,))
-
-            result = cur.fetchone()
-            paid_amt = result[0] if result else 0
-            balance_amt = total_amt - paid_amt
-
-            cur.execute("""
-                UPDATE customer
-                SET paid_amount = %s,
-                    balance_amount = %s
-                WHERE cid = %s
-            """, (paid_amt, balance_amt, cid))
+            recalc_customer_balance(cur, cid)
 
         conn.commit()
         return jsonify(success=True)
@@ -2441,7 +2516,8 @@ def village_page():
             state,
             emp1,
             emp2,
-            created_at
+            created_at,
+            status
         FROM village
         ORDER BY vid
     """)
@@ -2466,7 +2542,8 @@ def village_page():
             state,
             emp1,
             emp2,
-            created_at
+            created_at,
+            status
         FROM village
         WHERE vid = ANY(%s)
         ORDER BY vid
@@ -2487,11 +2564,12 @@ def village_page():
         total_villages=len(data)
     )
 
-@app.route("/api/delete_village", methods=["POST"])
+@app.route("/api/village/toggle_status", methods=["POST"])
 @login_required
-def delete_village():
+def toggle_village_status():
     if session.get("level") not in ["admin", "mgmt"]:
-       return jsonify(success=False, error="Unauthorized"), 403
+        return jsonify(success=False, error="Unauthorized"), 403
+
     data = request.get_json()
     vid = data.get("vid")
 
@@ -2499,12 +2577,27 @@ def delete_village():
     cur = conn.cursor()
 
     try:
-        cur.execute("DELETE FROM village WHERE vid = %s", (vid,))
+        # Toggle active ↔ inactive
+        cur.execute("""
+            UPDATE village
+            SET status = CASE
+                WHEN status = 'active' THEN 'inactive'
+                ELSE 'active'
+            END
+            WHERE vid = %s
+            RETURNING status
+        """, (vid,))
+
+        result = cur.fetchone()
+
         conn.commit()
-        return jsonify(success=True)
+
+        return jsonify(success=True, status=result[0] if result else None)
+
     except Exception as e:
         conn.rollback()
         return jsonify(success=False, error=str(e))
+
     finally:
         cur.close()
         conn.close()
@@ -2524,7 +2617,8 @@ def get_all_employees():
             city,
             joining_date,
             level,
-            state
+            state,
+            is_active
         FROM employee
         ORDER BY eid
     """)

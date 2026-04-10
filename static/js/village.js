@@ -83,66 +83,149 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   updateSummary();
+
+  // === Sorting support (match customers page behavior) ===
+  function sortTable(colIndex) {
+    if (!window.sortState) window.sortState = {};
+    if (!window.sortState[colIndex]) window.sortState[colIndex] = 0;
+    window.sortState[colIndex]++;
+
+    let visible = snapshot.filter(d => d.row.style.display !== "none");
+
+    const getCell = (row, i) => (row.children[i]?.textContent || "").trim();
+
+    if (window.sortState[colIndex] % 3 === 1) {
+      visible.sort((a, b) =>
+        getCell(a.row, colIndex).localeCompare(getCell(b.row, colIndex), undefined, { numeric: true })
+      );
+    } else if (window.sortState[colIndex] % 3 === 2) {
+      visible.sort((a, b) =>
+        getCell(b.row, colIndex).localeCompare(getCell(a.row, colIndex), undefined, { numeric: true })
+      );
+    } else {
+      visible = [...snapshot].filter(d => d.row.style.display !== "none");
+    }
+
+    body.innerHTML = "";
+    visible.forEach(d => body.appendChild(d.row));
+    updateSummary();
+  }
+
+  table.querySelectorAll("thead th").forEach((th, i) => {
+    if (i === 0) return; // skip checkbox
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => sortTable(i));
+  });
 });
 
 /* ===== ENABLE EDIT ===== */
 
-/* ===== ENABLE EDIT + SAVE TO DB ===== */
-
-function enableEdit(btn) {
+function openEditModal(btn) {
   const row = btn.closest("tr");
-  const vidCell = row.querySelector("td[data-field='vid']");
-  const vid = vidCell ? vidCell.innerText.trim() : null;
+  window.currentEditRow = row;
+  const cells = row.querySelectorAll("td[data-field]");
 
-  // If currently in Edit mode → switch to Save
-  if (btn.innerText === "Edit") {
+  let data = {};
 
-    row.querySelectorAll("td[data-field]").forEach(td => {
-      if (td.dataset.field !== "vid") { // never edit primary key
-        td.contentEditable = true;
-        td.classList.add("highlighted");
-      }
+  cells.forEach(cell => {
+    data[cell.dataset.field] = cell.innerText.trim();
+  });
+
+  document.getElementById("edit_vid").value = data.vid || "";
+  document.getElementById("edit_village_code").value = data.village_code || "";
+  document.getElementById("edit_village_name").value = data.village_name || "";
+
+  loadEmployees(data.emp1, data.emp2);
+
+  document.getElementById("editVillageModal").classList.remove("hidden");
+}
+
+function closeEditModal() {
+  document.getElementById("editVillageModal").classList.add("hidden");
+}
+
+function loadEmployees(selectedEmp1, selectedEmp2) {
+  fetch("/api/employees")
+    .then(res => res.json())
+    .then(data => {
+      const emp1 = document.getElementById("edit_emp1");
+      const emp2 = document.getElementById("edit_emp2");
+
+      emp1.innerHTML = "";
+      emp2.innerHTML = "";
+
+      data.forEach(emp => {
+        const opt1 = new Option(`${emp.eid} - ${emp.name}`, emp.eid);
+        const opt2 = new Option(`${emp.eid} - ${emp.name}`, emp.eid);
+
+        if (emp.eid == selectedEmp1) opt1.selected = true;
+        if (emp.eid == selectedEmp2) opt2.selected = true;
+
+        emp1.add(opt1);
+        emp2.add(opt2);
+      });
     });
+}
 
-    btn.innerText = "Save";
-    btn.classList.remove("edit-btn");
-    btn.classList.add("save-btn");
+function saveVillageEdit() {
+  const vid = document.getElementById("edit_vid").value;
+  const village_code = document.getElementById("edit_village_code").value;
+  const village_name = document.getElementById("edit_village_name").value;
+  const emp1 = document.getElementById("edit_emp1").value;
+  const emp2 = document.getElementById("edit_emp2").value;
 
-  } else {
-
-    // Collect updated data
-    const updatedData = {};
-    row.querySelectorAll("td[data-field]").forEach(td => {
-      updatedData[td.dataset.field] = td.innerText.trim();
-      td.contentEditable = false;
-      td.classList.remove("highlighted");
-    });
+  fetch(`/api/village/check?code=${village_code}&name=${village_name}&vid=${vid}`)
+  .then(res => res.json())
+  .then(check => {
+    if (check.exists) {
+      alert("Village already exists!");
+      return;
+    }
 
     fetch("/api/update_village", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedData)
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        vid,
+        village_code,
+        village_name,
+        emp1,
+        emp2
+      })
     })
     .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        btn.innerText = "Edit";
-        btn.classList.remove("save-btn");
-        btn.classList.add("edit-btn");
+    .then(resp => {
+      if (resp.success) {
+        const row = window.currentEditRow;
+
+        if (row) {
+            // update table cells live
+            row.querySelector("td[data-field='village_code']").innerText = village_code;
+            row.querySelector("td[data-field='village_name']").innerText = village_name;
+            row.querySelector("td[data-field='emp1']").innerText = emp1;
+            row.querySelector("td[data-field='emp2']").innerText = emp2;
+        }
+
+        closeEditModal();
       } else {
-        alert("Update failed: " + data.error);
+        alert(resp.error);
       }
     });
-  }
+  });
 }
 
-/* ===== DELETE ===== */
 
-function deleteVillage(vid) {
+/* ===== TOGGLE VILLAGE STATUS ===== */
 
-  if (!confirm("Delete this village?")) return;
+function toggleVillageStatus(vid, btn) {
 
-  fetch("/api/delete_village", {
+  if (!confirm("Are you sure you want to change village status?")) return;
+
+  const originalText = btn.innerText;
+  btn.disabled = true;
+  btn.innerText = "Processing...";
+
+  fetch("/api/village/toggle_status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ vid })
@@ -150,9 +233,87 @@ function deleteVillage(vid) {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      location.reload();
+
+      // Update button text + style
+      if (data.status === "inactive") {
+        btn.innerText = "Activate";
+        btn.classList.remove("danger-btn");
+      } else {
+        btn.innerText = "Inactivate";
+        btn.classList.add("danger-btn");
+      }
+
+      const row = btn.closest("tr");
+
+      // 🔹 Update status badge text + class
+      const statusCell = row.querySelector(".status-badge");
+
+      if (statusCell) {
+        statusCell.innerText =
+          data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
+        statusCell.classList.remove("status-active", "status-inactive");
+        statusCell.classList.add("status-" + data.status);
+      }
+
+      // 🔹 Update row styling
+      if (data.status === "inactive") {
+        row.classList.add("inactive-row");
+      } else {
+        row.classList.remove("inactive-row");
+      }
+
+      // 🔥 Refresh village dropdown after status change
+      if (typeof refreshVillageDropdown === "function") {
+        refreshVillageDropdown();
+      }
+
+      // 🔥 If current selected village becomes inactive → reset context
+      const villageSelect = document.getElementById("villageSelect");
+      if (villageSelect && villageSelect.value == vid && data.status === "inactive") {
+        fetch("/reset_context", { method: "POST" })
+          .then(() => {
+            villageSelect.value = "";
+          });
+      }
+
     } else {
-      alert("Delete failed");
+      alert("Failed: " + data.error);
+      btn.innerText = originalText;
     }
+  })
+  .catch(err => {
+    alert("Request failed: " + err.message);
+    btn.innerText = originalText;
+  })
+  .finally(() => {
+    btn.disabled = false;
   });
+}
+
+/* ===== REFRESH VILLAGE DROPDOWN ===== */
+
+function refreshVillageDropdown() {
+  const employeeSelect = document.getElementById("employeeSelect");
+  const villageSelect = document.getElementById("villageSelect");
+
+  if (!villageSelect) return;
+
+  const eid = employeeSelect ? employeeSelect.value : "";
+
+  fetch(`/api/villages?eid=${eid || ""}`)
+    .then(res => res.json())
+    .then(data => {
+      villageSelect.innerHTML = '<option value="">-- Select Village --</option>';
+
+      data.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.vid;
+        opt.textContent = v.name;
+        villageSelect.appendChild(opt);
+      });
+    })
+    .catch(err => {
+      console.error("Dropdown refresh failed:", err);
+    });
 }
