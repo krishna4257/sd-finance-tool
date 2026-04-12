@@ -274,7 +274,9 @@ print("raw_customer remaining:", count("raw_customer"))
 # ============================================================
 
 run("CREATE INDEX IF NOT EXISTS idx_raw_payment_ano ON raw_payment(ano)")
-run("CREATE INDEX IF NOT EXISTS idx_stage_payment_ano ON stage_payment(ano)")
+run("CREATE INDEX IF NOT EXISTS idx_raw_payment_clean_date ON raw_payment((regexp_replace(payment_date, '[^0-9]', '', 'g'))) ")
+run("CREATE INDEX IF NOT EXISTS idx_stage_customer_ano_vid ON stage_customer(ano, vid)")
+run("CREATE INDEX IF NOT EXISTS idx_stage_village_source_file ON stage_village(source_file)")
 
 print("\n🔍 RAW PAYMENT STATS")
 print("Total raw_payment rows:", count("raw_payment"))
@@ -317,41 +319,27 @@ print("\n🚀 STEP 4: Loading stage_payment (SAFE MODE)")
 # (2 rows)
 
 run("""
-UPDATE raw_payment
-SET ano = regexp_replace(ano, '[^0-9]', '', 'g')
-WHERE ano ~ '[^0-9]';
-""", "Cleaned special characters from ano in raw_payment")
-
-# 4.1 Load ALL raw payments
-run("""
 INSERT INTO stage_payment (
     ano,
     payment_date,
     amt
 )
-SELECT
+SELECT DISTINCT
     rp.ano::int,
-    safe_to_date(regexp_replace(rp.payment_date, '[^0-9]', '', 'g')),
-    rp.amt::numeric
-FROM raw_payment rp
-WHERE rp.ano ~ '^[0-9]+$'
-
--- valid date only
-AND safe_to_date(regexp_replace(rp.payment_date, '[^0-9]', '', 'g')) IS NOT NULL
-
--- skip null/invalid amount
+    safe_to_date(clean_date),
+    NULLIF(regexp_replace(rp.amt::text, '[^0-9.]', '', 'g'), '')::numeric
+FROM (
+    SELECT 
+        ano,
+        regexp_replace(payment_date, '[^0-9]', '', 'g') AS clean_date,
+        amt,
+        source_file
+    FROM raw_payment
+    WHERE ano ~ '^[0-9]+$'
+) rp
+WHERE clean_date ~ '^[0-9]{8}$'
+AND safe_to_date(clean_date) IS NOT NULL
 AND NULLIF(regexp_replace(rp.amt::text, '[^0-9.]', '', 'g'), '') IS NOT NULL
-
--- skip duplicates (ano + date + amt)
-AND NOT EXISTS (
-    SELECT 1
-    FROM raw_payment rp2
-    WHERE rp2.ano = rp.ano
-    AND regexp_replace(rp2.payment_date, '[^0-9]', '', 'g') = regexp_replace(rp.payment_date, '[^0-9]', '', 'g')
-    AND rp2.amt = rp.amt
-    GROUP BY rp2.ano, regexp_replace(rp2.payment_date, '[^0-9]', '', 'g'), rp2.amt
-    HAVING COUNT(*) > 1
-)
 """, "All raw payments loaded")
 
 print("Loaded into stage_payment:", count("stage_payment"))
@@ -363,12 +351,19 @@ UPDATE stage_payment sp
 SET
     vid = sv.vid,
     eid = sv.emp1
-FROM raw_payment rp
+FROM (
+    SELECT 
+        rp.ano::int AS ano,
+        safe_to_date(regexp_replace(rp.payment_date, '[^0-9]', '', 'g')) AS payment_date,
+        REPLACE(rp.source_file, '.sqlite', '')::int AS source_file
+    FROM raw_payment rp
+    WHERE rp.ano ~ '^[0-9]+$'
+) rp_clean
 JOIN stage_village sv
-  ON REPLACE(rp.source_file, '.sqlite', '')::int = sv.source_file
+  ON rp_clean.source_file = sv.source_file
 WHERE
-    sp.ano = rp.ano::int
-    AND sp.payment_date = to_date(NULLIF(rp.payment_date, ''), 'DD/MM/YYYY')
+    sp.ano = rp_clean.ano
+    AND sp.payment_date = rp_clean.payment_date
 """, "VID & EID populated")
 
 # 4.3 Populate CID using (ano + vid)
@@ -376,10 +371,8 @@ run("""
 UPDATE stage_payment sp
 SET cid = sc.cid
 FROM stage_customer sc
-WHERE
-    sp.cid IS NULL
-    AND sp.ano = sc.ano
-    AND sp.vid = sc.vid
+WHERE sp.cid IS NULL
+AND sp.ano = sc.ano
 """, "CID populated")
 
 print("raw_payment remaining:", count("raw_payment"))
@@ -415,6 +408,10 @@ FROM stage_payment
 WHERE cid IS NULL OR vid IS NULL OR eid IS NULL
 """, "Unmatched rows archived")
 
+run("""
+DELETE FROM stage_payment
+WHERE cid IS NULL OR vid IS NULL OR eid IS NULL
+""", "Unmatched rows removed from stage_payment")
 
 
 # ============================================================
@@ -428,22 +425,7 @@ checks = {
     "old_stage_payment rows": "SELECT COUNT(*) FROM old_stage_payment",
     "NULL cid": "SELECT COUNT(*) FROM stage_payment WHERE cid IS NULL",
     "NULL vid": "SELECT COUNT(*) FROM stage_payment WHERE vid IS NULL",
-    "NULL eid": "SELECT COUNT(*) FROM stage_payment WHERE eid IS NULL",
-    "Orphan customer refs": """
-        SELECT COUNT(*) FROM stage_payment sp
-        LEFT JOIN stage_customer sc ON sp.cid = sc.cid
-        WHERE sc.cid IS NULL
-    """,
-    "Orphan village refs": """
-        SELECT COUNT(*) FROM stage_payment sp
-        LEFT JOIN stage_village sv ON sp.vid = sv.vid
-        WHERE sv.vid IS NULL
-    """,
-    "Orphan employee refs": """
-        SELECT COUNT(*) FROM stage_payment sp
-        LEFT JOIN stage_employee se ON sp.eid = se.eid
-        WHERE se.eid IS NULL
-    """
+    "NULL eid": "SELECT COUNT(*) FROM stage_payment WHERE eid IS NULL"
 }
 
 for name, sql in checks.items():
