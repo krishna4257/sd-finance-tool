@@ -250,7 +250,12 @@ def load_to_pg():
 # ========================== MAIN =============================
 # ============================================================
 
-if __name__ == "__main__":
+
+def main():
     extract_sqlite()
     load_to_pg()
     print("\n🎉 ALL DONE (SQLite → Excel → PostgreSQL)")
+
+
+if __name__ == "__main__":
+    main()

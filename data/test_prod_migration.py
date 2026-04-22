@@ -6,16 +6,16 @@ from psycopg2.extras import execute_values
 # =========================
 
 SOURCE_DB = {
-    "host": "192.168.1.23",
+    "host": "localhost",
     "port": 5433,
     "dbname": "template1",          # staging DB on Mac
-    "user": "postgres",
+    "user": "jayakrishnareddykarri",
     "password": "Jaya@3579"
 }
 
 TARGET_DB = {
-    "host": "localhost",
-    "port": 5433,
+    "host": "192.168.1.12",
+    "port": 5432,
     "dbname": "sd_finance",
     "user": "sd_user",
     "password": "Jaya@3579"
@@ -43,10 +43,31 @@ tgt_cur = tgt.cursor()
 
 def truncate(table):
     print(f"🧹 Truncating {table}")
-    tgt_cur.execute(f"TRUNCATE TABLE {table} CASCADE")
+    
+    # Check if table exists
+    tgt_cur.execute(f"SELECT to_regclass('public.{table}')")
+    exists = tgt_cur.fetchone()[0]
+    
+    if not exists:
+        print(f"⚠️ Skipping {table} (does not exist on target)")
+        return
+    
+    tgt_cur.execute(f"TRUNCATE TABLE public.{table} CASCADE")
 
 def copy_table(select_sql, insert_sql, label):
     print(f"🚀 Migrating {label}")
+    
+    # Check if target table exists
+    tgt_cur.execute(f"SELECT to_regclass('public.{label}')")
+    exists = tgt_cur.fetchone()[0]
+    
+    if not exists:
+        print(f"⚠️ Skipping {label} (target table not found)")
+        return
+    
+    # Ensure deterministic order to avoid FK issues (customer before payment references)
+    if "FROM payment" in select_sql or "FROM closed_cust_payment" in select_sql:
+        select_sql = select_sql.strip() + " ORDER BY cid"
     src_cur.execute(select_sql)
 
     total = 0
@@ -74,7 +95,7 @@ copy_table(
     FROM stage_employee
     """,
     """
-    INSERT INTO employee (
+    INSERT INTO public.employee (
         eid, name, phone_number, city, joining_date, level, state, created_at
     ) VALUES %s
     """,
@@ -95,7 +116,7 @@ copy_table(
     FROM stage_village
     """,
     """
-    INSERT INTO village (
+    INSERT INTO public.village (
         vid, village_code, village_name, district, pincode,
         state, emp1, emp2, created_at, source_file
     ) VALUES %s
@@ -115,20 +136,48 @@ copy_table(
     SELECT cid, ano, name, vid, start_date, end_date,
            total_amount, paid_amount, balance_amount,
            installment_amount, type, period, pano,
-           created_at, aadhar_number, notes, latitude,
+           created_at, aadhaar_number, notes, latitude,
            longitude, eid
-    FROM stage_customer
+    FROM customer
     """,
     """
-    INSERT INTO customer (
+    INSERT INTO public.customer (
         cid, ano, name, vid, start_date, end_date,
         total_amount, paid_amount, balance_amount,
         installment_amount, type, period, pano,
-        created_at, aadhar_number, notes, latitude,
+        created_at, aadhaar_number, notes, latitude,
         longitude, eid
     ) VALUES %s
     """,
     "customer"
+)
+
+# =========================
+# 3️⃣B CLOSED CUSTOMER ACCOUNT
+# =========================
+
+if TRUNCATE_TARGET:
+    truncate("closed_cust_account")
+
+copy_table(
+    """
+    SELECT cid, ano, name, vid, start_date, end_date,
+           total_amount, paid_amount, balance_amount,
+           installment_amount, type, period, pano,
+           created_at, aadhaar_number, notes, latitude,
+           longitude, eid, status
+    FROM closed_cust_account
+    """,
+    """
+    INSERT INTO public.closed_cust_account (
+        cid, ano, name, vid, start_date, end_date,
+        total_amount, paid_amount, balance_amount,
+        installment_amount, type, period, pano,
+        created_at, aadhaar_number, notes, latitude,
+        longitude, eid, status
+    ) VALUES %s
+    """,
+    "closed_cust_account"
 )
 
 # =========================
@@ -141,12 +190,12 @@ if TRUNCATE_TARGET:
 copy_table(
     """
     SELECT pid, ano, payment_date, amt, created_at, eid, cid, vid
-    FROM stage_payment
+    FROM payment
     """,
     """
-    INSERT INTO payment (
+    INSERT INTO public.payment (
         pid, ano, payment_date, amt, created_at, eid, cid, vid
-    ) VALUES %s
+    ) OVERRIDING SYSTEM VALUE VALUES %s
     """,
     "payment"
 )
@@ -161,14 +210,14 @@ if TRUNCATE_TARGET:
 copy_table(
     """
     SELECT pid, ano, payment_date, amt, source_file,
-           created_at, eid, cid, vid, source_file_id
-    FROM old_stage_payment
+           created_at, eid, cid, vid
+    FROM closed_cust_payment
     """,
     """
-    INSERT INTO closed_cust_payment (
+    INSERT INTO public.closed_cust_payment (
         pid, ano, payment_date, amt, source_file,
-        created_at, eid, cid, vid, source_file_id
-    ) VALUES %s
+        created_at, eid, cid, vid
+    ) OVERRIDING SYSTEM VALUE VALUES %s
     """,
     "closed_cust_payment"
 )
@@ -183,10 +232,23 @@ for table in [
     "employee",
     "village",
     "customer",
+    "closed_cust_account",
     "payment",
     "closed_cust_payment"
 ]:
-    tgt_cur.execute(f"SELECT COUNT(*) FROM {table}")
+    tgt_cur.execute(f"SELECT to_regclass('public.{table}')")
+    exists = tgt_cur.fetchone()[0]
+
+    if not exists:
+        print(f"{table}: ❌ table not found on target")
+        continue
+
+    if table == "payment":
+        tgt_cur.execute("SELECT COUNT(*) FROM public.payment WHERE cid IS NOT NULL")
+        print(f"{table}: {tgt_cur.fetchone()[0]}")
+        continue
+
+    tgt_cur.execute(f"SELECT COUNT(*) FROM public.{table}")
     print(f"{table}: {tgt_cur.fetchone()[0]}")
 
 print("\n🎉 MIGRATION COMPLETED SUCCESSFULLY")

@@ -1,5 +1,6 @@
 import time
 import os
+import shutil
 from sqlalchemy import create_engine, text
 
 import sqlite_pg
@@ -35,6 +36,18 @@ def print_table_counts(stage):
         except:
             pass
 
+def check_disk():
+    total, used, free = shutil.disk_usage("/")
+    gb_free = free // (1024**3)
+    print(f"💾 Free disk space: {gb_free} GB")
+    if gb_free < 10:
+        raise RuntimeError("❌ Not enough disk space to run pipeline")
+
+def timed(label, func):
+    start = time.time()
+    func()
+    print(f"⏱️ {label} completed in {round(time.time()-start,2)}s")
+
 # ============================================================
 # E — EXTRACT
 # ============================================================
@@ -58,7 +71,10 @@ def extract_sqlite_parallel():
 
     try:
         # Run sqlite_pg script directly (preserves original logic)
-        runpy.run_path(sqlite_pg.__file__, run_name="__main__")
+        if hasattr(sqlite_pg, "main"):
+            sqlite_pg.main() # type: ignore
+        else:
+            runpy.run_path(sqlite_pg.__file__, run_name="__main__")
     except Exception as e:
         raise RuntimeError(f"Extraction failed: {e}")
 
@@ -77,7 +93,10 @@ def extract_sqlite_parallel():
 def transform_data():
     print("\n🧹 TRANSFORMING DATA (using raw_staged.py)")
     try:
-        runpy.run_path(raw_staged.__file__, run_name="__main__")
+        if hasattr(raw_staged, "main"):
+            raw_staged.main() # type: ignore
+        else:
+            runpy.run_path(raw_staged.__file__, run_name="__main__")
     except Exception as e:
         raise RuntimeError(f"Transform failed: {e}")
 
@@ -95,7 +114,10 @@ def load_stage():
 def load_final():
     print("\n🚀 LOADING TO FINAL (using staged_final.py)")
     try:
-        runpy.run_path(staged_final.__file__, run_name="__main__")
+        if hasattr(staged_final, "main"):
+            staged_final.main() # type: ignore
+        else:
+            runpy.run_path(staged_final.__file__, run_name="__main__")
     except Exception as e:
         raise RuntimeError(f"Final load failed: {e}")
 
@@ -106,7 +128,10 @@ def load_final():
 def validate():
     print("\n🧪 VALIDATION (using data_validation.py)")
     try:
-        runpy.run_path(data_validation.__file__, run_name="__main__")
+        if hasattr(data_validation, "main"):
+            data_validation.main() # type: ignore
+        else:
+            runpy.run_path(data_validation.__file__, run_name="__main__")
     except Exception as e:
         raise RuntimeError(f"Validation failed: {e}")
 
@@ -117,7 +142,12 @@ def validate():
 def run_pipeline():
     start = time.time()
 
-    extract_sqlite_parallel()
+    check_disk()
+
+    timed("EXTRACT", extract_sqlite_parallel)
+
+    if count("raw_payment") == 0:
+        raise RuntimeError("❌ Extraction failed: No payment data loaded")
 
     print("\n📊 RAW TABLE COUNTS")
     print("Customers:", count("raw_customer"))
@@ -125,7 +155,7 @@ def run_pipeline():
     print("Villages:", count("raw_village"))
     print("Employees:", count("raw_employee"))
 
-    transform_data()
+    timed("TRANSFORM", transform_data)
 
     print("\n📊 STAGE TABLE COUNTS")
     print("Customers:", count("stage_customer"))
@@ -133,15 +163,34 @@ def run_pipeline():
     print("Villages:", count("stage_village"))
     print("Employees:", count("stage_employee"))
 
-    load_final()
+    timed("LOAD FINAL", load_final)
 
-    print("\n📊 FINAL TABLE COUNTS")
-    print("Customers:", count("customer"))
-    print("Payments:", count("payment"))
-    print("Villages:", count("village"))
-    print("Employees:", count("employee"))
+    print("\n📊 DATA FLOW SUMMARY (RAW → STAGE → FINAL)")
+    print("="*100)
+    print(f"{'Entity':<15}{'RAW':>12}{'STAGE':>12}{'FINAL':>12}{'R→S %LOSS':>15}{'S→F %LOSS':>15}")
+    print("="*100)
 
-    validate()
+    entities = [
+        ("Customers", "raw_customer", "stage_customer", "customer"),
+        ("Payments", "raw_payment", "stage_payment", "payment"),
+        ("Villages", "raw_village", "stage_village", "village"),
+        ("Employees", "raw_employee", "stage_employee", "employee"),
+    ]
+
+    for name, raw_t, stage_t, final_t in entities:
+        raw_c = count(raw_t) or 0
+        stage_c = count(stage_t) or 0
+        final_c = count(final_t) or 0
+
+        # % loss calculations (safe divide)
+        rs_loss = ((raw_c - stage_c) / raw_c * 100) if raw_c > 0 else 0
+        sf_loss = ((stage_c - final_c) / stage_c * 100) if stage_c > 0 else 0
+
+        print(f"{name:<15}{raw_c:>12}{stage_c:>12}{final_c:>12}{rs_loss:>14.2f}%{sf_loss:>14.2f}%")
+
+    print("="*100)
+
+    timed("VALIDATION", validate)
 
     print(f"\n🎯 PIPELINE COMPLETED IN {round(time.time()-start,2)}s")
 
