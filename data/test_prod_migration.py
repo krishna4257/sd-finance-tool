@@ -14,7 +14,7 @@ SOURCE_DB = {
 }
 
 TARGET_DB = {
-    "host": "192.168.1.12",
+    "host": "192.168.1.65",
     "port": 5432,
     "dbname": "sd_finance",
     "user": "sd_user",

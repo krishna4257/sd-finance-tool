@@ -258,6 +258,66 @@ def main():
     print("stage_customer count:", count("stage_customer"))
     print("raw_customer remaining:", count("raw_customer"))
 
+    # ============================================================
+    # INTERACTIVE DUPLICATE RESOLUTION (CUSTOMER)
+    # ============================================================
+
+    print("\n🔍 CHECKING DUPLICATE CUSTOMERS (ano + vid)")
+
+    duplicates = scalar("""
+    SELECT COUNT(*) FROM (
+        SELECT ano, vid
+        FROM stage_customer
+        GROUP BY ano, vid
+        HAVING COUNT(*) > 1
+    ) t
+    """)
+
+    print(f"Duplicate groups found: {duplicates}")
+
+    if duplicates > 0: # type: ignore
+        print("\n⚠️ Duplicate customers detected. Starting interactive resolution...\n")
+
+        with engine.begin() as conn:
+            rows = conn.execute(text("""
+            SELECT *
+            FROM stage_customer
+            WHERE (ano, vid) IN (
+                SELECT ano, vid
+                FROM stage_customer
+                GROUP BY ano, vid
+                HAVING COUNT(*) > 1
+            )
+            ORDER BY ano, vid
+            """)).fetchall()
+
+        from collections import defaultdict
+        groups = defaultdict(list)
+
+        for r in rows:
+            groups[(r.ano, r.vid)].append(r)
+
+        for key, recs in groups.items():
+            print(f"\n🔁 Duplicate group → ANO: {key[0]}, VID: {key[1]}")
+
+            for i, r in enumerate(recs):
+                print(f"\nOption {i}:")
+                print(dict(r._mapping))
+
+            choice = int(input("\n👉 Enter index to KEEP: "))
+
+            keep = recs[choice]
+            delete_ids = [r.cid for r in recs if r.cid != keep.cid]
+
+            if delete_ids:
+                with engine.begin() as conn:
+                    conn.execute(text(f"""
+                    DELETE FROM stage_customer
+                    WHERE cid IN ({','.join(map(str, delete_ids))})
+                    """))
+
+                print(f"✅ Kept CID {keep.cid}, removed {len(delete_ids)} duplicates")
+
 
     # ============================================================
     # STEP 4 — STAGE_PAYMENT (FINAL FIXED VERSION, MODIFIED WHERE clause)
@@ -330,6 +390,10 @@ def main():
     ALTER TABLE stage_payment
     ADD COLUMN IF NOT EXISTS rn INT
     """)
+    run("""
+    ALTER TABLE stage_payment
+    ADD COLUMN IF NOT EXISTS source_file_id INT
+    """)
 
     #-- 4.2 Insert into stage_payment using pre-cleaned data (no repeated functions)
     run("""
@@ -337,13 +401,15 @@ def main():
         ano,
         payment_date,
         amt,
-        rn
+        rn,
+        source_file_id
     )
     SELECT
         ano,
         parsed_date AS payment_date,
         clean_amt,
-        rn
+        rn,
+        source_file_id
     FROM tmp_clean_payment
     WHERE parsed_date IS NOT NULL
     AND clean_amt IS NOT NULL
@@ -365,6 +431,7 @@ def main():
       ON tcp.source_file_id = sv.source_file
     WHERE sp.ano = tcp.ano
     AND sp.rn = tcp.rn
+    AND sp.source_file_id = tcp.source_file_id
     """, "VID & EID populated (STRICT + CORRECT)")
 
     # 4.3 Populate CID using (ano + vid)
