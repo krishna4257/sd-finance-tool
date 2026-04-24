@@ -21,7 +21,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
-import requests
 import base64
 load_dotenv()
 # Logging
