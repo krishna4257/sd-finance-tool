@@ -304,7 +304,13 @@ def main():
                 print(f"\nOption {i}:")
                 print(dict(r._mapping))
 
-            choice = int(input("\n👉 Enter index to KEEP: "))
+            while True:
+                user_input = input("\n👉 Enter index to KEEP: ").strip()
+                if user_input.isdigit() and int(user_input) < len(recs):
+                    choice = int(user_input)
+                    break
+                else:
+                    print(f"❌ Invalid input. Enter a number between 0 and {len(recs)-1}")
 
             keep = recs[choice]
             delete_ids = [r.cid for r in recs if r.cid != keep.cid]
