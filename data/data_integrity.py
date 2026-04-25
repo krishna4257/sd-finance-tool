@@ -1,6 +1,8 @@
 import psycopg2
 import pandas as pd
 
+OUTPUT_FILE = "data_integrity_report.xlsx"
+
 # ============================================================
 # CONFIG
 # ============================================================
@@ -123,6 +125,16 @@ merged["loan_diff"] = merged["total_loan_raw"] - merged["total_loan_final"]
 merged["paid_diff"] = merged["total_paid_raw"] - merged["total_paid_final"]
 merged["balance_diff"] = merged["total_balance_raw"] - merged["total_balance_final"]
 
+merged["expected_balance_raw"] = merged["total_loan_raw"] - merged["total_paid_raw"]
+merged["expected_balance_final"] = merged["total_loan_final"] - merged["total_paid_final"]
+
+merged["balance_error_raw"] = merged["total_balance_raw"] - merged["expected_balance_raw"]
+merged["balance_error_final"] = merged["total_balance_final"] - merged["expected_balance_final"]
+
+merged["loan_diff_pct"] = merged["loan_diff"] / merged["total_loan_raw"].replace(0, 1) * 100
+merged["paid_diff_pct"] = merged["paid_diff"] / merged["total_paid_raw"].replace(0, 1) * 100
+merged["balance_diff_pct"] = merged["balance_diff"] / merged["total_balance_raw"].replace(0, 1) * 100
+
 
 # ============================================================
 # STEP 5: PRINT RESULTS
@@ -168,9 +180,73 @@ issues = merged[
 
 print("\n🚨 VILLAGE LEVEL MISMATCHES:", len(issues))
 
+# ============================================================
+# STEP 7: EXPORT TO EXCEL
+# ============================================================
+
+balance_only_issues = merged[
+    (merged["cust_diff"] == 0) &
+    (merged["loan_diff"] == 0) &
+    (merged["paid_diff"] == 0) &
+    (merged["balance_diff"] != 0)
+]
+
+duplicate_impact = merged[
+    (merged["cust_diff"] != 0)
+]
+
+major_issues = merged[
+    (abs(merged["loan_diff"]) > 10000) |
+    (abs(merged["paid_diff"]) > 10000) |
+    (abs(merged["balance_diff"]) > 10000)
+]
+
+summary_df = merged[[
+    "vid",
+    "loan_diff",
+    "paid_diff",
+    "balance_diff",
+    "cust_diff"
+]].copy()
+
+summary_df = summary_df.rename(columns={
+    "loan_diff": "total_amount_diff",
+    "paid_diff": "total_paid_diff",
+    "balance_diff": "total_balance_diff",
+    "cust_diff": "total_cust_diff"
+})
+
+# Keep only rows with any difference
+summary_df = summary_df[
+    (summary_df["total_amount_diff"] != 0) |
+    (summary_df["total_paid_diff"] != 0) |
+    (summary_df["total_balance_diff"] != 0) |
+    (summary_df["total_cust_diff"] != 0)
+]
+
+with pd.ExcelWriter(OUTPUT_FILE, engine="xlsxwriter") as writer:
+    merged.to_excel(writer, sheet_name="full_comparison", index=False)
+    issues.to_excel(writer, sheet_name="mismatches", index=False)
+    raw_df.to_excel(writer, sheet_name="raw_aggregated", index=False)
+    final_df.to_excel(writer, sheet_name="final_aggregated", index=False)
+
+    balance_only_issues.to_excel(writer, sheet_name="balance_only", index=False)
+    duplicate_impact.to_excel(writer, sheet_name="duplicate_impact", index=False)
+    major_issues.to_excel(writer, sheet_name="major_issues", index=False)
+
+    summary_df.to_excel(writer, sheet_name="summary_diff", index=False)
+
+    # Auto-format columns
+    workbook = writer.book
+    for sheet_name in writer.sheets:
+        worksheet = writer.sheets[sheet_name]
+        worksheet.set_column(0, 20, 18)
+
+print(f"\n📁 Excel report generated: {OUTPUT_FILE}")
+
 if not issues.empty:
     print("\nTOP ISSUES:\n")
-    print(issues.sort_values("loan_diff", key=abs, ascending=False).head(20))
+    print(issues.sort_values("loan_diff", key=abs, ascending=False))
 
 
 # ============================================================

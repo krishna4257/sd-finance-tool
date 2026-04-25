@@ -7,6 +7,7 @@ import sqlite_pg
 import raw_staged
 import staged_final
 import data_validation
+import retry_bad_data
 import runpy
 
 PG_URL = "postgresql+psycopg2://jayakrishnareddykarri@localhost:5433/template1"
@@ -100,6 +101,30 @@ def transform_data():
     except Exception as e:
         raise RuntimeError(f"Transform failed: {e}")
 
+def wait_for_retry_signal():
+    print("\n⏸️ TRANSFORM COMPLETED")
+    print("👉 Fix bad data in bad_customer_data / bad_payment_data")
+    print("👉 Then type 'retry' to run retry pipeline and continue")
+    print("👉 Type 'skip' to continue without retry")
+
+    while True:
+        user_input = input("\nEnter command (retry/skip): ").strip().lower()
+        if user_input == "retry":
+            print("\n🔁 RUNNING RETRY PIPELINE")
+            try:
+                if hasattr(retry_bad_data, "main"):
+                    retry_bad_data.main()  # type: ignore
+                else:
+                    runpy.run_path(retry_bad_data.__file__, run_name="__main__")
+            except Exception as e:
+                raise RuntimeError(f"Retry failed: {e}")
+            break
+        elif user_input == "skip":
+            print("⏭️ Skipping retry step")
+            break
+        else:
+            print("❌ Invalid input. Type 'retry' or 'skip'.")
+
 # ============================================================
 # LOAD TO STAGE
 # ============================================================
@@ -156,6 +181,8 @@ def run_pipeline():
     print("Employees:", count("raw_employee"))
 
     timed("TRANSFORM", transform_data)
+
+    wait_for_retry_signal()
 
     print("\n📊 STAGE TABLE COUNTS")
     print("Customers:", count("stage_customer"))

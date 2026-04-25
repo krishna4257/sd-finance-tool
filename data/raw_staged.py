@@ -33,6 +33,8 @@ def main():
     run("TRUNCATE stage_village CASCADE")
     run("TRUNCATE stage_employee CASCADE")
     run("TRUNCATE old_stage_payment CASCADE")
+    run("TRUNCATE bad_payment_data CASCADE")
+    run("TRUNCATE bad_customer_data CASCADE")
 
     print("✅ All stage tables truncated")
 
@@ -147,7 +149,7 @@ def main():
             regexp_replace(rc.tdt, '[^0-9]', '', 'g') <> ''
             AND safe_to_date(regexp_replace(rc.tdt, '[^0-9]', '', 'g')) IS NULL
         )
-        OR NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '') IS NULL
+        OR NULLIF(regexp_replace(rc.amt, '[^0-9.\-]', '', 'g'), '') IS NULL
     """, "Bad customer rows captured")
 
     # ============================================================
@@ -214,10 +216,10 @@ def main():
             ELSE NULL
         END,
 
-        NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '')::numeric,
-        NULLIF(regexp_replace(rc.pamt, '[^0-9.]', '', 'g'), '')::numeric,
-        NULLIF(regexp_replace(rc.bamt, '[^0-9.]', '', 'g'), '')::numeric,
-        NULLIF(regexp_replace(rc.da, '[^0-9.]', '', 'g'), '')::numeric,
+        NULLIF(regexp_replace(rc.amt, '[^0-9.\-]', '', 'g'), '')::numeric,
+        NULLIF(regexp_replace(rc.pamt, '[^0-9.\-]', '', 'g'), '')::numeric,
+        NULLIF(regexp_replace(rc.bamt, '[^0-9.\-]', '', 'g'), '')::numeric,
+        NULLIF(regexp_replace(rc.da, '[^0-9.\-]', '', 'g'), '')::numeric,
         rc.dw,
         rc.ds::int,
         rc.pano,
@@ -250,7 +252,7 @@ def main():
     )
 
     -- skip invalid amounts
-    AND NULLIF(regexp_replace(rc.amt, '[^0-9.]', '', 'g'), '') IS NOT NULL
+    AND NULLIF(regexp_replace(rc.amt, '[^0-9.\-]', '', 'g'), '') IS NOT NULL
 
     -- allow duplicates but pick deterministic latest record
     """, "stage_customer loaded")
@@ -259,7 +261,7 @@ def main():
     print("raw_customer remaining:", count("raw_customer"))
 
     # ============================================================
-    # INTERACTIVE DUPLICATE RESOLUTION (CUSTOMER)
+    # NON-INTERACTIVE DUPLICATE RESOLUTION (CUSTOMER)
     # ============================================================
 
     print("\n🔍 CHECKING DUPLICATE CUSTOMERS (ano + vid)")
@@ -276,53 +278,52 @@ def main():
     print(f"Duplicate groups found: {duplicates}")
 
     if duplicates > 0: # type: ignore
-        print("\n⚠️ Duplicate customers detected. Starting interactive resolution...\n")
+        print("⚠️ Moving duplicate customers to bad_customer_data (auto-resolution)")
 
-        with engine.begin() as conn:
-            rows = conn.execute(text("""
-            SELECT *
+        # Move duplicate customers to bad_customer_data
+        run("""
+        INSERT INTO bad_customer_data
+        SELECT rc.*
+        FROM raw_customer rc
+        JOIN (
+            SELECT ano, vid
             FROM stage_customer
-            WHERE (ano, vid) IN (
-                SELECT ano, vid
-                FROM stage_customer
-                GROUP BY ano, vid
-                HAVING COUNT(*) > 1
-            )
-            ORDER BY ano, vid
-            """)).fetchall()
+            GROUP BY ano, vid
+            HAVING COUNT(*) > 1
+        ) dup
+        ON regexp_replace(rc.ano, '[^0-9]', '', 'g')::int = dup.ano
+        AND NULLIF(regexp_replace(rc.source_file, '[^0-9]', '', 'g'), '')::int IN (
+            SELECT source_file FROM stage_village WHERE vid = dup.vid
+        )
+        """, "Duplicate customers moved to bad_customer_data")
 
-        from collections import defaultdict
-        groups = defaultdict(list)
+        # Move related payments to bad_payment_data (STRICT mapping: ano + source_file)
+        run("""
+        INSERT INTO bad_payment_data (ano, payment_date, amt, source_file)
+        SELECT rp.ano, rp.payment_date, rp.amt, rp.source_file
+        FROM raw_payment rp
+        JOIN (
+            SELECT sc.ano, sv.source_file
+            FROM stage_customer sc
+            JOIN stage_village sv ON sc.vid = sv.vid
+            GROUP BY sc.ano, sv.source_file
+            HAVING COUNT(*) > 1
+        ) dup
+        ON rp.ano::int = dup.ano
+        AND REPLACE(rp.source_file, '.sqlite','')::int = dup.source_file
+        """, "Duplicate related payments moved to bad_payment_data (STRICT)")
 
-        for r in rows:
-            groups[(r.ano, r.vid)].append(r)
-
-        for key, recs in groups.items():
-            print(f"\n🔁 Duplicate group → ANO: {key[0]}, VID: {key[1]}")
-
-            for i, r in enumerate(recs):
-                print(f"\nOption {i}:")
-                print(dict(r._mapping))
-
-            while True:
-                user_input = input("\n👉 Enter index to KEEP: ").strip()
-                if user_input.isdigit() and int(user_input) < len(recs):
-                    choice = int(user_input)
-                    break
-                else:
-                    print(f"❌ Invalid input. Enter a number between 0 and {len(recs)-1}")
-
-            keep = recs[choice]
-            delete_ids = [r.cid for r in recs if r.cid != keep.cid]
-
-            if delete_ids:
-                with engine.begin() as conn:
-                    conn.execute(text(f"""
-                    DELETE FROM stage_customer
-                    WHERE cid IN ({','.join(map(str, delete_ids))})
-                    """))
-
-                print(f"✅ Kept CID {keep.cid}, removed {len(delete_ids)} duplicates")
+        # Keep only one record per (ano, vid) using lowest cid
+        run("""
+        DELETE FROM stage_customer sc
+        USING (
+            SELECT cid,
+                   ROW_NUMBER() OVER (PARTITION BY ano, vid ORDER BY cid) AS rn
+            FROM stage_customer
+        ) t
+        WHERE sc.cid = t.cid
+        AND t.rn > 1
+        """, "Duplicate customers removed (auto)")
 
 
     # ============================================================
@@ -355,13 +356,15 @@ def main():
         amt,
         source_file
     )
-    SELECT
-        ano,
-        payment_date,
-        amt,
-        source_file
-    FROM raw_payment
+    SELECT rp.ano, rp.payment_date, rp.amt, rp.source_file
+    FROM raw_payment rp
     WHERE safe_to_date(regexp_replace(payment_date, '[^0-9]', '', 'g')) IS NULL
+    AND NOT EXISTS (
+        SELECT 1 FROM bad_payment_data b
+        WHERE b.ano = rp.ano
+        AND b.payment_date = rp.payment_date
+        AND b.amt = rp.amt
+    )
     """, "Bad payment rows captured")
 
     print("\n🚀 STEP 4: Loading stage_payment (SAFE MODE)")
@@ -381,7 +384,7 @@ def main():
         SELECT
             ano::int AS ano,
             regexp_replace(payment_date, '[^0-9]', '', 'g') AS clean_date,
-            NULLIF(regexp_replace(amt::text, '[^0-9.]', '', 'g'), '')::numeric AS clean_amt,
+            NULLIF(regexp_replace(amt::text, '[^0-9.\-]', '', 'g'), '')::numeric AS clean_amt,
             REPLACE(source_file, '.sqlite', '')::int AS source_file_id
         FROM raw_payment
         WHERE ano ~ '^[0-9]+$'
