@@ -948,6 +948,14 @@ def mobile_villages():
 @app.get("/api/mobile/customers")
 def mobile_customers():
 
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return {"error": "missing token"}, 401
+
+    data = verify_mobile_token(token)
+    if not data:
+        return {"error": "invalid token"}, 401
+
     vid = request.args.get("vid")
     updated_after_raw = request.args.get("updated_after")
     updated_after = parse_mobile_timestamp(updated_after_raw)
@@ -996,6 +1004,14 @@ def mobile_customers():
 
 @app.get("/api/mobile/payments")
 def mobile_payments():
+
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return {"error": "missing token"}, 401
+
+    data = verify_mobile_token(token)
+    if not data:
+        return {"error": "invalid token"}, 401
 
     vid = request.args.get("vid")
     updated_after_raw = request.args.get("updated_after")
@@ -1046,6 +1062,14 @@ def mobile_payments():
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
     try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return {"error": "missing token"}, 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return {"error": "invalid token"}, 401
+
         payload_json = request.form.get("payload")
         data = json.loads(payload_json) # type: ignore
 
@@ -1125,6 +1149,14 @@ def customer_feed():
 def payment_feed_batch():
 
     try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return {"error": "missing token"}, 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return {"error": "invalid token"}, 401
+
         data = request.json # type: ignore
 
         payments = data.get("payments", []) # type: ignore
