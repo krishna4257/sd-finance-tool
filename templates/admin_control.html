@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+    <h3 class="mb-4">⚙️ Admin Control Panel</h3>
+    <div class="card shadow-sm p-4 text-center">
+        <h5 class="mb-3 text-danger">⚠️ Danger Zone</h5>
+        <p class="text-muted">
+            This action will permanently delete all data from the system.
+            This cannot be undone.
+        </p>
+        <button id="resetBtn" class="btn btn-danger rounded-pill px-5 py-3">
+            🔥 Reset Database
+        </button>
+    </div>
+</div>
+
+<script>
+document.getElementById("resetBtn").addEventListener("click", async () => {
+    const confirmAction = confirm("Are you sure you want to DELETE ALL DATA?");
+    if (!confirmAction) return;
+    try {
+        const response = await fetch("/api/mobile/reset_database", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert("✅ Database reset successful");
+            window.location.reload();
+        } else {
+            alert("❌ Failed: " + (data.error || "Unknown error"));
+        }
+    } catch (err) {
+        alert("❌ Error: " + err.message);
+    }
+});
+</script>
+
+{% endblock %}

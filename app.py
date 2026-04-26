@@ -1116,6 +1116,9 @@ def customer_feed():
         print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
+# ----------------------------------------------------
+# /api/mobile/payment_feed_batch
+# ----------------------------------------------------
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
 
@@ -1165,6 +1168,84 @@ def payment_feed_batch():
     except Exception as e:
         print("PAYMENT API ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
+
+# ----------------------------------------------------
+# /api/mobile/reset_database
+# ----------------------------------------------------
+@app.route("/api/mobile/reset_database", methods=["POST"])
+@login_required
+def reset_database():
+    try:
+        # ✅ Allow both WEB (session) and MOBILE (token)
+
+        eid = None
+
+        # 🔹 Case 1: Web (session-based)
+        if session.get("user_id"):
+            eid = session.get("employee_id")
+
+        # 🔹 Case 2: Mobile (token-based)
+        else:
+            token = request.headers.get("X-Mobile-Token")
+
+            if not token:
+                return {"error": "missing token"}, 401
+
+            data = verify_mobile_token(token)
+
+            if not data:
+                return {"error": "invalid token"}, 401
+
+            eid = data.get("eid")
+
+        # 🔹 Check employee level
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT level FROM employee WHERE eid = %s", (eid,))
+        row = cur.fetchone()
+
+        if not row:
+            return {"error": "employee not found"}, 403
+
+        level = row[0]
+
+        # 🔒 Only admin & mgmt allowed
+        if level not in ["admin", "mgmt"]:
+            return {"error": "unauthorized"}, 403
+
+        # 🚨 DELETE ALL DATA (SAFE ORDER USING TRUNCATE CASCADE)
+        cur.execute("""
+            TRUNCATE TABLE
+                payment,
+                closed_cust_payment,
+                customer,
+                closed_cust_account,
+                customer_docs,
+                customer_feed,
+                payment_feed_items,
+                user_devices,
+                user_village_access,
+                users,
+                village,
+                employee
+            RESTART IDENTITY CASCADE
+        """)
+
+        conn.commit()
+
+        return {"success": True, "message": "All data deleted successfully"}
+
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}, 500
+
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except:
+            pass
 # ----------------------------------------------------
 # ROUTES - postgre
 # ----------------------------------------------------
@@ -1207,6 +1288,12 @@ def get_dashboard_totals(vid):
         "sum_pamt": float(row[2]),
         "sum_bamt": float(row[3]),
     }
+
+@app.route("/admin_control")
+@login_required
+@admin_required
+def admin_control():
+    return render_template("admin_control.html")
 
 @app.route("/add_customer", methods=["GET", "POST"])
 @login_required
