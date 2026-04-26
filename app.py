@@ -1175,9 +1175,30 @@ def payment_feed_batch():
 @app.route("/api/mobile/reset_database", methods=["POST"])
 def reset_database():
     try:
-        # ⚠️ TEMP: Allow reset without auth (for admin mobile button)
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return {"error": "missing token"}, 401
+
+        data = verify_mobile_token(token)
+        if not data:
+            return {"error": "invalid token"}, 401
+
+        eid = data.get("eid")
+
+        # check employee level
         conn = get_pg_connection()
         cur = conn.cursor()
+
+        cur.execute("SELECT level FROM employee WHERE eid = %s", (eid,))
+        row = cur.fetchone()
+
+        if not row:
+            return {"error": "employee not found"}, 401
+
+        level = row[0]
+
+        if level not in ["admin", "mgmt"]:
+            return {"error": "unauthorized"}, 403
 
         # 🚨 DELETE ALL DATA (SAFE ORDER USING TRUNCATE CASCADE)
         cur.execute("""
