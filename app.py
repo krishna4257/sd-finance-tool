@@ -861,9 +861,10 @@ def mobile_login():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT id,password_hash,is_active
-        FROM users
-        WHERE username=%s
+        SELECT u.id, u.password_hash, u.is_active, e.level
+        FROM users u
+        JOIN employee e ON e.eid = u.employee_id
+        WHERE u.username=%s
     """,(username,))
 
     user = cur.fetchone()
@@ -871,7 +872,7 @@ def mobile_login():
     if not user:
         return {"error":"invalid"},401
 
-    user_id,password_hash,is_active = user
+    user_id,password_hash,is_active,level = user
 
     if not is_active:
         return {"error":"inactive"},403
@@ -890,7 +891,8 @@ def mobile_login():
         "token":token,
         "user_id":user_id,
         "username":username,
-        "eid": eid
+        "eid": eid,
+        "level": level
     }
 
 @app.get("/api/mobile/villages")
@@ -1185,17 +1187,26 @@ def reset_database():
 
         eid = data.get("eid")
 
-        # check employee level
-        conn = get_pg_connection()
-        cur = conn.cursor()
+        user_id = data.get("user_id")
 
-        cur.execute("SELECT level FROM employee WHERE eid = %s", (eid,))
-        row = cur.fetchone()
+        # 🔐 Validate user + employee mapping and active status
+        cur = get_pg_connection().cursor()
+        cur.execute("""
+            SELECT u.is_active, e.level
+            FROM users u
+            JOIN employee e ON e.eid = u.employee_id
+            WHERE u.id = %s AND u.employee_id = %s
+        """, (user_id, eid))
 
-        if not row:
-            return {"error": "employee not found"}, 401
+        user_row = cur.fetchone()
 
-        level = row[0]
+        if not user_row:
+            return {"error": "invalid user mapping"}, 401
+
+        is_active, level = user_row
+
+        if not is_active:
+            return {"error": "user inactive"}, 403
 
         if level not in ["admin", "mgmt"]:
             return {"error": "unauthorized"}, 403
@@ -1218,18 +1229,21 @@ def reset_database():
             RESTART IDENTITY CASCADE
         """)
 
-        conn.commit()
+        cur.connection.commit()
 
         return {"success": True, "message": "All data deleted successfully"}
 
     except Exception as e:
-        conn.rollback()
+        try:
+            cur.connection.rollback()
+        except:
+            pass
         return {"error": str(e)}, 500
 
     finally:
         try:
             cur.close()
-            conn.close()
+            cur.connection.close()
         except:
             pass
 # ----------------------------------------------------
