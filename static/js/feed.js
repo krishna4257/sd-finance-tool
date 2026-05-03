@@ -1,6 +1,6 @@
 function accept(feed_id) {
 
-  fetch(`/feed/customer/accept/${feed_id}`, {
+  csrfFetch(`/feed/customer/accept/${feed_id}`, {
     method: "POST"
   })
   .then(res => res.json())
@@ -21,7 +21,7 @@ function accept(feed_id) {
 
 function acceptPayment(feed_payment_id) {
 
-fetch(`/feed/payment/accept/${feed_payment_id}`, {
+csrfFetch(`/feed/payment/accept/${feed_payment_id}`, {
 method: "POST"
 })
 .then(res => res.json())

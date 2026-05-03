@@ -1,4 +1,46 @@
 // =====================================================
+// GLOBAL SESSION EXPIRY HANDLER
+// =====================================================
+(function () {
+  const originalFetch = window.fetch;
+
+  window.fetch = async function (...args) {
+    const response = await originalFetch(...args);
+
+    try {
+      const contentType = response.headers.get("content-type") || "";
+      const redirectedToLogin = response.redirected &&
+        response.url.includes("/login");
+
+      const unauthorized = response.status === 401;
+
+      const htmlLoginPage =
+        contentType.includes("text/html") &&
+        response.url.includes("/login");
+
+      if (redirectedToLogin || unauthorized || htmlLoginPage) {
+
+        // Prevent duplicate alerts
+        if (!window.__sessionExpiredShown) {
+          window.__sessionExpiredShown = true;
+
+          alert("Session expired. Please login again.");
+
+          window.location.href = "/login";
+        }
+
+        return Promise.reject(new Error("Session expired"));
+      }
+
+    } catch (err) {
+      console.error("Session handling error:", err);
+    }
+
+    return response;
+  };
+})();
+
+// =====================================================
 // GLOBAL STATE (DO NOT REMOVE – used across features)
 // =====================================================
 window.currentRow = null;
@@ -190,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // RESET MODE
       if (setBtn.dataset.mode === "reset") {
-        await fetch("/reset_context", { method: "POST" });
+        await csrfFetch("/reset_context", { method: "POST" });
 
         contextLocked = false;
         lastSelectedEmployee = null;
@@ -217,7 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      fetch("/set_context", {
+      csrfFetch("/set_context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({vid })
@@ -274,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!payload.name) return alert("Employee name required");
 
-    fetch("/api/create_employee", {
+    csrfFetch("/api/create_employee", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -313,7 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch("/api/create_village", {
+    csrfFetch("/api/create_village", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -344,6 +386,79 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   };
 });
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    /* ---------------------------------------------------
+        PROFILE DROPDOWN TOGGLE
+    --------------------------------------------------- */
+    const profileBtn = document.querySelector(".user-profile");
+    const profileMenu = document.getElementById("userDropdown");
+
+    if (!profileBtn || !profileMenu) {
+        return;
+    }
+
+    // Ensure hidden initially
+    profileMenu.style.display = "none";
+
+    profileBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+
+        const isOpen = profileMenu.style.display === "block";
+
+        profileMenu.style.display = isOpen ? "none" : "block";
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!profileBtn.contains(e.target)) {
+            profileMenu.style.display = "none";
+        }
+    });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+      const themeToggle = document.getElementById('theme-toggle');
+      
+      // 1. Set the toggle switch to the correct state on page load
+      const currentTheme = localStorage.getItem('theme') || 'dark';
+      if (currentTheme === 'dark') {
+        themeToggle.checked = true;
+      }
+
+      // 2. Add a listener to change the theme when the toggle is clicked
+      themeToggle.addEventListener('change', () => {
+        const selectedTheme = themeToggle.checked ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', selectedTheme);
+        localStorage.setItem('theme', selectedTheme);
+      });
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+      const newPDT = document.getElementById('newPDT');
+
+      if (newPDT) {
+        newPDT.addEventListener('input', function(e) {
+          let input = e.target.value.replace(/\D/g, '');
+
+          if (input.length >= 3 && input.length <= 4) {
+            input = input.slice(0,2) + '/' + input.slice(2);
+          } else if (input.length > 4) {
+            input = input.slice(0,2) + '/' + input.slice(2,4) + '/' + input.slice(4,8);
+          }
+
+          e.target.value = input;
+        });
+
+        flatpickr('#newPDT', {
+          dateFormat: 'd/m/Y',
+          allowInput: true,
+          clickOpens: true,
+          wrap: false
+        });
+      }
+});
+
 
 // =====================================================
 // HELPERS

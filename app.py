@@ -15,20 +15,19 @@ from flask import (
     Flask, render_template, request, redirect,
     session, jsonify, flash, url_for
 )
-from db import get_pg_connection, init_db
-from config import POSTGRES_URI
+from db import get_pg_connection
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
+from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import generate_csrf
 import base64
 load_dotenv()
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize SQLAlchemy (does NOT replace SQLite yet)
-init_db(POSTGRES_URI)
 
 def generate_system_id():
     """Generate stable system fingerprint."""
@@ -86,7 +85,10 @@ def parse_mobile_timestamp(ts):
 # FLASK APP SETUP
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
+app.secret_key = os.environ.get("SECRET_KEY")
+app.config["WTF_CSRF_ENABLED"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
+csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 limiter = Limiter(get_remote_address, app=app)
 
@@ -101,6 +103,37 @@ def fix_cookie_domain():
         app.config["SESSION_COOKIE_DOMAIN"] = None
 
 
+# ----------------------------------------------------
+# Session timeout and activity tracking
+# ----------------------------------------------------
+@app.before_request
+def session_timeout_check():
+    session.permanent = True
+
+    if "user_id" not in session:
+        return
+
+    now = datetime.utcnow()
+    last_activity = session.get("_last_activity")
+
+    if last_activity:
+        try:
+            last_activity_dt = datetime.fromisoformat(last_activity)
+
+            if now - last_activity_dt > app.config["PERMANENT_SESSION_LIFETIME"]:
+                session.clear()
+                flash("Session expired. Please login again.", "warning")
+                return redirect(url_for("login"))
+
+        except Exception:
+            session.clear()
+            return redirect(url_for("login"))
+
+    session["_last_activity"] = now.isoformat()
+
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=generate_csrf)
 # ----------------------------------------------------
 # Decorators
 # ----------------------------------------------------
@@ -846,7 +879,7 @@ def recalc_customer_balance(cur, cid):
 # ----------------------------------------------------
 # ROUTES - mobile app
 # ----------------------------------------------------
-
+@csrf.exempt
 @app.post("/api/mobile/login")
 def mobile_login():
 
@@ -895,6 +928,7 @@ def mobile_login():
         "level": level
     }
 
+@csrf.exempt
 @app.get("/api/mobile/villages")
 def mobile_villages():
 
@@ -945,6 +979,7 @@ def mobile_villages():
         ]
     }
 
+@csrf.exempt
 @app.get("/api/mobile/customers")
 def mobile_customers():
 
@@ -1002,6 +1037,7 @@ def mobile_customers():
 
     return {"customers": customers}
 
+@csrf.exempt
 @app.get("/api/mobile/payments")
 def mobile_payments():
 
@@ -1059,6 +1095,7 @@ def mobile_payments():
 
     return {"payments": payments}
 
+@csrf.exempt
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
     try:
@@ -1145,6 +1182,7 @@ def customer_feed():
 # ----------------------------------------------------
 # /api/mobile/payment_feed_batch
 # ----------------------------------------------------
+@csrf.exempt
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
 
@@ -1206,6 +1244,7 @@ def payment_feed_batch():
 # ----------------------------------------------------
 # /api/mobile/reset_database
 # ----------------------------------------------------
+@csrf.exempt
 @app.route("/api/mobile/reset_database", methods=["POST"])
 def reset_database():
     try:

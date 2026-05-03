@@ -12,6 +12,7 @@
   <div id="message" class="message-box" style="display: none; margin-bottom: 20px;"></div>
 
   <form id="customerForm" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-row">
       <div class="form-col">
         <label for="ano">Account Number</label>

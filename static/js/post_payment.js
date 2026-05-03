@@ -266,7 +266,7 @@ function submitAllPayments() {
   amt: Number(row.amt)
 }));
 
-  fetch("/submit_post_payment", {
+  csrfFetch("/submit_post_payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
