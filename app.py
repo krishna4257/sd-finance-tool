@@ -24,7 +24,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
 import base64
 load_dotenv()
-# Logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
