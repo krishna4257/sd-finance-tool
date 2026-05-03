@@ -1,32 +1,6 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 import psycopg2
 import os
 
-# Base class for all ORM models
-Base = declarative_base()
-
-# Engine & session will be initialized later (Step 2)
-engine = None
-SessionLocal = scoped_session(sessionmaker())
-
-
-def init_db(database_url: str):
-    """
-    Initialize SQLAlchemy engine and session factory.
-    Called once at app startup (later).
-    """
-    global engine
-    engine = create_engine(
-    database_url,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,
-    future=True,
-)
-    SessionLocal.configure(bind=engine)
 
 def get_pg_connection():
     required_vars = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"]

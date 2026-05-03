@@ -102,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
           updatedData[td.dataset.field] = td.textContent.trim();
       });
 
-      fetch("/api/customer/update_pg", {
+      csrfFetch("/api/customer/update_pg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "customer", data: updatedData })
@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    const res = await fetch("/api/payment/update_pg", {
+    const res = await csrfFetch("/api/payment/update_pg", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -206,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const originalText = closeAccountBtn.textContent;
           closeAccountBtn.textContent = "⏳ Retrieving...";
 
-          const res = await fetch("/api/customer/retrieve_account_pg", {
+          const res = await csrfFetch("/api/customer/retrieve_account_pg", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cid: customerRow.dataset.cid })
@@ -267,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const originalText = closeAccountBtn.textContent;
         closeAccountBtn.textContent = "⏳ Processing...";
 
-        const res = await fetch("/api/customer/close_account_pg", {
+        const res = await csrfFetch("/api/customer/close_account_pg", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cid, action })
@@ -321,7 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
               const newPdt = toISO(pdtCell.textContent.trim());
               const newAmt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, '')) || 0;
 
-              fetch("/api/payment/update_pg", {
+              csrfFetch("/api/payment/update_pg", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -364,7 +364,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const ano = document.getElementById("searchPostingAno").value;
           const date = document.getElementById("searchPostingDate").value;
 
-          fetch("/search_postings", {
+          csrfFetch("/search_postings", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ano, date }),
@@ -492,7 +492,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const row = el.closest("tr");
     const ano = row.dataset.ano;
     const pdt = row.dataset.pdt;
-    fetch("/delete_payment", {
+    csrfFetch("/delete_payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ano, pdt })
@@ -515,7 +515,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   window.deletePaymentFromPostingRow = (el, ano, pdt) => {
-    fetch("/delete_payment", {
+    csrfFetch("/delete_payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ano, pdt })
@@ -550,7 +550,7 @@ async function addPaymentFromForm(form) {
     };
     
     try {
-        const res = await fetch("/add_payment", {
+        const res = await csrfFetch("/add_payment", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json"},
             body: JSON.stringify(payload)
@@ -698,7 +698,7 @@ function updateCustomerSummary() {
   };
 
   function replacePaymentDates(oldDate, newDate) {
-    fetch("/update_payment_date_bulk", {
+    csrfFetch("/update_payment_date_bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -718,7 +718,7 @@ function updateCustomerSummary() {
 }
 
   function replacePostingDates(oldDate, newDate) {
-      fetch("/update_posting_date_bulk", {
+      csrfFetch("/update_posting_date_bulk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ find_date: oldDate, replace_date: newDate })

@@ -5,7 +5,8 @@
 
   <!-- Raised Form Box -->
   <div class="raised-box">
-    <form id="paymentForm" class="form-grid">
+    <form id="paymentForm" class="form-grid" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label><input type="text" id="pdt" placeholder="dd/mm/yyyy" required></label>
       <label><input type="text" id="ano" inputmode="numeric" placeholder="Account Number" required></label>
       <label><input type="number" id="amt" step="0.01" placeholder="Amount" required></label>

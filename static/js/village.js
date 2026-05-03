@@ -182,7 +182,7 @@ function saveVillageEdit() {
       return;
     }
 
-    fetch("/api/update_village", {
+    csrfFetch("/api/update_village", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
@@ -225,7 +225,7 @@ function toggleVillageStatus(vid, btn) {
   btn.disabled = true;
   btn.innerText = "Processing...";
 
-  fetch("/api/village/toggle_status", {
+  csrfFetch("/api/village/toggle_status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ vid })
@@ -271,7 +271,7 @@ function toggleVillageStatus(vid, btn) {
       // 🔥 If current selected village becomes inactive → reset context
       const villageSelect = document.getElementById("villageSelect");
       if (villageSelect && villageSelect.value == vid && data.status === "inactive") {
-        fetch("/reset_context", { method: "POST" })
+        csrfFetch("/reset_context", { method: "POST" })
           .then(() => {
             villageSelect.value = "";
           });

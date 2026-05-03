@@ -8,6 +8,7 @@
   <h2 class="page-title">🔍 Search/Edit Customer</h2>
 
   <form method="POST" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       <input id="searchQuery" type="text" name="query"
              placeholder="Enter Name or Account Number"
@@ -73,8 +74,11 @@
 
     <!-- Add Payment Section -->
     <form id="addPaymentForm"
+          method="POST"
           class="form-grid"
           data-ano="{{ ano }}">
+
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <label><input type="text" id="newPDT" placeholder="Date dd/mm/yyyy" required></label>
       <label><input type="number" id="newAMT" step="0.01" placeholder="Amount" required></label>
@@ -124,7 +128,8 @@
 <div class="raised-box" id="posting-section">
   <h2 class="page-title">🛠️ Search/Edit Posting</h2>
 
-  <form id="postingSearchForm" class="form-grid">
+  <form id="postingSearchForm" method="POST" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label><input type="text" id="searchPostingAno" placeholder="Search by A.no"></label>
     <label><input type="text" id="searchPostingDate" placeholder="Exact Date: dd/mm/yyyy"></label>
 

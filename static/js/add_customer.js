@@ -246,7 +246,7 @@ anoInput.addEventListener("change", checkAno);
         message.className = "message-box";
         message.style.display = 'block';
 
-        fetch("/add_customer", {
+        csrfFetch("/add_customer", {
             method: "POST",
             body: formData
         })

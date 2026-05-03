@@ -1,8 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-  <div id="selectionSummaryPopup" style="display:none;">
-  <span id="selectedCount">0</span> rows selected — Total: ₹<span id="selectedTotal">0.00</span>
-  </div>
 <head>
 
   <style>
@@ -19,61 +16,12 @@
     /* CRITICAL — SHOW THE PAGE */
     document.documentElement.style.visibility = "visible";
 })();
-document.addEventListener("DOMContentLoaded", function () {
 
-    /* ---------------------------------------------------
-        PROFILE DROPDOWN TOGGLE
-    --------------------------------------------------- */
-    const profileBtn = document.getElementById("profile-btn");
-    const profileMenu = document.getElementById("profile-menu");
-
-    profileBtn.addEventListener("click", function (e) {
-        e.stopPropagation();                         // Prevent closing immediately
-        profileMenu.classList.toggle("show-menu");   // Toggle dropdown
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener("click", function (e) {
-        if (!profileMenu.contains(e.target) && !profileBtn.contains(e.target)) {
-            profileMenu.classList.remove("show-menu");
-        }
-    });
-
-    /* ---------------------------------------------------
-        THEME TOGGLE + PROFILE COLOR SYNC
-    --------------------------------------------------- */
-    const themeToggle = document.getElementById("theme-toggle");
-    const profileCircle = document.getElementById("profile-circle");
-    const profileName = document.getElementById("profile-name");
-
-    function applyTheme(isDark) {
-        if (isDark) {
-            profileCircle.style.background = "#2b2b2b";
-            profileCircle.style.color = "#fff";
-            profileName.style.color = "#fff";
-        } else {
-            profileCircle.style.background = "#ffffff";
-            profileCircle.style.color = "#000";
-            profileName.style.color = "#000";
-        }
-    }
-
-    // Initial load theme
-    const savedTheme = localStorage.getItem("theme") || "dark";
-    const isDark = savedTheme === "dark";
-    applyTheme(isDark);
-
-    // When toggled
-    themeToggle.addEventListener("click", () => {
-        const nowDark = document.documentElement.classList.toggle("light-mode") === false; 
-        localStorage.setItem("theme", nowDark ? "dark" : "light");
-        applyTheme(nowDark);
-    });
-});
 </script>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>SD Finance</title>
   <!-- Add the Favicon -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/fin_icon.png') }}">
@@ -101,66 +49,30 @@ document.addEventListener("DOMContentLoaded", function () {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="{{ url_for('static', filename='js/calculator.js') }}"></script>
-
-
+  
   <script>
-    (function() {
-      try {
-        const theme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch (e) {}
-    })();
-  </script>
-  <script>
-  function toggleUserMenu() {
-    const menu = document.getElementById("userDropdown");
-    menu.style.display = menu.style.display === "block" ? "none" : "block";
-  }
+    window.getCSRFToken = function () {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      return meta ? meta.getAttribute('content') : '';
+    };
 
-// Close dropdown when clicking outside
-  document.addEventListener("click", function(e) {
-    const profile = document.querySelector(".user-profile");
-    if (profile && !profile.contains(e.target)) {
-        document.getElementById("userDropdown").style.display = "none";
-    }
-  });
-  </script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const themeToggle = document.getElementById('theme-toggle');
-      
-      // 1. Set the toggle switch to the correct state on page load
-      const currentTheme = localStorage.getItem('theme') || 'dark';
-      if (currentTheme === 'dark') {
-        themeToggle.checked = true;
-      }
+    window.csrfFetch = function (url, options = {}) {
+      options.headers = options.headers || {};
+      options.headers['X-CSRFToken'] = window.getCSRFToken();
 
-      // 2. Add a listener to change the theme when the toggle is clicked
-      themeToggle.addEventListener('change', () => {
-        const selectedTheme = themeToggle.checked ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', selectedTheme);
-        localStorage.setItem('theme', selectedTheme);
+      return fetch(url, options);
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('form').forEach(form => {
+        if (!form.querySelector('input[name="csrf_token"]')) {
+          const csrfInput = document.createElement('input');
+          csrfInput.type = 'hidden';
+          csrfInput.name = 'csrf_token';
+          csrfInput.value = window.getCSRFToken();
+          form.appendChild(csrfInput);
+        }
       });
-    });
-  </script>
-
-  <script>
-    // Auto-slash for dd/mm/yyyy
-    document.getElementById('newPDT').addEventListener('input', function(e) {
-      let input = e.target.value.replace(/\D/g, ''); // Remove non-digits
-      if (input.length >= 3 && input.length <= 4)
-        input = input.slice(0,2) + '/' + input.slice(2);
-      else if (input.length > 4)
-        input = input.slice(0,2) + '/' + input.slice(2,4) + '/' + input.slice(4,8);
-      e.target.value = input;
-    });
-
-    
-    flatpickr("#newPDT", {
-      dateFormat: "d/m/Y",
-      allowInput: true,
-      clickOpens: true,
-      wrap: false
     });
   </script>
 </head>
@@ -228,7 +140,7 @@ document.addEventListener("DOMContentLoaded", function () {
         <!-- USER MENU -->
         {% if session.get("user_id") %}
         <div class="user-profile">
-            <div class="user-trigger" onclick="toggleUserMenu()">
+            <div class="user-trigger">
                 <span class="user-icon">👤</span>
                 <span class="username">{{ session.get("username") }}</span>
             </div>

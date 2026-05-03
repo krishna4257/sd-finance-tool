@@ -110,7 +110,7 @@ function enableEdit(btn) {
       td.classList.remove("highlighted");
     });
 
-    fetch("/api/update_employee", {
+    csrfFetch("/api/update_employee", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updatedData)
@@ -130,7 +130,7 @@ function enableEdit(btn) {
 
 function toggleEmployeeStatus(eid, btn) {
 
-  fetch("/api/employee/toggle_status", {
+  csrfFetch("/api/employee/toggle_status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ eid })
@@ -181,7 +181,7 @@ function toggleEmployeeStatus(eid, btn) {
     // 🔥 If currently selected employee becomes inactive → reset context
     const employeeSelect = document.getElementById("employeeSelect");
     if (employeeSelect && employeeSelect.value == eid && !isActive) {
-      fetch("/reset_context", { method: "POST" })
+      csrfFetch("/reset_context", { method: "POST" })
         .then(() => {
           employeeSelect.value = "";
         });
