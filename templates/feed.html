@@ -136,7 +136,7 @@ onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
 <td>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="acceptPayment('{{ row[0] }}')">
+onclick="acceptPayment('{{ row.feed_payment_id }}')">
 ✅ Accept
 </button>
 
@@ -179,19 +179,20 @@ onclick="rejectPayment('{{ row.feed_payment_id }}')">
 </div>
 
 <script>
-function openImageModal(type, base64){
-    const modal = document.getElementById("imageModal");
-    const img = document.getElementById("modalImage");
-    img.src = "data:image/jpeg;base64," + base64;
-    modal.style.display = "flex";
+async function csrfFetch(url, options = {}) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                      document.querySelector('input[name="csrf_token"]')?.value || "";
+
+    options.headers = {
+        ...(options.headers || {}),
+        'X-CSRFToken': csrfToken
+    };
+
+    options.credentials = 'same-origin';
+
+    return fetch(url, options);
 }
 
-function closeImageModal(){
-    document.getElementById("imageModal").style.display = "none";
-}
-</script>
-
-<script>
 function setButtonLoading(btn, isLoading){
     if(!btn) return;
     if(isLoading){
@@ -287,7 +288,7 @@ function acceptSelected(){
     const originalText = btn.innerText;
     btn.innerText = "Processing...";
 
-    fetch("/feed/payment/accept_batch", {
+    csrfFetch("/feed/payment/accept_batch", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -359,7 +360,7 @@ function accept(feedId){
 
     setButtonLoading(btn, true);
 
-    fetch(`/feed/customer/accept/${feedId}`, {
+    csrfFetch(`/feed/customer/accept/${feedId}`, {
         method: "POST"
     })
     .then(res => res.json())

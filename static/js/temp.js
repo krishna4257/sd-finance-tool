@@ -7,25 +7,6 @@ function openEditVillageModal() {
 function closeEditVillageModal() {
   document.getElementById("editVillageModal").style.display = "none";
 }
-function submitVillageNameChange() {
-  const newName = document.getElementById("newVillageName").value.trim();
-  if (!newName) return alert("Village name cannot be empty.");
-
-  fetch("/update_village_name", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ new_name: newName })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      alert("Village name updated successfully.");
-      closeEditVillageModal();
-    } else {
-      alert("Failed to update: " + data.error);
-    }
-  });
-}
 
 
 function openCreateVillageModal() {
@@ -251,7 +232,7 @@ async function submitCreateVillage() {
     };
   }
 
-  const res = await fetch("/api/create_village", {
+  const res = await csrfFetch("/api/create_village", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify(payload)
@@ -308,7 +289,7 @@ function submitAddEmployee() {
     return;
   }
 
-  fetch("/api/create_employee", {
+  csrfFetch("/api/create_employee", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)

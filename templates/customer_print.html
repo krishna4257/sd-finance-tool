@@ -120,20 +120,22 @@
       <div class="details-grid">
         <div><strong>Account No:</strong> {{ customer.ano }}</div>
         <div><strong>Name:</strong> {{ customer.name }}</div>
-        <div><strong>Village Name:</strong> {{ customer.village }}</div>
+        <div><strong>Parent Account No:</strong> {{ customer.pano or '-' }}</div>
       </div>
     </div>
 
     <div class="details-section">
       <h2>Loan Information</h2>
       <div class="details-grid">
-        <div><strong>Loan Start Date:</strong> {{ customer.fdt }}</div>
-        <div><strong>Loan End Date:</strong> {{ customer.tdt }}</div>
-        <div><strong>Loan Amount:</strong> ₹{{ "{:,.2f}".format(customer.amt|float) }}</div>
-        <div><strong>Amount Paid:</strong> ₹{{ "{:,.2f}".format(customer.pamt|float) }}</div>
-        <div><strong>Balance Amount:</strong> ₹{{ "{:,.2f}".format(customer.bamt|float) }}</div>
-        <div><strong>Weekly Amount:</strong> ₹{{ "{:,.2f}".format(customer.da|float) }}</div>
-        <div><strong>Duration:</strong> {{ customer.ds }} Weeks</div>
+        <div><strong>Loan Start Date:</strong> {{ customer.start_date or '-' }}</div>
+        <div><strong>Loan End Date:</strong> {{ customer.end_date or '-' }}</div>
+        <div><strong>Loan Amount:</strong> ₹{{ "{:,.2f}".format(customer.total_amount|float) }}</div>
+        <div><strong>Amount Paid:</strong> ₹{{ "{:,.2f}".format(customer.paid_amount|float) }}</div>
+        <div><strong>Balance Amount:</strong> ₹{{ "{:,.2f}".format(customer.balance_amount|float) }}</div>
+        <div><strong>Installment Amount:</strong> ₹{{ "{:,.2f}".format(customer.installment_amount|float) }}</div>
+        <div><strong>Loan Type:</strong> {{ customer.type or '-' }}</div>
+        <div><strong>Loan Period:</strong> {{ customer.period or '-' }}</div>
+        <div><strong>Status:</strong> {{ customer.status or '-' }}</div>
       </div>
     </div>
 

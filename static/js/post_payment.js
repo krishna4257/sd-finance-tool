@@ -1,7 +1,28 @@
 // --- Initialize sound effect ---
 // Make sure you have a file at static/sounds/error.mp3
 const errorSound = new Audio('static/sounds/error.mp3');
-let tempTable = JSON.parse(localStorage.getItem('postPayments') || '[]');
+
+// Use sessionStorage instead of localStorage so unsaved payment rows
+// do not leak across different employees using the same browser/device.
+const POST_PAYMENT_STORAGE_KEY = 'postPayments';
+
+function loadTempPayments() {
+    try {
+        return JSON.parse(sessionStorage.getItem(POST_PAYMENT_STORAGE_KEY) || '[]');
+    } catch (e) {
+        console.error('Failed to load temporary payments:', e);
+        return [];
+    }
+}
+
+function persistTempPayments() {
+    sessionStorage.setItem(
+        POST_PAYMENT_STORAGE_KEY,
+        JSON.stringify(tempTable)
+    );
+}
+
+let tempTable = loadTempPayments();
 let selectedDate = null;
 
 
@@ -168,7 +189,7 @@ function updateTable() {
   document.getElementById("totalAmttop").textContent = totalAmt.toFixed(2);
   document.getElementById("totalAno").textContent = uniqueAno.size;
   document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
-  localStorage.setItem("postPayments", JSON.stringify(tempTable));
+  persistTempPayments();
 
   // Cumulative Sum Logic
   let runningTotal = 0;
@@ -197,7 +218,7 @@ function sortTemp(column) {
   sortState[column] = (sortState[column] + 1) % 3;
 
   if (sortState[column] === 0) {
-    tempTable = JSON.parse(localStorage.getItem("postPayments") || "[]");
+    tempTable = loadTempPayments();
   } else {
     tempTable.sort((a, b) => {
       let valA = a[column];
@@ -223,7 +244,7 @@ function sortTemp(column) {
 }
 
 function saveAndUpdate() {
-  localStorage.setItem("postPayments", JSON.stringify(tempTable));
+  persistTempPayments();
   updateTable();
 }
 
