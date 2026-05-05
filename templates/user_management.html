@@ -97,6 +97,20 @@
 
 <script>
 let selectedUserId = null;
+
+async function csrfFetch(url, options = {}) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                      document.querySelector('input[name="csrf_token"]')?.value || "";
+
+    options.headers = {
+        ...(options.headers || {}),
+        'X-CSRFToken': csrfToken
+    };
+
+    options.credentials = 'same-origin';
+
+    return fetch(url, options);
+}
 async function loadEmployees() {
     const res = await fetch('/api/employees');
     const data = await res.json();
@@ -177,7 +191,7 @@ tbody.onclick = async function(e) {
         const isActive = btn.dataset.active === "true";
         if (!confirm(isActive ? "Deactivate this user?" : "Activate this user?")) return;
 
-        const r = await fetch('/api/users/toggle_status', {
+        const r = await csrfFetch('/api/users/toggle_status', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({id})
@@ -191,7 +205,7 @@ tbody.onclick = async function(e) {
     if (btn.classList.contains('reset-device-btn')) {
         if (!confirm("Reset device?")) return;
 
-        const r = await fetch('/api/users/reset_device', {
+        const r = await csrfFetch('/api/users/reset_device', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({id})
@@ -260,7 +274,7 @@ document.getElementById("village-save").onclick = async () => {
         document.querySelectorAll('#selected-villages-list input')
     ).map(cb => cb.value);
 
-    const res = await fetch('/api/users/update_villages', {
+    const res = await csrfFetch('/api/users/update_villages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: selectedUserId, village_ids: selected })
@@ -286,7 +300,7 @@ document.getElementById("u_save").onclick = async () => {
         employee_id: document.getElementById("u_employee").value
     };
 
-    const res = await fetch("/api/users/add", {
+    const res = await csrfFetch("/api/users/add", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload)

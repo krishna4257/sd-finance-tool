@@ -15,18 +15,104 @@ from flask import (
     Flask, render_template, request, redirect,
     session, jsonify, flash, url_for
 )
-from db import get_pg_connection
+from db import get_pg_connection, get_pool_stats
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
-import base64
+from psycopg2.extras import execute_values
 load_dotenv()
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------
+# AUDIT LOGGING SYSTEM
+# ----------------------------------------------------
+def audit_log(
+    action,
+    entity_type=None,
+    entity_id=None,
+    details=None,
+    status="success"
+):
+    conn = None
+    cur = None
+
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        user_id = session.get("user_id")
+        employee_id = session.get("employee_id") or session.get("eid")
+        username = session.get("username")
+
+        cur.execute("""
+            INSERT INTO audit_log (
+                action,
+                entity_type,
+                entity_id,
+                user_id,
+                employee_id,
+                username,
+                ip_address,
+                request_method,
+                request_path,
+                user_agent,
+                details,
+                status
+            )
+            VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s
+            )
+        """, (
+            action,
+            entity_type,
+            str(entity_id) if entity_id is not None else None,
+            user_id,
+            employee_id,
+            username,
+            request.headers.get("X-Forwarded-For", request.remote_addr),
+            request.method,
+            request.path,
+            request.headers.get("User-Agent"),
+            json.dumps(details or {}),
+            status
+        ))
+
+        conn.commit()
+
+    except Exception as e:
+        logger.warning("Audit log failed: %s", e)
+
+        if conn:
+            conn.rollback()
+
+    finally:
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
+
+# Helper: Log DB pool stats
+def log_db_pool_stats(context=""):
+    try:
+        stats = get_pool_stats()
+
+        logger.info(
+            "DB Pool Stats%s -> used=%s available=%s max=%s",
+            f" [{context}]" if context else "",
+            stats.get("used_connections"),
+            stats.get("available_connections"),
+            stats.get("max_connections")
+        )
+
+    except Exception as e:
+        logger.warning("Unable to fetch DB pool stats: %s", e)
 
 
 def generate_system_id():
@@ -90,7 +176,31 @@ app.config["WTF_CSRF_ENABLED"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
 csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-limiter = Limiter(get_remote_address, app=app)
+
+# Custom mobile rate limit key function
+def mobile_rate_limit_key():
+    token = request.headers.get("X-Mobile-Token")
+
+    if token:
+        data = verify_mobile_token(token)
+
+        if data:
+            eid = data.get("eid")
+            user_id = data.get("user_id")
+
+            if eid:
+                return f"mobile-eid:{eid}"
+
+            if user_id:
+                return f"mobile-user:{user_id}"
+
+    return get_remote_address()
+
+
+limiter = Limiter(
+    key_func=mobile_rate_limit_key,
+    app=app
+)
 
 @app.before_request
 def fix_cookie_domain():
@@ -259,6 +369,15 @@ def toggle_employee_status():
         new_status = cur.fetchone()[0] # type: ignore
 
         conn.commit()
+
+        audit_log(
+            action="toggle_employee_status",
+            entity_type="employee",
+            entity_id=eid,
+            details={
+                "new_status": "active" if new_status else "inactive"
+            }
+        )
 
         return jsonify(success=True, status="active" if new_status else "inactive")
 
@@ -575,6 +694,18 @@ def api_create_village():
     ))
 
     conn.commit()
+    audit_log(
+        action="create_village",
+        entity_type="village",
+        entity_id=vid,
+        details={
+            "village_name": data["village_name"],
+            "village_code": data["village_code"],
+            "emp1": data["emp1_eid"],
+            "emp2": data.get("emp2_eid"),
+            "state": state
+        }
+    )
     cur.close()
     conn.close()
 
@@ -626,6 +757,16 @@ def api_create_employee():
             return jsonify(success=False, error="Failed to create employee"), 500
         
         conn.commit()
+        audit_log(
+            action="create_employee",
+            entity_type="employee",
+            entity_id=new_eid,
+            details={
+                "name": name,
+                "level": data.get("level"),
+                "state": data.get("state")
+            }
+        )
 
         return jsonify(success=True, eid=new_eid, name=name)
 
@@ -880,6 +1021,7 @@ def recalc_customer_balance(cur, cid):
 # ROUTES - mobile app
 # ----------------------------------------------------
 @csrf.exempt
+@limiter.limit("5 per minute")
 @app.post("/api/mobile/login")
 def mobile_login():
 
@@ -892,41 +1034,55 @@ def mobile_login():
 
     conn = get_pg_connection()
     cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT u.id, u.password_hash, u.is_active, e.level
+            FROM users u
+            JOIN employee e ON e.eid = u.employee_id
+            WHERE u.username=%s
+        """,(username,))
 
-    cur.execute("""
-        SELECT u.id, u.password_hash, u.is_active, e.level
-        FROM users u
-        JOIN employee e ON e.eid = u.employee_id
-        WHERE u.username=%s
-    """,(username,))
+        user = cur.fetchone()
 
-    user = cur.fetchone()
+        if not user:
+            return {"error":"invalid"},401
 
-    if not user:
-        return {"error":"invalid"},401
+        user_id,password_hash,is_active,level = user
 
-    user_id,password_hash,is_active,level = user
+        if not is_active:
+            return {"error":"inactive"},403
 
-    if not is_active:
-        return {"error":"inactive"},403
+        if not check_password_hash(password_hash,password):
+            return {"error":"invalid"},401
+        
+        cur.execute("SELECT eid FROM employee WHERE eid IN (SELECT employee_id FROM users WHERE id = %s)", (user_id,))
+        result = cur.fetchone()
+        if not result:
+            return {"error":"employee not found"},401
+        eid = result[0]
+        token = generate_mobile_token(user_id, eid)
 
-    if not check_password_hash(password_hash,password):
-        return {"error":"invalid"},401
-    
-    cur.execute("SELECT eid FROM employee WHERE eid IN (SELECT employee_id FROM users WHERE id = %s)", (user_id,))
-    result = cur.fetchone()
-    if not result:
-        return {"error":"employee not found"},401
-    eid = result[0]
-    token = generate_mobile_token(user_id, eid)
+        audit_log(
+          action="mobile_login",
+          entity_type="user",
+          entity_id=user_id,
+          details={
+              "eid": eid,
+              "username": username,
+              "level": level
+            }
+        )
 
-    return {
-        "token":token,
-        "user_id":user_id,
-        "username":username,
-        "eid": eid,
-        "level": level
-    }
+        return {
+            "token":token,
+            "user_id":user_id,
+            "username":username,
+            "eid": eid,
+            "level": level
+        }
+    finally:
+        cur.close()
+        conn.close()
 
 @csrf.exempt
 @app.get("/api/mobile/villages")
@@ -948,36 +1104,36 @@ def mobile_villages():
     # Fetch employee name
     conn = get_pg_connection()
     cur = conn.cursor()
+    try:
+        cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
+        emp_row = cur.fetchone()
+        employee_name = emp_row[0] if emp_row else ""
 
-    cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
-    emp_row = cur.fetchone()
-    employee_name = emp_row[0] if emp_row else ""
+        # 🔹 Fetch villages from user_village_access
+        cur.execute("""
+            SELECT v.vid, v.village_name, v.district
+            FROM user_village_access uva
+            JOIN village v ON v.vid = uva.village_id
+            WHERE uva.user_id = %s
+            ORDER BY v.village_name
+        """, (user_id,))
 
-    # 🔹 Fetch villages from user_village_access
-    cur.execute("""
-        SELECT v.vid, v.village_name, v.district
-        FROM user_village_access uva
-        JOIN village v ON v.vid = uva.village_id
-        WHERE uva.user_id = %s
-        ORDER BY v.village_name
-    """, (user_id,))
+        villages = cur.fetchall()
 
-    villages = cur.fetchall()
-
-    cur.close()
-    conn.close()
-
-    return {
-        "villages": [
-            {
-                "vid": v[0],
-                "village_name": v[1],
-                "district": v[2],
-                "employee_name": employee_name
-            }
-            for v in villages
-        ]
-    }
+        return {
+            "villages": [
+                {
+                    "vid": v[0],
+                    "village_name": v[1],
+                    "district": v[2],
+                    "employee_name": employee_name
+                }
+                for v in villages
+            ]
+        }
+    finally:
+        cur.close()
+        conn.close()
 
 @csrf.exempt
 @app.get("/api/mobile/customers")
@@ -995,47 +1151,41 @@ def mobile_customers():
     updated_after_raw = request.args.get("updated_after")
     updated_after = parse_mobile_timestamp(updated_after_raw)
 
-    if updated_after:
-        try:
-            ua_dt = datetime.fromisoformat(updated_after) # type: ignore
-            if ua_dt.tzinfo is None:
-                # assume client sends UTC if no tz
-                ua_dt = ua_dt.replace(tzinfo=None)
-            updated_after = ua_dt.isoformat()
-        except Exception:
-            pass
-
     conn = get_pg_connection()
     cur = conn.cursor()
-    cur.execute("SET TIME ZONE 'UTC'")
+    try:
+        cur.execute("SET TIME ZONE 'UTC'")
 
-    if updated_after:
-        cur.execute("""
-            SELECT *
-            FROM customer
-            WHERE vid = %s
-              AND (
-                created_at > (%s::timestamptz AT TIME ZONE 'UTC')
-                OR COALESCE(updated_at, created_at) > (%s::timestamptz AT TIME ZONE 'UTC')
-              )
-        """, (vid, updated_after, updated_after))
-    else:
-        cur.execute("""
-            SELECT *
-            FROM customer
-            WHERE vid = %s
-        """, (vid,))
+        if updated_after:
+            cur.execute("""
+                SELECT *
+                FROM customer
+                WHERE vid = %s
+                  AND (
+                    created_at > %s
+                    OR COALESCE(updated_at, created_at) > %s
+                  )
+            """, (vid, updated_after, updated_after))
+        else:
+            cur.execute("""
+                SELECT *
+                FROM customer
+                WHERE vid = %s
+            """, (vid,))
 
-    columns = [desc[0] for desc in cur.description] if cur.description else []
+        columns = [desc[0] for desc in cur.description] if cur.description else []
 
-    rows = cur.fetchall()
+        rows = cur.fetchall()
 
-    customers = []
+        customers = []
 
-    for r in rows:
-        customers.append(dict(zip(columns, r)))
+        for r in rows:
+            customers.append(dict(zip(columns, r)))
 
-    return {"customers": customers}
+        return {"customers": customers}
+    finally:
+        cur.close()
+        conn.close()
 
 @csrf.exempt
 @app.get("/api/mobile/payments")
@@ -1053,49 +1203,44 @@ def mobile_payments():
     updated_after_raw = request.args.get("updated_after")
     updated_after = parse_mobile_timestamp(updated_after_raw)
 
-    if updated_after:
-        try:
-            ua_dt = datetime.fromisoformat(updated_after) # type: ignore
-            if ua_dt.tzinfo is None:
-                # assume client sends UTC if no tz
-                ua_dt = ua_dt.replace(tzinfo=None)
-            updated_after = ua_dt.isoformat()
-        except Exception:
-            pass
-
     conn = get_pg_connection()
     cur = conn.cursor()
-    cur.execute("SET TIME ZONE 'UTC'")
+    try:
+        cur.execute("SET TIME ZONE 'UTC'")
 
-    if updated_after:
-        cur.execute("""
-            SELECT *
-            FROM payment
-            WHERE vid = %s
-              AND (
-                created_at > (%s::timestamptz AT TIME ZONE 'UTC')
-                OR updated_at > (%s::timestamptz AT TIME ZONE 'UTC')
-              )
-        """, (vid, updated_after, updated_after))
-    else:
-        cur.execute("""
-            SELECT *
-            FROM payment
-            WHERE vid = %s
-        """, (vid,))
+        if updated_after:
+            cur.execute("""
+                SELECT *
+                FROM payment
+                WHERE vid = %s
+                  AND (
+                    created_at > %s
+                    OR updated_at > %s
+                  )
+            """, (vid, updated_after, updated_after))
+        else:
+            cur.execute("""
+                SELECT *
+                FROM payment
+                WHERE vid = %s
+            """, (vid,))
 
-    columns = [desc[0] for desc in cur.description] if cur.description else []
+        columns = [desc[0] for desc in cur.description] if cur.description else []
 
-    rows = cur.fetchall()
+        rows = cur.fetchall()
 
-    payments = []
+        payments = []
 
-    for r in rows:
-        payments.append(dict(zip(columns, r)))
+        for r in rows:
+            payments.append(dict(zip(columns, r)))
 
-    return {"payments": payments}
+        return {"payments": payments}
+    finally:
+        cur.close()
+        conn.close()
 
 @csrf.exempt
+@limiter.limit("200 per minute")
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
     try:
@@ -1172,6 +1317,18 @@ def customer_feed():
             ))
 
         conn.commit()
+        audit_log(
+            action="mobile_customer_upload",
+            entity_type="customer_feed",
+            entity_id=local_uuid,
+            details={
+                "eid": eid,
+                "vid": vid,
+                "ano": ano,
+                "device_id": device_id,
+                "status": status
+            }
+        )
 
         return jsonify({"status": "ok"})
 
@@ -1183,6 +1340,7 @@ def customer_feed():
 # /api/mobile/payment_feed_batch
 # ----------------------------------------------------
 @csrf.exempt
+@limiter.limit("300 per minute")
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
 
@@ -1231,6 +1389,17 @@ def payment_feed_batch():
             ))
 
         conn.commit()
+        audit_log(
+            action="mobile_payment_upload",
+            entity_type="payment_feed",
+            entity_id=vid,
+            details={
+                "eid": eid,
+                "vid": vid,
+                "device_id": device_id,
+                "payments_received": total_records
+            }
+        )
 
         return jsonify({
             "status": "ok",
@@ -1261,7 +1430,8 @@ def reset_database():
         user_id = data.get("user_id")
 
         # 🔐 Validate user + employee mapping and active status
-        cur = get_pg_connection().cursor()
+        conn = get_pg_connection()
+        cur = conn.cursor()
         cur.execute("""
             SELECT u.is_active, e.level
             FROM users u
@@ -1299,8 +1469,18 @@ def reset_database():
                 employee
             RESTART IDENTITY CASCADE
         """)
-
+        
         cur.connection.commit()
+        audit_log(
+            action="reset_database",
+            entity_type="system",
+            entity_id="full_database",
+            details={
+                "performed_by_user_id": user_id,
+                "performed_by_eid": eid,
+                "level": level
+            }
+        )
 
         return {"success": True, "message": "All data deleted successfully"}
 
@@ -1334,16 +1514,6 @@ def get_dashboard_totals(vid):
                 COALESCE(SUM(c.balance_amount), 0)
             FROM customer c
             WHERE c.vid = %s
-        """, (vid,))
-    else:
-        cur.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(SUM(total_amount), 0),
-                COALESCE(SUM(paid_amount), 0),
-                COALESCE(SUM(balance_amount), 0)
-            FROM customer
-            WHERE vid = %s
         """, (vid,))
 
     row = cur.fetchone()
@@ -1416,6 +1586,17 @@ def add_customer():
         }
 
         cid = insert_customer(payload)
+        
+        audit_log(
+            action="create_customer",
+            entity_type="customer",
+            entity_id=ano,
+            details={
+                "vid": vid,
+                "eid": eid,
+                "name": data["name"]
+            }
+        )
 
         return jsonify({
             "message": "Customer added successfully",
@@ -1726,6 +1907,18 @@ def submit_post_payment():
 
         conn.commit()
 
+        audit_log(
+            action="submit_post_payment",
+            entity_type="payment",
+            entity_id=vid,
+            details={
+                "eid": eid,
+                "vid": vid,
+                "submitted_count": submitted,
+                "skipped_count": len(skipped)
+            }
+        )
+
         return jsonify( 
             success=True,
             message=f"{submitted} payments posted",
@@ -1740,6 +1933,7 @@ def submit_post_payment():
     finally:
         cur.close()
         conn.close()
+
 
 
 @app.route("/search", methods=["GET", "POST"])
@@ -1829,6 +2023,255 @@ def search_customer():
         query=request.form.get("query") if request.method == "POST" else ""
     )
 
+# ---------------------- Inserted routes ----------------------
+
+@app.route("/check_parent_link")
+@login_required
+def check_parent_link():
+    vid = session.get("vid")
+    pano_to_check = request.args.get("pano", "").strip()
+
+    if not pano_to_check or not vid:
+        return jsonify(found=False, accounts=[])
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # Find all accounts linked through this parent account number
+        cur.execute("""
+            SELECT DISTINCT ano
+            FROM (
+                SELECT ano, pano
+                FROM customer
+                WHERE vid = %s
+
+                UNION ALL
+
+                SELECT ano, pano
+                FROM closed_cust_account
+                WHERE vid = %s
+            ) linked_accounts
+            WHERE CAST(pano AS TEXT) = %s
+               OR CAST(ano AS TEXT) = %s
+            ORDER BY ano
+        """, (vid, vid, pano_to_check, pano_to_check))
+
+        rows = cur.fetchall()
+        accounts = [str(r[0]) for r in rows if r and r[0] is not None]
+
+        return jsonify(
+            found=len(accounts) > 0,
+            accounts=accounts
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(found=False, error=str(e), accounts=[]), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route("/print_customer/<ano>")
+@login_required
+def print_customer(ano):
+    vid = session.get("vid")
+
+    if not vid:
+        flash("Please select Village first", "warning")
+        return redirect(url_for("dashboard"))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # Fetch customer from active + closed tables
+        cur.execute("""
+            SELECT
+                cid,
+                ano,
+                name,
+                pano,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                status
+            FROM (
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    pano,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    'active' AS status
+                FROM customer
+                WHERE vid = %s
+
+                UNION ALL
+
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    pano,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    status
+                FROM closed_cust_account
+                WHERE vid = %s
+            ) customer_data
+            WHERE CAST(ano AS TEXT) = %s
+            LIMIT 1
+        """, (vid, vid, str(ano)))
+
+        customer = cur.fetchone()
+
+        if not customer:
+            return "Customer not found.", 404
+
+        cur.execute("""
+            SELECT
+                ano,
+                TO_CHAR(payment_date, 'DD/MM/YYYY') AS pdt,
+                amt,
+                pid
+            FROM (
+                SELECT ano, payment_date, amt, pid, cid
+                FROM payment
+
+                UNION ALL
+
+                SELECT ano, payment_date, amt, pid, cid
+                FROM closed_cust_payment
+            ) payment_data
+            WHERE cid = %s
+            ORDER BY payment_date, pid
+        """, (customer[0],))
+
+        payments = cur.fetchall()
+
+        customer_data = {
+            "cid": customer[0],
+            "ano": customer[1],
+            "name": customer[2],
+            "pano": customer[3],
+            "start_date": customer[4],
+            "end_date": customer[5],
+            "total_amount": float(customer[6] or 0),
+            "paid_amount": float(customer[7] or 0),
+            "balance_amount": float(customer[8] or 0),
+            "installment_amount": float(customer[9] or 0),
+            "type": customer[10],
+            "period": customer[11],
+            "status": customer[12]
+        }
+
+        payments_data = [
+            {
+                "ano": row[0],
+                "pdt": row[1],
+                "amt": float(row[2] or 0),
+                "pid": row[3]
+            }
+            for row in payments
+        ]
+
+        return render_template(
+            "customer_print.html",
+            customer=customer_data,
+            payments=payments_data
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        return f"Something went wrong: {e}", 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route("/search_postings", methods=["POST"])
+@login_required
+def search_postings():
+    vid = session.get("vid")
+
+    if not vid:
+        return jsonify(success=False, error="No village selected"), 400
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify(success=False, error="No data received"), 400
+
+    ano = str(data.get("ano", "")).strip()
+    date = str(data.get("date", "")).strip()
+
+    if not ano and not date:
+        return jsonify(success=False, error="Provide A.no or Date"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        query = """
+            SELECT
+                ano AS \"ANO\",
+                TO_CHAR(payment_date, 'DD/MM/YYYY') AS \"PDT\",
+                amt AS \"AMT\"
+            FROM payment
+            WHERE vid = %s
+        """
+
+        params = [vid]
+
+        if ano:
+            query += " AND CAST(ano AS TEXT) = %s"
+            params.append(ano)
+
+        if date:
+            query += " AND TO_CHAR(payment_date, 'DD/MM/YYYY') = %s"
+            params.append(date)
+
+        query += " ORDER BY payment_date, pid"
+
+        cur.execute(query, params)
+
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        rows = cur.fetchall()
+
+        results = [dict(zip(columns, row)) for row in rows]
+
+        return jsonify(success=True, data=results)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
 
 @app.route("/api/customer/close_account_pg", methods=["POST"])
 @login_required
@@ -1908,7 +2351,7 @@ def close_customer_account_pg():
                 %s, NOW() AT TIME ZONE 'Asia/Kolkata'
             FROM customer
             WHERE cid = %s
-        """, (final_status, session.get("employee_id"), cid))
+        """, (final_status, session.get("employee_id") or session.get("eid"), cid))
 
         # 2️⃣ Move payments (explicit columns)
         cur.execute("""
@@ -1927,6 +2370,16 @@ def close_customer_account_pg():
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
 
+        audit_log(
+            action="close_customer_account",
+            entity_type="customer",
+            entity_id=cid,
+            details={
+                "status": final_status,
+                "paid_amount": str(paid_amount),
+                "balance_amount": str(balance_amount)
+            }
+        )
         conn.commit()
 
         return jsonify({
@@ -1963,7 +2416,7 @@ def retrieve_customer_account_pg():
                 type, period, created_at,
                 aadhaar_number, notes,
                 latitude, longitude, eid
-            )
+            ) OVERRIDING SYSTEM VALUE
             SELECT
                 cid, ano, name, vid,
                 start_date, end_date,
@@ -1992,6 +2445,11 @@ def retrieve_customer_account_pg():
         cur.execute("DELETE FROM closed_cust_payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM closed_cust_account WHERE cid = %s", (cid,))
 
+        audit_log(
+            action="retrieve_customer_account",
+            entity_type="customer",
+            entity_id=cid
+        )
         conn.commit()
 
         return jsonify({"success": True})
@@ -2034,6 +2492,17 @@ def update_village():
         ))
 
         conn.commit()
+        audit_log(
+            action="update_village",
+            entity_type="village",
+            entity_id=vid,
+            details={
+                "village_code": data.get("village_code"),
+                "village_name": data.get("village_name"),
+                "emp1": data.get("emp1"),
+                "emp2": data.get("emp2")
+            }
+        )
         return jsonify(success=True)
 
     except Exception as e:
@@ -2045,6 +2514,7 @@ def update_village():
         conn.close()
 
 @app.route("/feed")
+@login_required
 def feed():
     print("Accessing feed...")
     vid = session.get("vid")
@@ -2152,7 +2622,7 @@ def accept_customer(feed_id):
     cur = conn.cursor()
 
     # Safety check: ensure logged-in employee
-    logged_user = session.get("employee_id")
+    logged_user = session.get("eid")
 
     if not logged_user:
         return {"success": False, "error": "User not logged properly"}
@@ -2239,6 +2709,17 @@ def accept_customer(feed_id):
     cur.execute("SET TIME ZONE 'UTC'")
 
     conn.commit()
+    audit_log(
+        action="accept_customer_feed",
+        entity_type="customer_feed",
+        entity_id=feed_id,
+        details={
+            "ano": data.get("ano"),
+            "vid": data.get("vid"),
+            "eid": data.get("eid"),
+            "reviewed_by": logged_user
+        }
+    )
     cur.close()
     conn.close()
 
@@ -2319,6 +2800,18 @@ def accept_payment(feed_payment_id):
     """, (logged_user, feed_payment_id))
 
     conn.commit()
+    audit_log(
+        action="accept_payment_feed",
+        entity_type="payment_feed",
+        entity_id=feed_payment_id,
+        details={
+            "ano": ano,
+            "vid": vid,
+            "eid": eid,
+            "amt": str(amt),
+            "reviewed_by": logged_user
+        }
+    )
     cur.close()
     conn.close()
 
@@ -2396,17 +2889,26 @@ def accept_payment_batch():
         if not insert_values:
             return {"success": False, "error": "No valid payments to insert"}
 
-        # 3️⃣ BULK INSERT (single query)
-        args_str = ",".join(cur.mogrify("(%s,%s,%s,%s,%s,%s)", v).decode() for v in insert_values)
-
-        cur.execute(f"""
-            INSERT INTO payment (cid, vid, eid, ano, amt, payment_date)
-            VALUES {args_str}
-        """)
+        # 3️⃣ BULK INSERT (safe + parameterized)
+        execute_values(
+            cur,
+            """
+                INSERT INTO payment (
+                    cid,
+                    vid,
+                    eid,
+                    ano,
+                    amt,
+                    payment_date
+                )
+                VALUES %s
+            """,
+            insert_values,
+            template="(%s,%s,%s,%s,%s,%s)"
+        )
 
         # 4️⃣ Update customers (optimized)
         for ano, (cid, total_amt) in customer_map.items():
-
             recalc_customer_balance(cur, cid)
 
         # 5️⃣ Mark all as accepted
@@ -2419,6 +2921,16 @@ def accept_payment_batch():
         """, (logged_user, ids))
 
         conn.commit()
+        audit_log(
+            action="accept_payment_batch",
+            entity_type="payment_feed",
+            entity_id=vid,
+            details={
+                "reviewed_by": logged_user,
+                "selected_feed_ids": ids,
+                "payments_inserted": len(insert_values)
+            }
+        )
         conn.close()
 
         return {
@@ -2641,6 +3153,16 @@ def delete_payment():
             cid, total_amt = row
 
             recalc_customer_balance(cur, cid)
+
+        audit_log(
+            action="delete_payment",
+            entity_type="payment",
+            entity_id=ano,
+            details={
+                "vid": vid,
+                "payment_date": str(pdt)
+            }
+        )
 
         conn.commit()
         return jsonify(success=True)
@@ -2906,15 +3428,15 @@ def login():
         # 1️⃣ Fetch user
         # ---------------------------
         cur.execute("""
-    SELECT u.id,
-           u.password_hash,
-           u.employee_id,
-           u.is_active,
-           e.level
-    FROM users u
-    JOIN employee e ON e.eid = u.employee_id
-    WHERE u.username = %s
-""", (username,))
+            SELECT u.id,
+                   u.password_hash,
+                   u.employee_id,
+                   u.is_active,
+                   e.level
+            FROM users u
+            JOIN employee e ON e.eid = u.employee_id
+            WHERE u.username = %s
+        """, (username,))
         user = cur.fetchone()
         if not user:
             flash("Invalid credentials")
@@ -2995,6 +3517,18 @@ def login():
         session["level"] = level
         session["villages"] = villages
 
+        audit_log(
+            action="login",
+            entity_type="user",
+            entity_id=user_id,
+            details={
+                "employee_id": employee_id,
+                "username": username,
+                "level": level,
+                "device_id": device_id
+            }
+        )
+
         return redirect("/dashboard")
 
     finally:
@@ -3003,6 +3537,14 @@ def login():
 
 @app.route("/logout")
 def logout():
+    audit_log(
+      action="logout",
+      entity_type="user",
+      entity_id=session.get("user_id"),
+      details={
+          "eid": session.get("eid")
+      }
+    )
     session.clear()
     flash("Logged out", "info")
     return redirect(url_for("login"))

@@ -190,7 +190,8 @@ function saveVillageEdit() {
         village_code,
         village_name,
         emp1,
-        emp2
+        emp2,
+        new_name: village_name
       })
     })
     .then(res => res.json())
