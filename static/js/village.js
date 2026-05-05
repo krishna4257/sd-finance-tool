@@ -174,6 +174,11 @@ function saveVillageEdit() {
   const emp1 = document.getElementById("edit_emp1").value;
   const emp2 = document.getElementById("edit_emp2").value;
 
+  // ⚠️ Warn if only one employee is assigned
+  if (emp1 && !emp2) {
+    alert("Only one employee selected for this village.");
+  }
+
   fetch(`/api/village/check?code=${village_code}&name=${village_name}&vid=${vid}`)
   .then(res => res.json())
   .then(check => {

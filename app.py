@@ -621,27 +621,69 @@ def api_create_village():
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # -------------------------
+        # -------------------------
     # DUPLICATE CHECK
     # -------------------------
+    village_code = (data.get("village_code") or "").strip().upper()
+    village_name = (data.get("village_name") or "").strip().upper()
+
     cur.execute("""
-        SELECT 1
+        SELECT village_code, village_name
         FROM village
         WHERE
             LOWER(village_code) = LOWER(%s)
             OR LOWER(village_name) = LOWER(%s)
+        LIMIT 1
     """, (
-        data["village_code"],
-        data["village_name"]
+        village_code,
+        village_name
     ))
 
-    if cur.fetchone():
-        cur.close()
-        conn.close()
-        return jsonify({
-            "success": False,
-            "error": "Village already exists for this employee"
-        })
+    existing = cur.fetchone()
+
+    if existing:
+        existing_code, existing_name = existing
+
+        # Same code + same name
+        if (
+            existing_code
+            and existing_name
+            and existing_code.strip().lower() == village_code.lower()
+            and existing_name.strip().lower() == village_name.lower()
+        ):
+            cur.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "Village already exists with same code and village name"
+            })
+
+        # Same village code
+        if (
+            existing_code
+            and existing_code.strip().lower() == village_code.lower()
+        ):
+            cur.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": f"Village code '{village_code}' already exists"
+            })
+
+        # Same village name
+        if (
+            existing_name
+            and existing_name.strip().lower() == village_name.lower()
+        ):
+            cur.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": f"Village name '{village_name}' already exists"
+            })
 
     # -------------------------
     # STATE-BASED VID GENERATION
@@ -730,13 +772,57 @@ def api_create_employee():
         if not result:
             return jsonify(success=False, error="Failed to generate EID"), 500
         new_eid = result[0]
-        # 🔒 Prevent duplicate employee names (case-insensitive)
+
+        phone_number = (data.get("phone_number") or "").strip()
+
+        # 🔒 Prevent duplicate employee name + phone combinations
         cur.execute(
-            "SELECT 1 FROM employee WHERE LOWER(name) = LOWER(%s)",
-            (name,)
+            """
+            SELECT name, phone_number
+            FROM employee
+            WHERE LOWER(name) = LOWER(%s)
+               OR phone_number = %s
+            LIMIT 1
+            """,
+            (name, phone_number)
         )
-        if cur.fetchone():
-            return jsonify(success=False, error="Employee already exists")
+
+        existing_employee = cur.fetchone()
+
+        if existing_employee:
+            existing_name, existing_phone = existing_employee
+
+            # Same name + same phone
+            if (
+                existing_name
+                and existing_phone
+                and existing_name.strip().lower() == name.lower()
+                and str(existing_phone).strip() == phone_number
+            ):
+                return jsonify(
+                    success=False,
+                    error="Employee already exists with same name and mobile number"
+                )
+
+            # Same employee name
+            if (
+                existing_name
+                and existing_name.strip().lower() == name.lower()
+            ):
+                return jsonify(
+                    success=False,
+                    error=f"Employee name '{name}' already exists"
+                )
+
+            # Same phone number
+            if (
+                existing_phone
+                and str(existing_phone).strip() == phone_number
+            ):
+                return jsonify(
+                    success=False,
+                    error=f"Mobile number '{phone_number}' is already assigned to another employee"
+                )
 
         cur.execute("""
             INSERT INTO employee (eid, name, phone_number, city, joining_date, level, state, is_active)
@@ -745,7 +831,7 @@ def api_create_employee():
         """, (
             new_eid,
             name,
-            data.get("phone_number"),
+            phone_number,
             data.get("city"),
             data.get("joining_date"),
             data.get("level"),
@@ -2474,6 +2560,62 @@ def update_village():
     conn = get_pg_connection()
     cur = conn.cursor()
 
+    village_code = (data.get("village_code") or "").strip().upper()
+    village_name = (data.get("village_name") or "").strip().upper()
+
+        # 🔒 Prevent duplicate village code / village name
+    cur.execute("""
+            SELECT vid, village_code, village_name
+            FROM village
+            WHERE vid != %s
+              AND (
+                    LOWER(village_code) = LOWER(%s)
+                    OR LOWER(village_name) = LOWER(%s)
+                  )
+            LIMIT 1
+        """, (
+            vid,
+            village_code,
+            village_name
+        ))
+
+    existing = cur.fetchone()
+
+    if existing:
+        existing_vid, existing_code, existing_name = existing
+
+            # Same code + same name
+        if (
+            existing_code
+            and existing_name
+            and existing_code.strip().lower() == village_code.lower()
+            and existing_name.strip().lower() == village_name.lower()
+        ):
+            return jsonify(
+                success=False,
+                error="Another village already exists with same code and village name"
+            )
+
+            # Same village code
+        if (
+            existing_code
+            and existing_code.strip().lower() == village_code.lower()
+        ):
+            return jsonify(
+                success=False,
+                error=f"Village code '{village_code}' already exists"
+            )
+
+            # Same village name
+        if (
+            existing_name
+            and existing_name.strip().lower() == village_name.lower()
+        ):
+            return jsonify(
+                success=False,
+                error=f"Village name '{village_name}' already exists"
+            )
+
     try:
         cur.execute("""
             UPDATE village
@@ -2484,8 +2626,8 @@ def update_village():
               emp2 = %s
             WHERE vid = %s
         """, (
-            data.get("village_code"),
-            data.get("village_name"),
+            village_code,
+            village_name,
             data.get("emp1"),
             data.get("emp2"),
             vid
@@ -2497,8 +2639,8 @@ def update_village():
             entity_type="village",
             entity_id=vid,
             details={
-                "village_code": data.get("village_code"),
-                "village_name": data.get("village_name"),
+                "village_code": village_code,
+                "village_name": village_name,
                 "emp1": data.get("emp1"),
                 "emp2": data.get("emp2")
             }
@@ -3315,29 +3457,109 @@ def update_employee_in_db(data):
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        UPDATE employee
-        SET
-            name = %s,
-            phone_number = %s,
-            city = %s,
-            joining_date = %s,
-            level = %s,
-            state = %s
-        WHERE eid = %s
-    """, (
-        data.get("name"),
-        data.get("phone_number"),
-        data.get("city"),
-        data.get("joining_date"),
-        data.get("level"),
-        data.get("state"),
-        data.get("eid"),
-    ))
+    try:
+        eid = data.get("eid")
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        name = (data.get("name") or "").strip()
+        phone_number = (data.get("phone_number") or "").strip()
+
+        # 🔒 Required validation
+        if not name:
+            return {
+                "success": False,
+                "error": "Employee name is required"
+            }
+
+        # 🔒 Prevent duplicate employee name / phone while editing
+        cur.execute(
+            """
+            SELECT eid, name, phone_number
+            FROM employee
+            WHERE eid != %s
+              AND (
+                    LOWER(name) = LOWER(%s)
+                    OR phone_number = %s
+                  )
+            LIMIT 1
+            """,
+            (eid, name, phone_number)
+        )
+
+        existing_employee = cur.fetchone()
+
+        if existing_employee:
+            existing_eid, existing_name, existing_phone = existing_employee
+
+            # Same name + same phone
+            if (
+                existing_name
+                and existing_phone
+                and existing_name.strip().lower() == name.lower()
+                and str(existing_phone).strip() == phone_number
+            ):
+                return {
+                    "success": False,
+                    "error": "Another employee already exists with same name and mobile number"
+                }
+
+            # Same employee name
+            if (
+                existing_name
+                and existing_name.strip().lower() == name.lower()
+            ):
+                return {
+                    "success": False,
+                    "error": f"Employee name '{name}' already exists"
+                }
+
+            # Same phone number
+            if (
+                existing_phone
+                and str(existing_phone).strip() == phone_number
+            ):
+                return {
+                    "success": False,
+                    "error": f"Mobile number '{phone_number}' is already assigned to another employee"
+                }
+
+        # ✅ Update employee
+        cur.execute("""
+            UPDATE employee
+            SET
+                name = %s,
+                phone_number = %s,
+                city = %s,
+                joining_date = %s,
+                level = %s,
+                state = %s
+            WHERE eid = %s
+        """, (
+            name,
+            phone_number,
+            data.get("city"),
+            data.get("joining_date"),
+            data.get("level"),
+            data.get("state"),
+            eid,
+        ))
+
+        conn.commit()
+
+        return {
+            "success": True
+        }
+
+    except Exception as e:
+        conn.rollback()
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+    finally:
+        cur.close()
+        conn.close()
 
 
 def delete_employee_from_db(eid):
@@ -3368,8 +3590,11 @@ def employee_page():
 def update_employee():
     data = request.json
     try:
-        update_employee_in_db(data)  # implement in repo
-        return jsonify(success=True)
+        result = update_employee_in_db(data)  # implement in repo
+        if result["success"]:
+            return jsonify(success=True)
+        else:
+            return jsonify(success=False, error=result["error"])
     except Exception as e:
         return jsonify(success=False, error=str(e))
     
@@ -3439,7 +3664,7 @@ def login():
         """, (username,))
         user = cur.fetchone()
         if not user:
-            flash("Invalid credentials")
+            flash("Incorrect username. Please contact admin to reset credentials")
             return redirect("/login")
 
         user_id, password_hash, employee_id, is_active, level = user
@@ -3455,7 +3680,7 @@ def login():
         # 2️⃣ Check password
         # ---------------------------
         if not check_password_hash(password_hash, password):
-            flash("Invalid credentials")
+            flash("Incorrect password. Please contact admin to reset credentials")
             return redirect("/login")
 
         # ---------------------------

@@ -92,6 +92,11 @@ function enableEdit(btn) {
 
   if (btn.innerText === "Edit") {
 
+    // Store original values before editing
+    row.querySelectorAll("td[data-field]").forEach(td => {
+      td.dataset.originalValue = td.innerText.trim();
+    });
+
     row.querySelectorAll("td[data-field]").forEach(td => {
       if (td.dataset.field !== "eid") {
         td.contentEditable = true;
@@ -104,10 +109,9 @@ function enableEdit(btn) {
   } else {
 
     const updatedData = {};
+
     row.querySelectorAll("td[data-field]").forEach(td => {
       updatedData[td.dataset.field] = td.innerText.trim();
-      td.contentEditable = false;
-      td.classList.remove("highlighted");
     });
 
     csrfFetch("/api/update_employee", {
@@ -118,10 +122,44 @@ function enableEdit(btn) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
+
+        // Save successful → lock row
+        row.querySelectorAll("td[data-field]").forEach(td => {
+          td.contentEditable = false;
+          td.classList.remove("highlighted");
+
+          // Update original values after successful save
+          td.dataset.originalValue = td.innerText.trim();
+        });
+
         btn.innerText = "Edit";
+
       } else {
+
+        // Restore original values on failed save
+        row.querySelectorAll("td[data-field]").forEach(td => {
+          td.innerText = td.dataset.originalValue || "";
+          td.contentEditable = false;
+          td.classList.remove("highlighted");
+        });
+
+        btn.innerText = "Edit";
+
         alert("Update failed: " + data.error);
       }
+    })
+    .catch(err => {
+
+      // Restore original values on request failure
+      row.querySelectorAll("td[data-field]").forEach(td => {
+        td.innerText = td.dataset.originalValue || "";
+        td.contentEditable = false;
+        td.classList.remove("highlighted");
+      });
+
+      btn.innerText = "Edit";
+
+      alert("Request failed: " + err.message);
     });
   }
 }
