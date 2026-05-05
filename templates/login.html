@@ -23,6 +23,39 @@
         <!-- Title -->
         <h2 class="page-title" style="margin-bottom:25px;">Login</h2>
 
+        <!-- Error Messages -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div style="
+                    background: rgba(255, 77, 77, 0.12);
+                    border: 1px solid rgba(255, 77, 77, 0.35);
+                    color: #ffb3b3;
+                    padding: 12px 16px;
+                    border-radius: 12px;
+                    margin-bottom: 20px;
+                    font-size: 14px;
+                    text-align: center;
+                ">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if error %}
+            <div style="
+                background: rgba(255, 77, 77, 0.12);
+                border: 1px solid rgba(255, 77, 77, 0.35);
+                color: #ffb3b3;
+                padding: 12px 16px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                text-align: center;
+            ">
+                {{ error }}
+            </div>
+        {% endif %}
+
         <!-- LOGIN FORM -->
         <form method="POST" action="/login">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

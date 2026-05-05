@@ -355,6 +355,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+        // ⚠️ Warn if only one employee selected
+        // ⚠️ Confirm if only one employee selected
+    if (payload.emp1_eid && !payload.emp2_eid) {
+
+      const proceed = confirm(
+        "Only one employee selected for this village.\n\n" +
+        "Click OK to continue creating the village.\n" +
+        "Click Cancel to select a second employee."
+      );
+
+      if (!proceed) {
+        return;
+      }
+    }
+
     csrfFetch("/api/create_village", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
