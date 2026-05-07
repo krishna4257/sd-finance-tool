@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
       ano: clean(cells[anoIdx]?.textContent || "").toLowerCase(),
       pano: clean(cells[panoIndex]?.textContent || "").toLowerCase(),
       name: (cells[nameIdx]?.textContent || "").trim().toLowerCase(),
+      phone_number: (cells[headers.indexOf("phone_number")]?.textContent || "").trim(),
       total_amount: parseFloat(clean(cells[amtIndex]?.textContent || "0")) || 0,
       paid_amount: parseFloat(clean(cells[pamtIndex]?.textContent || "0")) || 0,
       balance_amount: parseFloat(clean(cells[bamtIndex]?.textContent || "0")) || 0,
@@ -50,9 +51,45 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   window.applySearch = function () {
-    const term = document.getElementById("searchBox").value.trim().toLowerCase();
-    snapshot.forEach(d => {d.row.style.display = term === "" || d.ano === term || d.name.includes(term) ? "" : "none";
+    const rawTerm = document.getElementById("searchBox").value.trim();
+    const term = rawTerm.toLowerCase();
+
+    // Empty search → show all
+    if (!term) {
+      snapshot.forEach(d => {
+        d.row.style.display = "";
+      });
+      updateSummary();
+      return;
+    }
+
+    // 📱 Mobile number search (10 digits)
+    const isPhoneSearch = /^\d{10}$/.test(term);
+
+    // 🔢 Account number search (only digits, but not 10-digit phone)
+    const isAnoSearch = /^\d+$/.test(term) && !isPhoneSearch;
+
+    // 🔤 Name search (contains letters)
+    const isNameSearch = /[a-z]/i.test(rawTerm);
+
+    snapshot.forEach(d => {
+      const phone = (d.phone_number || "").toLowerCase();
+
+      let show = false;
+
+      if (isPhoneSearch) {
+        show = phone === term;
+      } else if (isAnoSearch) {
+        // Exact ano match only
+        show = d.ano === term;
+      } else if (isNameSearch) {
+        // Name contains only
+        show = d.name.includes(term);
+      }
+
+      d.row.style.display = show ? "" : "none";
     });
+
     updateSummary();
   };
 

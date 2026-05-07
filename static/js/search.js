@@ -85,18 +85,94 @@ document.addEventListener("DOMContentLoaded", () => {
   if (editCustomerBtn && customerRow && saveCustomerBtn) {
     editCustomerBtn.addEventListener("click", () => {
       customerRow.querySelectorAll("td[data-field]").forEach((td) => {
-        if (!["ANO", "ADD1", "status"].includes(td.dataset.field)) {
+
+        // Store original value for rollback
+        td.dataset.originalValue = td.textContent.trim();
+
+        // Only customer name and total amount should be editable
+        if (
+          td.dataset.field === "name" ||
+          td.dataset.field === "total_amount"
+        ) {
           td.setAttribute("contenteditable", "true");
+          td.classList.add("highlighted");
         }
       });
       editCustomerBtn.style.display = "none";
       saveCustomerBtn.style.display = "inline-block";
     });
 
+    // Restrict invalid customer names during edit
+    customerRow.addEventListener("input", (e) => {
+      const td = e.target;
+
+      if (td.dataset.field === "name") {
+        // Allow only alphabets and spaces
+        td.textContent = td.textContent.replace(/[^a-zA-Z\s]/g, "");
+        // Prevent multiple spaces
+        td.textContent = td.textContent.replace(/\s{2,}/g, " ");
+        // Prevent leading spaces
+        td.textContent = td.textContent.replace(/^\s+/g, "");
+        placeCaretAtEnd(td);
+      }
+            // Live update BAMT when total amount changes
+      if (td.dataset.field === "total_amount") {
+
+        // Allow only valid numbers
+        td.textContent = td.textContent.replace(/[^0-9.]/g, "");
+
+        const amt = parseFloat(td.textContent) || 0;
+
+        const pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
+        const bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
+
+        const paidAmount = parseFloat(
+          (pamtCell?.textContent || "").replace(/[^0-9.-]/g, "")
+        ) || 0;
+
+        const balance = amt - paidAmount;
+
+        if (bamtCell) {
+          bamtCell.textContent = balance.toFixed(2);
+        }
+
+        placeCaretAtEnd(td);
+      }
+    });
+
     saveCustomerBtn.addEventListener("click", () => {
       const updatedData = {
          cid: customerRow.dataset.cid
       };
+
+      const nameCell = customerRow.querySelector("td[data-field='name']");
+      const customerName = (nameCell?.textContent || "").trim();
+
+      // Remove spaces to calculate actual letters
+      const lettersOnly = customerName.replace(/\s/g, "");
+
+      // Must contain only alphabets and spaces
+      const validNamePattern = /^[A-Za-z ]+$/;
+
+      if (
+        !customerName ||
+        !validNamePattern.test(customerName) ||
+        lettersOnly.length < 3
+      ) {
+
+        // Restore original value
+        if (nameCell) {
+          nameCell.textContent = nameCell.dataset.originalValue || "";
+          nameCell.setAttribute("contenteditable", "false");
+          nameCell.classList.remove("highlighted");
+        }
+
+        saveCustomerBtn.style.display = "none";
+        editCustomerBtn.style.display = "inline-block";
+
+        alert("Customer name must contain at least 3 letters and cannot contain numbers or special characters");
+        return;
+      }
 
       customerRow.querySelectorAll("td[data-field]").forEach(td => {
           updatedData[td.dataset.field] = td.textContent.trim();
@@ -112,14 +188,39 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.success) {
           customerRow.querySelectorAll("td").forEach((td) => {
             td.setAttribute("contenteditable", "false");
+            td.classList.remove("highlighted");
           });
           saveCustomerBtn.style.display = "none";
           editCustomerBtn.style.display = "inline-block";
         } else {
+
+          // Restore original values on failed save
+          customerRow.querySelectorAll("td[data-field]").forEach((td) => {
+            td.textContent = td.dataset.originalValue || td.textContent;
+            td.setAttribute("contenteditable", "false");
+            td.classList.remove("highlighted");
+          });
+
+          saveCustomerBtn.style.display = "none";
+          editCustomerBtn.style.display = "inline-block";
+
           alert("Update failed: " + data.error);
         }
       })
-      .catch((err) => alert("Error: " + err.message));
+      .catch((err) => {
+
+        // Restore original values on request failure
+        customerRow.querySelectorAll("td[data-field]").forEach((td) => {
+          td.textContent = td.dataset.originalValue || td.textContent;
+          td.setAttribute("contenteditable", "false");
+          td.classList.remove("highlighted");
+        });
+
+        saveCustomerBtn.style.display = "none";
+        editCustomerBtn.style.display = "inline-block";
+
+        alert("Error: " + err.message);
+      });
     });
   }
 
@@ -658,7 +759,7 @@ function updateCustomerSummary() {
     const customerRow = document.querySelector("#customerTable tbody tr");
     if (!customerRow) return;
 
-    const amtCellCust = customerRow.querySelector("td[data-field='AMT']");
+    const amtCellCust = customerRow.querySelector("td[data-field='total_amount']");
     const amt = parseFloat((amtCellCust?.textContent || "").replace(/[^0-9.-]/g, "")) || 0;
 
     const paymentRows = document.querySelectorAll("#paymentTable tbody tr");
@@ -671,8 +772,8 @@ function updateCustomerSummary() {
         totalPaid += a;
     });
 
-    let pamtCell = customerRow.querySelector("td[data-field='PAMT']");
-    let bamtCell = customerRow.querySelector("td[data-field='BAMT']");
+    let pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
+    let bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
 
     if (pamtCell) pamtCell.innerText = totalPaid.toLocaleString();
     if (bamtCell) bamtCell.innerText = (amt - totalPaid).toLocaleString();
@@ -757,9 +858,9 @@ function updateCustomerSummary() {
     document.getElementById("anoCount").textContent = rows.length;
     applyGlobalMoneyFormatting();
     if (customerRow) {
-      const amtCell = customerRow.querySelector("td[data-field='AMT']");
-      const pamtCell = customerRow.querySelector("td[data-field='PAMT']");
-      const bamtCell = customerRow.querySelector("td[data-field='BAMT']");
+      const amtCell = customerRow.querySelector("td[data-field='total_amount']");
+      const pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
+      const bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
       const amt = parseFloat(amtCell?.textContent.trim()) || 0;
       if (pamtCell && bamtCell) {
         pamtCell.textContent = totalAmt.toFixed(2);
@@ -770,9 +871,9 @@ function updateCustomerSummary() {
 
   // --- Auto-calculation Functions ---
   function recalculateBAMT(row) {
-    const amtCell = row.querySelector('td[data-field="AMT"]');
-    const pamtCell = row.querySelector('td[data-field="PAMT"]');
-    const bamtCell = row.querySelector('td[data-field="BAMT"]');
+    const amtCell = row.querySelector('td[data-field="total_amount"]');
+    const pamtCell = row.querySelector('td[data-field="paid_amount"]');
+    const bamtCell = row.querySelector('td[data-field="balance_amount"]');
     const amt = parseFloat(amtCell.textContent.trim());
     const pamt = parseFloat(pamtCell.textContent.trim());
     if (!isNaN(amt) && !isNaN(pamt)) {
@@ -825,7 +926,7 @@ function updateCustomerSummary() {
           });
         }
       });
-      ["AMT"].forEach((field) => {
+      ["total_amount"].forEach((field) => {
         const cell = customerRow.querySelector(`td[data-field="${field}"]`);
         if (cell) {
           cell.addEventListener("input", () => {

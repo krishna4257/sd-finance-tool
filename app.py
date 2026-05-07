@@ -600,6 +600,24 @@ def check_employee():
 
     return jsonify(found=bool(row))
 
+# ------------------ New API: Get next available Employee ID ------------------
+@app.route("/api/employee/next_eid")
+@login_required
+def api_next_employee_eid():
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT COALESCE(MAX(eid), 0) + 1 FROM employee")
+        result = cur.fetchone()
+        next_eid = result[0] if result else 1
+
+        return jsonify({"next_eid": next_eid})
+
+    finally:
+        cur.close()
+        conn.close()
+
 STATE_CODE_MAP = {
     "ANDHRA PRADESH": 11,
     "TELANGANA": 12,
@@ -949,7 +967,8 @@ def get_all_customers_by_context(vid):
   notes,
   latitude,
   longitude,
-  eid
+  eid,
+  phone_number
 FROM customer
 WHERE vid = %s
 ORDER BY ano;
@@ -980,7 +999,8 @@ ORDER BY ano;
             "notes": r[15],
             "latitude": r[16],
             "longitude": r[17],
-            "eid": r[18]
+            "eid": r[18],
+            "phone_number": r[19]
         })
 
     return customers
@@ -1040,7 +1060,7 @@ def insert_customer(data):
                     total_amount, paid_amount, balance_amount, installment_amount,
                     type, period,
                     aadhaar_number, notes,
-                    latitude, longitude,
+                    latitude, longitude,phone_number,
                     status
                 )
                 VALUES (
@@ -1049,7 +1069,7 @@ def insert_customer(data):
                     %(total_amount)s, %(paid_amount)s, %(balance_amount)s, %(installment_amount)s,
                     %(type)s, %(period)s,
                     %(aadhaar_number)s, %(notes)s,
-                    %(latitude)s, %(longitude)s,
+                    %(latitude)s, %(longitude)s, %(phone_number)s,
                     'open'
                 )
                 RETURNING cid
@@ -1655,6 +1675,7 @@ def add_customer():
             "ano": ano,
             "name": data["name"].strip(),
             "pano": data.get("pano") or None,
+            "phone_number": (data.get("phone_number") or "").strip() or None,
             "vid": vid,
             "eid": eid,
             "start_date": fdt,
@@ -1738,6 +1759,7 @@ def view_customers():
                 latitude,
                 longitude,
                 eid,
+                phone_number,
                 status
             FROM closed_cust_account
             WHERE vid = %s
@@ -1765,6 +1787,7 @@ def view_customers():
                 latitude,
                 longitude,
                 eid,
+                phone_number,
                 'active' AS status
             FROM customer
             WHERE vid = %s
@@ -2188,6 +2211,7 @@ def print_customer(ano):
                 installment_amount,
                 type,
                 period,
+                phone_number,
                 status
             FROM (
                 SELECT
@@ -2203,6 +2227,7 @@ def print_customer(ano):
                     installment_amount,
                     type,
                     period,
+                    phone_number,
                     'active' AS status
                 FROM customer
                 WHERE vid = %s
@@ -2222,6 +2247,7 @@ def print_customer(ano):
                     installment_amount,
                     type,
                     period,
+                    phone_number,
                     status
                 FROM closed_cust_account
                 WHERE vid = %s
@@ -2269,7 +2295,8 @@ def print_customer(ano):
             "installment_amount": float(customer[9] or 0),
             "type": customer[10],
             "period": customer[11],
-            "status": customer[12]
+            "status": customer[12],
+            "phone_number": customer[13]
         }
 
         payments_data = [
@@ -2424,7 +2451,7 @@ def close_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, status,
+                latitude, longitude, eid, status, phone_number,
                 closed_by, closed_at
             )
             SELECT
@@ -2433,7 +2460,7 @@ def close_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, %s,
+                latitude, longitude, eid, phone_number, %s,
                 %s, NOW() AT TIME ZONE 'Asia/Kolkata'
             FROM customer
             WHERE cid = %s
@@ -2501,7 +2528,7 @@ def retrieve_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid
+                latitude, longitude, eid, phone_number
             ) OVERRIDING SYSTEM VALUE
             SELECT
                 cid, ano, name, vid,
@@ -2509,7 +2536,7 @@ def retrieve_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid
+                latitude, longitude, eid, phone_number
             FROM closed_cust_account
             WHERE cid = %s
         """, (cid,))
@@ -2708,6 +2735,7 @@ def feed():
             "ano": payload.get("ano"),
             "name": payload.get("name"),
             "pano": payload.get("pano"),
+            "phone_number": payload.get("phone_number"),
             "type": payload.get("type"),
             "period": payload.get("period"),
             "start_date": payload.get("start_date"),
@@ -2815,10 +2843,11 @@ def accept_customer(feed_id):
             latitude,
             longitude,
             eid,
+            phone_number,
             status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
     """,
     (
         data.get("ano"),
@@ -2837,6 +2866,7 @@ def accept_customer(feed_id):
         data.get("notes"),
         data.get("latitude"),
         data.get("longitude"),
+        data.get("phone_number"),
         data.get("eid")
     ))
 
@@ -3615,7 +3645,6 @@ def delete_employee():
 @app.route("/")
 @login_required
 def home():
-    print("⚠️ LOCAL mode: skipping GCS auth DB initialization")
     return redirect("/dashboard")
 
 def get_active_db_path():
@@ -3674,7 +3703,7 @@ def login():
             return render_template(
         "login.html",
         error="User account disabled by admin. Contact admin for activation."
-    )
+        )
 
         # ---------------------------
         # 2️⃣ Check password
