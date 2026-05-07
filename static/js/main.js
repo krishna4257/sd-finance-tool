@@ -295,13 +295,46 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===================================================
   // ADD EMPLOYEE MODAL
   // ===================================================
-  window.openAddEmployeeModal = target => {
+  window.openAddEmployeeModal = async target => {
     window.currentEmployeeTarget = target;
+
     document.getElementById("addEmployeeModal").style.display = "block";
+
+    // Reset form fields
+    empName.value = "";
+    empPhone.value = "";
+    empCity.value = "";
+    empJoiningDate.value = "";
+    empLevel.value = "";
+    empState.value = "";
+
+    // Load next employee ID
+    try {
+      const response = await fetch("/api/employee/next_eid");
+      const data = await response.json();
+
+      if (data.next_eid) {
+        empId.value = data.next_eid;
+      } else {
+        empId.value = "AUTO";
+      }
+    } catch (err) {
+      console.error("Failed to fetch next employee ID:", err);
+      empId.value = "AUTO";
+    }
   };
 
   window.closeAddEmployeeModal = () => {
     document.getElementById("addEmployeeModal").style.display = "none";
+
+    // Clear modal fields
+    empId.value = "";
+    empName.value = "";
+    empPhone.value = "";
+    empCity.value = "";
+    empJoiningDate.value = "";
+    empLevel.value = "";
+    empState.value = "";
   };
 
   window.submitAddEmployee = () => {

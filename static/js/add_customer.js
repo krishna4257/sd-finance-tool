@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const anoInput = document.getElementById('ano');
     const nameInput = document.getElementById('name');
     const panoInput = document.getElementById('pano');
+    const phoneNumberInput = document.getElementById('phone_number');
     const typeInput = document.getElementById('type');
     const periodInput = document.getElementById('period');
     const startDateInput = document.getElementById('start_date');
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function () {
       anoInput,
       nameInput,
       panoInput,
+      phoneNumberInput,
       typeInput,
       periodInput,
       startDateInput,
@@ -71,9 +73,26 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (submitButton) submitButton.disabled = !enabled;
     }
-document.getElementById("ano").addEventListener("input", function () {
-    this.value = this.value.replace(/[^0-9]/g, "");
-});
+
+    phoneNumberInput.addEventListener("input", function () {
+        this.value = this.value.replace(/[^0-9]/g, "").slice(0, 10);
+    });
+
+    // Restrict invalid customer names
+    nameInput.addEventListener("input", function () {
+        // Allow only letters and spaces
+        this.value = this.value.replace(/[^a-zA-Z\s]/g, "");
+
+        // Prevent multiple spaces
+        this.value = this.value.replace(/\s{2,}/g, " ");
+
+        // Prevent leading spaces
+        this.value = this.value.replace(/^\s+/g, "");
+    });
+
+    document.getElementById("ano").addEventListener("input", function () {
+        this.value = this.value.replace(/[^0-9]/g, "");
+    });
    
     function checkAno() {
     const ano = anoInput.value.trim();
@@ -113,8 +132,8 @@ anoInput.addEventListener("change", checkAno);
 
             if (currentIndex === -1) return;
 
-            const tabOrderFull = [anoInput, nameInput, panoInput, typeInput, periodInput, startDateInput, totalAmountInput];
-            const tabOrderSimplified = [nameInput, panoInput, totalAmountInput];
+            const tabOrderFull = [anoInput, nameInput, panoInput, phoneNumberInput, typeInput, periodInput, startDateInput, totalAmountInput];
+            const tabOrderSimplified = [nameInput, panoInput, phoneNumberInput, totalAmountInput];
             const currentTabOrder = loanFieldsSet ? tabOrderSimplified : tabOrderFull;
 
             const nextIndex = currentTabOrder.indexOf(e.target) + 1;
@@ -241,6 +260,29 @@ anoInput.addEventListener("change", checkAno);
         isSubmitting = true; // ✅ Set the flag to true
         
         const formData = new FormData(form);
+
+        // Customer name validation
+        const customerName = (nameInput.value || "").trim();
+
+        // Remove spaces to calculate actual letters
+        const lettersOnly = customerName.replace(/\s/g, "");
+
+        // Must contain only alphabets and spaces
+        const validNamePattern = /^[A-Za-z ]+$/;
+
+        if (
+            !customerName ||
+            !validNamePattern.test(customerName) ||
+            lettersOnly.length < 3
+        ) {
+            message.textContent = "Customer name must contain at least 3 letters and cannot contain numbers or special characters";
+            message.className = "message-box error";
+            message.style.display = 'block';
+
+            nameInput.focus();
+            isSubmitting = false;
+            return;
+        }
         
         message.textContent = "Saving...";
         message.className = "message-box";
@@ -266,10 +308,18 @@ anoInput.addEventListener("change", checkAno);
                 document.getElementById('name').value = '';
                 document.getElementById('aadhaar_number').value = '';
                 document.getElementById('pano').value = '';
+                document.getElementById('phone_number').value = '';
+
                 document.getElementById('total_amount').value = '';
-                document.getElementById('start_date').value = '';
-                document.getElementById('end_date').value = '';
-                document.getElementById('installment_amount').value = '';
+
+                // Keep these fields persistent for repeated customer entry
+                // type
+                // period
+                // start_date
+
+                // Recalculate derived fields using preserved values
+                calculateLoanFields();
+
                 document.getElementById('longitude').value = '';
                 document.getElementById('latitude').value = '';
                 
@@ -277,10 +327,11 @@ anoInput.addEventListener("change", checkAno);
                 if (parentInfoTooltip) parentInfoTooltip.style.display = 'none';
 
                 setFormFieldsEnabled(false); // Disable form again
-                window.location.reload();
+
                 anoInput.focus(); // Move cursor back to the A.no field
                 
-                loanFieldsSet = false; // Reset the loop state
+                // Keep simplified fast-entry workflow active
+                loanFieldsSet = true;
             }
         })
         .catch(err => {
@@ -309,6 +360,12 @@ anoInput.addEventListener("change", checkAno);
 
     if (!isNaN(highestAno)) {
       anoInput.value = highestAno + 1;
+    }
+
+    // Preserve previously selected loan configuration during repeated entries
+    if (typeInput.value && periodInput.value && startDateInput.value) {
+        loanFieldsSet = true;
+        calculateLoanFields();
     }
 
 });

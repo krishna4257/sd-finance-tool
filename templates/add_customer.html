@@ -16,14 +16,16 @@
     <div class="form-row">
       <div class="form-col">
         <label for="ano">Account Number</label>
-        <input id="ano" name="ano" type="text" inputmode="numeric" pattern="[0-9]*"
-placeholder="Account Number (ANO)" required data-tab-order="1">
+        <input id="ano" name="ano" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Account Number (ANO)" required data-tab-order="1">
 
         <label for="name">Name</label>
         <input id="name" name="name" type="text" placeholder="Customer Name" required data-tab-order="2">
 
         <label for="pano">Parent A.no</label>
         <input id="pano" name="pano" type="text" placeholder="Link to another account (optional)" data-tab-order="3">
+
+        <label for="phone_number">Phone Number</label>
+        <input id="phone_number" name="phone_number" type="text" placeholder="Phone Number" maxlength="10" inputmode="numeric">
 
         <label for="vid">Village Name</label>
         <input id="vid" name="vid" type="text" value="{{ village_name }}" readonly>
@@ -36,9 +38,6 @@ placeholder="Account Number (ANO)" required data-tab-order="1">
 
         <label for="notes">Notes</label>
         <input id="notes" name="notes" type="text" placeholder="Any additional notes">
-
-        <label for="latitude">Latitude</label>
-        <input id="latitude" name="latitude" type="text" placeholder="Latitude">
       </div>
 
       <div class="form-col">
@@ -62,6 +61,9 @@ placeholder="Account Number (ANO)" required data-tab-order="1">
 
         <label for="installment_amount">Installment Amount</label>
         <input id="installment_amount" name="installment_amount" type="number" step="0.01" readonly placeholder="Calculated automatically">
+
+        <label for="latitude">Latitude</label>
+        <input id="latitude" name="latitude" type="text" placeholder="Latitude">
 
         <label for="longitude">Longitude</label>
         <input id="longitude" name="longitude" type="text" placeholder="Longitude">

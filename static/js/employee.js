@@ -15,10 +15,42 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   window.applySearch = function () {
-    const term = document.getElementById("searchBox").value.toLowerCase();
+    const rawTerm = document.getElementById("searchBox").value.trim();
+    const term = rawTerm.toLowerCase();
+
     snapshot.forEach(d => {
-      d.row.style.display = term === "" || d.text.includes(term) ? "" : "none";
+      const row = d.row;
+
+      const eidCell = row.querySelector('td[data-field="eid"]');
+      const nameCell = row.querySelector('td[data-field="name"]');
+      const phoneCell = row.querySelector('td[data-field="phone_number"]');
+
+      const eid = eidCell ? eidCell.innerText.trim() : "";
+      const name = nameCell ? nameCell.innerText.toLowerCase().trim() : "";
+      const phone = phoneCell ? phoneCell.innerText.trim() : "";
+
+      let match = false;
+
+      // Empty search → show all
+      if (term === "") {
+        match = true;
+      }
+      // 10 digit number → search only phone number
+      else if (/^\d{10}$/.test(term)) {
+        match = phone.includes(term);
+      }
+      // 1 to 3 digit number → search only employee ID
+      else if (/^\d{1,3}$/.test(term)) {
+        match = eid === term;
+      }
+      // Text search → search only employee name
+      else {
+        match = name.includes(term);
+      }
+
+      row.style.display = match ? "" : "none";
     });
+
     updateSummary();
   };
 
