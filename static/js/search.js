@@ -417,7 +417,6 @@ document.addEventListener("DOMContentLoaded", () => {
               button.textContent = "💾 Save";
               button.setAttribute("data-editing", "true");
           } else {
-              const originalPdt = row.dataset.pdt;
               const ano = row.cells[0].textContent.trim();
               const newPdt = toISO(pdtCell.textContent.trim());
               const newAmt = parseFloat(amtCell.textContent.replace(/[^\d.-]/g, '')) || 0;
@@ -428,8 +427,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({
                   data: {
                     ano: row.dataset.ano,
-                    old_pdt: toISO(row.dataset.pdt),
-                    pdt: toISO(pdtCell.textContent.trim()),
+                    old_pdt: row.dataset.pdt,
+                    pdt: newPdt,
                     amt: newAmt
                   }
                 })
@@ -444,6 +443,9 @@ document.addEventListener("DOMContentLoaded", () => {
                   button.textContent = "✏️ Edit";
                   button.setAttribute("data-editing", "false");
                   row.dataset.pdt = newPdt;
+                  updatePostingTableTotals();
+                  updateCumulativeSum('postingTable');
+                  applyGlobalMoneyFormatting();
                 } else {
                   alert("Save failed: " + data.error);
                 }
@@ -482,9 +484,10 @@ document.addEventListener("DOMContentLoaded", () => {
               applyGlobalMoneyFormatting(); 
 
               if (data.success && data.data) {
-                  data.data.forEach((row) => {
+              data.data.forEach((row) => {
                       const tr = document.createElement("tr");
-                      tr.dataset.pdt = row.PDT;
+                      tr.dataset.ano = row.ANO;
+                      tr.dataset.pdt = toISO(row.PDT);
                       tr.innerHTML = `
                           <td>${row.ANO}</td>
                           <td data-field="PDT" contenteditable="false">${row.PDT}</td>
@@ -619,14 +622,30 @@ document.addEventListener("DOMContentLoaded", () => {
     csrfFetch("/delete_payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ano, pdt })
+      body: JSON.stringify({
+        ano,
+        pdt: toISO(pdt)
+      })
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        el.closest("tr").remove();
+        const dt = $.fn.DataTable.isDataTable('#postingTable')
+          ? $('#postingTable').DataTable()
+          : null;
+
+        const rowEl = el.closest("tr");
+
+        if (dt) {
+          dt.row(rowEl).remove().draw(false);
+        } else {
+          rowEl.remove();
+        }
+
         updatePostingTableTotals();
         updateCumulativeSum('postingTable');
+        applyGlobalMoneyFormatting();
+
       } else {
         alert("Delete failed: " + data.error);
       }
@@ -819,7 +838,7 @@ function updateCustomerSummary() {
 }
 
   function replacePostingDates(oldDate, newDate) {
-      csrfFetch("/update_posting_date_bulk", {
+      csrfFetch("/update_payment_date_bulk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ find_date: oldDate, replace_date: newDate })
@@ -991,9 +1010,21 @@ function updateCumulativeSum(tableId) {
     applyGlobalMoneyFormatting();
 }
 
-function toISO(dmy) {
-  const [d, m, y] = dmy.split("/");
-  return `${y}-${m}-${d}`;
+function toISO(dateStr) {
+  if (!dateStr) return "";
+
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Convert dd/mm/yyyy -> yyyy-mm-dd
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split("/");
+    return `${y}-${m}-${d}`;
+  }
+
+  return dateStr;
 }
 
   // Initial call after table is ready
