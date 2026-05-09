@@ -2132,51 +2132,212 @@ def search_customer():
         query=request.form.get("query") if request.method == "POST" else ""
     )
 
-# ---------------------- Inserted routes ----------------------
 
-@app.route("/check_parent_link")
+@app.route("/api/customer_family_full/<account_no>")
 @login_required
-def check_parent_link():
+def api_customer_family_full(account_no):
     vid = session.get("vid")
-    pano_to_check = request.args.get("pano", "").strip()
 
-    if not pano_to_check or not vid:
-        return jsonify(found=False, accounts=[])
+    if not vid:
+        return jsonify({
+            "success": False,
+            "error": "Village context missing",
+            "customers": []
+        }), 400
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
     try:
-        # Find all accounts linked through this parent account number
+        account_no = str(account_no).strip()
+
         cur.execute("""
-            SELECT DISTINCT ano
+            SELECT
+                cid,
+                ano,
+                name,
+                vid,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                pano,
+                created_at,
+                aadhaar_number,
+                notes,
+                latitude,
+                longitude,
+                eid,
+                phone_number,
+                status
             FROM (
-                SELECT ano, pano
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    phone_number,
+                    'active' AS status
                 FROM customer
                 WHERE vid = %s
 
                 UNION ALL
 
-                SELECT ano, pano
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    phone_number,
+                    status
                 FROM closed_cust_account
                 WHERE vid = %s
-            ) linked_accounts
-            WHERE CAST(pano AS TEXT) = %s
-               OR CAST(ano AS TEXT) = %s
-            ORDER BY ano
-        """, (vid, vid, pano_to_check, pano_to_check))
+            ) all_customers
+        """, (vid, vid))
 
         rows = cur.fetchall()
-        accounts = [str(r[0]) for r in rows if r and r[0] is not None]
 
-        return jsonify(
-            found=len(accounts) > 0,
-            accounts=accounts
+        family_map = {}
+        customer_map = {}
+
+        for row in rows:
+
+            customer = {
+                "cid": row[0],
+                "ano": str(row[1]).strip() if row[1] is not None else "",
+                "name": row[2],
+                "vid": row[3],
+                "start_date": row[4].isoformat() if row[4] else None,
+                "end_date": row[5].isoformat() if row[5] else None,
+                "total_amount": float(row[6] or 0),
+                "paid_amount": float(row[7] or 0),
+                "balance_amount": float(row[8] or 0),
+                "installment_amount": float(row[9] or 0),
+                "type": row[10],
+                "period": row[11],
+                "pano": str(row[12]).strip() if row[12] is not None else "",
+                "created_at": row[13].isoformat() if row[13] else None,
+                "aadhaar_number": row[14],
+                "notes": row[15],
+                "latitude": row[16],
+                "longitude": row[17],
+                "eid": row[18],
+                "phone_number": row[19],
+                "status": row[20]
+            }
+
+            ano = customer["ano"]
+            pano = customer["pano"]
+
+            if ano.endswith(".0"):
+                ano = ano[:-2]
+                customer["ano"] = ano
+
+            if pano.endswith(".0"):
+                pano = pano[:-2]
+                customer["pano"] = pano
+
+            if not ano:
+                continue
+
+            customer_map[ano] = customer
+
+            if ano not in family_map:
+                family_map[ano] = set()
+
+            if pano:
+
+                if pano not in family_map:
+                    family_map[pano] = set()
+
+                family_map[ano].add(pano)
+                family_map[pano].add(ano)
+
+        visited = set()
+        queue = [account_no]
+
+        while queue:
+
+            current = queue.pop(0)
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+
+            for linked in family_map.get(current, set()):
+
+                if linked not in visited:
+                    queue.append(linked)
+
+        customers = []
+
+        for acc in visited:
+
+            customer = customer_map.get(str(acc).strip())
+
+            if customer:
+                customers.append(customer)
+
+        customers = sorted(
+            customers,
+            key=lambda x: (
+                0,
+                int(str(x["ano"]).strip())
+            ) if str(x["ano"]).strip().isdigit() else (
+                1,
+                str(x["ano"]).strip()
+            )
         )
 
+        return jsonify({
+            "success": True,
+            "customers": customers
+        })
+
     except Exception as e:
+
         traceback.print_exc()
-        return jsonify(found=False, error=str(e), accounts=[]), 500
+
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "customers": []
+        }), 500
 
     finally:
         cur.close()

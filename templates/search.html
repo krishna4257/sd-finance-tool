@@ -134,7 +134,12 @@
     <label><input type="text" id="searchPostingDate" placeholder="Exact Date: dd/mm/yyyy"></label>
 
     <button type="submit" class="neumorphic-btn small">🔍 Find</button>
-    <button type="button" id="bulkDateChangeBtnPosting" class="neumorphic-btn small">🛠️ Edit All Dates</button>
+    <button type="button"
+            id="bulkDateChangeBtnPosting"
+            class="neumorphic-btn small"
+            data-mode="posting">
+      🛠️ Edit All Dates
+    </button>
   </form>
 
   <div class="scroll-table-container" style="margin-top:20px;">
@@ -145,10 +150,10 @@
             <th>PDT</th>
             <th>AMT</th>
             <th>Cumulative</th>
-            <th class="nosort">Action</th>
+            <th class="nosort action-column">Action</th>
           </tr>
       </thead>
-      <tbody></tbody>
+      <tbody id="postingTableBody"></tbody>
       <tfoot>
         <tr>
           <td colspan="2"><strong>Total:</strong> <span id="postingEntryCount"></span></td>
@@ -159,6 +164,8 @@
   </div>
 
   <div class="message-box" id="postingMessageBox" style="display:none;"></div>
+  <input type="hidden" id="postingSearchMode" value="direct_posting_search">
+  <input type="hidden" id="postingEditContext" value="posting_table">
 </div>
 
 <!-- Bulk Modal -->

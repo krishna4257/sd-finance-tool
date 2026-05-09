@@ -52,6 +52,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.applySearch = function () {
     const rawTerm = document.getElementById("searchBox").value.trim();
+
+    // Parent search multi-account support
+    if (window.location.search.includes("parent_search=1") && rawTerm.includes(",")) {
+      const accountList = rawTerm
+        .split(",")
+        .map(v => v.trim().toLowerCase())
+        .filter(Boolean);
+
+      snapshot.forEach(d => {
+        d.row.style.display = accountList.includes(d.ano) ? "" : "none";
+      });
+
+      updateSummary();
+      return;
+    }
+
     const term = rawTerm.toLowerCase();
 
     // Empty search → show all
@@ -95,8 +111,27 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.resetSearch = function () {
     document.getElementById("searchBox").value = "";
+
+    // Detect parent-search mode BEFORE removing params
+    const wasParentSearch = window.location.search.includes("parent_search=1");
+
+    // Remove parent search state from URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete("parent_search");
+    url.searchParams.delete("search");
+
+    // Parent-search rebuild cannot be restored safely.
+    // Reload original table state.
+    if (wasParentSearch) {
+      window.location.href = url.pathname;
+      return;
+    }
+
+    window.history.replaceState({}, "", url);
+
     snapshot.forEach(d => (d.row.style.display = ""));
     table.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+
     updateSummary();
   };
 
@@ -131,30 +166,250 @@ document.addEventListener("DOMContentLoaded", function () {
     w.print();
   };
 
-  window.applyParentSearch = function () {
-    const term = document.getElementById("searchBox").value.trim().toLowerCase();
+  window.applyParentSearch = async function () {
 
-    if (!term) {
-      snapshot.forEach(d => (d.row.style.display = ""));
-      updateSummary();
+  const rawTerm = document.getElementById("searchBox").value.trim();
+  const term = rawTerm.toLowerCase();
+
+  if (!term) {
+    window.location.reload();
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      `/api/customer_family_full/${encodeURIComponent(term)}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    console.log("Parent search result:", result);
+
+    if (!result.success) {
+      alert(result.error || "Unable to load parent accounts.");
       return;
     }
 
-    snapshot.forEach(d => {
-      // Show:
-      // 1) the searched customer (ano === term)
-      // 2) the parent record (ano === pano of searched)
-      // 3) the child record (pano === term)
-      const show =
-        d.ano === term ||
-        d.pano === term ||
-        snapshot.some(x => x.ano === term && d.ano === x.pano);
+    const customers = result.customers || [];
 
-      d.row.style.display = show ? "" : "none";
+    if (customers.length === 0) {
+      alert("No related accounts found.");
+      return;
+    }
+
+    // Normalize helper
+    const normalizeAccount = (value) => {
+      let normalized = String(value || "").trim().toLowerCase();
+
+      if (normalized.endsWith('.0')) {
+        normalized = normalized.slice(0, -2);
+      }
+
+      return normalized;
+    };
+
+    // Find searched customer
+    const searchedCustomer = customers.find(customer => {
+      return normalizeAccount(customer.ano) === term;
+    });
+
+    if (!searchedCustomer) {
+      alert("Customer not found.");
+      return;
+    }
+
+    const parentAno = normalizeAccount(searchedCustomer.pano);
+
+    // ONLY keep:
+    // 1. searched customer
+    // 2. direct parent customer
+    // 3. direct child customers
+    const filteredCustomers = customers.filter(customer => {
+
+      const ano = normalizeAccount(customer.ano);
+      const pano = normalizeAccount(customer.pano);
+
+      return (
+        ano === term ||
+        ano === parentAno ||
+        pano === term
+      );
+    });
+
+    // Completely destroy old DataTable before rebuilding rows
+    if ($.fn.DataTable.isDataTable('#customerTable')) {
+      $('#customerTable').DataTable().clear().destroy();
+    }
+    tableBody.innerHTML = "";
+
+    filteredCustomers.forEach(customer => {
+
+    // Force browser to fully commit rebuilt rows
+    tableBody.offsetHeight;
+
+      const tr = document.createElement("tr");
+      tr.className = "table-row";
+
+      const checkboxTd = document.createElement("td");
+      checkboxTd.innerHTML = `<input type="checkbox" />`;
+
+      tr.appendChild(checkboxTd);
+
+      // Build ALL table columns exactly like original table
+      headers.forEach((header, index) => {
+
+        // Skip checkbox column because already added manually
+        if (index === 0) {
+          return;
+        }
+
+        const td = document.createElement("td");
+        td.className = "table-cell";
+
+        let value = customer[header];
+
+        if (value === null || value === undefined) {
+          value = "";
+        }
+
+        if (
+          [
+            "total_amount",
+            "paid_amount",
+            "balance_amount",
+            "installment_amount"
+          ].includes(header)
+        ) {
+
+          td.setAttribute("data-money", "");
+          td.textContent = value;
+
+        } else if (header === "status") {
+
+          td.innerHTML = `
+            <span class="status-badge status-${String(value)
+              .toLowerCase()
+              .replace(/\s+/g, "-")}">
+              ${value}
+            </span>
+          `;
+
+        } else {
+
+          td.textContent = value;
+        }
+
+        tr.appendChild(td);
+      });
+
+      // Ensure row has exact same column count as original table
+      while (tr.children.length < table.querySelectorAll("thead th").length) {
+        const emptyTd = document.createElement("td");
+        emptyTd.className = "table-cell";
+        emptyTd.textContent = "";
+        tr.appendChild(emptyTd);
+      }
+
+      tableBody.appendChild(tr);
+    });
+
+
+    // Reinitialize DataTable properly after rebuilding rows
+    const rebuiltTable = $('#customerTable').DataTable({
+      destroy: true,
+      paging: false,
+      info: false,
+      searching: false,
+      ordering: false,
+      autoWidth: true,
+      scrollX: false,
+      scrollCollapse: false,
+      fixedHeader: false
+    });
+
+    // Restore default hidden columns
+    const DEFAULT_HIDDEN_COLUMNS = [
+      "cid",
+      "vid",
+      "created_at",
+      "aadhaar_number",
+      "latitude",
+      "longitude",
+      "eid"
+    ];
+
+    rebuiltTable.columns().every(function () {
+
+      const headerText = this.header().innerText
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+      if (DEFAULT_HIDDEN_COLUMNS.includes(headerText)) {
+        this.visible(false, false);
+      }
+    });
+
+    setTimeout(() => {
+      rebuiltTable.columns.adjust().draw(false);
+
+      const wrapper = document.querySelector('#customerTable_wrapper');
+      if (wrapper) {
+        wrapper.style.width = '100%';
+      }
+
+      table.style.width = '100%';
+      table.style.tableLayout = 'auto';
+    }, 50);
+
+    // Rebuild snapshot with new parent-search rows
+    snapshot.length = 0;
+
+    Array.from(tableBody.querySelectorAll("tr")).forEach(row => {
+      const cells = row.children;
+      snapshot.push({
+        row,
+        ano: clean(cells[anoIdx]?.textContent || "").toLowerCase(),
+        pano:
+          panoIndex >= 0
+            ? clean(cells[panoIndex]?.textContent || "").toLowerCase()
+            : "",
+        name: (cells[nameIdx]?.textContent || "").trim().toLowerCase(),
+        phone_number: (cells[headers.indexOf("phone_number")]?.textContent || "").trim(),
+        total_amount: parseFloat(clean(cells[amtIndex]?.textContent || "0")) || 0,
+        paid_amount: parseFloat(clean(cells[pamtIndex]?.textContent || "0")) || 0,
+        balance_amount: parseFloat(clean(cells[bamtIndex]?.textContent || "0")) || 0,
+      });
     });
 
     updateSummary();
-  };
+
+    if (typeof applyGlobalMoneyFormatting === "function") {
+      applyGlobalMoneyFormatting();
+    }
+
+    snapshot.forEach(d => {
+      d.row.style.display = "";
+    });
+
+    const url = new URL(window.location.href);
+
+    url.searchParams.set("parent_search", "1");
+    url.searchParams.set("search", term);
+
+    window.history.replaceState({}, "", url);
+
+  } catch (err) {
+
+    console.error("Parent search failed:", err);
+    alert(err?.message || "Parent search failed.");
+  }
+};
 
   window.filterYearlyReport = function () {
     snapshot.forEach(d => {d.row.style.display = d.balance_amount > 0 ? "" : "none";});
@@ -191,11 +446,34 @@ document.addEventListener("DOMContentLoaded", function () {
 
   table.querySelectorAll("thead th").forEach((th, i) => {
     if (i === 0) return;
+
+    th.classList.remove("sorting", "sorting_asc", "sorting_desc");
+    th.style.backgroundImage = "none";
     th.style.cursor = "pointer";
+
     th.addEventListener("click", () => sortTable(i));
   });
 
-  updateSummary();
+  // Auto-run parent search from URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialSearch = urlParams.get("search") || "";
+  const isParentSearch = urlParams.get("parent_search") === "1";
+
+  if (initialSearch) {
+    const searchBox = document.getElementById("searchBox");
+
+    if (searchBox) {
+      searchBox.value = initialSearch;
+
+      if (isParentSearch) {
+        window.applyParentSearch();
+      } else {
+        window.applySearch();
+      }
+    }
+  } else {
+    updateSummary();
+  }
 });
 
 
@@ -223,7 +501,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const table = $.fn.DataTable.isDataTable('#customerTable')
     ? $('#customerTable').DataTable()
-    : $('#customerTable').DataTable({ paging: false, info: false });
+    : $('#customerTable').DataTable({
+        paging: false,
+        info: false,
+        searching: false,
+        ordering: false,
+        autoWidth: false,
+        scrollX: true,
+        scrollCollapse: true,
+        fixedHeader: false
+      });
 
   // Always reset to default column visibility on page load
   table.columns().every(function () {
@@ -239,7 +526,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  table.columns.adjust();
+  table.columns.adjust().draw(false);
 
   const modal = document.getElementById("columnModal");
   const list = document.getElementById("columnCheckboxList");
@@ -266,7 +553,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       checkbox.addEventListener("change", () => {
         column.visible(checkbox.checked, false);
-        table.columns.adjust();
+        table.columns.adjust().draw(false);
       });
 
       wrapper.appendChild(checkbox);

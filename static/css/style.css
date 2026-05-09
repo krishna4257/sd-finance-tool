@@ -2299,18 +2299,36 @@ body.dark-mode .mf-upload-btn {
     100% { opacity: 0; }
 }
 
-.customer-table th,
-.customer-table td {
-  white-space: nowrap;
-  text-overflow: ellipsis;
+/* ===== CUSTOMER TABLE TEXT FIX ===== */
+
+#customerTable {
+  table-layout: auto;
+  width: max-content;
+  min-width: 1600px;
 }
 
-.customer-table th:nth-child(3),
-.customer-table td:nth-child(3) {
-  width: 90px;
-  max-width: 90px;
+/* Default cells */
+#customerTable th,
+#customerTable td {
   white-space: nowrap;
   text-align: center;
+  vertical-align: middle;
+  padding: 10px 14px;
+}
+
+/* Customer name column */
+.customer-table th:nth-child(3),
+.customer-table td:nth-child(3) {
+  min-width: 260px;
+  max-width: none;
+  width: auto;
+
+  white-space: normal;      /* allow wrapping */
+  overflow: visible;
+  text-overflow: unset;
+
+  text-align: left;
+  word-break: break-word;
 }
 
 
