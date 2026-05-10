@@ -1,14 +1,6 @@
 let tooltipTimeout = null;
 
 
-function openEditVillageModal() {
-  document.getElementById("editVillageModal").style.display = "block";
-}
-function closeEditVillageModal() {
-  document.getElementById("editVillageModal").style.display = "none";
-}
-
-
 function openCreateVillageModal() {
   document.getElementById("createVillageModal").style.display = "block";
   loadEmployeesForVillageModal();

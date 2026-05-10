@@ -9,6 +9,22 @@ document.addEventListener("DOMContentLoaded", function () {
     text: row.innerText.toLowerCase()
   }));
 
+  function formatDate(value) {
+    if (!value) return "";
+
+    const str = String(value).trim();
+
+    // Match YYYY-MM-DD only
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+      return value;
+    }
+
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
+
   function updateSummary() {
     const visible = snapshot.filter(d => d.row.style.display !== "none");
     document.getElementById("totalCount").textContent = visible.length;
@@ -112,6 +128,11 @@ document.addEventListener("DOMContentLoaded", function () {
         row.children[index].style.display = show ? "" : "none";
     });
   }
+
+  // Format joining dates on initial page load
+  body.querySelectorAll('td[data-field="joining_date"]').forEach(td => {
+    td.textContent = formatDate(td.textContent);
+  });
 
   updateSummary();
 

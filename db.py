@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.pool import ThreadedConnectionPool, PoolError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +26,12 @@ pg_pool = ThreadedConnectionPool(
 )
 
 
+# Custom exception for pool exhaustion
+class DatabasePoolExhausted(Exception):
+    """Raised when PostgreSQL connection pool is exhausted."""
+    pass
+
+
 class PooledConnection:
     def __init__(self, conn, pool):
         self._conn = conn
@@ -38,8 +44,19 @@ class PooledConnection:
         """
         Return connection back to pool
         instead of closing TCP socket.
+
+        Always rollback before returning to pool
+        so no dirty transaction/session state leaks
+        to the next borrower.
         """
         if self._conn:
+            try:
+                # Reset any open transaction state
+                self._conn.rollback()
+            except Exception:
+                # Ignore rollback failures on already-closed/bad connections
+                pass
+
             self._pool.putconn(self._conn)
             self._conn = None
 
@@ -51,8 +68,26 @@ class PooledConnection:
 
 
 def get_pg_connection():
-    conn = pg_pool.getconn()
-    conn.autocommit = False
+    try:
+        conn = pg_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        except Exception:
+            try:
+                pg_pool.putconn(conn, close=True)
+            except Exception:
+                pass
+
+            conn = pg_pool.getconn()
+
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+    except PoolError as e:
+        raise DatabasePoolExhausted(
+            "PostgreSQL connection pool exhausted"
+        ) from e
+
     return PooledConnection(conn, pg_pool)
 
 

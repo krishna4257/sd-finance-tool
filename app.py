@@ -75,7 +75,7 @@ def audit_log(
             user_id,
             employee_id,
             username,
-            request.headers.get("X-Forwarded-For", request.remote_addr),
+            request.remote_addr,
             request.method,
             request.path,
             request.headers.get("User-Agent"),
@@ -165,15 +165,32 @@ def parse_mobile_timestamp(ts):
         return dt.astimezone(timezone.utc)
 
     except Exception as e:
-        print("Timestamp parse error:", e)
+        logger.warning("Timestamp parse error: %s", e)
         return None
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = os.environ.get("SECRET_KEY")
+
+secret_key = os.environ.get("SECRET_KEY")
+
+if not secret_key:
+    raise RuntimeError("SECRET_KEY environment variable is not set")
+
+app.secret_key = secret_key
+
 app.config["WTF_CSRF_ENABLED"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
+
+# Secure session cookie settings
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Only force secure cookies in production HTTPS deployments
+# Local development on http://127.0.0.1:8080 must keep this disabled,
+# otherwise Flask cannot store the session cookie and CSRF fails.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
+
 csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -202,6 +219,7 @@ limiter = Limiter(
     app=app
 )
 
+
 @app.before_request
 def fix_cookie_domain():
     host = request.headers.get("Host", "")
@@ -212,13 +230,26 @@ def fix_cookie_domain():
         # Allows Cloud Run direct link to work
         app.config["SESSION_COOKIE_DOMAIN"] = None
 
+# Set security headers after each request
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    # HSTS only when running over HTTPS
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    return response
+
 
 # ----------------------------------------------------
 # Session timeout and activity tracking
 # ----------------------------------------------------
 @app.before_request
 def session_timeout_check():
-    session.permanent = True
 
     if "user_id" not in session:
         return
@@ -888,20 +919,32 @@ def api_check_village():
     code = request.args.get("code")
     name = request.args.get("name")
     emp1 = request.args.get("emp1")
+    vid = request.args.get("vid")
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT 1
-        FROM village
-        WHERE (
-            LOWER(village_code) = LOWER(%s)
-            OR LOWER(village_name) = LOWER(%s)
-        )
-          AND vid != %s
-        LIMIT 1
-    """, (code, name, request.args.get("vid")))
+    if vid:
+        cur.execute("""
+            SELECT 1
+            FROM village
+            WHERE (
+                LOWER(village_code) = LOWER(%s)
+                OR LOWER(village_name) = LOWER(%s)
+            )
+              AND vid != %s
+            LIMIT 1
+        """, (code, name, vid))
+    else:
+        cur.execute("""
+            SELECT 1
+            FROM village
+            WHERE (
+                LOWER(village_code) = LOWER(%s)
+                OR LOWER(village_name) = LOWER(%s)
+            )
+            LIMIT 1
+        """, (code, name))
 
     exists = cur.fetchone() is not None
     cur.close()
@@ -1349,6 +1392,8 @@ def mobile_payments():
 @limiter.limit("200 per minute")
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
+    conn = None
+    cur = None
     try:
         token = request.headers.get("X-Mobile-Token")
         if not token:
@@ -1380,7 +1425,7 @@ def customer_feed():
            customer_payload = json.loads(customer_payload)
         ano = customer_payload.get("ano")
         payload = json.dumps(customer_payload)
-        print("VID:", vid, "ANO:", ano)
+        logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
         # 1️⃣ Insert into customer_feed
         cur.execute("""
             INSERT INTO customer_feed
@@ -1439,8 +1484,18 @@ def customer_feed():
         return jsonify({"status": "ok"})
 
     except Exception as e:
-        print("ERROR:", str(e))
+        if conn:
+            conn.rollback()
+
+        logger.exception("Customer feed processing failed")
         return jsonify({"error": str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
 
 # ----------------------------------------------------
 # /api/mobile/payment_feed_batch
@@ -1449,7 +1504,8 @@ def customer_feed():
 @limiter.limit("300 per minute")
 @app.route("/api/mobile/payment_feed_batch", methods=["POST"])
 def payment_feed_batch():
-
+    conn = None
+    cur = None
     try:
         token = request.headers.get("X-Mobile-Token")
         if not token:
@@ -1513,8 +1569,18 @@ def payment_feed_batch():
         })
 
     except Exception as e:
-        print("PAYMENT API ERROR:", str(e))
+        if conn:
+            conn.rollback()
+
+        logger.exception("Payment feed batch processing failed")
         return jsonify({"error": str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
 
 # ----------------------------------------------------
 # /api/mobile/reset_database
@@ -2106,17 +2172,17 @@ def search_customer():
 
             # 🔹 Fetch payments for this customer (from both payment and closed_cust_payment)
             cur.execute("""
-                SELECT ano, payment_date, amt
+                SELECT ano, payment_date, amt, pid
                 FROM payment
                 WHERE cid = %s
 
                 UNION ALL
 
-                SELECT ano, payment_date, amt
+                SELECT ano, payment_date, amt, pid
                 FROM closed_cust_payment
                 WHERE cid = %s
 
-                ORDER BY payment_date
+                ORDER BY payment_date, pid
             """, (cust["cid"], cust["cid"]))
 
             pamt1_records[cust["ano"]] = cur.fetchall()
@@ -2846,103 +2912,105 @@ def update_village():
 @app.route("/feed")
 @login_required
 def feed():
-    print("Accessing feed...")
+    logger.debug("Accessing feed page")
     vid = session.get("vid")
     if not vid:
         return redirect("/dashboard")
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # CUSTOMER FEED
-    cur.execute("""
+    try:
+        # CUSTOMER FEED
+        cur.execute("""
+            SELECT
+                cf.feed_id,
+                cf.payload,
+                cf.status,
+                cf.vid,
+                (cf.payload->>'ano')::INT AS ano,
+                cf.payload->>'name' AS name,
+                cf.payload->>'type' AS type,
+                cd.aadhaar_photo,
+                cd.house_photo
+            FROM customer_feed cf
+            LEFT JOIN customer_docs cd
+              ON cd.vid = cf.vid
+             AND cd.ano = (cf.payload->>'ano')::INT
+            WHERE cf.vid = %s AND cf.status='pending'
+            ORDER BY cf.feed_id DESC
+        """, (vid,))
+
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] # type: ignore
+
+        customers = []
+        for r in rows:
+            row_dict = dict(zip(columns, r))
+
+            payload = row_dict.get("payload")
+
+            # ✅ Normalize payload
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            elif payload is None:
+                payload = {}
+
+            # ✅ Flatten payload into row_dict (VERY IMPORTANT)
+            row_dict.update({
+                "ano": payload.get("ano"),
+                "name": payload.get("name"),
+                "pano": payload.get("pano"),
+                "phone_number": payload.get("phone_number"),
+                "type": payload.get("type"),
+                "period": payload.get("period"),
+                "start_date": payload.get("start_date"),
+                "end_date": payload.get("end_date"),
+                "total_amount": payload.get("total_amount"),
+                "installment_amount": payload.get("installment_amount"),
+                "aadhaar_number": payload.get("aadhaar_number"),
+                "notes": payload.get("notes"),
+                "latitude": payload.get("latitude"),
+                "longitude": payload.get("longitude"),
+                "eid": payload.get("eid"),
+                "vid": payload.get("vid"),
+            })
+
+            # keep payload also (optional)
+            row_dict["payload"] = payload
+
+            customers.append(row_dict)
+        # PAYMENT FEED
+        cur.execute("""
         SELECT
-            cf.feed_id,
-            cf.payload,
-            cf.status,
-            cf.vid,
-            (cf.payload->>'ano')::INT AS ano,
-            cf.payload->>'name' AS name,
-            cf.payload->>'type' AS type,
-            cd.aadhaar_photo,
-            cd.house_photo
-        FROM customer_feed cf
-        LEFT JOIN customer_docs cd
-          ON cd.vid = cf.vid
-         AND cd.ano = (cf.payload->>'ano')::INT
-        WHERE cf.vid = %s AND cf.status='pending'
-        ORDER BY cf.feed_id DESC
+            feed_payment_id,
+            payload->>'ano' AS ano,
+            payload->>'amt' AS amt,
+            payload->>'pdate' AS pdt,
+            payload->>'vid' AS vid,
+            status
+        FROM payment_feed_items
+        WHERE status='pending'
+          AND (payload->>'vid')::INT = %s
+        ORDER BY feed_payment_id DESC
     """, (vid,))
 
-    rows = cur.fetchall()
-    columns = [desc[0] for desc in cur.description] # type: ignore
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] # type: ignore
 
-    customers = []
-    for r in rows:
-        row_dict = dict(zip(columns, r))
+        payments = [dict(zip(columns, r)) for r in rows]
 
-        payload = row_dict.get("payload")
+        return render_template(
+            "feed.html",
+            customers=customers,
+            payments=payments
+        )
 
-        # ✅ Normalize payload
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except Exception:
-                payload = {}
-        elif payload is None:
-            payload = {}
-
-        # ✅ Flatten payload into row_dict (VERY IMPORTANT)
-        row_dict.update({
-            "ano": payload.get("ano"),
-            "name": payload.get("name"),
-            "pano": payload.get("pano"),
-            "phone_number": payload.get("phone_number"),
-            "type": payload.get("type"),
-            "period": payload.get("period"),
-            "start_date": payload.get("start_date"),
-            "end_date": payload.get("end_date"),
-            "total_amount": payload.get("total_amount"),
-            "installment_amount": payload.get("installment_amount"),
-            "aadhaar_number": payload.get("aadhaar_number"),
-            "notes": payload.get("notes"),
-            "latitude": payload.get("latitude"),
-            "longitude": payload.get("longitude"),
-            "eid": payload.get("eid"),
-            "vid": payload.get("vid"),
-        })
-
-        # keep payload also (optional)
-        row_dict["payload"] = payload
-
-        customers.append(row_dict)
-    # PAYMENT FEED
-    cur.execute("""
-    SELECT
-        feed_payment_id,
-        payload->>'ano' AS ano,
-        payload->>'amt' AS amt,
-        payload->>'pdate' AS pdt,
-        payload->>'vid' AS vid,
-        status
-    FROM payment_feed_items
-    WHERE status='pending'
-      AND (payload->>'vid')::INT = %s
-    ORDER BY feed_payment_id DESC
-""", (vid,))
-
-    rows = cur.fetchall()
-    columns = [desc[0] for desc in cur.description] # type: ignore
-
-    payments = [dict(zip(columns, r)) for r in rows]
-    
-
-    conn.close()
-
-    return render_template(
-        "feed.html",
-        customers=customers,
-        payments=payments
-    )
+    finally:
+        cur.close()
+        conn.close()
 
 
 @app.post("/feed/customer/accept/<feed_id>")
@@ -2953,7 +3021,9 @@ def accept_customer(feed_id):
     cur = conn.cursor()
 
     # Safety check: ensure logged-in employee
-    logged_user = session.get("eid")
+    # employee_id is always set at login.
+    # eid may only exist after village/context selection.
+    logged_user = session.get("employee_id") or session.get("eid")
 
     if not logged_user:
         return {"success": False, "error": "User not logged properly"}
@@ -3830,6 +3900,7 @@ def login():
     username = request.form.get("username")
     password = request.form.get("password")
     device_id = request.form.get("device_id")
+    session.permanent = True
 
     if not username or not password:
         flash("Username and password required")
