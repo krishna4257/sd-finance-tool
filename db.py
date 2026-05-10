@@ -38,6 +38,10 @@ class PooledConnection:
         self._pool = pool
 
     def __getattr__(self, item):
+        if self._conn is None:
+            raise RuntimeError(
+                "Connection already returned to pool"
+            )
         return getattr(self._conn, item)
 
     def close(self):

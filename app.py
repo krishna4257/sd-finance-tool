@@ -167,6 +167,14 @@ def parse_mobile_timestamp(ts):
     except Exception as e:
         logger.warning("Timestamp parse error: %s", e)
         return None
+    
+def normalize_account_number(value):
+    if value is None:
+        return None
+    try:
+        return int(str(value).replace(".0", "").strip())
+    except Exception:
+        return None
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
@@ -986,6 +994,51 @@ def get_customer_info_by_ano(ano, vid):
         "da": float(row[4] or 0)
     }
 
+@app.route("/check_parent_link")
+@login_required
+def check_parent_link():
+
+    pano = request.args.get("pano", "").strip()
+    vid = session.get("vid")
+
+    if not pano or not vid:
+        return jsonify({
+            "found": False,
+            "accounts": []
+        })
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT ano
+            FROM customer
+            WHERE pano = %s
+              AND vid = %s
+            ORDER BY ano
+        """, (pano, vid))
+
+        rows = cur.fetchall()
+
+        accounts = [str(r[0]) for r in rows]
+
+        return jsonify({
+            "found": len(accounts) > 0,
+            "accounts": accounts
+        })
+
+    except Exception as e:
+        return jsonify({
+            "found": False,
+            "accounts": [],
+            "error": str(e)
+        })
+
+    finally:
+        cur.close()
+        conn.close()
+
 def get_all_customers_by_context(vid):
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -1642,7 +1695,7 @@ def reset_database():
             RESTART IDENTITY CASCADE
         """)
         
-        cur.connection.commit()
+        conn.commit()
         audit_log(
             action="reset_database",
             entity_type="system",
@@ -1658,15 +1711,18 @@ def reset_database():
 
     except Exception as e:
         try:
-            cur.connection.rollback()
+            conn.rollback()
         except:
             pass
         return {"error": str(e)}, 500
 
     finally:
         try:
-            cur.close()
-            cur.connection.close()
+            if cur:
+                cur.close()
+
+            if conn:
+                conn.close()
         except:
             pass
 # ----------------------------------------------------
@@ -1674,6 +1730,13 @@ def reset_database():
 # ----------------------------------------------------
 
 def get_dashboard_totals(vid):
+    if not vid:
+        return {
+            "total_customers": 0,
+            "sum_amt": 0.0,
+            "sum_pamt": 0.0,
+            "sum_bamt": 0.0,
+        }
     conn = get_pg_connection()
     cur = conn.cursor()
 
@@ -2048,7 +2111,7 @@ def submit_post_payment():
 
     try:
         for row in rows:
-            ano = int(row["ano"])
+            ano = normalize_account_number(row.get("ano"))
             amt = Decimal(str(row["amt"]))
             payment_date = datetime.strptime(row["pdt"], "%d/%m/%Y").date()
 
@@ -2215,7 +2278,11 @@ def api_customer_family_full(account_no):
     cur = conn.cursor()
 
     try:
-        account_no = str(account_no).strip()
+        normalized = normalize_account_number(account_no)
+        if normalized is None:
+            return jsonify(success=False)
+
+        account_no = str(normalized)
 
         cur.execute("""
             SELECT
@@ -2616,6 +2683,8 @@ def search_postings():
 @app.route("/api/customer/close_account_pg", methods=["POST"])
 @login_required
 def close_customer_account_pg():
+    conn = None
+    cur = None
     try:
         data = request.get_json()
         cid = data.get("cid")
@@ -2687,7 +2756,7 @@ def close_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, phone_number, %s,
+                latitude, longitude, eid, %s, phone_number,
                 %s, NOW() AT TIME ZONE 'Asia/Kolkata'
             FROM customer
             WHERE cid = %s
@@ -2728,15 +2797,22 @@ def close_customer_account_pg():
         })
 
     except Exception as e:
-        conn.rollback()
+        conn.rollback() # type: ignore
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if cur:
+            cur.close()
 
+        if conn:
+            conn.close()
 
 # ------------------ NEW: Retrieve closed/defaulted/written_off account ------------------
 @app.route("/api/customer/retrieve_account_pg", methods=["POST"])
 @login_required
 def retrieve_customer_account_pg():
+    conn = None
+    cur = None
     try:
         data = request.get_json()
         cid = data.get("cid")
@@ -2795,12 +2871,15 @@ def retrieve_customer_account_pg():
         return jsonify({"success": True})
 
     except Exception as e:
-        conn.rollback()
+        conn.rollback() # type: ignore
         return jsonify({"success": False, "error": str(e)})
 
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
 
 @app.route("/api/update_village", methods=["POST"])
 @login_required
@@ -3097,8 +3176,9 @@ def accept_customer(feed_id):
         data.get("notes"),
         data.get("latitude"),
         data.get("longitude"),
-        data.get("phone_number"),
-        data.get("eid")
+        data.get("eid"),
+        data.get("phone_number")
+        
     ))
 
     cur.execute("""
@@ -3258,8 +3338,52 @@ def accept_payment_batch():
         if not rows:
             return {"success": False, "error": "No valid payments found"}
 
-        insert_values = []
+        # -------------------------------------------------
+        # Batch prefetch customers
+        # -------------------------------------------------
+        anos = []
+
+        for r in rows:
+            payload = r[0]
+            ano = payload.get("ano")
+
+            if ano is not None:
+                try:
+                    anos.append(int(ano))
+                except Exception:
+                    pass
+
+        anos = list(set(anos))
+
         customer_map = {}
+
+        if anos:
+
+            # Use vid from first payload (all selected payments belong to same village)
+            first_payload = rows[0][0]
+            batch_vid = first_payload.get("vid")
+
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    total_amount,
+                    paid_amount,
+                    balance_amount
+                FROM customer
+                WHERE ano = ANY(%s)
+                  AND vid = %s
+            """, (anos, batch_vid))
+
+            for row in cur.fetchall():
+                customer_map[int(row[1])] = {
+                    "cid": row[0],
+                    "total_amount": row[2],
+                    "paid_amount": row[3],
+                    "balance_amount": row[4]
+                }
+
+        insert_values = []
 
         # 2️⃣ Prepare bulk insert
         for r in rows:
@@ -3271,21 +3395,12 @@ def accept_payment_batch():
             amt = Decimal(str(p.get("amt")))
             pdate = datetime.fromisoformat(p.get("pdate")).date()
 
-            # fetch customer only once per ano
-            if ano not in customer_map:
-                cur.execute("""
-                    SELECT cid, total_amount
-                    FROM customer
-                    WHERE ano = %s AND vid = %s
-                """, (ano, vid))
+            customer = customer_map.get(int(ano))
 
-                cust = cur.fetchone()
-                if not cust:
-                    continue
+            if not customer:
+                continue
 
-                customer_map[ano] = cust
-
-            cid, total_amt = customer_map[ano]
+            cid = customer["cid"]
 
             insert_values.append((cid, vid, eid, ano, amt, pdate))
 
@@ -3311,8 +3426,8 @@ def accept_payment_batch():
         )
 
         # 4️⃣ Update customers (optimized)
-        for ano, (cid, total_amt) in customer_map.items():
-            recalc_customer_balance(cur, cid)
+        for customer in customer_map.values():
+            recalc_customer_balance(cur, customer["cid"])
 
         # 5️⃣ Mark all as accepted
         cur.execute("""
@@ -3848,6 +3963,7 @@ def employee_page():
 
 @app.route("/api/update_employee", methods=["POST"])
 @login_required
+@admin_required
 def update_employee():
     data = request.json
     try:
@@ -4070,36 +4186,46 @@ def list_users():
     users = []
     rows = cur.fetchall()
 
-    for row in rows:
-        user_id, username, employee_id, is_active, emp_name, level = row
+    user_ids = [r[0] for r in rows]
 
-        # Fetch device
-        cur.execute("""
-            SELECT device_id 
-            FROM user_devices 
-            WHERE user_id = %s AND is_active = TRUE
-        """, (user_id,))
-        device = cur.fetchone()
+    devices_by_user = {}
+    villages_by_user = {}
 
-        # Fetch assigned villages
+    if user_ids:
+
+        # Batch fetch active devices
         cur.execute("""
-            SELECT v.vid, v.village_name, v.district
+            SELECT user_id, device_id
+            FROM user_devices
+            WHERE user_id = ANY(%s)
+              AND is_active = TRUE
+        """, (user_ids,))
+
+        for uid, device_id in cur.fetchall():
+            devices_by_user[uid] = device_id
+
+        # Batch fetch village access
+        cur.execute("""
+            SELECT
+                uva.user_id,
+                v.vid,
+                v.village_name,
+                v.district
             FROM user_village_access uva
             JOIN village v ON v.vid = uva.village_id
-            WHERE uva.user_id = %s
+            WHERE uva.user_id = ANY(%s)
             ORDER BY v.village_name
-        """, (user_id,))
+        """, (user_ids,))
 
-        village_rows = cur.fetchall()
+        for uid, vid, village_name, district in cur.fetchall():
+            villages_by_user.setdefault(uid, []).append({
+                "vid": vid,
+                "name": village_name,
+                "district": district
+            })
 
-        villages = [
-            {
-                "vid": v[0],
-                "name": v[1],
-                "district": v[2]
-            }
-            for v in village_rows
-        ]
+    for row in rows:
+        user_id, username, employee_id, is_active, emp_name, level = row
 
         users.append({
             "id": user_id,
@@ -4107,9 +4233,9 @@ def list_users():
             "employee_id": employee_id,
             "employee_name": emp_name,
             "role": level,
-            "device_id": device[0] if device else "",
+            "device_id": devices_by_user.get(user_id, ""),
             "is_active": is_active,
-            "villages": villages
+            "villages": villages_by_user.get(user_id, [])
         })
 
     cur.close()
