@@ -3992,7 +3992,18 @@ def delete_employee():
 @app.route("/")
 @login_required
 def home():
-    return redirect("/dashboard")
+    return redirect("/landing")
+
+@app.route("/landing")
+@login_required
+def landing():
+    # Clear active village context so the header shows nothing
+    # and the user must pick a village on this page.
+    session.pop("vid", None)
+    session.pop("eid", None)
+    session.pop("village_name", None)
+    session.pop("employee_name", None)
+    return render_template("landing.html")
 
 def get_active_db_path():
     path = session.get("active_path")
@@ -4131,7 +4142,7 @@ def login():
             }
         )
 
-        return redirect("/dashboard")
+        return redirect("/landing")
 
     finally:
         cur.close()

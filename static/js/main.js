@@ -438,29 +438,27 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("DOMContentLoaded", function () {
 
     /* ---------------------------------------------------
-        PROFILE DROPDOWN TOGGLE
+        PREMIUM PROFILE DROPDOWN TOGGLE
     --------------------------------------------------- */
-    const profileBtn = document.querySelector(".user-profile");
+    const triggerBtn  = document.getElementById("userTriggerBtn");
     const profileMenu = document.getElementById("userDropdown");
+    const wrapper     = document.getElementById("userProfileWrapper");
 
-    if (!profileBtn || !profileMenu) {
-        return;
-    }
+    if (!triggerBtn || !profileMenu) return;
 
-    // Ensure hidden initially
     profileMenu.style.display = "none";
 
-    profileBtn.addEventListener("click", function (e) {
+    triggerBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-
         const isOpen = profileMenu.style.display === "block";
-
         profileMenu.style.display = isOpen ? "none" : "block";
+        triggerBtn.setAttribute("aria-expanded", String(!isOpen));
     });
 
     document.addEventListener("click", function (e) {
-        if (!profileBtn.contains(e.target)) {
+        if (wrapper && !wrapper.contains(e.target)) {
             profileMenu.style.display = "none";
+            triggerBtn.setAttribute("aria-expanded", "false");
         }
     });
 });
