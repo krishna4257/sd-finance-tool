@@ -79,76 +79,100 @@
 
 <body>
   <aside>
-    <div class="logo-container" href="dashboard.html">
-     <a href="/dashboard"> <img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"> </a>
+    <div class="logo-container">
+      <a href="/landing"><img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"></a>
     </div>
-    <a class="neumorphic-btn" href="/dashboard">🏠 Dashboard</a>
-    <a class="neumorphic-btn" href="/add_customer">➕ Add Customer</a>
-    <a class="neumorphic-btn" href="/post_payment">💰 Add Payment</a>
-    <a class="neumorphic-btn" href="{{ url_for('view_customers') }}">👁️ Customers</a>
-    <a class="neumorphic-btn" href="/post_payment_report">📄 Posting Report</a>
-    <a class="neumorphic-btn" href="/feed">📥 Feed</a>
+
+    {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'users_page', 'admin_control'] %}
+    <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
-    <a href="/village" class="neumorphic-btn">🏘️ Village</a>
-    <a href="/employee" class="neumorphic-btn">👤 Employee</a>
+    <a href="/village"  class="neumorphic-btn {% if request.endpoint == 'village_page' %}active{% endif %}">🏘️ Village</a>
+    <a href="/employee" class="neumorphic-btn {% if request.endpoint == 'employee_page' %}active{% endif %}">👤 Employee</a>
     {% endif %}
-    <a class="neumorphic-btn" href="/search">🛠️ Search  |  Edit</a>
-    {% if session.level == "admin" %}
-    <a class="neumorphic-btn" href="/users">👥 User Management</a>
-    <a class="neumorphic-btn" href="/admin_control">⚙️ Admin Control</a>
+    {% if session.level == 'admin' %}
+    <a href="/users"         class="neumorphic-btn {% if request.endpoint == 'users_page' %}active{% endif %}">👥 User Management</a>
+    <a href="/admin_control" class="neumorphic-btn {% if request.endpoint == 'admin_control' %}active{% endif %}">⚙️ Admin Control</a>
     {% endif %}
-    </aside>
+
+    {% else %}
+    <!-- ── APP / VILLAGE DASHBOARD SIDEBAR ── -->
+    <a href="/dashboard"                      class="neumorphic-btn {% if request.endpoint == 'dashboard' %}active{% endif %}">🏠 Dashboard</a>
+    <a href="/add_customer"                   class="neumorphic-btn {% if request.endpoint == 'add_customer' %}active{% endif %}">➕ Add Customer</a>
+    <a href="/post_payment"                   class="neumorphic-btn {% if request.endpoint == 'post_payment_page' %}active{% endif %}">💰 Add Payment</a>
+    <a href="{{ url_for('view_customers') }}" class="neumorphic-btn {% if request.endpoint == 'view_customers' %}active{% endif %}">👁️ Customers</a>
+    <a href="/post_payment_report"            class="neumorphic-btn {% if request.endpoint == 'post_payment_report' %}active{% endif %}">📄 Posting Report</a>
+    <a href="/feed"                           class="neumorphic-btn {% if request.endpoint == 'feed' %}active{% endif %}">📥 Feed</a>
+    <a href="/search"                         class="neumorphic-btn {% if request.endpoint == 'search_customer' %}active{% endif %}">🛠️ Search | Edit</a>
+    {% endif %}
+
+  </aside>
 
   <main>
     <header>
-      <!-- Village Selector / Active Display -->
-            {% if not session.active_db %}
-            <form method="POST" action="/dashboard" class="village-select-form">
-                <select id="employeeSelect"></select>
-                <select id="villageSelect"></select>
-                <button id="setContextBtn" type="button" class="neumorphic-btn">Set</button>
-            </form>
-            {% if session.level in ['admin', 'mgmt'] %}
-            <button onclick="openCreateVillageModal()" class="neumorphic-btn-h">➕ Create Village</button>
-            <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp1')">➕ Add Employee</button>
-            {% endif %}
-            {% else %}
-      <div>
-        <strong>Active Village:</strong> {{ village_name or "Unknown" }}
-        <form method="POST" action="/reselect" style="display: inline;">
-          <button type="submit" class="neumorphic-btn-h">🔄 Reselect</button>
-        </form>
-      </div>
-      {% endif %}
+      <!-- ── Left: Home button + active context info ── -->
+      <div class="header-left-group">
 
-      <!-- Dark Mode Toggle -->
-       
-      <div class="theme-switch-wrapper">
-        <button id="calculatorToggleBtn" class="neumorphic-btn" style="margin-left: auto;">
+        <!-- Home button always visible -->
+        <a href="/landing" class="neumorphic-btn header-home-btn" title="Back to village selection">
+          🏠 Home
+        </a>
+
+        <!-- Show selected village + employee when context is active -->
+        {% if session.get("vid") %}
+        <div class="header-context-info">
+          <span class="header-context-label">Village:</span>
+          <span class="header-context-value">{{ session.get("village_name", "—") }}</span>
+          <span class="header-context-sep">·</span>
+          <span class="header-context-label">Employee:</span>
+          <span class="header-context-value">{{ session.get("employee_name", "—") }}</span>
+        </div>
+        {% endif %}
+
+      </div>
+
+      <!-- ── Right: Calculator + Premium Profile Button ── -->
+      <div class="header-right-group">
+        <button id="calculatorToggleBtn" class="neumorphic-btn calc-btn" title="Calculator">
           <i class="fas fa-calculator"></i>
         </button>
-        <label class="theme-switch">
-          <input type="checkbox" id="theme-toggle">
-          <span class="slider">
-            <span class="icon sun">☀️</span>
-            <span class="icon moon">🌙</span>
-          </span>
-        </label>
-        <!-- USER MENU -->
+
+        <!-- PREMIUM USER PROFILE -->
         {% if session.get("user_id") %}
-        <div class="user-profile">
-            <div class="user-trigger">
-                <span class="user-icon">👤</span>
-                <span class="username">{{ session.get("username") }}</span>
+        <div class="user-profile" id="userProfileWrapper">
+
+          <!-- Trigger button -->
+          <button class="user-trigger-btn" id="userTriggerBtn" aria-expanded="false" aria-haspopup="true">
+            <span class="user-avatar-circle">
+              {{ session.get("username", "?")[0] | upper }}
+            </span>
+            <span class="user-trigger-name">{{ session.get("username") }}</span>
+            <span class="user-trigger-chevron">▾</span>
+          </button>
+
+          <!-- Dropdown panel -->
+          <div id="userDropdown" class="user-dropdown" role="menu">
+
+            <!-- Theme toggle row -->
+            <div class="dropdown-theme-row">
+              <span class="dropdown-theme-label">Dark Mode</span>
+              <label class="theme-switch theme-switch--sm">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider">
+                  <span class="icon sun">☀️</span>
+                  <span class="icon moon">🌙</span>
+                </span>
+              </label>
             </div>
 
-            <div id="userDropdown" class="user-dropdown">
-                <a href="{{ url_for('logout') }}">Logout</a>
-            </div>
+            <div class="dropdown-divider"></div>
+
+            <a href="{{ url_for('logout') }}" class="dropdown-logout-link">🚪 Logout</a>
+          </div>
         </div>
         {% endif %}
       </div>
     </header>
+
 
     <div id="main-content">
       {% block content %}{% endblock %}

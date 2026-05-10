@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="landing-page">
+
+  <!-- Page Title -->
+  <div class="landing-title">
+    <h1>Select Village to Continue</h1>
+    <p class="landing-subtitle">Choose an employee to see their villages, then click a village to enter.</p>
+  </div>
+
+  <!-- Two Side-by-Side Boxes -->
+  <div class="landing-panels">
+
+    <!-- ======================== -->
+    <!-- EMPLOYEE PANEL           -->
+    <!-- ======================== -->
+    <div class="landing-panel" id="employeePanel">
+      <div class="panel-header">
+        <h2>👤 Employees</h2>
+        <button class="landing-icon-btn" id="empRestartBtn" title="Restart — clear selection">↺ Restart</button>
+      </div>
+
+      <!-- Auto-search input -->
+      <div class="landing-search-wrap">
+        <span class="landing-search-icon">🔍</span>
+        <input
+          type="text"
+          id="empSearchInput"
+          class="landing-search"
+          placeholder="Search employees..."
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- Employee list -->
+      <div class="landing-list" id="empList">
+        <div class="landing-empty">Loading employees…</div>
+      </div>
+
+      <!-- Create Employee button -->
+      {% if session.level in ['admin', 'mgmt'] %}
+      <div class="panel-footer">
+        <button class="landing-action-btn" onclick="openAddEmployeeModal('emp1')">➕ Create Employee</button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ======================== -->
+    <!-- VILLAGE PANEL            -->
+    <!-- ======================== -->
+    <div class="landing-panel" id="villagePanel">
+      <div class="panel-header">
+        <h2>🏘️ Villages</h2>
+      </div>
+
+      <!-- Village list -->
+      <div class="landing-list" id="villageList">
+        <div class="landing-empty" id="villageEmptyMsg">
+          ← Select an employee to see their villages
+        </div>
+      </div>
+
+      <!-- Create Village button -->
+      {% if session.level in ['admin', 'mgmt'] %}
+      <div class="panel-footer">
+        <button class="landing-action-btn" onclick="openCreateVillageModal()">➕ Create Village</button>
+      </div>
+      {% endif %}
+    </div>
+
+  </div><!-- /.landing-panels -->
+
+</div><!-- /.landing-page -->
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+{% endblock %}
