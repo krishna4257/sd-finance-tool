@@ -14,7 +14,19 @@ $.fn.dataTable.ext.type.order['date-ddmmyyyy-pre'] = function (d) {
 
 // All code MUST be inside this single DOMContentLoaded listener
 document.addEventListener("DOMContentLoaded", () => {
+  function formatDateToDDMMYYYY(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return dateStr;
+    }
 
+    // yyyy-mm-dd -> dd-mm-yyyy
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-');
+      return `${d}-${m}-${y}`;
+    }
+
+    return dateStr;
+  }
   // --- Element Selectors ---
   let activeReplaceMode = null;
 
@@ -443,6 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   button.textContent = "✏️ Edit";
                   button.setAttribute("data-editing", "false");
                   row.dataset.pdt = newPdt;
+                  pdtCell.textContent = formatDateToDDMMYYYY(newPdt);
                   updatePostingTableTotals();
                   updateCumulativeSum('postingTable');
                   applyGlobalMoneyFormatting();
@@ -488,9 +501,12 @@ document.addEventListener("DOMContentLoaded", () => {
                       const tr = document.createElement("tr");
                       tr.dataset.ano = row.ANO;
                       tr.dataset.pdt = toISO(row.PDT);
+                      const formattedPdt = row.PDT
+                          ? row.PDT.split("-").reverse().join("-")
+                          : "";
                       tr.innerHTML = `
                           <td>${row.ANO}</td>
-                          <td data-field="PDT" contenteditable="false">${row.PDT}</td>
+                          <td data-field="PDT" contenteditable="false">${formattedPdt}</td>
                           <td data-field="AMT" contenteditable="false" data-money>${row.AMT}</td>
                           <td class="cumulative-amt"></td>  <!-- New Cumulative Amount Column -->
                           <td>
@@ -688,7 +704,7 @@ async function addPaymentFromForm(form) {
         const newRowHtml = `
 <tr data-ano="${ano}" data-pdt="${pdt}">
     <td data-field="ANO" contenteditable="false">${ano}</td>
-    <td data-field="PDT" contenteditable="false">${pdt}</td>
+    <td data-field="PDT" contenteditable="false">${formatDateToDDMMYYYY(pdt)}</td>
     <td data-field="AMT" data-money="${amt}" contenteditable="false">${amt}</td>
     <td class="cumulative-amt" data-money="0"></td>
     <td>
@@ -1040,6 +1056,13 @@ function toISO(dateStr) {
     updateCumulativeSum('postingTable');
     applyGlobalMoneyFormatting(); 
   });
+
+// Format existing PDT values in already-rendered payment table
+const existingPaymentDateCells = document.querySelectorAll('#paymentTable td[data-field="PDT"]');
+
+existingPaymentDateCells.forEach((cell) => {
+  cell.textContent = formatDateToDDMMYYYY(cell.textContent.trim());
+});
 
 applyGlobalMoneyFormatting();
 

@@ -12,6 +12,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const anoIdx = headers.indexOf("ano");
   const nameIdx = headers.indexOf("name");
+
+  function formatDate(value) {
+    if (!value) return "";
+
+    const str = String(value).trim();
+
+    // Match YYYY-MM-DD only
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+      return value;
+    }
+
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
   
   const clean = v => v.replace(/[₹,]/g, "").trim();
   // 🔒 Immutable snapshot (single source of truth)
@@ -299,6 +315,10 @@ document.addEventListener("DOMContentLoaded", function () {
             </span>
           `;
 
+        } else if (["start_date", "end_date"].includes(header)) {
+
+          td.textContent = formatDate(value);
+
         } else {
 
           td.textContent = value;
@@ -474,6 +494,21 @@ document.addEventListener("DOMContentLoaded", function () {
   } else {
     updateSummary();
   }
+
+  // Format existing table dates on initial page load
+  tableBody.querySelectorAll("tr").forEach(row => {
+    headers.forEach((header, index) => {
+      if (["start_date", "end_date"].includes(header)) {
+        // headers array already includes checkbox column,
+        // so indexes already match row.children
+        const cell = row.children[index];
+
+        if (cell) {
+          cell.textContent = formatDate(cell.textContent);
+        }
+      }
+    });
+  });
 });
 
 
