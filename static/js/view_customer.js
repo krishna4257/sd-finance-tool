@@ -360,7 +360,11 @@ document.addEventListener("DOMContentLoaded", function () {
       "aadhaar_number",
       "latitude",
       "longitude",
-      "eid"
+      "eid",
+      "status",
+      "installment_amount",
+      "phone_number",
+      "notes"
     ];
 
     rebuiltTable.columns().every(function () {
@@ -526,12 +530,16 @@ window.addEventListener("load", () => {
 document.addEventListener("DOMContentLoaded", () => {
   const DEFAULT_HIDDEN_COLUMNS = [
     "cid",
-    "vid",
-    "created_at",
-    "aadhaar_number",
-    "latitude",
-    "longitude",
-    "eid"
+      "vid",
+      "created_at",
+      "aadhaar_number",
+      "latitude",
+      "longitude",
+      "eid",
+      "status",
+      "installment_amount",
+      "phone_number",
+      "notes"
   ];
 
   const table = $.fn.DataTable.isDataTable('#customerTable')

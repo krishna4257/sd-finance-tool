@@ -2186,10 +2186,11 @@ def search_customer():
     customers = []
     pamt1_records = {}
     loanee_headers = [
-        "cid", "ano", "name",
+        "cid", "ano", "name", "vid", "start_date", "end_date",
         "total_amount", "paid_amount",
         "balance_amount", "installment_amount",
-        "type", "period", "created_at", "status"
+        "type", "period","pano", "created_at","aadhaar_number","notes","latitude", "longitude","eid", "status",
+        "updated_at","phone_number"
     ]
 
     if request.method == "POST":
@@ -2202,26 +2203,66 @@ def search_customer():
         cur.execute("""
             (
                 SELECT
-                    cid, ano, name,
-                    total_amount, paid_amount,
-                    balance_amount, installment_amount,
-                    type, period, created_at,
-                    'active' AS status
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    'active' AS status,
+                    updated_at,
+                    phone_number
                 FROM customer
                 WHERE vid = %s
-                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+                  AND (
+                        CAST(ano AS TEXT) = %s
+                        OR LOWER(name) LIKE LOWER(%s)
+                  )
             )
             UNION ALL
             (
                 SELECT
-                    cid, ano, name,
-                    total_amount, paid_amount,
-                    balance_amount, installment_amount,
-                    type, period, created_at,
-                    status
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    status,
+                    NULL AS updated_at,
+                    phone_number
                 FROM closed_cust_account
                 WHERE vid = %s
-                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+                  AND (
+                        CAST(ano AS TEXT) = %s
+                        OR LOWER(name) LIKE LOWER(%s)
+                  )
             )
             ORDER BY ano
             LIMIT 1
@@ -3468,6 +3509,7 @@ def update_customer_pg():
     payload = request.get_json()
 
     data = payload.get("data") if isinstance(payload, dict) else None
+
     if not data:
         return jsonify(success=False, error="Missing data"), 400
 
@@ -3476,6 +3518,7 @@ def update_customer_pg():
 
     if not cid:
         return jsonify(success=False, error="Missing cid"), 400
+
     if not vid:
         return jsonify(success=False, error="Missing vid in session"), 400
 
@@ -3483,31 +3526,132 @@ def update_customer_pg():
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            UPDATE customer
+
+        # 🔹 Detect table based on status
+        status = (data.get("status") or "active").strip().lower()
+
+        if status == "active":
+            table_name = "customer"
+        else:
+            table_name = "closed_cust_account"
+
+        # 🔹 Fetch existing paid amount
+        cur.execute(f"""
+            SELECT paid_amount
+            FROM {table_name}
+            WHERE cid = %s
+              AND vid = %s
+        """, (cid, vid))
+
+        existing = cur.fetchone()
+
+        if not existing:
+            return jsonify(success=False, error="Customer not found"), 404
+
+        paid_amount = float(existing[0] or 0)
+
+        # 🔹 Read editable fields
+        name = (data.get("name") or "").strip()
+        start_date_raw = (data.get("start_date") or "").strip()
+        loan_type = (data.get("type") or "").strip().upper()
+        pano = (data.get("pano") or "").strip() or None
+        notes = (data.get("notes") or "").strip() or None
+        phone_number = (data.get("phone_number") or "").strip() or None
+
+        try:
+            total_amount = float(data.get("total_amount") or 0)
+        except Exception:
+            return jsonify(success=False, error="Invalid total amount"), 400
+
+        try:
+            period = int(data.get("period") or 0)
+        except Exception:
+            return jsonify(success=False, error="Invalid period"), 400
+
+        # 🔹 Validation
+        if not name:
+            return jsonify(success=False, error="Name is required"), 400
+
+        if loan_type not in ["W", "M"]:
+            return jsonify(success=False, error="Loan type must be W or M"), 400
+
+        if period <= 0:
+            return jsonify(success=False, error="Period must be greater than 0"), 400
+
+        if total_amount <= 0:
+            return jsonify(success=False, error="Total amount must be greater than 0"), 400
+
+        if phone_number:
+            if not phone_number.isdigit() or len(phone_number) != 10:
+                return jsonify(success=False, error="Phone number must be 10 digits"), 400
+
+        # 🔹 Parse frontend date safely
+        try:
+            if "/" in start_date_raw:
+                start_date = datetime.strptime(start_date_raw, "%d/%m/%Y").date()
+            else:
+                start_date = datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+        except Exception:
+            return jsonify(success=False, error="Invalid start date format"), 400
+
+        # 🔹 Recalculate derived fields
+        if loan_type == "M":
+            end_date = start_date + relativedelta(months=period)
+        else:
+            end_date = start_date + timedelta(weeks=period)
+
+        installment_amount = round(total_amount / period, 2)
+        balance_amount = round(total_amount - paid_amount, 2)
+
+        # 🔹 Update customer
+        cur.execute(f"""
+            UPDATE {table_name}
             SET
-              name = %s,
-              total_amount = %s,
-              paid_amount = %s,
-              balance_amount = %s,
-              installment_amount = %s
+                name = %s,
+                start_date = %s,
+                end_date = %s,
+                total_amount = %s,
+                balance_amount = %s,
+                installment_amount = %s,
+                type = %s,
+                period = %s,
+                pano = %s,
+                notes = %s,
+                phone_number = %s,
+                updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
             WHERE cid = %s
               AND vid = %s
         """, (
-            data.get("name"),
-            data.get("total_amount"),
-            data.get("paid_amount"),
-            data.get("balance_amount"),
-            data.get("installment_amount"),
+            name,
+            start_date,
+            end_date,
+            total_amount,
+            balance_amount,
+            installment_amount,
+            loan_type,
+            period,
+            pano,
+            notes,
+            phone_number,
             cid,
             vid
         ))
 
         conn.commit()
-        return jsonify(success=True)
+
+        return jsonify(
+            success=True,
+            recalculated={
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+                "installment_amount": installment_amount,
+                "balance_amount": balance_amount
+            }
+        )
 
     except Exception as e:
         conn.rollback()
+        traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
 
     finally:
