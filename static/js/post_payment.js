@@ -28,20 +28,33 @@ let selectedDate = null;
 
 // --- Instant lookup mapping ---
 const CUSTOMER_MAP = {};
-window.CUSTOMERS.forEach(c => {
-    // Normalize backend keys to the frontend expected shape
-    const normalized = {
-  ano: String(c.ano).trim(),
-  name: c.name,
-  amt: Number(c.total_amount) || 0,
-  pamt: Number(c.paid_amount) || 0,
-  bamt: Number(c.balance_amount) || 0,
-  da: Number(c.installment_amount) || 0
-};
 
-    console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
-    if (normalized.ano) {
-        CUSTOMER_MAP[normalized.ano] = normalized;
+(window.CUSTOMERS || []).forEach(c => {
+    try {
+
+        if (!c || c.ano === null || c.ano === undefined) {
+            console.warn("Skipping invalid customer:", c);
+            return;
+        }
+
+        // Normalize backend keys to the frontend expected shape
+        const normalized = {
+            ano: String(c.ano).trim(),
+            name: c.name || "",
+            amt: Number(c.total_amount) || 0,
+            pamt: Number(c.paid_amount) || 0,
+            bamt: Number(c.balance_amount) || 0,
+            da: Number(c.installment_amount) || 0
+        };
+
+        console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
+
+        if (normalized.ano) {
+            CUSTOMER_MAP[normalized.ano] = normalized;
+        }
+
+    } catch (err) {
+        console.error("Failed loading customer:", c, err);
     }
 });
 
@@ -314,23 +327,63 @@ document.getElementById("ano").addEventListener("input", function () {
 });
 document.getElementById("paymentForm").addEventListener("submit", function (e) {
   e.preventDefault();
-  const pdt = document.getElementById("pdt").value;
-  const ano = document.getElementById("ano").value;
+
+  const pdt = document.getElementById("pdt").value.trim();
+  const ano = document.getElementById("ano").value.trim();
   const amt = parseFloat(document.getElementById("amt").value);
 
-  if (!pdt || !ano || isNaN(amt)) return;
+  console.log("DEBUG FORM SUBMIT =>", { pdt, ano, amt });
 
-  const duplicate = tempTable.some(row => row.ano === ano && row.pdt === pdt);
-  console.log("DEBUG: Submit pressed. ANO:", ano, "PDT:", pdt, "Amount:", amt, "Duplicate:", duplicate);
-  if (duplicate) {
-    showError("Duplicate A.no + Date combo exists.");
+  if (!pdt) {
+    showError("❌ Please enter payment date.");
     return;
   }
 
-  tempTable.unshift({ ano, pdt, amt });
+  if (!ano) {
+    showError("❌ Please enter account number.");
+    return;
+  }
+
+  if (isNaN(amt)) {
+    showError("❌ Please enter amount.");
+    return;
+  }
+
+  const customer = CUSTOMER_MAP[String(ano)];
+
+  console.log("DEBUG CUSTOMER LOOKUP =>", customer);
+
+  if (!customer) {
+    showError("❌ A.no not found in database!");
+    return;
+  }
+
+  const duplicate = tempTable.some(
+    row => String(row.ano) === String(ano) && row.pdt === pdt
+  );
+
+  console.log("DEBUG DUPLICATE CHECK =>", duplicate);
+
+  if (duplicate) {
+    showError("❌ Duplicate A.no + Date combo exists.");
+    return;
+  }
+
+  tempTable.unshift({
+    ano: String(ano),
+    pdt,
+    amt: Number(amt)
+  });
+
+  console.log("DEBUG ROW ADDED =>", tempTable[0]);
+
   saveAndUpdate();
+
   document.getElementById("ano").value = "";
   document.getElementById("amt").value = "";
+
+  document.getElementById("customerInfo").style.display = "none";
+
   document.getElementById("ano").focus();
 });
 
@@ -364,7 +417,7 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
     }
 
     // ---- INSTANT VALIDATION ----
-    const customer = CUSTOMER_MAP[ano];
+    const customer = CUSTOMER_MAP[String(ano).trim()];
     console.log("DEBUG: Typed ANO:", ano, "Lookup result:", customer);
     if (!customer) {
         showError("❌ A.no not found in database!");

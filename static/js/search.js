@@ -60,6 +60,97 @@ document.addEventListener("DOMContentLoaded", () => {
     sel.addRange(range);
   }
 
+  function parseDisplayDate(dateStr) {
+  if (!dateStr) return null;
+
+  // yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+
+  // dd-mm-yyyy
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split("-");
+    return new Date(`${y}-${m}-${d}`);
+  }
+
+  // dd/mm/yyyy
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split("/");
+    return new Date(`${y}-${m}-${d}`);
+  }
+
+  return null;
+}
+
+function formatDateForDisplay(date) {
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const y = date.getFullYear();
+
+  return `${d}-${m}-${y}`;
+}
+
+function recalculateCustomerLoanFields(row) {
+  const startDateCell = row.querySelector("td[data-field='start_date']");
+  const endDateCell = row.querySelector("td[data-field='end_date']");
+  const typeCell = row.querySelector("td[data-field='type']");
+  const periodCell = row.querySelector("td[data-field='period']");
+  const totalAmountCell = row.querySelector("td[data-field='total_amount']");
+  const installmentCell = row.querySelector("td[data-field='installment_amount']");
+  const paidAmountCell = row.querySelector("td[data-field='paid_amount']");
+  const balanceAmountCell = row.querySelector("td[data-field='balance_amount']");
+
+  if (
+    !startDateCell ||
+    !endDateCell ||
+    !typeCell ||
+    !periodCell ||
+    !totalAmountCell ||
+    !installmentCell
+  ) {
+    return;
+  }
+
+  const type = typeCell.textContent.trim().toUpperCase();
+  const period = parseInt(periodCell.textContent.trim(), 10);
+
+  const totalAmount = parseFloat(
+    totalAmountCell.textContent.replace(/[^0-9.-]/g, "")
+  ) || 0;
+
+  // Installment calculation
+  if (!isNaN(period) && period > 0) {
+    installmentCell.textContent = (totalAmount / period).toFixed(2);
+  }
+
+  // Balance recalculation
+  if (paidAmountCell && balanceAmountCell) {
+    const paidAmount = parseFloat(
+      paidAmountCell.textContent.replace(/[^0-9.-]/g, "")
+    ) || 0;
+
+    balanceAmountCell.textContent = (totalAmount - paidAmount).toFixed(2);
+  }
+
+  // End date calculation
+  const startDate = parseDisplayDate(startDateCell.textContent.trim());
+
+  if (!startDate || isNaN(period)) return;
+
+  const endDate = new Date(startDate);
+
+  if (type === "W") {
+    endDate.setDate(endDate.getDate() + (period * 7));
+  } else if (type === "M") {
+    endDate.setMonth(endDate.getMonth() + period);
+  } else {
+    return;
+  }
+
+  endDateCell.textContent = formatDateForDisplay(endDate);
+}
+
   // Enter edit mode
   document.addEventListener('focusin', (e) => {
     const el = e.target;
@@ -101,11 +192,18 @@ document.addEventListener("DOMContentLoaded", () => {
         // Store original value for rollback
         td.dataset.originalValue = td.textContent.trim();
 
-        // Only customer name and total amount should be editable
-        if (
-          td.dataset.field === "name" ||
-          td.dataset.field === "total_amount"
-        ) {
+        const editableFields = [
+          "name",
+          "total_amount",
+          "start_date",
+          "type",
+          "period",
+          "pano",
+          "notes",
+          "phone_number"
+        ];
+
+        if (editableFields.includes(td.dataset.field)) {
           td.setAttribute("contenteditable", "true");
           td.classList.add("highlighted");
         }
@@ -118,37 +216,56 @@ document.addEventListener("DOMContentLoaded", () => {
     customerRow.addEventListener("input", (e) => {
       const td = e.target;
 
+      if (!td.dataset.field) return;
+
+      // Name validation
       if (td.dataset.field === "name") {
-        // Allow only alphabets and spaces
         td.textContent = td.textContent.replace(/[^a-zA-Z\s]/g, "");
-        // Prevent multiple spaces
         td.textContent = td.textContent.replace(/\s{2,}/g, " ");
-        // Prevent leading spaces
         td.textContent = td.textContent.replace(/^\s+/g, "");
         placeCaretAtEnd(td);
       }
-            // Live update BAMT when total amount changes
+
+      // Amount validation
       if (td.dataset.field === "total_amount") {
-
-        // Allow only valid numbers
         td.textContent = td.textContent.replace(/[^0-9.]/g, "");
+        placeCaretAtEnd(td);
+      }
 
-        const amt = parseFloat(td.textContent) || 0;
+      // Period validation
+      if (td.dataset.field === "period") {
+        td.textContent = td.textContent.replace(/[^0-9]/g, "");
+        placeCaretAtEnd(td);
+      }
 
-        const pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
-        const bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
+      // Phone validation
+      if (td.dataset.field === "phone_number") {
+        td.textContent = td.textContent.replace(/[^0-9]/g, "").slice(0, 10);
+        placeCaretAtEnd(td);
+      }
 
-        const paidAmount = parseFloat(
-          (pamtCell?.textContent || "").replace(/[^0-9.-]/g, "")
-        ) || 0;
+      // Type validation
+      if (td.dataset.field === "type") {
+          let value = td.textContent.toUpperCase().replace(/[^WM]/g, "");
 
-        const balance = amt - paidAmount;
-
-        if (bamtCell) {
-          bamtCell.textContent = balance.toFixed(2);
+        if (value.length > 1) {
+          value = value[0];
         }
 
+        td.textContent = value;
         placeCaretAtEnd(td);
+      }
+
+      // Recalculate loan fields instantly
+      if (
+        [
+          "start_date",
+          "type",
+          "period",
+          "total_amount"
+        ].includes(td.dataset.field)
+      ) {
+        recalculateCustomerLoanFields(customerRow);
       }
     });
 

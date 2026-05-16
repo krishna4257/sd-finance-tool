@@ -68,8 +68,11 @@
   </div>
 </div>
 
+<script type="application/json" id="customers-data">
+  {{ customers | tojson | safe }}
+</script>
 <script>
-  window.CUSTOMERS = JSON.parse('{{ customers | tojson | safe }}');
+  window.CUSTOMERS = JSON.parse(document.getElementById("customers-data").textContent);
 </script>
 <script src="{{ url_for('static', filename='js/post_payment.js') }}"></script>
 {% endblock %}
