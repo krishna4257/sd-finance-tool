@@ -3,7 +3,7 @@ let originalData = [];
 let filteredData = [];
 
 /* Default visible columns */
-const DEFAULT_COLUMNS = ["ano", "payment_date", "amt"];
+const DEFAULT_COLUMNS = ["ano", "payment_date", "amt", "payment_status"];
 
 /* Column definitions (order + labels) */
 const COLUMN_DEFS = [
@@ -14,7 +14,8 @@ const COLUMN_DEFS = [
   { key: "created_at", label: "Created At" },
   { key: "eid", label: "EID" },
   { key: "cid", label: "CID" },
-  { key: "vid", label: "VID" }
+  { key: "vid", label: "VID" },
+  { key: "payment_status", label: "Payment Status" }
 ];
 
 let visibleColumns = [...DEFAULT_COLUMNS];
@@ -33,7 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
       created_at: r.created_at,
       eid: r.eid,
       cid: r.cid,
-      vid: r.vid
+      vid: r.vid,
+      payment_status: r.payment_status
     }));
   } catch (e) {
     console.error("Failed to parse payment data", e);
@@ -104,8 +106,23 @@ function renderTable(data) {
       const td = document.createElement("td");
       if (col === "amt") {
         td.innerHTML = `<span data-money>${row[col]}</span>`;
+
       } else if (col === "payment_date") {
         td.textContent = formatDateDDMMYYYY(row[col]);
+
+      } else if (col === "payment_status") {
+
+        const status = String(row[col] || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "-");
+
+        td.innerHTML = `
+          <span class="status-badge status-${status}">
+            ${row[col] ?? ""}
+          </span>
+        `;
+
       } else {
         td.textContent = row[col] ?? "";
       }

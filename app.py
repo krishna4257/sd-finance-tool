@@ -1981,18 +1981,35 @@ def post_payment_report():
             created_at,
             eid,
             cid,
-            vid
+            vid,
+            'active' AS payment_status
         FROM payment
         WHERE vid = %s
+
+        UNION ALL
+
+        SELECT
+            pid,
+            ano,
+            payment_date,
+            amt,
+            created_at,
+            eid,
+            cid,
+            vid,
+            'closed' AS payment_status
+        FROM closed_cust_payment
+        WHERE vid = %s
+
         ORDER BY payment_date DESC, pid DESC
-    """, (vid,))
+    """, (vid, vid))
 
     rows = cur.fetchall()
     # cur.description can be None for some drivers or edge cases; guard against that
     if cur.description:
         headers = [desc[0] for desc in cur.description]
     else:
-        headers = ["pid", "ano", "payment_date", "amt", "created_at", "eid", "cid", "vid"]
+        headers = ["pid", "ano", "payment_date", "amt", "created_at", "eid", "cid", "vid", "payment_status"]
 
     cur.close()
     conn.close()
