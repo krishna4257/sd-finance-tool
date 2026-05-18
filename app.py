@@ -2105,7 +2105,123 @@ def get_customer_info():
         "installment_amount": row[5],
     })
 
+@app.route("/api/payment_day_stats")
+@login_required
+def payment_day_stats():
 
+    vid = session.get("vid")
+
+    if not vid:
+        return jsonify({"error": "Missing village context"}), 400
+
+    date_str = request.args.get("date")
+
+    if not date_str:
+        return jsonify({"error": "Missing date"}), 400
+
+    try:
+        payment_date = datetime.strptime(date_str, "%d/%m/%Y").date()
+    except Exception:
+        return jsonify({"error": "Invalid date"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        cur.execute("""
+
+            WITH village_collection_day AS (
+
+                SELECT DISTINCT ON (p.vid)
+
+                    p.vid,
+
+                    TRIM(TO_CHAR(p.payment_date, 'Day'))
+                        AS collection_day,
+
+                    COUNT(*) AS payment_count
+
+                FROM payment p
+
+                WHERE p.vid = %s
+
+                GROUP BY
+                    p.vid,
+                    collection_day
+
+                ORDER BY
+                    p.vid,
+                    payment_count DESC
+            ),
+
+            eligible_customers AS (
+
+                SELECT
+                    COUNT(*) AS expected_accounts
+
+                FROM customer c
+                JOIN village_collection_day vcd
+                    ON vcd.vid = c.vid
+
+                WHERE c.vid = %s
+                  AND c.type = 'W'
+
+                  AND (
+                        c.start_date + INTERVAL '7 days'
+                      )::date <= %s
+
+                  AND TRIM(TO_CHAR(%s::date, 'Day'))
+                      = vcd.collection_day
+            ),
+
+            actual_payments AS (
+
+                SELECT
+                    COUNT(DISTINCT ano) AS paid_accounts
+
+                FROM payment
+
+                WHERE vid = %s
+                  AND payment_date = %s
+            )
+
+            SELECT
+                COALESCE(ec.expected_accounts, 0)
+                    AS expected_accounts,
+
+                COALESCE(ap.paid_accounts, 0)
+                    AS already_paid
+
+            FROM eligible_customers ec
+            CROSS JOIN actual_payments ap
+
+        """, (
+            vid,
+            vid,
+            payment_date,
+            payment_date,
+            vid,
+            payment_date
+        ))
+
+        row = cur.fetchone()
+
+        expected_accounts = int(row[0] or 0) if row else 0
+        already_paid = int(row[1] or 0) if row else 0
+
+        return jsonify({
+            "expected_accounts": expected_accounts,
+            "already_paid": already_paid
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/submit_post_payment", methods=["POST"])
 @login_required
