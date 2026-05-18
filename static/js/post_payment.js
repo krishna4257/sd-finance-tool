@@ -22,8 +22,13 @@ function persistTempPayments() {
     );
 }
 
+
 let tempTable = loadTempPayments();
 let selectedDate = null;
+let isSubmittingPayments = false;
+
+let expectedPayments = 0;
+let alreadyPaidPayments = 0;
 
 
 // --- Instant lookup mapping ---
@@ -67,10 +72,105 @@ function showError(message) {
     errorSound.play().catch(e => console.warn("Could not play error sound:", e));
 }
 
+
 function ddmmyyyyToIso(dateStr) {
   // "10/01/2026" → "2026-01-10"
   const [dd, mm, yyyy] = dateStr.split('/');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadPaymentDayStats() {
+
+    const pdt = document.getElementById("pdt")?.value?.trim();
+
+    if (!pdt) {
+        expectedPayments = 0;
+        alreadyPaidPayments = 0;
+        updateCollectionStats();
+        return;
+    }
+
+    try {
+
+        console.log("DEBUG PAYMENT STATS DATE =>", {
+            original: pdt
+        });
+
+        const response = await fetch(
+            `/api/payment_day_stats?date=${encodeURIComponent(pdt)}`
+        );
+
+        console.log("DEBUG PAYMENT STATS STATUS =>", response.status);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        console.log("DEBUG PAYMENT DAY STATS RESPONSE =>", data);
+
+        if (data.error) {
+            console.error("PAYMENT DAY STATS API ERROR =>", data.error);
+
+            expectedPayments = 0;
+            alreadyPaidPayments = 0;
+            updateCollectionStats();
+
+            return;
+        }
+
+        expectedPayments = Number(
+            data.expected_accounts ||
+            data.expectedPayments ||
+            data.eligible_accounts ||
+            0
+        );
+
+        alreadyPaidPayments = Number(
+            data.already_paid ||
+            data.paid_accounts ||
+            data.alreadyPaid ||
+            0
+        );
+
+        console.log("DEBUG FINAL COUNTS =>", {
+            expectedPayments,
+            alreadyPaidPayments
+        });
+
+        updateCollectionStats();
+
+    } catch (err) {
+        console.error("Failed loading collection stats:", err);
+
+        expectedPayments = 0;
+        alreadyPaidPayments = 0;
+        updateCollectionStats();
+    }
+}
+
+function updateCollectionStats() {
+
+    const enteredToday = tempTable.length;
+
+    const expected = expectedPayments;
+
+    const missed = Math.max(
+        expected - (alreadyPaidPayments + enteredToday),
+        0
+    );
+
+    const expectedEl = document.getElementById("expectedPayments");
+    const missedEl = document.getElementById("missedPayments");
+
+    if (expectedEl) {
+        expectedEl.textContent = expected;
+    }
+
+    if (missedEl) {
+        missedEl.textContent = missed;
+    }
 }
 
 document.addEventListener('click', function(e) {
@@ -218,6 +318,7 @@ function updateTable() {
   });
 
   applyGlobalMoneyFormatting();
+  updateCollectionStats();
 }
 
 
@@ -289,16 +390,33 @@ function printTemp() {
 }
 
 function submitAllPayments() {
+
+  if (isSubmittingPayments) {
+    console.log("Payment submission already in progress.");
+    return;
+  }
+
   if (tempTable.length === 0) {
     alert("There are no payments to submit.");
     return;
   }
-  
+
+  isSubmittingPayments = true;
+
+  const submitBtn = document.querySelector(
+    'button[onclick="submitAllPayments()"]'
+  );
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Submitting...";
+  }
+
   const payload = tempTable.map(row => ({
-  ano: Number(row.ano),
-  pdt: row.pdt,          // 👈 backend expects dd/mm/yyyy
-  amt: Number(row.amt)
-}));
+    ano: Number(row.ano),
+    pdt: row.pdt,
+    amt: Number(row.amt)
+  }));
 
   csrfFetch("/submit_post_payment", {
     method: "POST",
@@ -313,13 +431,25 @@ function submitAllPayments() {
     })
     .then(data => {
       const successMsg = document.getElementById("successMsg");
+
       successMsg.style.display = "block";
       successMsg.innerText = data.message;
+
       tempTable = data.skipped_rows;
-      saveAndUpdate(); 
+
+      saveAndUpdate();
     })
     .catch(err => {
-        showError(`An error occurred: ${err.message}`);
+      showError(`An error occurred: ${err.message}`);
+    })
+    .finally(() => {
+
+      isSubmittingPayments = false;
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "📤 Submit All Payments";
+      }
     });
 }
 document.getElementById("ano").addEventListener("input", function () {
@@ -440,17 +570,69 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
 updateTable();
 applyGlobalMoneyFormatting();
 
-// --- Auto-focus the Date (PDT) field when Post Payment page loads ---
+// --- Auto-focus + live collection stats loader ---
 document.addEventListener("DOMContentLoaded", () => {
-    const pdtInput = document.getElementById("pdt");
-    if (pdtInput) {
-        pdtInput.focus();
 
-        // Place cursor at the end — Safari-safe fallback
-        const len = pdtInput.value.length;
-        try { pdtInput.setSelectionRange(len, len); } catch (e) {}
-        setTimeout(() => {
-            try { pdtInput.setSelectionRange(len, len); } catch (e) {}
-        }, 0);
-    }
+    const pdtInput = document.getElementById("pdt");
+
+    if (!pdtInput) return;
+
+    pdtInput.focus();
+
+    const len = pdtInput.value.length;
+
+    try {
+        pdtInput.setSelectionRange(len, len);
+    } catch (e) {}
+
+    // -----------------------------------------
+    // CENTRALIZED stats loader
+    // -----------------------------------------
+
+    let lastLoadedDate = "";
+
+    const triggerStatsLoad = () => {
+
+        const currentDate = pdtInput.value.trim();
+
+        // Prevent duplicate unnecessary calls
+        if (!currentDate || currentDate === lastLoadedDate) {
+            return;
+        }
+
+        lastLoadedDate = currentDate;
+
+        console.log(
+            "AUTO LOADING PAYMENT STATS FOR =>",
+            currentDate
+        );
+
+        loadPaymentDayStats();
+    };
+
+    // Safari/macOS calendar compatibility
+    pdtInput.addEventListener("change", triggerStatsLoad);
+    pdtInput.addEventListener("input", triggerStatsLoad);
+    pdtInput.addEventListener("blur", triggerStatsLoad);
+    pdtInput.addEventListener("keyup", triggerStatsLoad);
+
+    // IMPORTANT:
+    // Detect programmatic value changes too
+    let previousValue = pdtInput.value;
+
+    setInterval(() => {
+
+        if (pdtInput.value !== previousValue) {
+
+            previousValue = pdtInput.value;
+
+            triggerStatsLoad();
+        }
+
+    }, 150);
+
+    // Initial load if date already exists
+    setTimeout(() => {
+        triggerStatsLoad();
+    }, 100);
 });
