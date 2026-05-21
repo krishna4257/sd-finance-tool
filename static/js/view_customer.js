@@ -436,8 +436,9 @@ document.addEventListener("DOMContentLoaded", function () {
 };
 
   window.filterYearlyReport = function () {
-    snapshot.forEach(d => {d.row.style.display = d.balance_amount > 0 ? "" : "none";});
-    updateSummary();
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "yearly");
+    window.location.href = url.toString();
   };
 
   // Sorting support

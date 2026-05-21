@@ -1894,6 +1894,64 @@ def view_customers():
             WHERE vid = %s
             ORDER BY ano
         """, (vid,))
+    elif mode == "yearly":
+        cur.execute("""
+
+        SELECT
+            cid,
+            ano,
+            name,
+            vid,
+            start_date,
+            end_date,
+            total_amount,
+            paid_amount,
+            balance_amount,
+            installment_amount,
+            type,
+            period,
+            pano,
+            created_at,
+            aadhaar_number,
+            notes,
+            latitude,
+            longitude,
+            eid,
+            phone_number,
+            'active' AS status
+        FROM customer
+        WHERE vid = %s
+
+        UNION ALL
+
+        SELECT
+            cid,
+            ano,
+            name,
+            vid,
+            start_date,
+            end_date,
+            total_amount,
+            paid_amount,
+            balance_amount,
+            installment_amount,
+            type,
+            period,
+            pano,
+            created_at,
+            aadhaar_number,
+            notes,
+            latitude,
+            longitude,
+            eid,
+            phone_number,
+            status
+        FROM closed_cust_account
+        WHERE vid = %s
+        AND LOWER(TRIM(status)) != 'written_off'
+        ORDER BY ano
+
+    """, (vid, vid))
     else:
         cur.execute("""
             SELECT
