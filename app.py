@@ -1949,6 +1949,7 @@ def view_customers():
         FROM closed_cust_account
         WHERE vid = %s
         AND LOWER(TRIM(status)) != 'written_off'
+        AND LOWER(TRIM(status)) != 'closed'
         ORDER BY ano
 
     """, (vid, vid))
