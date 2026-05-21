@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="page-title">👁️ Customers Table</h2>
+<h2 class="page-title">
+  {% if mode == "yearly" %}
+    📅 Yearly Report
+  {% elif mode == "closed" %}
+    📁 Closed Customers
+  {% else %}
+    👁️ Customers Table
+  {% endif %}
+</h2>
 
 <div class="raised-box">
   <div class="control-row">
