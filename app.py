@@ -446,7 +446,7 @@ def api_villages():
         if user_level in ["admin", "mgmt"]:
             if eid:
                 cur.execute("""
-                    SELECT vid, village_name
+                    SELECT vid, village_code, village_name
                     FROM village
                     WHERE (emp1 = %s OR emp2 = %s)
                       AND status = 'active'
@@ -454,7 +454,7 @@ def api_villages():
                 """, (eid, eid))
             else:
                 cur.execute("""
-                    SELECT vid, village_name
+                    SELECT vid, village_code, village_name
                     FROM village WHERE status = 'active'
                     ORDER BY village_name
                 """)
@@ -463,9 +463,9 @@ def api_villages():
         else:
             if not user_villages:
                 return jsonify([])
-
+ 
             cur.execute("""
-                SELECT vid, village_name
+                SELECT vid, village_code, village_name
                 FROM village
                 WHERE vid = ANY(%s)
                   AND status = 'active'
@@ -475,7 +475,7 @@ def api_villages():
         rows = cur.fetchall()
 
         return jsonify([
-            {"vid": r[0], "name": r[1]}
+            {"vid": r[0], "code": r[1], "name": r[2], "display_name": f"{r[1]} - {r[2]}"}
             for r in rows
         ])
     finally:
@@ -3748,7 +3748,10 @@ def update_customer_pg():
         loan_type = (data.get("type") or "").strip().upper()
         pano = (data.get("pano") or "").strip() or None
         notes = (data.get("notes") or "").strip() or None
-        phone_number = (data.get("phone_number") or "").strip() or None
+        phone_number = (data.get("phone_number") or "").strip()
+        if phone_number.lower() == "none":
+             phone_number = ""
+        phone_number = phone_number or None
 
         try:
             total_amount = float(data.get("total_amount") or 0)
@@ -4041,19 +4044,23 @@ def village_page():
     if user_level in ["admin", "mgmt"]:
         cur.execute("""
         SELECT
-            vid,
-            village_code,
-            village_name,
-            district,
-            pincode,
-            state,
-            emp1,
-            emp2,
-            created_at,
-            status
-        FROM village
-        ORDER BY vid
-    """)
+            v.vid,
+            v.village_code,
+            v.village_name,
+            v.district,
+            v.pincode,
+            v.state,
+            v.emp1,
+            e1.name AS emp1_name,
+            v.emp2,
+            e2.name AS emp2_name,
+            v.created_at,
+            v.status
+        FROM village v
+        LEFT JOIN employee e1 ON e1.eid = v.emp1
+        LEFT JOIN employee e2 ON e2.eid = v.emp2
+        ORDER BY v.vid
+        """)
     else:
         if not allowed_villages:
             cur.close()
@@ -4063,24 +4070,28 @@ def village_page():
                 headers=[],
                 data=[],
                 total_villages=0
-        )
+            )
 
         cur.execute("""
         SELECT
-            vid,
-            village_code,
-            village_name,
-            district,
-            pincode,
-            state,
-            emp1,
-            emp2,
-            created_at,
-            status
-        FROM village
-        WHERE vid = ANY(%s)
-        ORDER BY vid
-    """, (allowed_villages,))
+            v.vid,
+            v.village_code,
+            v.village_name,
+            v.district,
+            v.pincode,
+            v.state,
+            v.emp1,
+            e1.name AS emp1_name,
+            v.emp2,
+            e2.name AS emp2_name,
+            v.created_at,
+            v.status
+        FROM village v
+        LEFT JOIN employee e1 ON e1.eid = v.emp1
+        LEFT JOIN employee e2 ON e2.eid = v.emp2
+        WHERE v.vid = ANY(%s)
+        ORDER BY v.vid
+        """, (allowed_villages,))
 
     rows = cur.fetchall()
 
@@ -4882,6 +4893,352 @@ def update_payment_date_bulk():
     except Exception as e:
         conn.rollback()
         return jsonify(success=False, error=str(e)), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+# ----------------------------------------------------
+# CASHBAG ROUTES
+# ----------------------------------------------------
+
+@app.route("/cashbag")
+@login_required
+def cashbag():
+
+    vid = session.get("vid")
+
+    # Enforce village context
+    if not vid:
+        flash("Please select Village from Dashboard first", "warning")
+        return redirect(url_for("dashboard"))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # ------------------------------------------------
+        # SUMMARY TOTALS
+        # ------------------------------------------------
+
+        # Office Cash
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'office_credit'
+        """, (vid,))
+
+        office_cash = float(cur.fetchone()[0] or 0)
+
+        # Collections
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'customer_collection'
+        """, (vid,))
+
+        collections = float(cur.fetchone()[0] or 0)
+
+        # Loans Dispensed
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'loan_disbursed'
+        """, (vid,))
+
+        loans_disbursed = float(cur.fetchone()[0] or 0)
+
+        # Expenses
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'expense'
+        """, (vid,))
+
+        expenses = float(cur.fetchone()[0] or 0)
+
+        # Adjustments
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'adjustment'
+        """, (vid,))
+
+        adjustments = float(cur.fetchone()[0] or 0)
+
+        # ------------------------------------------------
+        # FINAL CASHBAG TOTAL
+        # ------------------------------------------------
+
+        cashbag_total = (
+            office_cash
+            + collections
+            + adjustments
+            - loans_disbursed
+            - expenses
+        )
+
+        # ------------------------------------------------
+        # TRANSACTION HISTORY
+        # ------------------------------------------------
+
+        cur.execute("""
+            SELECT
+                id,
+                txn_type,
+                amount,
+                notes,
+                created_by,
+                TO_CHAR(
+                    created_at AT TIME ZONE 'Asia/Kolkata',
+                    'DD/MM/YYYY HH12:MI AM'
+                ) AS created_at
+            FROM cashbag_transactions
+            WHERE vid = %s
+            ORDER BY created_at DESC, id DESC
+        """, (vid,))
+
+        rows = cur.fetchall()
+
+        transactions = []
+
+        for row in rows:
+
+            transactions.append({
+                "id": row[0],
+                "txn_type": row[1],
+                "amount": float(row[2] or 0),
+                "notes": row[3],
+                "created_by": row[4],
+                "created_at": row[5]
+            })
+
+        return render_template(
+            "cashbag.html",
+
+            cashbag_total=cashbag_total,
+            office_cash=office_cash,
+            collections=collections,
+            loans_disbursed=loans_disbursed,
+            expenses=expenses,
+
+            transactions=transactions
+        )
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        flash(f"Cashbag loading failed: {str(e)}", "danger")
+
+        return redirect(url_for("dashboard"))
+
+    finally:
+
+        cur.close()
+        conn.close()
+
+
+# ----------------------------------------------------
+# ADD CASHBAG TRANSACTION
+# ----------------------------------------------------
+
+@app.route("/cashbag/add", methods=["POST"])
+@login_required
+def add_cashbag_transaction():
+
+    vid = session.get("vid")
+
+    if not vid:
+        flash("Please select Village first", "warning")
+        return redirect(url_for("dashboard"))
+
+    txn_type = request.form.get("txn_type")
+    amount = request.form.get("amount")
+    notes = request.form.get("notes")
+
+    username = session.get("username") or "Unknown"
+
+    # Allowed transaction types
+    allowed_types = [
+        "office_credit",
+        "expense",
+        "adjustment"
+    ]
+
+    if txn_type not in allowed_types:
+
+        flash("Invalid transaction type", "danger")
+
+        return redirect(url_for("cashbag"))
+
+    try:
+        amount = float(amount or 0)
+        if amount <= 0:
+            flash("Amount must be greater than zero", "warning")
+            return redirect(url_for("cashbag"))
+    except Exception:
+        flash("Invalid amount", "danger")
+        return redirect(url_for("cashbag"))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        cur.execute("""
+            INSERT INTO cashbag_transactions (
+                vid,
+                eid,
+                txn_type,
+                amount,
+                notes,
+                created_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            vid,
+            session.get("eid"),
+            txn_type,
+            amount,
+            notes,
+            username
+        ))
+
+        conn.commit()
+
+        audit_log(
+            action="cashbag_transaction_added",
+            entity_type="cashbag_transaction",
+            entity_id=vid,
+            details={
+                "txn_type": txn_type,
+                "amount": amount,
+                "notes": notes
+            }
+        )
+
+        flash("Cashbag entry added successfully", "success")
+
+    except Exception as e:
+
+        conn.rollback()
+
+        traceback.print_exc()
+
+        flash(f"Failed to add transaction: {str(e)}", "danger")
+
+    finally:
+
+        cur.close()
+        conn.close()
+
+    return redirect(url_for("cashbag"))
+
+
+@app.route("/api/village/update_employee_pair", methods=["POST"])
+@login_required
+@admin_required
+def update_employee_pair():
+
+    data = request.get_json()
+
+    old_emp1 = data.get("old_emp1")
+    old_emp2 = data.get("old_emp2")
+
+    new_emp1 = data.get("new_emp1")
+    new_emp2 = data.get("new_emp2")
+
+    if old_emp1 == new_emp1 and old_emp2 == new_emp2:
+        return jsonify(success=True)
+
+    # Prevent duplicate employee assignment
+    if (
+        new_emp1
+        and new_emp2
+        and str(new_emp1) == str(new_emp2)
+    ):
+        return jsonify(
+            success=False,
+            error="Same employee cannot occupy both slots"
+        )
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # Check if target pair already exists
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM village
+            WHERE
+                COALESCE(emp1,-1) = COALESCE(%s,-1)
+            AND COALESCE(emp2,-1) = COALESCE(%s,-1)
+        """, (
+            new_emp1,
+            new_emp2
+        ))
+
+        existing_count = cur.fetchone()[0]
+
+        if (existing_count > 0 and not (str(old_emp1) == str(new_emp1) and str(old_emp2) == str(new_emp2))):
+            return jsonify(
+                success=False,
+                error="Employee pair already exists"
+            )
+
+        # Bulk update entire cluster
+        cur.execute("""
+            UPDATE village
+            SET
+                emp1 = %s,
+                emp2 = %s
+            WHERE
+                COALESCE(emp1,-1) = COALESCE(%s,-1)
+            AND COALESCE(emp2,-1) = COALESCE(%s,-1)
+        """, (
+            new_emp1,
+            new_emp2,
+            old_emp1,
+            old_emp2
+        ))
+
+        updated_rows = cur.rowcount
+
+        conn.commit()
+
+        audit_log(
+            action="update_employee_pair",
+            entity_type="village_cluster",
+            entity_id=f"{old_emp1}_{old_emp2}",
+            details={
+                "old_emp1": old_emp1,
+                "old_emp2": old_emp2,
+                "new_emp1": new_emp1,
+                "new_emp2": new_emp2,
+                "villages_updated": updated_rows
+            }
+        )
+
+        return jsonify(
+            success=True,
+            villages_updated=updated_rows
+        )
+
+    except Exception as e:
+        conn.rollback()
+
+        return jsonify(
+            success=False,
+            error=str(e)
+        )
 
     finally:
         cur.close()

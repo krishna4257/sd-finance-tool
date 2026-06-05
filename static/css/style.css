@@ -3512,4 +3512,249 @@ body.dark-mode .mf-upload-btn {
 
 /* ================================================================
    END LANDING PAGE STYLES
-   ================================================================ */
+   ================================================================ */
+
+
+   /* ==========================================
+   VILLAGE TILE VIEW
+========================================== */
+
+.employee-tiles-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.employee-tile {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(212,175,55,0.15);
+    border-radius: 18px;
+    padding: 18px;
+    min-height: 220px;
+
+    box-shadow:
+      0 6px 18px rgba(0,0,0,0.25);
+
+    transition:
+      transform .2s ease,
+      box-shadow .2s ease,
+      border-color .2s ease;
+}
+
+.employee-tile:hover {
+    transform: translateY(-4px);
+
+    border-color: rgba(212,175,55,0.45);
+
+    box-shadow:
+      0 12px 28px rgba(0,0,0,0.35);
+}
+
+.employee-tile-header {
+    margin-bottom: 15px;
+}
+
+
+
+.employee-name-row{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+}
+
+.employee-pair-count {
+    color: #d9d9d9;
+    font-size: 14px;
+}
+
+.employee-tile-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.village-chip {
+    background: rgba(212,175,55,0.12);
+    border: 1px solid rgba(212,175,55,0.25);
+
+    color: #f0f0f0;
+
+    border-radius: 999px;
+
+    padding: 6px 12px;
+
+    font-size: 12px;
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+.village-chip:hover {
+    background: rgba(212,175,55,0.22);
+}
+
+.employee-chip {
+    background: rgba(212,175,55,0.12);
+    border: 1px solid rgba(212,175,55,0.25);
+    color: #f0f0f0;
+
+    border-radius: 999px;
+
+    padding: 6px 12px;
+
+    font-size: 12px;
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+.employee-chip:hover {
+    background: rgba(212,175,55,0.22);
+}
+
+.employee-separator {
+    color: #d4af37;
+    font-weight: 700;
+    margin: 0 4px;
+}
+
+.tile-view-header {
+    padding: 12px 20px;
+}
+
+.village-view-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.view-label {
+    color: #a0a0a0;
+    font-size: 14px;
+}
+
+.view-label.active {
+    color: #d4af37;
+    font-weight: 700;
+}
+
+.view-toggle{
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+.view-btn{
+    background: rgba(255,255,255,0.05);
+    border:1px solid rgba(212,175,55,0.15);
+    color:#bdbdbd;
+    padding:8px 16px;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:600;
+    transition:.2s;
+}
+
+.view-btn:hover{
+    border-color:#d4af37;
+}
+
+.view-btn.active{
+    background:#d4af37;
+    color:#111;
+    border-color:#d4af37;
+}
+
+.draggable-village {
+    cursor: grab;
+}
+
+.draggable-village:active {
+    cursor: grabbing;
+}
+
+.drag-target {
+    border: 2px dashed #d4af37 !important;
+    transform: scale(1.02);
+}
+
+.employee-pair-subtitle {
+    font-size: 11px;
+    color: #9a9a9a;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+/* ==========================================
+   Village View Segmented Switch
+========================================== */
+
+.village-view-tabs{
+    width: fit-content;
+    margin: 18px auto 0;
+    padding: 5px;
+
+    display:flex;
+    align-items:center;
+    gap:4px;
+
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(212,175,55,0.15);
+
+    border-radius: 999px;
+}
+
+.village-tab{
+    border:none;
+    background:transparent;
+
+    color:#a5a5a5;
+
+    padding:10px 24px;
+
+    border-radius:999px;
+
+    cursor:pointer;
+    font-weight:600;
+    font-size:14px;
+
+    transition:all .2s ease;
+}
+
+.village-tab:hover{
+    color:#d4af37;
+}
+
+.village-tab.active{
+    background:#d4af37;
+    color:#111;
+    box-shadow:0 3px 12px rgba(212,175,55,.35);
+}
+
+[data-theme="light"] .village-view-tabs{
+    background:#f4f4f4;
+    border:1px solid #ddd;
+}
+
+[data-theme="light"] .village-tab{
+    color:#666;
+}
+
+[data-theme="light"] .village-tab.active{
+    background:#d4af37;
+    color:#111;
+}
+
+.employee-empty-slot{
+    display:inline-flex;
+    align-items:center;
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px dashed rgba(212,175,55,.4);
+    color:#d4af37;
+    font-size:12px;
+    cursor:pointer;
+}

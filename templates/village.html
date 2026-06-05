@@ -12,7 +12,7 @@
     <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
     <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
     <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
-    <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
+    <button id="columnSelectorBtn" class="neumorphic-btn">🧩 Table View</button>
   </div>
 
   <div class="summary-row">
@@ -21,9 +21,21 @@
       <span id="totalCount">{{ total_villages }}</span>
     </div>
   </div>
+  <div class="village-view-tabs">
+        <button id="tableViewBtn" class="village-tab active">
+            📋 Table
+        </button>
+
+        <button id="tileViewBtn" class="village-tab">
+            🧱 Tiles
+        </button>
+        <button id="mapViewBtn" class="village-tab">
+            🗺️ Map
+        </button>
+    </div>
 </div>
 
-<div class="raised-box">
+<div class="raised-box" id="tableViewContainer">
   <div class="customer-table-wrapper app-table-wrapper">
     <table id="villageTable" class="customer-table">
       <thead>
@@ -76,6 +88,33 @@
       </tbody>
     </table>
   </div>
+</div>
+
+<div class="raised-box" id="tileViewContainer" style="display:none;">
+
+  <div class="tile-view-header">
+    <div class="summary-item">
+      <strong>Employee Pairs:</strong>
+      <span id="tileEmployeePairCount">0</span>
+    </div>
+  </div>
+
+  <div id="employeeTilesContainer" class="employee-tiles-container">
+    <!-- Dynamically rendered by village.js -->
+  </div>
+
+</div>
+<div class="raised-box" id="mapViewContainer" style="display:none;">
+
+  <div class="tile-view-header">
+    <div class="summary-item">
+      <strong>Village Map:</strong>
+      <span id="mapVillageCount">{{ total_villages }}</span>
+    </div>
+  </div>
+
+  <div id="indiaVillageMap" style="height:700px;width:100%;border-radius:14px;"></div>
+
 </div>
 <!-- Edit Village Modal -->
 <div id="editVillageModal" class="column-modal hidden">
@@ -130,5 +169,10 @@
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{{ url_for('static', filename='js/village.js') }}"></script>
+<script>
+  window.villageData = {{ data|tojson }};
+</script>
 {% endblock %}

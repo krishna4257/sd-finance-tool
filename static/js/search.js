@@ -220,28 +220,23 @@ function recalculateCustomerLoanFields(row) {
 
       // Name validation
       if (td.dataset.field === "name") {
-        td.textContent = td.textContent.replace(/[^a-zA-Z\s]/g, "");
-        td.textContent = td.textContent.replace(/\s{2,}/g, " ");
-        td.textContent = td.textContent.replace(/^\s+/g, "");
-        placeCaretAtEnd(td);
+        // Do not rewrite text while typing.
+        // Validation already happens when Save is clicked.
       }
 
       // Amount validation
       if (td.dataset.field === "total_amount") {
         td.textContent = td.textContent.replace(/[^0-9.]/g, "");
-        placeCaretAtEnd(td);
       }
 
       // Period validation
       if (td.dataset.field === "period") {
         td.textContent = td.textContent.replace(/[^0-9]/g, "");
-        placeCaretAtEnd(td);
       }
 
       // Phone validation
       if (td.dataset.field === "phone_number") {
         td.textContent = td.textContent.replace(/[^0-9]/g, "").slice(0, 10);
-        placeCaretAtEnd(td);
       }
 
       // Type validation
@@ -253,7 +248,6 @@ function recalculateCustomerLoanFields(row) {
         }
 
         td.textContent = value;
-        placeCaretAtEnd(td);
       }
 
       // Recalculate loan fields instantly
