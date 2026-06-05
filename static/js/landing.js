@@ -136,7 +136,7 @@ function loadVillages(eid) {
           onclick="enterVillage(${v.vid})"
         >
           <span class="landing-item-icon">🏘️</span>
-          <span class="landing-item-label">${escHtml(v.name)}</span>
+          <span class="landing-item-label">${escHtml(v.display_name)}</span>
           <span class="landing-item-arrow">→</span>
         </div>
       `).join("");
