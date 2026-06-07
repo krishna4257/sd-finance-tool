@@ -162,71 +162,71 @@ document.addEventListener("DOMContentLoaded", function () {
       tile.dataset.emp2 = group.emp2;
       tile.className = "employee-tile";
 
-      tile.innerHTML = `
-        <div class="employee-tile-header">
-          <div class="employee-name-row">
+    tile.innerHTML = `
+      <div class="employee-tile-header">
+        <div class="employee-name-row">
 
+  <span
+      class="employee-chip draggable-employee editable-employee"
+      draggable="true"
+      data-slot="emp1"
+      data-eid="${group.emp1}"
+      data-name="${group.emp1_name}"
+      data-pair-emp1="${group.emp1}"
+      data-pair-emp2="${group.emp2}">
+      ${group.emp1_name}
+  </span>
+
+  <span class="employee-separator">+</span>
+
+  ${
+    group.emp2 && group.emp2 !== "None"
+    ? `
     <span
-        class="employee-chip draggable-employee"
+        class="employee-chip draggable-employee editable-employee"
         draggable="true"
-        data-slot="emp1"
-        data-eid="${group.emp1}"
-        data-name="${group.emp1_name}"
+        data-slot="emp2"
+        data-eid="${group.emp2}"
+        data-name="${group.emp2_name}"
         data-pair-emp1="${group.emp1}"
         data-pair-emp2="${group.emp2}">
-        ${group.emp1_name}
+        ${group.emp2_name}
     </span>
-
-    <span class="employee-separator">+</span>
-
-    ${
-      group.emp2 && group.emp2 !== "None"
-      ? `
-      <span
-          class="employee-chip draggable-employee"
-          draggable="true"
-          data-slot="emp2"
-          data-eid="${group.emp2}"
-          data-name="${group.emp2_name}"
-          data-pair-emp1="${group.emp1}"
-          data-pair-emp2="${group.emp2}">
-          ${group.emp2_name}
-      </span>
-      `
-      : `
-      <span
-          class="employee-empty-slot"
-          data-slot="emp2"
-          data-emp1="${group.emp1}"
-          data-emp2="${group.emp2}">
-          + Add Employee
-      </span>
-      `
-    }
+    `
+    : `
+    <span
+        class="employee-empty-slot"
+        data-slot="emp2"
+        data-emp1="${group.emp1}"
+        data-emp2="${group.emp2}">
+        + Add Employee
+    </span>
+    `
+  }
 
 </div>
-          <div class="employee-pair-subtitle">
-              IDs: ${group.emp1} + ${group.emp2}
-          </div>
-          <div class="employee-pair-count">
-              🏘️ ${group.villages.length} Villages
-          </div>
+        <div class="employee-pair-subtitle">
+            IDs: ${group.emp1} + ${group.emp2}
         </div>
-        <div class="employee-tile-body">
-          ${group.villages.map(v => `
-  <span
-    class="village-chip draggable-village"
-    draggable="true"
-    data-vid="${v.vid}"
-    data-village-code="${v.village_code}"
-    data-village-name="${v.village_name}"
-    data-emp1="${group.emp1}"
-    data-emp2="${group.emp2}">
-    ${v.village_name}
-  </span>
+        <div class="employee-pair-count">
+            🏘️ ${group.villages.length} Villages
+        </div>
+      </div>
+      <div class="employee-tile-body">
+        ${group.villages.map(v => `
+<span
+  class="village-chip draggable-village"
+  draggable="true"
+  data-vid="${v.vid}"
+  data-village-code="${v.village_code}"
+  data-village-name="${v.village_name}"
+  data-emp1="${group.emp1}"
+  data-emp2="${group.emp2}">
+  ${v.village_name}
+</span>
 `).join("")}
-        </div>
-      `;
+      </div>
+    `;
 
       employeeTilesContainer.appendChild(tile);
       enableTileDrop(tile);
@@ -240,6 +240,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeEmployeeTrashZone();
     initializeVillageDragging();
     initializeEmployeeDragging();
+    initializeEmployeeEditing();
   }
 
   function enableTileDrop(tile) {
@@ -429,6 +430,88 @@ document.addEventListener("DOMContentLoaded", function () {
 
       });
 
+    });
+  }
+
+  function initializeEmployeeEditing() {
+    document.querySelectorAll(".editable-employee").forEach(chip => {
+      chip.addEventListener("dblclick", async () => {
+        try {
+          const response = await fetch("/api/employees");
+          const employees = await response.json();
+
+          const options = employees
+            .map(emp => `
+              <option value="${emp.eid}">
+                ${emp.eid} - ${emp.name}
+              </option>
+            `)
+            .join("");
+
+          const currentSlot = chip.dataset.slot;
+
+          const overlay = document.createElement("div");
+          overlay.id = "employeeReplaceOverlay";
+
+          overlay.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;">
+              <div style="width:520px;max-width:90vw;background:#1f1f1f;border:1px solid rgba(212,175,55,.35);border-radius:14px;padding:18px;">
+                <h3 style="margin-bottom:12px;color:#d4af37;">Replace Employee</h3>
+                <select id="employeeReplaceSelect" style="width:100%;padding:10px;">
+                  <option value="">Select Employee</option>
+                  ${options}
+                </select>
+                <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;">
+                  <button id="employeeReplaceCancel">Cancel</button>
+                  <button id="employeeReplaceSave">Save</button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.appendChild(overlay);
+
+          document.getElementById("employeeReplaceCancel").onclick = () => overlay.remove();
+
+          document.getElementById("employeeReplaceSave").onclick = async () => {
+
+            const selectedEmployee = document.getElementById("employeeReplaceSelect").value;
+
+            if (!selectedEmployee) {
+              alert("Please select employee");
+              return;
+            }
+
+            const payload = {
+              old_emp1: chip.dataset.pairEmp1,
+              old_emp2: chip.dataset.pairEmp2 === "None" ? null : chip.dataset.pairEmp2,
+              new_emp1: currentSlot === "emp1" ? selectedEmployee : chip.dataset.pairEmp1,
+              new_emp2: currentSlot === "emp2"
+                ? selectedEmployee
+                : (chip.dataset.pairEmp2 === "None" ? null : chip.dataset.pairEmp2)
+            };
+
+            const saveResponse = await csrfFetch("/api/village/update_employee_pair", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+
+            const result = await saveResponse.json();
+
+            if (!result.success) {
+              alert(result.error || "Update failed");
+              return;
+            }
+
+            location.reload();
+          };
+
+        } catch (err) {
+          alert(err.message);
+        }
+
+      });
     });
   }
 
