@@ -175,6 +175,108 @@ def normalize_account_number(value):
         return int(str(value).replace(".0", "").strip())
     except Exception:
         return None
+
+
+def normalize_mobile_customer_payload(payload):
+    """Normalize customer payload from mobile app to match DB column names."""
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid customer payload")
+
+    normalized = dict(payload)
+
+    base_amount = Decimal(str(normalized.get("base_amount") or 0))
+    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0))
+    interest_amount = Decimal(str(normalized.get("interest_amount") or 0))
+    total_amount = Decimal(str(normalized.get("total_amount") or 0))
+
+    normalized["base_amount"] = float(base_amount)
+    normalized["cutting_amount"] = float(cutting_amount)
+    normalized["interest_amount"] = float(interest_amount)
+
+    if total_amount > 0:
+        component_sum = base_amount + cutting_amount + interest_amount
+        if component_sum > 0 and component_sum != total_amount:
+            logger.warning(
+                "Customer ano=%s total_amount=%s does not equal base+cutting+interest=%s",
+                normalized.get("ano"),
+                total_amount,
+                component_sum,
+            )
+
+    loan_type = normalized.get("type")
+    if loan_type == "weekly":
+        normalized["type"] = "W"
+    elif loan_type == "monthly":
+        normalized["type"] = "M"
+
+    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0)
+    if normalized.get("balance_amount") is None and total_amount > 0:
+        normalized["balance_amount"] = float(
+            total_amount - Decimal(str(normalized["paid_amount"]))
+        )
+
+    return normalized
+
+
+def normalize_mobile_payment_payload(payload):
+    """Normalize payment payload from mobile app to match DB column names."""
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid payment payload")
+
+    normalized = dict(payload)
+
+    payment_type = (normalized.get("payment_type") or "cash").lower().strip()
+    if payment_type not in ("cash", "upi", "partial"):
+        payment_type = "cash"
+
+    amt = Decimal(str(normalized.get("amt") or 0))
+
+    cash_raw = normalized.get("cash_amount", normalized.get("cash_amt"))
+    upi_raw = normalized.get("upi_amount", normalized.get("upi_amt"))
+
+    if payment_type == "cash":
+        cash_amount = amt
+        upi_amount = Decimal("0")
+    elif payment_type == "upi":
+        cash_amount = Decimal("0")
+        upi_amount = amt
+    else:
+        cash_amount = Decimal(str(cash_raw or 0))
+        upi_amount = Decimal(str(upi_raw or 0))
+        if cash_amount <= 0 or upi_amount <= 0:
+            raise ValueError(
+                "Partial payment requires cash_amount and upi_amount greater than zero"
+            )
+        amt = cash_amount + upi_amount
+
+    if amt <= 0:
+        raise ValueError("Payment amount must be greater than zero")
+
+    payment_date_raw = normalized.get("payment_date") or normalized.get("pdate")
+    if not payment_date_raw:
+        raise ValueError("Payment date is required")
+
+    payment_date = datetime.fromisoformat(str(payment_date_raw)[:10]).date()
+
+    ano = normalize_account_number(normalized.get("ano"))
+    vid = normalize_account_number(normalized.get("vid"))
+    eid = normalize_account_number(normalized.get("eid"))
+    if ano is None or vid is None or eid is None:
+        raise ValueError("Payment requires ano, vid, and eid")
+
+    normalized["ano"] = ano
+    normalized["vid"] = vid
+    normalized["eid"] = eid
+    normalized["payment_type"] = payment_type
+    normalized["amt"] = float(amt)
+    normalized["cash_amount"] = float(cash_amount)
+    normalized["upi_amount"] = float(upi_amount)
+    normalized["payment_date"] = payment_date.isoformat()
+    normalized.pop("pdate", None)
+    normalized.pop("cash_amt", None)
+    normalized.pop("upi_amt", None)
+
+    return normalized
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
@@ -1442,6 +1544,66 @@ def mobile_payments():
         conn.close()
 
 @csrf.exempt
+@app.get("/api/mobile/closed_customers")
+def mobile_closed_customers():
+
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return {"error": "missing token"}, 401
+
+    data = verify_mobile_token(token)
+    if not data:
+        return {"error": "invalid token"}, 401
+
+    vid = request.args.get("vid")
+    updated_after_raw = request.args.get("updated_after")
+    updated_after = parse_mobile_timestamp(updated_after_raw)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SET TIME ZONE 'UTC'")
+
+        if updated_after:
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    status,
+                    balance_amount,
+                    closed_at,
+                    closed_at AS updated_at
+                FROM closed_cust_account
+                WHERE vid = %s
+                  AND closed_at > %s
+            """, (vid, updated_after))
+        else:
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    status,
+                    balance_amount,
+                    closed_at,
+                    closed_at AS updated_at
+                FROM closed_cust_account
+                WHERE vid = %s
+            """, (vid,))
+
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        rows = cur.fetchall()
+        customers = [dict(zip(columns, r)) for r in rows]
+
+        return {"customers": customers}
+    finally:
+        cur.close()
+        conn.close()
+
+@csrf.exempt
 @limiter.limit("200 per minute")
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
@@ -1476,6 +1638,15 @@ def customer_feed():
 
         if isinstance(customer_payload, str):
            customer_payload = json.loads(customer_payload)
+
+        if not isinstance(customer_payload, dict):
+            return jsonify({"error": "invalid customer payload"}), 400
+
+        try:
+            customer_payload = normalize_mobile_customer_payload(customer_payload)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
         ano = customer_payload.get("ano")
         payload = json.dumps(customer_payload)
         logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
@@ -1578,13 +1749,23 @@ def payment_feed_batch():
         if not payments:
             return jsonify({"error": "no payments provided"}), 400
 
+        normalized_payments = []
+        for p in payments:
+            try:
+                normalized = normalize_mobile_payment_payload(p)
+                if p.get("local_uuid"):
+                    normalized["local_uuid"] = p.get("local_uuid")
+                normalized_payments.append(normalized)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        total_records = len(payments)
+        total_records = len(normalized_payments)
 
         # insert each payment as JSON payload
-        for p in payments:
+        for p in normalized_payments:
 
             local_uuid = p.get("local_uuid")
             payload = json.dumps(p)
@@ -3300,7 +3481,10 @@ def feed():
             feed_payment_id,
             payload->>'ano' AS ano,
             payload->>'amt' AS amt,
-            payload->>'pdate' AS pdt,
+            COALESCE(payload->>'payment_date', payload->>'pdate') AS pdt,
+            COALESCE(payload->>'payment_type', 'cash') AS payment_type,
+            payload->>'cash_amount' AS cash_amount,
+            payload->>'upi_amount' AS upi_amount,
             payload->>'vid' AS vid,
             status
         FROM payment_feed_items
@@ -3360,6 +3544,12 @@ def accept_customer(feed_id):
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
     print("PAYLOAD:", data)
+
+    try:
+        data = normalize_mobile_customer_payload(data)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
     loan_type = data.get("type")
     if loan_type == "weekly":
         loan_type = "W"
@@ -3375,6 +3565,9 @@ def accept_customer(feed_id):
             start_date,
             end_date,
             total_amount,
+            base_amount,
+            cutting_amount,
+            interest_amount,
             paid_amount,
             balance_amount,
             installment_amount,
@@ -3390,7 +3583,7 @@ def accept_customer(feed_id):
             status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
     """,
     (
         data.get("ano"),
@@ -3399,6 +3592,9 @@ def accept_customer(feed_id):
         data.get("start_date"),
         data.get("end_date"),
         data.get("total_amount"),
+        data.get("base_amount", 0),
+        data.get("cutting_amount", 0),
+        data.get("interest_amount", 0),
         data.get("paid_amount"),
         data.get("balance_amount"),
         data.get("installment_amount"),
@@ -3468,12 +3664,30 @@ def accept_payment(feed_payment_id):
         return {"success": False, "error": "Feed not found"}
 
     data = row[0]
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            return {"success": False, "error": "Invalid payload format"}
+
+    try:
+        data = normalize_mobile_payment_payload(data)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
 
     ano = data.get("ano")
     vid = data.get("vid")
     eid = data.get("eid")
+    if ano is None or vid is None or eid is None:
+        return {"success": False, "error": "Missing ano, vid, or eid in payment payload"}
+
     amt = Decimal(str(data.get("amt")))
-    pdate = datetime.fromisoformat(data.get("pdate")).date()
+    payment_date = datetime.fromisoformat(
+        str(data.get("payment_date") or data.get("pdate"))[:10]
+    ).date()
+    payment_type = data.get("payment_type", "cash")
+    cash_amount = Decimal(str(data.get("cash_amount", 0)))
+    upi_amount = Decimal(str(data.get("upi_amount", 0)))
 
     # 2️⃣ Get customer
     cur.execute("""
@@ -3492,15 +3706,18 @@ def accept_payment(feed_payment_id):
     # 3️⃣ Insert payment
     cur.execute("""
         INSERT INTO payment
-        (cid, vid, eid, ano, amt, payment_date)
-        VALUES (%s,%s,%s,%s,%s,%s)
+        (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         cid,
         vid,
         eid,
         ano,
         amt,
-        pdate
+        payment_date,
+        payment_type,
+        cash_amount,
+        upi_amount
     ))
 
     # 4️⃣ Recalculate balance
@@ -3621,21 +3838,51 @@ def accept_payment_batch():
         # 2️⃣ Prepare bulk insert
         for r in rows:
             p = r[0]
+            if isinstance(p, str):
+                p = json.loads(p)
+
+            try:
+                p = normalize_mobile_payment_payload(p)
+            except ValueError:
+                continue
 
             ano = p.get("ano")
             vid = p.get("vid")
             eid = p.get("eid")
-            amt = Decimal(str(p.get("amt")))
-            pdate = datetime.fromisoformat(p.get("pdate")).date()
+            if ano is None or vid is None or eid is None:
+                continue
 
-            customer = customer_map.get(int(ano))
+            try:
+                ano_int = int(ano)
+            except (TypeError, ValueError):
+                continue
+
+            amt = Decimal(str(p.get("amt")))
+            payment_date = datetime.fromisoformat(
+                str(p.get("payment_date") or p.get("pdate"))[:10]
+            ).date()
+            payment_type = p.get("payment_type", "cash")
+            cash_amount = Decimal(str(p.get("cash_amount", 0)))
+            upi_amount = Decimal(str(p.get("upi_amount", 0)))
+
+            customer = customer_map.get(ano_int)
 
             if not customer:
                 continue
 
             cid = customer["cid"]
 
-            insert_values.append((cid, vid, eid, ano, amt, pdate))
+            insert_values.append((
+                cid,
+                vid,
+                eid,
+                ano_int,
+                amt,
+                payment_date,
+                payment_type,
+                cash_amount,
+                upi_amount,
+            ))
 
         if not insert_values:
             return {"success": False, "error": "No valid payments to insert"}
@@ -3650,12 +3897,15 @@ def accept_payment_batch():
                     eid,
                     ano,
                     amt,
-                    payment_date
+                    payment_date,
+                    payment_type,
+                    cash_amount,
+                    upi_amount
                 )
                 VALUES %s
             """,
             insert_values,
-            template="(%s,%s,%s,%s,%s,%s)"
+            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
 
         # 4️⃣ Update customers (optimized)
@@ -3761,7 +4011,7 @@ def update_customer_pg():
         try:
             period = int(data.get("period") or 0)
         except Exception:
-            return jsonify(success=False, error="Invalid period"), 400
+            return jsonify(success=False, error="Invalid period"), 400 
 
         # 🔹 Validation
         if not name:
