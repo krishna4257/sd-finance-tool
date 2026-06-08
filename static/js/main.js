@@ -60,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // SAFE TABLE INIT (does NOT touch business features)
   // ===================================================
   document.querySelectorAll("table").forEach(t => {
+    if (t.id === "popPaymentTable" || t.classList.contains("no-datatable") || t.classList.contains("popup-mini-table")) return;
     if (!t.querySelector("thead")) return;
     if ($.fn.DataTable.isDataTable(t)) return;
 
@@ -73,16 +74,151 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ===================================================
-  // ROW HIGHLIGHTING (GLOBAL)
+  // ROW HIGHLIGHTING (GLOBAL) & KEYBOARD NAVIGATION
   // ===================================================
   document.body.addEventListener("click", e => {
-    const row = e.target.closest("tr");
+    const row = e.target.closest("tbody tr");
     if (!row) return;
+
+    // Ignore if clicking on interactive form elements inside rows
+    if (e.target.closest("input") || e.target.closest("button") || e.target.closest("a") || e.target.closest("span.delete-btn")) {
+      return;
+    }
+
+    // Blur active inputs so keyboard navigation takes effect immediately on row click
+    if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) {
+      document.activeElement.blur();
+    }
+
     if (window.currentRow) {
       window.currentRow.classList.remove("highlighted-row");
     }
     window.currentRow = row;
     row.classList.add("highlighted-row");
+  });
+  function scrollRowIntoView(row) {
+    if (!row) return;
+    const container = row.closest(".customer-table-wrapper, .scroll-table-container, .app-table-wrapper");
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      
+      const rowTop = rowRect.top - containerRect.top + container.scrollTop;
+      const rowBottom = rowTop + rowRect.height;
+      
+      const containerTop = container.scrollTop;
+      const containerBottom = containerTop + container.clientHeight;
+      
+      const headerHeight = container.querySelector("thead")?.offsetHeight || 0;
+      
+      if (rowTop < containerTop + headerHeight) {
+        container.scrollTop = rowTop - headerHeight;
+      } else if (rowBottom > containerBottom) {
+        container.scrollTop = rowBottom - container.clientHeight;
+      }
+    } else {
+      row.scrollIntoView({ block: "nearest", behavior: "auto" });
+    }
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const activeInput = document.activeElement;
+      const isSearchBox = activeInput && activeInput.id === "searchBox";
+
+      // Premium Shortcut: Pressing ArrowDown in the searchbox focuses the first table row
+      if (isSearchBox && e.key === "ArrowDown") {
+        const firstTable = document.querySelector("table");
+        if (firstTable) {
+          const visibleRows = Array.from(firstTable.querySelectorAll("tbody tr"))
+            .filter(r => r.style.display !== "none" && !r.classList.contains("dataTables_empty"));
+          
+          if (visibleRows.length > 0) {
+            e.preventDefault();
+            activeInput.blur(); // blur search box
+            
+            if (window.currentRow) {
+              window.currentRow.classList.remove("highlighted-row");
+              window.currentRow.classList.remove("highlighted");
+            }
+            
+            window.currentRow = visibleRows[0];
+            window.currentRow.classList.add("highlighted-row");
+            scrollRowIntoView(window.currentRow);
+            return;
+          }
+        }
+      }
+
+      // Ignore normal inputs (except searchbox ArrowDown shortcut handled above)
+      if (activeInput && !isSearchBox && (
+          activeInput.tagName === "INPUT" || 
+          activeInput.tagName === "TEXTAREA" || 
+          activeInput.getAttribute("contenteditable") === "true"
+      )) {
+          return;
+      }
+
+      // Ignore if user is currently focused on the search box but pressed other keys
+      if (isSearchBox) {
+          return;
+      }
+
+      if (!window.currentRow) return;
+
+      // Prevent standard browser scrolling immediately to avoid competing scroll conflicts
+      e.preventDefault();
+
+      const currentTable = window.currentRow.closest("table");
+      if (!currentTable) return;
+
+      const rows = Array.from(currentTable.querySelectorAll("tbody tr"));
+      // filter out hidden rows or empty rows
+      const visibleRows = rows.filter(r => r.style.display !== "none" && !r.classList.contains("dataTables_empty"));
+      if (visibleRows.length === 0) return;
+
+      let currentIndex = visibleRows.indexOf(window.currentRow);
+      let nextIndex = currentIndex;
+
+      if (e.key === "ArrowUp") {
+        nextIndex = currentIndex - 1;
+      } else if (e.key === "ArrowDown") {
+        nextIndex = currentIndex + 1;
+      }
+
+      if (nextIndex >= 0 && nextIndex < visibleRows.length) {
+        window.currentRow.classList.remove("highlighted-row");
+        window.currentRow.classList.remove("highlighted"); // safety rollback
+        
+        window.currentRow = visibleRows[nextIndex];
+        window.currentRow.classList.add("highlighted-row");
+
+        // Scroll the highlighted row into view instantly and snappily
+        scrollRowIntoView(window.currentRow);
+      }
+    }
+    
+    // Trigger dblclick event when Enter key is pressed on a highlighted row
+    if (e.key === "Enter") {
+      if (window.currentRow) {
+        const activeInput = document.activeElement;
+        // Ignore if user is currently editing a field
+        if (activeInput && (activeInput.tagName === "INPUT" || activeInput.tagName === "TEXTAREA" || activeInput.getAttribute("contenteditable") === "true")) {
+          return;
+        }
+        
+        e.preventDefault();
+        
+        // Trigger a double click mouse event on the second cell (index 1) of the highlighted row
+        const target = window.currentRow.children[1] || window.currentRow;
+        const dblClickEvent = new MouseEvent("dblclick", {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        target.dispatchEvent(dblClickEvent);
+      }
+    }
   });
 
   // ===================================================
@@ -463,22 +599,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-      const themeToggle = document.getElementById('theme-toggle');
-      
-      // 1. Set the toggle switch to the correct state on page load
-      const currentTheme = localStorage.getItem('theme') || 'dark';
-      if (currentTheme === 'dark') {
-        themeToggle.checked = true;
-      }
-
-      // 2. Add a listener to change the theme when the toggle is clicked
-      themeToggle.addEventListener('change', () => {
-        const selectedTheme = themeToggle.checked ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', selectedTheme);
-        localStorage.setItem('theme', selectedTheme);
-      });
-});
+// Theme toggle removed - light mode only
 
 document.addEventListener('DOMContentLoaded', function () {
       const newPDT = document.getElementById('newPDT');
@@ -504,8 +625,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
 });
-
-
 // =====================================================
 // HELPERS
 // =====================================================
@@ -516,3 +635,43 @@ function debounce(fn, delay) {
     t = setTimeout(() => fn(...args), delay);
   };
 }
+
+// =====================================================
+// GLOBAL PAGE LOADER & MOUSE GLOW TRACKING
+// =====================================================
+document.addEventListener("DOMContentLoaded", () => {
+  // Hide page loader with a smooth transition once page is loaded
+  const loader = document.getElementById("global-page-loader");
+  if (loader) {
+    setTimeout(() => {
+      loader.classList.add("fade-out");
+    }, 150);
+  }
+
+  // Intercept normal links to display loader before leaving page
+  document.addEventListener("click", e => {
+    const link = e.target.closest("a");
+    if (link) {
+      const href = link.getAttribute("href");
+      const target = link.getAttribute("target");
+      if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !target && !e.ctrlKey && !e.metaKey) {
+        if (loader) {
+          loader.classList.remove("fade-out");
+        }
+      }
+    }
+  });
+
+  // Intercept form submissions to display loader
+  document.addEventListener("submit", e => {
+    if (e.defaultPrevented) return;
+    const form = e.target.closest("form");
+    if (form && !form.classList.contains("no-loader")) {
+      if (loader) {
+        loader.classList.remove("fade-out");
+      }
+    }
+  });
+});
+
+// Mouse glow tracking removed for light mode design

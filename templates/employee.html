@@ -37,20 +37,20 @@
 
 </style>
 
-<h2 class="page-title">👨‍💼 Employee Table</h2>
-
+<h2 class="page-title">Employee Table</h2>
+ 
 <div class="raised-box">
   <div class="control-row">
     <label class="search-label">
       <input type="text" id="searchBox" placeholder="Search employee name or code...">
     </label>
-
-    <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
-    <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
-    <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
-    <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
+ 
+    <button onclick="applySearch()" class="neumorphic-btn">Find</button>
+    <button onclick="resetSearch()" class="neumorphic-btn">Reset</button>
+    <button onclick="printSelected()" class="neumorphic-btn">Print</button>
+    <button id="tableViewBtn" class="neumorphic-btn">Table View</button>
   </div>
-
+  
   <div class="summary-row">
     <div class="summary-item">
       <strong>Total Employees:</strong>
@@ -58,7 +58,7 @@
     </div>
   </div>
 </div>
-
+ 
 <div class="raised-box">
   <div class="customer-table-wrapper">
     <table id="employeeTable" class="customer-table">
@@ -71,12 +71,12 @@
           <th>Actions</th>
         </tr>
       </thead>
-
+ 
       <tbody id="employeeTableBody">
         {% for row in data %}
         <tr class="table-row">
           <td><input type="checkbox" /></td>
-
+ 
           {% for col in headers %}
             {% if col == 'is_active' %}
             <td class="table-cell status-cell">
@@ -88,7 +88,7 @@
             <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
             {% endif %}
           {% endfor %}
-
+ 
           <td class="table-cell">
             <div class="action-buttons">
               <button class="neumorphic-btn ultrasmall edit-btn"
@@ -108,11 +108,11 @@
     </table>
   </div>
 </div>
-
+ 
 <!-- Column Modal -->
 <div id="columnModal" class="column-modal hidden">
   <div class="column-modal-content">
-    <h3>📋 Select Columns</h3>
+    <h3>Select Columns</h3>
     <div id="columnCheckboxList" class="column-list"></div>
     <div class="modal-actions">
       <button id="closeColumnModal" class="neumorphic-btn small">

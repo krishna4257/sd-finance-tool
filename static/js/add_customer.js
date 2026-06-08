@@ -302,6 +302,14 @@ anoInput.addEventListener("change", checkAno);
                 message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
                 message.className = "message-box success success-highlight";
                 document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
+                
+                // Update analytics in real-time
+                if (data.analytics) {
+                    document.getElementById('countToday').textContent = data.analytics.today;
+                    document.getElementById('countWeek').textContent = data.analytics.week;
+                    document.getElementById('countMonth').textContent = data.analytics.month;
+                }
+                
                 anoInput.value = data.highest_ano + 1;
                 // Clear all dynamic fields to prepare for a new entry
                 document.getElementById('ano').value = '';

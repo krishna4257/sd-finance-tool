@@ -102,6 +102,97 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
     if (parts.length < 3) return 0;
     return parseInt(parts[2] + parts[1] + parts[0], 10);
   };
+
+  // Global Interceptor to customize column sortability and styles
+  const originalDataTable = $.fn.DataTable;
+  $.fn.DataTable = function(options) {
+      if (typeof options === 'string' || originalDataTable.isDataTable(this)) {
+          return originalDataTable.apply(this, arguments);
+      }
+      options = $.extend(true, {}, options || {});
+      const columnDefs = options.columnDefs || [];
+      
+      this.find("thead th").each((index, th) => {
+          const text = $(th).text().trim().toUpperCase();
+          const hasHtml = $(th).html().includes("<input") || $(th).html().includes("<button");
+          
+          const isUnsortable = (
+              text === "" || 
+              hasHtml ||
+              text === "EDIT" || 
+              text === "DELETE" || 
+              text === "ACTION" || 
+              text === "ACTIONS" || 
+              text === "CUMULATIVE AMOUNT" || 
+              text === "CUMULATIVE" || 
+              text === "EDIT/DELETE"
+          );
+          
+          if (isUnsortable) {
+              columnDefs.push({ targets: index, orderable: false });
+          } else {
+              $(th).addClass("sortable-header");
+              columnDefs.push({ targets: index, orderSequence: ['asc', 'desc'] });
+          }
+      });
+      options.columnDefs = columnDefs;
+      if (options.ordering === undefined) options.ordering = true;
+      return originalDataTable.call(this, options);
+  };
+  // Copy all static properties of original constructor
+  for (let key in originalDataTable) {
+      if (originalDataTable.hasOwnProperty(key)) {
+          $.fn.DataTable[key] = originalDataTable[key];
+      }
+  }
+  $.fn.DataTable.isDataTable = originalDataTable.isDataTable;
+  $.fn.DataTable.ext = originalDataTable.ext;
+  $.fn.DataTable.settings = originalDataTable.settings;
+  $.fn.DataTable.models = originalDataTable.models;
+  $.fn.DataTable.Api = originalDataTable.Api;
+
+  const originaldataTable = $.fn.dataTable;
+  $.fn.dataTable = function(options) {
+      if (typeof options === 'string' || originaldataTable.isDataTable(this)) {
+          return originaldataTable.apply(this, arguments);
+      }
+      options = $.extend(true, {}, options || {});
+      const columnDefs = options.columnDefs || [];
+      this.find("thead th").each((index, th) => {
+          const text = $(th).text().trim().toUpperCase();
+          const hasHtml = $(th).html().includes("<input") || $(th).html().includes("<button");
+          if (
+              text === "" || 
+              hasHtml ||
+              text === "EDIT" || 
+              text === "DELETE" || 
+              text === "ACTION" || 
+              text === "ACTIONS" || 
+              text === "CUMULATIVE AMOUNT" || 
+              text === "CUMULATIVE" || 
+              text === "EDIT/DELETE"
+          ) {
+              columnDefs.push({ targets: index, orderable: false });
+          } else {
+              $(th).addClass("sortable-header");
+              columnDefs.push({ targets: index, orderSequence: ['asc', 'desc'] });
+          }
+      });
+      options.columnDefs = columnDefs;
+      if (options.ordering === undefined) options.ordering = true;
+      return originaldataTable.call(this, options);
+  };
+  // Copy all static properties of original jQuery plugin method
+  for (let key in originaldataTable) {
+      if (originaldataTable.hasOwnProperty(key)) {
+          $.fn.dataTable[key] = originaldataTable[key];
+      }
+  }
+  $.fn.dataTable.isDataTable = originaldataTable.isDataTable;
+  $.fn.dataTable.ext = originaldataTable.ext;
+  $.fn.dataTable.settings = originaldataTable.settings;
+  $.fn.dataTable.models = originaldataTable.models;
+  $.fn.dataTable.Api = originaldataTable.Api;
 }
 
 // Automatically apply money formatting once the DOM is ready. This

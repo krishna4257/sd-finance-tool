@@ -64,14 +64,24 @@ function renderEmployeeList(list) {
     return;
   }
 
-  container.innerHTML = list.map(e => `
+  // Pin selected employee to the top
+  let sortedList = [...list];
+  if (selectedEid) {
+    const selectedIndex = sortedList.findIndex(e => String(e.eid) === String(selectedEid));
+    if (selectedIndex > -1) {
+      const [selectedEmp] = sortedList.splice(selectedIndex, 1);
+      sortedList.unshift(selectedEmp);
+    }
+  }
+
+  container.innerHTML = sortedList.map(e => `
     <div
       class="landing-item emp-item ${String(e.eid) === String(selectedEid) ? 'landing-item--active' : ''}"
       data-eid="${e.eid}"
       data-name="${e.name}"
       onclick="selectEmployee(${e.eid}, '${escHtml(e.name)}')"
     >
-      <span class="landing-item-icon">👤</span>
+      <span class="landing-item-icon"><i class="fas fa-user"></i></span>
       <span class="landing-item-label">${escHtml(e.name)}</span>
       ${String(e.eid) === String(selectedEid)
         ? '<span class="landing-item-badge">Selected</span>'
@@ -99,6 +109,7 @@ function selectEmployee(eid, name, skipPersist = false) {
 
   if (!skipPersist) {
     localStorage.setItem(STORAGE_KEY, String(eid));
+    localStorage.removeItem("landing_selected_vid");
   }
 
   // Re-render employees so the active highlight refreshes
@@ -129,17 +140,32 @@ function loadVillages(eid) {
         return;
       }
 
-      container.innerHTML = list.map(v => `
-        <div
-          class="landing-item village-item"
-          data-vid="${v.vid}"
-          onclick="enterVillage(${v.vid})"
-        >
-          <span class="landing-item-icon">🏘️</span>
-          <span class="landing-item-label">${escHtml(v.name)}</span>
-          <span class="landing-item-arrow">→</span>
-        </div>
-      `).join("");
+      // Pin selected village to the top
+      const savedVid = localStorage.getItem("landing_selected_vid");
+      let sortedList = [...list];
+      if (savedVid) {
+        const selectedIndex = sortedList.findIndex(v => String(v.vid) === String(savedVid));
+        if (selectedIndex > -1) {
+          const [selectedVillage] = sortedList.splice(selectedIndex, 1);
+          sortedList.unshift(selectedVillage);
+        }
+      }
+
+      container.innerHTML = sortedList.map(v => {
+        const isSelected = savedVid && String(v.vid) === String(savedVid);
+        const codePrefix = v.code ? `${escHtml(v.code)} - ` : '';
+        return `
+          <div
+            class="landing-item village-item ${isSelected ? 'landing-item--active' : ''}"
+            data-vid="${v.vid}"
+            onclick="enterVillage(${v.vid})"
+          >
+            <span class="landing-item-icon"><i class="fas fa-map-marker-alt"></i></span>
+            <span class="landing-item-label">${codePrefix}${escHtml(v.name)}</span>
+            <span class="landing-item-arrow">→</span>
+          </div>
+        `;
+      }).join("");
     })
     .catch(() => {
       container.innerHTML =
@@ -151,6 +177,9 @@ function loadVillages(eid) {
 // 6. Click village → set context → go to dashboard
 // ----------------------------------------------------------------
 function enterVillage(vid) {
+  // Store selected village in localStorage
+  localStorage.setItem("landing_selected_vid", String(vid));
+
   // Optimistic visual feedback
   document.querySelectorAll(".village-item").forEach(el => {
     if (Number(el.dataset.vid) === Number(vid)) {
@@ -188,6 +217,7 @@ function enterVillage(vid) {
 // ----------------------------------------------------------------
 function restartEmployee() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem("landing_selected_vid");
   selectedEid = null;
 
   document.getElementById("empSearchInput").value = "";

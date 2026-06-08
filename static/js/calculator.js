@@ -17,7 +17,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Toggle Calculator Visibility ---
   toggleBtn.addEventListener('click', () => {
     const isVisible = calculator.style.display === 'block';
-    calculator.style.display = isVisible ? 'none' : 'block';
+    if (isVisible) {
+      calculator.style.display = 'none';
+    } else {
+      // Position below the toggle button, aligned to its right edge
+      const btnRect = toggleBtn.getBoundingClientRect();
+      const calcWidth = 280; // matches CSS width
+      const gap = 8; // gap below the button
+
+      let top = btnRect.bottom + gap + window.scrollY;
+      let left = btnRect.right - calcWidth + window.scrollX;
+
+      // Clamp to viewport so it never goes off-screen on the left
+      if (left < 8) left = 8;
+
+      calculator.style.top = `${top}px`;
+      calculator.style.left = `${left}px`;
+      calculator.style.right = 'auto';
+      calculator.style.display = 'block';
+    }
   });
 
   // --- Calculator Logic ---
@@ -136,5 +154,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('mouseup', () => {
     isDragging = false;
     header.style.cursor = 'move';
+  });
+
+  // --- Hide on Click Outside (preserves calculation state) ---
+  document.addEventListener('mousedown', (e) => {
+    // Only act when the calculator is visible
+    if (calculator.style.display !== 'block') return;
+    // Ignore if the click is inside the calculator or on the toggle button
+    if (calculator.contains(e.target) || toggleBtn.contains(e.target)) return;
+    // Ignore if a drag just ended (mouseup hasn't fired yet)
+    if (isDragging) return;
+    // Hide — but do NOT call clear(), so the display and state are preserved
+    calculator.style.display = 'none';
   });
 });

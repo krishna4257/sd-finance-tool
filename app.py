@@ -172,6 +172,115 @@ def parse_mobile_timestamp(ts):
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+# ----------------------------------------------------
+# DATABASE MIGRATIONS ON STARTUP
+# ----------------------------------------------------
+def run_db_migrations():
+    logger.info("Starting database migrations...")
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'customer'")
+        cust_cols = {row[0] for row in cur.fetchall()}
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'closed_cust_account'")
+        closed_cols = {row[0] for row in cur.fetchall()}
+        
+        if 'customer_rating' not in cust_cols:
+            cur.execute("ALTER TABLE customer ADD COLUMN customer_rating numeric DEFAULT 100.0")
+            if 'repayment_score' in cust_cols:
+                cur.execute("UPDATE customer SET customer_rating = repayment_score WHERE repayment_score IS NOT NULL")
+        if 'customer_rating' not in closed_cols:
+            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN customer_rating numeric DEFAULT 100.0")
+            if 'repayment_score' in closed_cols:
+                cur.execute("UPDATE closed_cust_account SET customer_rating = repayment_score WHERE repayment_score IS NOT NULL")
+                
+        if 'final_frozen_rating' not in cust_cols:
+            cur.execute("ALTER TABLE customer ADD COLUMN final_frozen_rating numeric DEFAULT NULL")
+        if 'final_frozen_rating' not in closed_cols:
+            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN final_frozen_rating numeric DEFAULT NULL")
+            
+        if 'final_risk_level' not in cust_cols:
+            cur.execute("ALTER TABLE customer ADD COLUMN final_risk_level text DEFAULT NULL")
+        if 'final_risk_level' not in closed_cols:
+            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN final_risk_level text DEFAULT NULL")
+            
+        if 'freeze_date' not in cust_cols:
+            cur.execute("ALTER TABLE customer ADD COLUMN freeze_date timestamp with time zone DEFAULT NULL")
+        if 'freeze_date' not in closed_cols:
+            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN freeze_date timestamp with time zone DEFAULT NULL")
+            
+        for col in ['repayment_score', 'successful_streak', 'missed_streak', 'partial_streak']:
+            if col in cust_cols:
+                cur.execute(f"ALTER TABLE customer DROP COLUMN {col}")
+            if col in closed_cols:
+                cur.execute(f"ALTER TABLE closed_cust_account DROP COLUMN {col}")
+                
+        conn.commit()
+        logger.info("Database migrations finished successfully.")
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error executing database migrations: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+run_db_migrations()
+
+from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
+
+def execute_daily_rating_recalculation():
+    logger.info("Scheduler task triggered: checking for advisory lock...")
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT pg_try_advisory_lock(55555)")
+        lock_acquired = cur.fetchone()[0]
+        
+        if not lock_acquired:
+            logger.info("Advisory lock not acquired. Another worker is already executing the daily recalculation.")
+            return
+
+        logger.info("Advisory lock acquired. Running daily rating recalculation for active customers...")
+        
+        cur.execute("""
+            SELECT cid
+            FROM customer
+            WHERE balance_amount > 0
+        """)
+        cids = [row[0] for row in cur.fetchall()]
+        
+        logger.info(f"Found {len(cids)} active customers to evaluate.")
+        for cid in cids:
+            try:
+                recalc_customer_repayment_score(cur, cid, force_recalc=True)
+            except Exception as ex:
+                logger.error(f"Failed to recalculate rating for customer cid={cid}: {ex}")
+                
+        conn.commit()
+        logger.info("Daily rating recalculation completed successfully.")
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error in daily scheduler run: {e}")
+    finally:
+        try:
+            cur.execute("SELECT pg_advisory_unlock(55555)")
+            conn.commit()
+        except Exception as unlock_err:
+            logger.warning(f"Error releasing advisory lock: {unlock_err}")
+        cur.close()
+        conn.close()
+
+def init_scheduler():
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        KOLKATA = pytz.timezone('Asia/Kolkata')
+        scheduler = BackgroundScheduler(timezone=KOLKATA)
+        scheduler.add_job(execute_daily_rating_recalculation, 'cron', hour=5, minute=0)
+        scheduler.start()
+        logger.info("APScheduler initialized for 5:00 AM IST daily recalculations.")
+
+init_scheduler()
+
 secret_key = os.environ.get("SECRET_KEY")
 
 if not secret_key:
@@ -242,7 +351,14 @@ def set_security_headers(response):
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
+    # Prevent caching in debug/development mode
+    if app.debug:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
     return response
+
 
 
 # ----------------------------------------------------
@@ -271,6 +387,21 @@ def session_timeout_check():
             return redirect(url_for("login"))
 
     session["_last_activity"] = now.isoformat()
+
+    # Auto-recover village_code and village_name if missing from session context
+    if "vid" in session and ("village_code" not in session or "village_name" not in session):
+        try:
+            conn = get_pg_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT village_code, village_name FROM village WHERE vid = %s", (session["vid"],))
+            row = cur.fetchone()
+            if row:
+                session["village_code"] = row[0]
+                session["village_name"] = row[1]
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
 @app.context_processor
 def inject_csrf_token():
@@ -438,7 +569,7 @@ def api_villages():
         if user_level in ["admin", "mgmt"]:
             if eid:
                 cur.execute("""
-                    SELECT vid, village_name
+                    SELECT vid, village_name, village_code
                     FROM village
                     WHERE (emp1 = %s OR emp2 = %s)
                       AND status = 'active'
@@ -446,7 +577,7 @@ def api_villages():
                 """, (eid, eid))
             else:
                 cur.execute("""
-                    SELECT vid, village_name
+                    SELECT vid, village_name, village_code
                     FROM village WHERE status = 'active'
                     ORDER BY village_name
                 """)
@@ -457,7 +588,7 @@ def api_villages():
                 return jsonify([])
 
             cur.execute("""
-                SELECT vid, village_name
+                SELECT vid, village_name, village_code
                 FROM village
                 WHERE vid = ANY(%s)
                   AND status = 'active'
@@ -467,7 +598,7 @@ def api_villages():
         rows = cur.fetchall()
 
         return jsonify([
-            {"vid": r[0], "name": r[1]}
+            {"vid": r[0], "name": r[1], "code": r[2]}
             for r in rows
         ])
     finally:
@@ -575,7 +706,7 @@ def set_context():
 
     # fetch eid + village_name together
     cur.execute("""
-        SELECT emp1, village_name
+        SELECT emp1, village_name, village_code
         FROM village
         WHERE vid = %s
           AND status = 'active'
@@ -590,6 +721,7 @@ def set_context():
 
     eid = row[0]
     village_name = row[1]
+    village_code = row[2]
 
     # fetch employee name
     cur.execute("SELECT name FROM employee WHERE eid = %s", (eid,))
@@ -600,6 +732,7 @@ def set_context():
     session["vid"] = vid
     session["eid"] = eid
     session["village_name"] = village_name
+    session["village_code"] = village_code
     session["employee_name"] = employee_name
 
     cur.close()
@@ -612,6 +745,7 @@ def reset_context():
     session.pop("eid", None)
     session.pop("vid", None)
     session.pop("village_name", None)
+    session.pop("village_code", None)
     session.pop("employee_name", None)
     return jsonify(success=True)
 
@@ -1123,6 +1257,7 @@ def insert_customer(data):
                 conn.close()
                 return None
             cid = result[0]
+            recalc_customer_repayment_score(cur, cid, force_recalc=True)
             conn.commit()
             return cid
 
@@ -1143,7 +1278,796 @@ def customer_exists_by_ano_and_vid(ano, vid):
     conn.close()
     return exists
 
+def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, today=None):
+    import pytz
+    KOLKATA = pytz.timezone('Asia/Kolkata')
+    
+    if not today:
+        today = datetime.now(KOLKATA).date()
+        
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.fromisoformat(start_date).date()
+        except ValueError:
+            start_date = datetime.strptime(start_date, "%d/%m/%Y").date()
+    elif isinstance(start_date, datetime):
+        start_date = start_date.date()
+
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.fromisoformat(end_date).date()
+        except ValueError:
+            end_date = datetime.strptime(end_date, "%d/%m/%Y").date()
+    elif isinstance(end_date, datetime):
+        end_date = end_date.date()
+
+    if isinstance(today, str):
+        try:
+            today = datetime.fromisoformat(today).date()
+        except ValueError:
+            today = datetime.strptime(today, "%d/%m/%Y").date()
+    elif isinstance(today, datetime):
+        today = today.date()
+
+    if not start_date or not end_date or not installment_amount or not period or installment_amount <= 0 or period <= 0:
+        return 100.0, "Excellent", 0.0, []
+
+    # Filter out future-dated payments
+    valid_payments = []
+    for p in payments:
+        p_date = p.get("payment_date")
+        if not p_date:
+            continue
+        if isinstance(p_date, str):
+            try:
+                p_date = datetime.fromisoformat(p_date).date()
+            except ValueError:
+                p_date = datetime.strptime(p_date, "%d/%m/%Y").date()
+        elif isinstance(p_date, datetime):
+            p_date = p_date.date()
+        
+        if p_date <= today:
+            valid_payments.append({
+                "amt": Decimal(str(p.get("amt", 0))),
+                "payment_date": p_date
+            })
+
+    # Day aggregation: multiple payments on the same calendar day for the same customer will be aggregated into a single amount.
+    aggregated_payments = {}
+    for p in valid_payments:
+        d = p["payment_date"]
+        aggregated_payments[d] = aggregated_payments.get(d, Decimal("0")) + p["amt"]
+        
+    # Generate rolling sequential due windows, expanding beyond period if customer is overdue
+    max_eval_date = end_date
+    if today > max_eval_date:
+        max_eval_date = today
+    for p in valid_payments:
+        if p["payment_date"] > max_eval_date:
+            max_eval_date = p["payment_date"]
+
+    total_weeks_cap = int(period) + 156
+    due_dates = []
+    w = 1
+    while True:
+        due = start_date + timedelta(days=7 * w + 1)
+        due_dates.append(due)
+        if w >= int(period):
+            if due >= max_eval_date or w >= total_weeks_cap:
+                break
+        w += 1
+    total_weeks = len(due_dates)
+
+    # Determine how many weeks to evaluate
+    num_weeks_to_evaluate = 0
+    for w in range(1, total_weeks + 1):
+        window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
+        if window_start <= today:
+            num_weeks_to_evaluate = w
+        else:
+            break
+
+    # Sum of valid payments
+    total_paid = sum(p["amt"] for p in valid_payments)
+    rem_balance = Decimal(str(balance_amount or 0)) + total_paid
+    inst_amt = Decimal(str(installment_amount))
+
+    # Allocation state
+    payments_by_week = {}
+    for w in range(1, num_weeks_to_evaluate + 1):
+        window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
+        window_end = due_dates[w-1]
+        
+        week_p_sum = Decimal("0")
+        for p_date, p_amt in list(aggregated_payments.items()):
+            if window_start <= p_date <= window_end:
+                week_p_sum += p_amt
+                
+        payments_by_week[w] = week_p_sum
+
+    # Allocation algorithm
+    virtual_paid = {w: Decimal("0") for w in range(1, num_weeks_to_evaluate + 1)}
+    initial_status = {}
+    
+    carry_forward = Decimal("0")
+    
+    for w in range(1, num_weeks_to_evaluate + 1):
+        current_inst = inst_amt if w <= int(period) else Decimal("0")
+        available = payments_by_week.get(w, Decimal("0")) + carry_forward
+        
+        if current_inst > 0:
+            if available >= current_inst:
+                initial_status[w] = "SUCCESS"
+                allocated = current_inst
+                excess = available - current_inst
+                virtual_paid[w] = allocated
+                
+                # 1. Repair oldest MISSED first
+                if excess > 0:
+                    for j in range(1, w):
+                        if j <= int(period) and virtual_paid[j] == 0:
+                            needed = inst_amt
+                            if excess >= needed:
+                                virtual_paid[j] = inst_amt
+                                excess -= needed
+                            else:
+                                virtual_paid[j] = excess
+                                excess = Decimal("0")
+                                break
+                                
+                # 2. Repair oldest PARTIAL second
+                if excess > 0:
+                    for j in range(1, w):
+                        if j <= int(period) and 0 < virtual_paid[j] < inst_amt:
+                            needed = inst_amt - virtual_paid[j]
+                            if excess >= needed:
+                                virtual_paid[j] = inst_amt
+                                excess -= needed
+                            else:
+                                virtual_paid[j] += excess
+                                excess = Decimal("0")
+                                break
+                                
+                carry_forward = excess
+            else:
+                if available > 0:
+                    initial_status[w] = "PARTIAL"
+                else:
+                    initial_status[w] = "MISSED"
+                virtual_paid[w] = available
+                carry_forward = Decimal("0")
+        else:
+            # Week is beyond the original period (overdue window).
+            # These payments are just late regular installments, NOT surplus.
+            # They must NOT repair earlier missed/partial weeks.
+            initial_status[w] = "OVERDUE"
+            virtual_paid[w] = available
+            carry_forward = Decimal("0")
+
+    # Score calculation loop
+    score = 100.0
+    consecutive_success = 0
+    week_details = []
+    total_excess_payments = Decimal("0")
+    
+    for w in range(1, num_weeks_to_evaluate + 1):
+        if rem_balance <= 0:
+            break
+            
+        p_actual = payments_by_week.get(w, Decimal("0"))
+        rem_balance -= p_actual
+        due_dt = due_dates[w-1]
+        
+        window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
+        window_end = due_dates[w-1]
+        
+        # Calculate excess payments throughout lifecycle (using base inst_amt)
+        if p_actual > inst_amt:
+            total_excess_payments += (p_actual - inst_amt)
+        
+        # Find all actual payments in this window
+        week_payment_dates = []
+        for p_date in sorted(aggregated_payments.keys()):
+            if window_start <= p_date <= window_end:
+                week_payment_dates.append(p_date.isoformat())
+        
+        paid_date_val = ", ".join(week_payment_dates) if week_payment_dates else None
+        
+        if w <= int(period):
+            init_stat = initial_status[w]
+            v_paid = virtual_paid[w]
+            is_current_due_window = (due_dt >= today)
+            
+            if is_current_due_window:
+                if v_paid >= inst_amt:
+                    consecutive_success += 1
+                    if consecutive_success > 1:
+                        score = min(100.0, score + 3.0)
+                    penalty = 0.0
+                    display_status = "SUCCESS"
+                else:
+                    consecutive_success = 0
+                    penalty = 0.0
+                    display_status = "PENDING"
+            else:
+                if init_stat == "SUCCESS":
+                    consecutive_success += 1
+                    if consecutive_success > 1:
+                        score = min(100.0, score + 3.0)
+                    penalty = 0.0
+                    display_status = "SUCCESS"
+                elif v_paid >= inst_amt:
+                    consecutive_success = 0
+                    score = max(0.0, score - 3.0)
+                    penalty = 3.0
+                    display_status = init_stat
+                else:
+                    consecutive_success = 0
+                    unpaid_percentage = float((inst_amt - v_paid) / inst_amt)
+                    penalty = unpaid_percentage * 10.0
+                    score = max(0.0, score - penalty)
+                    display_status = init_stat
+            
+            allocated_val = float(v_paid)
+        else:
+            # Overdue weeks beyond period - display only, no repair
+            display_status = "OVERDUE"
+            
+            # Apply overdue penalty week-by-week (starts from 3 weeks past period, i.e. 21 days)
+            # Only apply if payment is NOT made (p_actual == 0) and past the 2 weeks grace period (weeks_past >= 3)
+            penalty = 0.0
+            if p_actual == 0:
+                weeks_past = w - int(period)
+                if weeks_past >= 3:
+                    if due_dt <= today:
+                        penalty = 5.0
+                        score = max(0.0, score - penalty)
+            
+            allocated_val = float(p_actual)
+            
+        week_details.append({
+            "week": w,
+            "due_date": due_dt.isoformat(),
+            "paid_date": paid_date_val,
+            "status": display_status,
+            "allocated": allocated_val,
+            "penalty": float(round(penalty, 2)),
+            "score_after": float(round(score, 2))
+        })
+
+    # Apply Closure Recovery Bonus ONLY if balance_amount <= 0
+    if balance_amount is not None and balance_amount <= 0:
+        bonus_installments = float(total_excess_payments / inst_amt) if inst_amt > 0 else 0.0
+        closure_bonus = bonus_installments * 5.0
+        score = min(100.0, score + closure_bonus)
+        if week_details:
+            week_details[-1]["score_after"] = float(round(score, 2))
+
+    # Score must always be clamped
+    score = min(max(score, 0.0), 100.0)
+
+    # Overdue end date penalties are already applied week-by-week inside the loop above.
+    # Calculate overdue_penalty for return value only (informational), do NOT subtract again.
+    overdue_penalty = 0.0
+    if rem_balance > 0 and today > end_date:
+        days_overdue = (today - end_date).days
+        if days_overdue >= 21:
+            overdue_weeks = ((days_overdue - 21) // 7) + 1
+            overdue_penalty = overdue_weeks * 5.0
+
+    rounded_score = int(round(score))
+    if rounded_score >= 90:
+        risk_level = "Excellent"
+    elif rounded_score >= 75:
+        risk_level = "Good"
+    elif rounded_score >= 60:
+        risk_level = "Risky"
+    else:
+        risk_level = "Critical"
+
+    return float(round(score, 2)), risk_level, overdue_penalty, week_details
+
+
+def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, today=None):
+    import pytz
+    KOLKATA = pytz.timezone('Asia/Kolkata')
+    
+    if not today:
+        today = datetime.now(KOLKATA).date()
+        
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.fromisoformat(start_date).date()
+        except ValueError:
+            start_date = datetime.strptime(start_date, "%d/%m/%Y").date()
+    elif isinstance(start_date, datetime):
+        start_date = start_date.date()
+
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.fromisoformat(end_date).date()
+        except ValueError:
+            end_date = datetime.strptime(end_date, "%d/%m/%Y").date()
+    elif isinstance(end_date, datetime):
+        end_date = end_date.date()
+
+    if isinstance(today, str):
+        try:
+            today = datetime.fromisoformat(today).date()
+        except ValueError:
+            today = datetime.strptime(today, "%d/%m/%Y").date()
+    elif isinstance(today, datetime):
+        today = today.date()
+
+    if not start_date or not end_date or not installment_amount or not period or installment_amount <= 0 or period <= 0:
+        actual_end = end_date or start_date or today
+        predicted_end = actual_end
+        return {
+            "status": "OnTrack",
+            "predicted_end_date": predicted_end.isoformat() if hasattr(predicted_end, "isoformat") else str(predicted_end),
+            "actual_end_date": actual_end.isoformat() if hasattr(actual_end, "isoformat") else str(actual_end),
+            "diff_badge": "On Time",
+            "net_weeks": 0,
+            "discipline": {
+                "on_time": 0,
+                "delayed": 0,
+                "partial": 0,
+                "missed": 0
+            },
+            "stability": {
+                "score": 100.0,
+                "label": "Stable"
+            },
+            "predicted_next_risk": "Low"
+        }
+
+    inst_amt = Decimal(str(installment_amount or 0))
+    bal_amt = Decimal(str(balance_amount or 0))
+    
+    # 1. Reconstruct payments_by_week
+    valid_payments = []
+    for p in payments:
+        p_date = p.get("payment_date")
+        if not p_date:
+            continue
+        if isinstance(p_date, str):
+            try:
+                p_date = datetime.fromisoformat(p_date).date()
+            except ValueError:
+                p_date = datetime.strptime(p_date, "%d/%m/%Y").date()
+        elif isinstance(p_date, datetime):
+            p_date = p_date.date()
+        
+        if p_date <= today:
+            valid_payments.append({
+                "amt": Decimal(str(p.get("amt", 0))),
+                "payment_date": p_date
+            })
+
+    aggregated_payments = {}
+    for p in valid_payments:
+        d = p["payment_date"]
+        aggregated_payments[d] = aggregated_payments.get(d, Decimal("0")) + p["amt"]
+        
+    due_dates = []
+    w = 1
+    total_weeks_cap = int(period) + 156
+    max_eval_date = end_date
+    if today > max_eval_date:
+        max_eval_date = today
+    for p in valid_payments:
+        if p["payment_date"] > max_eval_date:
+            max_eval_date = p["payment_date"]
+            
+    while True:
+        due = start_date + timedelta(days=7 * w + 1)
+        due_dates.append(due)
+        if w >= int(period):
+            if due >= max_eval_date or w >= total_weeks_cap:
+                break
+        w += 1
+    total_weeks = len(due_dates)
+
+    num_weeks_to_evaluate = 0
+    for w in range(1, total_weeks + 1):
+        window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
+        if window_start <= today:
+            num_weeks_to_evaluate = w
+        else:
+            break
+
+    payments_by_week = {}
+    for w in range(1, num_weeks_to_evaluate + 1):
+        window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
+        window_end = due_dates[w-1]
+        week_p_sum = Decimal("0")
+        for p_date, p_amt in list(aggregated_payments.items()):
+            if window_start <= p_date <= window_end:
+                week_p_sum += p_amt
+        payments_by_week[w] = week_p_sum
+
+    # 2. Run allocation logic
+    virtual_paid = {w: Decimal("0") for w in range(1, num_weeks_to_evaluate + 1)}
+    initial_status = {}
+    carry_forward = Decimal("0")
+    
+    for w in range(1, num_weeks_to_evaluate + 1):
+        current_inst = inst_amt if w <= int(period) else Decimal("0")
+        available = payments_by_week.get(w, Decimal("0")) + carry_forward
+        
+        if current_inst > 0:
+            if available >= current_inst:
+                initial_status[w] = "SUCCESS"
+                allocated = current_inst
+                excess = available - current_inst
+                virtual_paid[w] = allocated
+                
+                # Repair oldest MISSED first
+                if excess > 0:
+                    for j in range(1, w):
+                        if j <= int(period) and virtual_paid[j] == 0:
+                            needed = inst_amt
+                            if excess >= needed:
+                                virtual_paid[j] = inst_amt
+                                excess -= needed
+                            else:
+                                virtual_paid[j] = excess
+                                excess = Decimal("0")
+                                break
+                                
+                # Repair oldest PARTIAL second
+                if excess > 0:
+                    for j in range(1, w):
+                        if j <= int(period) and 0 < virtual_paid[j] < inst_amt:
+                            needed = inst_amt - virtual_paid[j]
+                            if excess >= needed:
+                                virtual_paid[j] = inst_amt
+                                excess -= needed
+                            else:
+                                virtual_paid[j] += excess
+                                excess = Decimal("0")
+                                break
+                                
+                carry_forward = excess
+            else:
+                if available > 0:
+                    initial_status[w] = "PARTIAL"
+                else:
+                    initial_status[w] = "MISSED"
+                virtual_paid[w] = available
+                carry_forward = Decimal("0")
+        else:
+            initial_status[w] = "OVERDUE"
+            virtual_paid[w] = available
+            carry_forward = Decimal("0")
+
+    # 3. Calculate status
+    status = "OnTrack"
+    if bal_amt <= 0:
+        status = "Settled"
+    else:
+        if today > end_date:
+            days_overdue = (today - end_date).days
+            if days_overdue >= 42:
+                status = "To Be Defaulted"
+            else:
+                status = "Overdue"
+        else:
+            has_overdue_weeks = False
+            for w in range(1, num_weeks_to_evaluate + 1):
+                if w <= int(period):
+                    due_dt = due_dates[w-1]
+                    if due_dt < today:
+                        if virtual_paid.get(w, Decimal("0")) < inst_amt:
+                            has_overdue_weeks = True
+                            break
+            if has_overdue_weeks:
+                status = "Overdue"
+
+    # 4. Calculate Predicted End Date
+    if bal_amt <= 0:
+        predicted_end = end_date
+        net_weeks = 0
+    else:
+        unpaid_equivalents = float(bal_amt / inst_amt) if inst_amt > 0 else 0.0
+        if today < end_date:
+            scheduled_remaining_weeks = (end_date - today).days / 7.0
+            delay_weeks = max(0.0, unpaid_equivalents - scheduled_remaining_weeks)
+            predicted_end = end_date + timedelta(days=int(round(delay_weeks * 7.0)))
+        else:
+            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * 7.0)))
+        
+        net_weeks = int(round((predicted_end - end_date).days / 7.0))
+
+    if net_weeks > 0:
+        diff_badge = f"+{net_weeks} week{'s' if net_weeks > 1 else ''} late"
+    elif net_weeks < 0:
+        diff_badge = f"{abs(net_weeks)} week{'s' if abs(net_weeks) > 1 else ''} early"
+    else:
+        diff_badge = "On Time"
+
+    # 5. Discipline profile counts
+    on_time_count = 0
+    delayed_count = 0
+    partial_count = 0
+    missed_count = 0
+    
+    unrepaired_missed = 0
+    unrepaired_partial = 0
+    
+    for w in range(1, num_weeks_to_evaluate + 1):
+        if w > int(period):
+            continue
+        due_dt = due_dates[w-1]
+        is_past = (due_dt < today)
+        
+        init_stat = initial_status[w]
+        v_paid = virtual_paid[w]
+        
+        if init_stat == "SUCCESS":
+            on_time_count += 1
+        elif is_past:
+            if init_stat == "MISSED":
+                missed_count += 1
+                if v_paid >= inst_amt:
+                    delayed_count += 1
+                else:
+                    unrepaired_missed += 1
+            elif init_stat == "PARTIAL":
+                partial_count += 1
+                if v_paid >= inst_amt:
+                    delayed_count += 1
+                else:
+                    unrepaired_partial += 1
+
+    # 6. Payment Stability
+    stability_score = 100.0
+    stability_score -= (unrepaired_missed * 10.0 + unrepaired_partial * 5.0 + delayed_count * 3.0)
+    stability_score = min(max(stability_score, 0.0), 100.0)
+    
+    if stability_score >= 90:
+        stability = "Very Stable"
+    elif stability_score >= 75:
+        stability = "Stable"
+    elif stability_score >= 50:
+        stability = "Medium"
+    elif stability_score >= 30:
+        stability = "Unstable"
+    else:
+        stability = "Highly Unstable"
+
+    # 7. Predicted Next Risk
+    curr_score = 100.0
+    if week_details:
+        curr_score = week_details[-1]["score_after"]
+        
+    next_risk = "Low"
+    if status == "To Be Defaulted" or curr_score < 50.0:
+        next_risk = "Critical"
+    elif status == "Overdue":
+        last_w = num_weeks_to_evaluate
+        if last_w > 0 and virtual_paid.get(last_w, Decimal("0")) == 0:
+            next_risk = "High"
+        else:
+            next_risk = "Medium"
+    elif status == "Settled":
+        next_risk = "Low"
+    else:
+        recent_issues = 0
+        for w in range(max(1, num_weeks_to_evaluate - 2), num_weeks_to_evaluate + 1):
+            if w <= int(period):
+                due_dt = due_dates[w-1]
+                if due_dt < today:
+                    if virtual_paid.get(w, Decimal("0")) < inst_amt:
+                        recent_issues += 1
+        if recent_issues >= 2:
+            next_risk = "High"
+        elif recent_issues == 1:
+            next_risk = "Medium"
+        else:
+            next_risk = "Low"
+            
+        if curr_score < 75.0:
+            if next_risk == "Low":
+                next_risk = "Medium"
+            elif next_risk == "Medium":
+                next_risk = "High"
+            elif next_risk == "High":
+                next_risk = "Critical"
+
+    return {
+        "status": status,
+        "predicted_end_date": predicted_end.isoformat(),
+        "actual_end_date": end_date.isoformat(),
+        "diff_badge": diff_badge,
+        "net_weeks": net_weeks,
+        "discipline": {
+            "on_time": on_time_count,
+            "delayed": delayed_count,
+            "partial": partial_count,
+            "missed": missed_count
+        },
+        "stability": {
+            "score": float(stability_score),
+            "label": stability
+        },
+        "predicted_next_risk": next_risk
+    }
+
+
+def format_customer_ratings_with_trends(cur, data):
+    if not data:
+        return data
+        
+    cids = [c["cid"] for c in data]
+    
+    # Fetch all payments for these customers
+    cur.execute("""
+        SELECT cid, ano, payment_date, amt, pid
+        FROM (
+            SELECT cid, ano, payment_date, amt, pid FROM payment WHERE cid = ANY(%s)
+            UNION ALL
+            SELECT cid, ano, payment_date, amt, pid FROM closed_cust_payment WHERE cid = ANY(%s)
+        ) p
+        ORDER BY payment_date, pid
+    """, (cids, cids))
+    prows = cur.fetchall()
+    
+    payments_by_cid = {}
+    for prow in prows:
+        cid = prow[0]
+        if cid not in payments_by_cid:
+            payments_by_cid[cid] = []
+        payments_by_cid[cid].append({
+            "ano": prow[1],
+            "payment_date": prow[2].isoformat() if hasattr(prow[2], "isoformat") else str(prow[2]),
+            "amt": float(prow[3] or 0),
+            "pid": prow[4]
+        })
+        
+    for c in data:
+        cid = c["cid"]
+        payments = payments_by_cid.get(cid, [])
+        
+        # Run calculation
+        score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
+            c["start_date"], c["end_date"], c["installment_amount"], c["period"], payments, c["balance_amount"]
+        )
+        
+        # Filter out future in-progress weeks for trend calculation
+        import pytz
+        KOLKATA = pytz.timezone('Asia/Kolkata')
+        today = datetime.now(KOLKATA).date()
+
+        completed_weeks = []
+        for w in week_details:
+            w_due_str = w["due_date"]
+            if isinstance(w_due_str, str):
+                try:
+                    w_due = datetime.fromisoformat(w_due_str).date()
+                except ValueError:
+                    w_due = datetime.strptime(w_due_str, "%Y-%m-%d").date()
+            else:
+                w_due = w_due_str
+                
+            if w_due > today:
+                continue
+            completed_weeks.append(w)
+
+        trend = "flat"
+        if len(completed_weeks) >= 2:
+            last_score = completed_weeks[-1]["score_after"]
+            prev_score = completed_weeks[-2]["score_after"]
+            if last_score > prev_score:
+                trend = "up"
+            elif last_score < prev_score:
+                trend = "down"
+                
+        rating = score
+        if rating is not None:
+            try:
+                rating_val = int(round(float(rating)))
+                if trend == "up":
+                    c["customer_rating"] = f"{rating_val} ▲"
+                elif trend == "down":
+                    c["customer_rating"] = f"{rating_val} ▼"
+                else:
+                    c["customer_rating"] = f"{rating_val}"
+            except (ValueError, TypeError):
+                c["customer_rating"] = str(rating)
+        else:
+            c["customer_rating"] = ""
+            
+    return data
+
+
+def recalc_customer_repayment_score(cur, cid, force_recalc=False):
+    # Fetch customer details
+    cur.execute("""
+        SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status
+        FROM (
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, 'active' AS status, cid
+            FROM customer
+            UNION ALL
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid
+            FROM closed_cust_account
+        ) all_cust
+        WHERE cid = %s
+    """, (cid,))
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status = row
+    
+    # Freeze logic:
+    if balance_amount is not None and balance_amount <= 0 and freeze_date is not None and not force_recalc:
+        return {
+            "score": float(customer_rating),
+            "risk_level": final_risk_level,
+            "freeze_date": freeze_date.isoformat() if freeze_date else None
+        }
+
+    # Fetch payments
+    cur.execute("""
+        SELECT amt, payment_date
+        FROM (
+            SELECT amt, payment_date, pid, cid FROM payment
+            UNION ALL
+            SELECT amt, payment_date, pid, cid FROM closed_cust_payment
+        ) all_pmts
+        WHERE cid = %s
+        ORDER BY payment_date, pid
+    """, (cid,))
+    prows = cur.fetchall()
+    payments = [{"amt": prow[0], "payment_date": prow[1]} for prow in prows]
+
+    score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
+        start_date, end_date, installment_amount, period, payments, balance_amount
+    )
+
+    table_name = "customer" if status == "active" else "closed_cust_account"
+    
+    import pytz
+    KOLKATA = pytz.timezone('Asia/Kolkata')
+    
+    new_freeze_date = freeze_date
+    new_final_frozen_rating = final_frozen_rating
+    new_final_risk_level = final_risk_level
+    
+    if balance_amount is not None and balance_amount <= 0:
+        if new_freeze_date is None:
+            new_freeze_date = datetime.now(KOLKATA)
+        new_final_frozen_rating = score
+        new_final_risk_level = risk_level
+    else:
+        new_freeze_date = None
+        new_final_frozen_rating = None
+        new_final_risk_level = None
+
+    cur.execute(f"""
+        UPDATE {table_name}
+        SET customer_rating = %s,
+            final_frozen_rating = %s,
+            final_risk_level = %s,
+            freeze_date = %s
+        WHERE cid = %s
+    """, (score, new_final_frozen_rating, new_final_risk_level, new_freeze_date, cid))
+
+    return {
+        "score": float(score),
+        "risk_level": risk_level,
+        "freeze_date": new_freeze_date.isoformat() if new_freeze_date else None,
+        "week_details": week_details
+    }
+
+
 def recalc_customer_balance(cur, cid):
+    # Get old balance
+    cur.execute("SELECT balance_amount FROM customer WHERE cid = %s", (cid,))
+    row = cur.fetchone()
+    old_balance = row[0] if row else Decimal("0")
+
     cur.execute("SELECT total_amount FROM customer WHERE cid = %s", (cid,))
     row = cur.fetchone()
     if not row:
@@ -1166,6 +2090,8 @@ def recalc_customer_balance(cur, cid):
             balance_amount = %s
         WHERE cid = %s
     """, (paid_amt, balance_amt, cid))
+
+    recalc_customer_repayment_score(cur, cid, force_recalc=True)
 # ----------------------------------------------------
 # ROUTES - mobile app
 # ----------------------------------------------------
@@ -1708,6 +2634,37 @@ def get_dashboard_totals(vid):
 def admin_control():
     return render_template("admin_control.html")
 
+def get_customer_analytics(vid):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT 
+                COUNT(*) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 3) as today_count,
+                COALESCE(SUM(total_amount) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 3), 0) as today_sum,
+                COUNT(*) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 8) as week_count,
+                COALESCE(SUM(total_amount) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 8), 0) as week_sum,
+                COUNT(*) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 31) as month_count,
+                COALESCE(SUM(total_amount) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 31), 0) as month_sum
+            FROM customer
+            WHERE vid = %s
+        """, (vid,))
+        row = cur.fetchone()
+        if row:
+            t_count, t_sum, w_count, w_sum, m_count, m_sum = row
+            return {
+                "today": f"{t_count} - ₹{int(round(t_sum)):,}",
+                "week": f"{w_count} - ₹{int(round(w_sum)):,}",
+                "month": f"{m_count} - ₹{int(round(m_sum)):,}"
+            }
+        return {"today": "0 - ₹0", "week": "0 - ₹0", "month": "0 - ₹0"}
+    except Exception as e:
+        logger.error(f"Error fetching customer analytics: {e}")
+        return {"today": "0 - ₹0", "week": "0 - ₹0", "month": "0 - ₹0"}
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route("/add_customer", methods=["GET", "POST"])
 @login_required
 def add_customer():
@@ -1774,17 +2731,21 @@ def add_customer():
         return jsonify({
             "message": "Customer added successfully",
             "highest_ano": get_highest_ano_by_vid(vid),
-            "cid": cid
+            "new_ano": ano,
+            "cid": cid,
+            "analytics": get_customer_analytics(vid)
         })
 
     # GET
     highest_ano = get_highest_ano_by_vid(vid)
+    analytics = get_customer_analytics(vid)
 
     return render_template(
         "add_customer.html",
         highest_ano=highest_ano,
         village_name=session.get("village_name"),
-        employee_name=session.get("employee_name")
+        employee_name=session.get("employee_name"),
+        analytics=analytics
     )
 
 @app.route("/view_customers")
@@ -1803,6 +2764,40 @@ def view_customers():
     conn = get_pg_connection()
     cur = conn.cursor()
 
+    # 📊 Overhauled Analytics Calculations
+    # Active Stats (from customer table)
+    cur.execute("""
+        SELECT 
+            COALESCE(COUNT(*), 0),
+            COALESCE(SUM(total_amount), 0.0),
+            COALESCE(SUM(balance_amount), 0.0)
+        FROM customer
+        WHERE vid = %s
+    """, (vid,))
+    active_count, active_loan_sum, active_bal_sum = cur.fetchone()
+
+    # Closed Stats (from closed_cust_account table)
+    cur.execute("""
+        SELECT 
+            COALESCE(COUNT(*), 0),
+            COALESCE(SUM(total_amount), 0.0)
+        FROM closed_cust_account
+        WHERE vid = %s
+    """, (vid,))
+    closed_count, closed_loan_sum = cur.fetchone()
+
+    # Defaulted Stats (balance > 0 in closed_cust_account table)
+    cur.execute("""
+        SELECT 
+            COALESCE(COUNT(*), 0),
+            COALESCE(SUM(total_amount), 0.0),
+            COALESCE(SUM(balance_amount), 0.0)
+        FROM closed_cust_account
+        WHERE vid = %s AND balance_amount > 0
+    """, (vid,))
+    defaulted_count, defaulted_loan_sum, defaulted_bal_sum = cur.fetchone()
+
+    # Fetch Table Rows based on mode
     if mode == "closed":
         cur.execute("""
             SELECT
@@ -1826,7 +2821,11 @@ def view_customers():
                 longitude,
                 eid,
                 phone_number,
-                status
+                status,
+                customer_rating,
+                final_frozen_rating,
+                final_risk_level,
+                freeze_date
             FROM closed_cust_account
             WHERE vid = %s
             ORDER BY ano
@@ -1854,7 +2853,11 @@ def view_customers():
                 longitude,
                 eid,
                 phone_number,
-                'active' AS status
+                'active' AS status,
+                customer_rating,
+                final_frozen_rating,
+                final_risk_level,
+                freeze_date
             FROM customer
             WHERE vid = %s
             ORDER BY ano
@@ -1863,27 +2866,142 @@ def view_customers():
     rows = cur.fetchall()
     headers = [desc[0] for desc in cur.description] # type: ignore
 
+    data = [dict(zip(headers, r)) for r in rows]
+    data = format_customer_ratings_with_trends(cur, data)
+
     cur.close()
     conn.close()
-
-    data = [dict(zip(headers, r)) for r in rows]
-
-    # 🔹 Recalculate totals based on mode
-    total_customers = len(data)
-    sum_amt = sum(float(r["total_amount"] or 0) for r in data)
-    sum_pamt = sum(float(r["paid_amount"] or 0) for r in data)
-    sum_bamt = sum(float(r["balance_amount"] or 0) for r in data)
 
     return render_template(
         "view_customers.html",
         headers=headers,
         data=data,
-        total_customers=total_customers,
-        sum_amt=sum_amt,
-        sum_pamt=sum_pamt,
-        sum_bamt=sum_bamt,
-        mode=mode  # 🔹 pass to frontend for toggle button
+        active_customers=active_count,
+        defaulted_customers=defaulted_count,
+        closed_customers=closed_count,
+        total_loan_amount=active_loan_sum,
+        closed_loan_amount=closed_loan_sum,
+        active_balance_amount=active_bal_sum,
+        defaulted_balance_amount=defaulted_bal_sum,
+        mode=mode
     )
+
+@app.route("/api/balance_report")
+@login_required
+def api_balance_report():
+    vid = session.get("vid")
+    if not vid:
+        return jsonify({"success": False, "error": "No village context selected"})
+    
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            SELECT
+                cid,
+                ano,
+                name,
+                vid,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                pano,
+                created_at,
+                aadhaar_number,
+                notes,
+                latitude,
+                longitude,
+                eid,
+                phone_number,
+                'active' AS status,
+                customer_rating,
+                final_frozen_rating,
+                final_risk_level,
+                freeze_date
+            FROM customer
+            WHERE vid = %s AND balance_amount > 0
+            
+            UNION ALL
+            
+            SELECT
+                cid,
+                ano,
+                name,
+                vid,
+                start_date,
+                end_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount,
+                type,
+                period,
+                pano,
+                created_at,
+                aadhaar_number,
+                notes,
+                latitude,
+                longitude,
+                eid,
+                phone_number,
+                status,
+                customer_rating,
+                final_frozen_rating,
+                final_risk_level,
+                freeze_date
+            FROM closed_cust_account
+            WHERE vid = %s AND balance_amount > 0
+            ORDER BY ano
+        """, (vid, vid))
+        
+        rows = cur.fetchall()
+        headers = [desc[0] for desc in cur.description]
+        data = [dict(zip(headers, r)) for r in rows]
+        
+        data = format_customer_ratings_with_trends(cur, data)
+        
+        serialized = []
+        for c in data:
+            serialized.append({
+                "cid": c.get("cid"),
+                "ano": str(c.get("ano")).strip() if c.get("ano") is not None else "",
+                "name": c.get("name"),
+                "vid": c.get("vid"),
+                "start_date": c.get("start_date").isoformat() if hasattr(c.get("start_date"), "isoformat") else str(c.get("start_date")) if c.get("start_date") else None,
+                "end_date": c.get("end_date").isoformat() if hasattr(c.get("end_date"), "isoformat") else str(c.get("end_date")) if c.get("end_date") else None,
+                "total_amount": float(c.get("total_amount") or 0),
+                "paid_amount": float(c.get("paid_amount") or 0),
+                "balance_amount": float(c.get("balance_amount") or 0),
+                "installment_amount": float(c.get("installment_amount") or 0),
+                "type": c.get("type"),
+                "period": c.get("period"),
+                "pano": str(c.get("pano")).strip() if c.get("pano") is not None else "",
+                "created_at": c.get("created_at").isoformat() if hasattr(c.get("created_at"), "isoformat") else str(c.get("created_at")) if c.get("created_at") else None,
+                "aadhaar_number": c.get("aadhaar_number"),
+                "notes": c.get("notes"),
+                "latitude": c.get("latitude"),
+                "longitude": c.get("longitude"),
+                "eid": c.get("eid"),
+                "phone_number": c.get("phone_number"),
+                "status": c.get("status"),
+                "customer_rating": c.get("customer_rating"),
+                "final_frozen_rating": float(c.get("final_frozen_rating")) if c.get("final_frozen_rating") is not None else None,
+                "final_risk_level": c.get("final_risk_level"),
+                "freeze_date": c.get("freeze_date").isoformat() if hasattr(c.get("freeze_date"), "isoformat") else str(c.get("freeze_date")) if c.get("freeze_date") else None
+            })
+            
+        return jsonify({"success": True, "customers": serialized})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/check_ano_exists")
 @login_required
@@ -1964,7 +3082,7 @@ def post_payment_page():
             balance_amount,
             installment_amount
         FROM customer
-        WHERE vid = %s
+        WHERE vid = %s AND (status IS NULL OR status != 'closed')
     """, (vid,))
 
     customers = [
@@ -2024,6 +3142,132 @@ def get_customer_info():
         "outstanding": row[4],
         "installment_amount": row[5],
     })
+
+
+
+@app.route("/api/post_payment_analytics", methods=["GET"])
+@login_required
+def post_payment_analytics():
+    vid = session.get("vid")
+    if not vid:
+        return jsonify(error="Village context not set"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # 1. Get last posting date for the village
+        cur.execute("""
+            SELECT MAX(payment_date) FROM payment WHERE vid = %s
+        """, (vid,))
+        last_date = cur.fetchone()[0]
+
+        if not last_date:
+            last_date = datetime.today().date()
+            days_ago = 0
+            last_date_str = last_date.strftime("%d/%m/%Y") + " (No postings yet)"
+        else:
+            days_ago = (datetime.today().date() - last_date).days
+            last_date_str = last_date.strftime("%d/%m/%Y") + f" ({days_ago} days ago)"
+
+        # 2. Get all active or historically active customers for this village from the customer table, ignoring closed ones
+        cur.execute("""
+            SELECT cid, ano, name, total_amount, installment_amount, start_date
+            FROM customer
+            WHERE vid = %s AND (status IS NULL OR status != 'closed')
+        """, (vid,))
+        customers = []
+        for r in cur.fetchall():
+            customers.append({
+                "cid": r[0],
+                "ano": r[1],
+                "name": r[2],
+                "total_amount": float(r[3] or 0),
+                "installment_amount": float(r[4] or 0),
+                "start_date": r[5]
+            })
+
+        # 3. Get all payments for this village
+        cur.execute("""
+            SELECT cid, amt, payment_date FROM payment WHERE vid = %s
+        """, (vid,))
+        payments = []
+        for r in cur.fetchall():
+            payments.append({
+                "cid": r[0],
+                "amt": float(r[1] or 0),
+                "payment_date": r[2]
+            })
+
+        # Calculate weeks: We generate 5 weeks ending at last_date
+        # Week 0: [last_date - 6, last_date]
+        # Week 1: [last_date - 13, last_date - 7]
+        # Week 2: [last_date - 20, last_date - 14]
+        # Week 3: [last_date - 27, last_date - 21]
+        # Week 4: [last_date - 34, last_date - 28]
+        weeks = []
+        for i in range(4, -1, -1):
+            w_end = last_date - timedelta(days=7 * i)
+            w_start = w_end - timedelta(days=6)
+            
+            label = "This Week" if i == 0 else f"{i} Wk{'s' if i > 1 else ''} Ago"
+            
+            weeks.append({
+                "label": label,
+                "start": w_start,
+                "end": w_end,
+                "active_customers": 0,
+                "paid_customers": 0,
+                "unpaid_customers": 0,
+                "expected_collection": 0.0,
+                "actual_collection": 0.0,
+                "failed_to_collect": 0.0
+            })
+
+        for w in weeks:
+            start_dt = w["start"]
+            end_dt = w["end"]
+            
+            for c in customers:
+                # Check if customer loan started on or before the end of the week
+                if c["start_date"] and c["start_date"] <= end_dt:
+                    # Calculate total paid before this week
+                    paid_before = sum(p["amt"] for p in payments if p["cid"] == c["cid"] and p["payment_date"] < start_dt)
+                    
+                    # If loan balance at start of week was greater than 0, they were active
+                    if c["total_amount"] - paid_before > 0.01:
+                        w["active_customers"] += 1
+                        w["expected_collection"] += c["installment_amount"]
+                        
+                        # Calculate paid during this week
+                        paid_this_week = sum(p["amt"] for p in payments if p["cid"] == c["cid"] and start_dt <= p["payment_date"] <= end_dt)
+                        
+                        if paid_this_week > 0.01:
+                            w["paid_customers"] += 1
+                            w["actual_collection"] += paid_this_week
+                        else:
+                            w["unpaid_customers"] += 1
+                            w["failed_to_collect"] += c["installment_amount"]
+
+        # Format and round data
+        for w in weeks:
+            w["expected_collection"] = round(w["expected_collection"], 2)
+            w["actual_collection"] = round(w["actual_collection"], 2)
+            w["failed_to_collect"] = round(w["failed_to_collect"], 2)
+            w["start"] = w["start"].strftime("%d/%m/%Y")
+            w["end"] = w["end"].strftime("%d/%m/%Y")
+
+        return jsonify(
+            last_posting_date=last_date_str,
+            weeks=weeks
+        )
+
+    except Exception as e:
+        logger.error(f"Error calculating post payment analytics: {e}")
+        return jsonify(error="Internal server error"), 500
+    finally:
+        cur.close()
+        conn.close()
 
 
 
@@ -2199,6 +3443,334 @@ def search_customer():
     )
 
 
+@app.route("/api/customer/save_payments", methods=["POST"])
+@login_required
+def api_customer_save_payments():
+    vid = session.get("vid")
+    eid = session.get("eid")
+    if not vid:
+        return jsonify(success=False, error="Village context missing"), 400
+
+    data = request.get_json()
+    cid = data.get("cid")
+    ano = data.get("ano")
+    payments = data.get("payments")
+
+    if not cid or not ano or payments is None:
+        return jsonify(success=False, error="Missing required parameters"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # Determine if active or closed
+        cur.execute("SELECT 1 FROM customer WHERE cid = %s", (cid,))
+        is_active = cur.fetchone() is not None
+
+        table_payment = "payment" if is_active else "closed_cust_payment"
+        table_customer = "customer" if is_active else "closed_cust_account"
+
+        # Get old balance
+        cur.execute(f"SELECT balance_amount FROM {table_customer} WHERE cid = %s", (cid,))
+        row = cur.fetchone()
+        old_balance = row[0] if row else Decimal("0")
+
+        # Get existing pids for this customer
+        cur.execute(f"SELECT pid FROM {table_payment} WHERE cid = %s", (cid,))
+        existing_pids = {row[0] for row in cur.fetchall()}
+
+        incoming_pids = set()
+        for p in payments:
+            pid = p.get("pid")
+            amt = Decimal(str(p.get("amt", 0)))
+            pdt_str = p.get("payment_date")
+            try:
+                pdt = datetime.fromisoformat(pdt_str).date()
+            except ValueError:
+                pdt = datetime.strptime(pdt_str, "%d/%m/%Y").date()
+
+            if pid and pid in existing_pids:
+                # UPDATE
+                cur.execute(f"""
+                    UPDATE {table_payment}
+                    SET amt = %s, payment_date = %s, updated_at = NOW()
+                    WHERE pid = %s AND cid = %s
+                """, (amt, pdt, pid, cid))
+                incoming_pids.add(pid)
+            else:
+                # INSERT
+                cur.execute(f"""
+                    INSERT INTO {table_payment} (cid, vid, eid, ano, amt, payment_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (cid, vid, eid, ano, amt, pdt))
+
+        # DELETE missing pids
+        pids_to_delete = existing_pids - incoming_pids
+        if pids_to_delete:
+            cur.execute(f"""
+                DELETE FROM {table_payment}
+                WHERE pid IN %s AND cid = %s
+            """, (tuple(pids_to_delete), cid))
+
+        # Recalculate totals
+        cur.execute(f"SELECT total_amount FROM {table_customer} WHERE cid = %s", (cid,))
+        row = cur.fetchone()
+        if row:
+            total_amt = row[0]
+            cur.execute(f"SELECT COALESCE(SUM(amt), 0) FROM {table_payment} WHERE cid = %s", (cid,))
+            paid_amt = cur.fetchone()[0]
+            balance_amt = total_amt - paid_amt
+
+            cur.execute(f"""
+                UPDATE {table_customer}
+                SET paid_amount = %s,
+                    balance_amount = %s
+                WHERE cid = %s
+            """, (paid_amt, balance_amt, cid))
+
+            force_recalc = (balance_amt > 0) or (old_balance is not None and old_balance > 0 and balance_amt <= 0)
+            recalc_customer_repayment_score(cur, cid, force_recalc=force_recalc)
+
+        conn.commit()
+        return jsonify(success=True)
+
+    except Exception as e:
+        conn.rollback()
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route("/api/customer_detail_with_payments/<account_no>", methods=["GET"])
+@login_required
+def api_customer_detail_with_payments(account_no):
+    vid = session.get("vid")
+    
+    with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
+        f.write(f"[{datetime.now()}] API call started: account_no={repr(account_no)}, session_vid={repr(vid)}\n")
+        
+    if not vid:
+        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
+            f.write(f"[{datetime.now()}] Error: session_vid missing\n")
+        return jsonify(success=False, error="Village context missing"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        account_no = str(account_no).strip()
+
+        cid_val = None
+        if account_no.isdigit():
+            try:
+                cid_val = int(account_no)
+            except ValueError:
+                pass
+
+        row = None
+        if cid_val is not None:
+            cur.execute("""
+                SELECT 
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                    balance_amount, installment_amount, type, period, pano, created_at, 
+                    aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                FROM (
+                    SELECT 
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                        balance_amount, installment_amount, type, period, pano, created_at, 
+                        aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM customer
+                    WHERE vid = %s AND cid = %s
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                        balance_amount, installment_amount, type, period, pano, created_at, 
+                        aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM closed_cust_account
+                    WHERE vid = %s AND cid = %s
+                ) all_cust
+                LIMIT 1
+            """, (vid, cid_val, vid, cid_val))
+            row = cur.fetchone()
+
+        if not row:
+            # Fetch customer details by ANO (prioritizing active status)
+            cur.execute("""
+                SELECT 
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                    balance_amount, installment_amount, type, period, pano, created_at, 
+                    aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                FROM (
+                    SELECT 
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                        balance_amount, installment_amount, type, period, pano, created_at, 
+                        aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM customer
+                    WHERE vid = %s AND CAST(ano AS TEXT) = %s
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
+                        balance_amount, installment_amount, type, period, pano, created_at, 
+                        aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM closed_cust_account
+                    WHERE vid = %s AND CAST(ano AS TEXT) = %s
+                ) all_cust
+                ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END
+                LIMIT 1
+            """, (vid, account_no, vid, account_no))
+            row = cur.fetchone()
+        if not row:
+            with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
+                f.write(f"[{datetime.now()}] 404 Error: Not found in DB. parsed_cid={repr(cid_val)}, search_term={repr(account_no)}, session_vid={repr(vid)}\n")
+            return jsonify(success=False, error="Customer not found"), 404
+
+        loanee_headers = [
+            "cid", "ano", "name", "vid", "start_date", "end_date", "total_amount", "paid_amount", 
+            "balance_amount", "installment_amount", "type", "period", "pano", "created_at", 
+            "aadhaar_number", "notes", "latitude", "longitude", "eid", "phone_number", "status",
+            "customer_rating", "final_frozen_rating", "final_risk_level", "freeze_date"
+        ]
+
+        cust = dict(zip(loanee_headers, row))
+
+        # Format decimal values and dates
+        for key in ["total_amount", "paid_amount", "balance_amount", "installment_amount", "customer_rating", "final_frozen_rating"]:
+            if cust.get(key) is not None:
+                cust[key] = float(cust[key])
+            else:
+                cust[key] = 0.0 if key != "final_frozen_rating" else None
+        for key in ["start_date", "end_date", "created_at", "freeze_date"]:
+            if cust.get(key):
+                cust[key] = cust[key].isoformat()
+
+        # Fetch payments
+        cur.execute("""
+            SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
+            FROM payment
+            WHERE cid = %s
+            
+            UNION ALL
+            
+            SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
+            FROM closed_cust_payment
+            WHERE cid = %s
+            
+            ORDER BY payment_date, pid
+        """, (cust["cid"], cust["cid"]))
+
+        prows = cur.fetchall()
+        payments = []
+        for prow in prows:
+            payments.append({
+                "ano": prow[0],
+                "payment_date": prow[1],
+                "amt": float(prow[2] or 0),
+                "pid": prow[3]
+            })
+
+        # Calculate week details log dynamically (strictly read-only!)
+        score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"]
+        )
+        
+        cust["customer_rating"] = score
+
+        behavioral_analytics = calculate_behavioral_analytics(
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details
+        )
+
+        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
+            f.write(f"[{datetime.now()}] Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}\n")
+
+        return jsonify(
+            success=True,
+            customer=cust,
+            payments=payments,
+            week_details=week_details,
+            behavioral_analytics=behavioral_analytics
+        )
+
+    except Exception as e:
+        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
+            f.write(f"[{datetime.now()}] Server Exception: {str(e)}\n")
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route("/api/recalculate_customer_rating/<account_no>", methods=["POST"])
+@login_required
+def api_recalculate_customer_rating(account_no):
+    vid = session.get("vid")
+    if not vid:
+        return jsonify(success=False, error="Village context missing"), 400
+        
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        account_no = str(account_no).strip()
+        cid_val = None
+        if account_no.isdigit():
+            try:
+                cid_val = int(account_no)
+            except ValueError:
+                pass
+                
+        row = None
+        if cid_val is not None:
+            cur.execute("""
+                SELECT cid 
+                FROM (
+                    SELECT cid, vid FROM customer
+                    UNION ALL
+                    SELECT cid, vid FROM closed_cust_account
+                ) all_cust
+                WHERE vid = %s AND cid = %s 
+                LIMIT 1
+            """, (vid, cid_val))
+            row = cur.fetchone()
+        if not row:
+            cur.execute("""
+                SELECT cid 
+                FROM (
+                    SELECT cid, vid, ano FROM customer
+                    UNION ALL
+                    SELECT cid, vid, ano FROM closed_cust_account
+                ) all_cust
+                WHERE vid = %s AND CAST(ano AS TEXT) = %s 
+                LIMIT 1
+            """, (vid, account_no))
+            row = cur.fetchone()
+            
+        if not row:
+            return jsonify(success=False, error="Customer not found"), 404
+            
+        cid = row[0]
+        res = recalc_customer_repayment_score(cur, cid, force_recalc=True)
+        conn.commit()
+        return jsonify(success=True, rating=res)
+    except Exception as e:
+        conn.rollback()
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
 @app.route("/api/customer_family_full/<account_no>")
 @login_required
 def api_customer_family_full(account_no):
@@ -2239,7 +3811,11 @@ def api_customer_family_full(account_no):
                 longitude,
                 eid,
                 phone_number,
-                status
+                status,
+                customer_rating,
+                final_frozen_rating,
+                final_risk_level,
+                freeze_date
             FROM (
                 SELECT
                     cid,
@@ -2262,7 +3838,11 @@ def api_customer_family_full(account_no):
                     longitude,
                     eid,
                     phone_number,
-                    'active' AS status
+                    'active' AS status,
+                    customer_rating,
+                    final_frozen_rating,
+                    final_risk_level,
+                    freeze_date
                 FROM customer
                 WHERE vid = %s
 
@@ -2289,7 +3869,11 @@ def api_customer_family_full(account_no):
                     longitude,
                     eid,
                     phone_number,
-                    status
+                    status,
+                    customer_rating,
+                    final_frozen_rating,
+                    final_risk_level,
+                    freeze_date
                 FROM closed_cust_account
                 WHERE vid = %s
             ) all_customers
@@ -2323,7 +3907,11 @@ def api_customer_family_full(account_no):
                 "longitude": row[17],
                 "eid": row[18],
                 "phone_number": row[19],
-                "status": row[20]
+                "status": row[20],
+                "customer_rating": float(row[21]) if row[21] is not None else None,
+                "final_frozen_rating": float(row[22]) if row[22] is not None else None,
+                "final_risk_level": row[23],
+                "freeze_date": row[24].isoformat() if row[24] else None
             }
 
             ano = customer["ano"]
@@ -2341,43 +3929,40 @@ def api_customer_family_full(account_no):
                 continue
 
             customer_map[ano] = customer
+            if customer.get("cid"):
+                customer_map[str(customer["cid"])] = customer
 
-            if ano not in family_map:
-                family_map[ano] = set()
+        # Trace parent chain starting from account_no
+        visited = []
+        current = account_no
+        if current.endswith(".0"):
+            current = current[:-2]
 
-            if pano:
-
-                if pano not in family_map:
-                    family_map[pano] = set()
-
-                family_map[ano].add(pano)
-                family_map[pano].add(ano)
-
-        visited = set()
-        queue = [account_no]
-
-        while queue:
-
-            current = queue.pop(0)
-
+        while current:
             if current in visited:
-                continue
+                break # Avoid loop
 
-            visited.add(current)
+            cust = customer_map.get(current)
+            if cust:
+                visited.append(current)
+                pano = cust.get("pano", "").strip()
+                if pano.endswith(".0"):
+                    pano = pano[:-2]
 
-            for linked in family_map.get(current, set()):
-
-                if linked not in visited:
-                    queue.append(linked)
+                if pano and pano.lower() != 'nan' and pano != '':
+                    current = pano
+                else:
+                    break
+            else:
+                break
 
         customers = []
-
         for acc in visited:
-
             customer = customer_map.get(str(acc).strip())
-
             if customer:
                 customers.append(customer)
+
+        customers = format_customer_ratings_with_trends(cur, customers)
 
         customers = sorted(
             customers,
@@ -2479,9 +4064,9 @@ def print_customer(ano):
                 FROM closed_cust_account
                 WHERE vid = %s
             ) customer_data
-            WHERE CAST(ano AS TEXT) = %s
+            WHERE CAST(ano AS TEXT) = %s OR CAST(cid AS TEXT) = %s
             LIMIT 1
-        """, (vid, vid, str(ano)))
+        """, (vid, vid, str(ano), str(ano)))
 
         customer = cur.fetchone()
 
@@ -2670,6 +4255,9 @@ def close_customer_account_pg():
         # 📦 MOVE DATA (NOT COPY)
         # -------------------------------
 
+        # 0️⃣ Recalculate and freeze rating in customer table before moving
+        recalc_customer_repayment_score(cur, cid, force_recalc=True)
+
         # 1️⃣ Move customer (explicit columns to avoid mismatch)
         cur.execute("""
             INSERT INTO closed_cust_account (
@@ -2679,7 +4267,8 @@ def close_customer_account_pg():
                 type, period, created_at,
                 aadhaar_number, notes,
                 latitude, longitude, eid, status, phone_number,
-                closed_by, closed_at
+                closed_by, closed_at,
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date
             )
             SELECT
                 cid, ano, name, vid,
@@ -2688,7 +4277,8 @@ def close_customer_account_pg():
                 type, period, created_at,
                 aadhaar_number, notes,
                 latitude, longitude, eid, phone_number, %s,
-                %s, NOW() AT TIME ZONE 'Asia/Kolkata'
+                %s, NOW() AT TIME ZONE 'Asia/Kolkata',
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date
             FROM customer
             WHERE cid = %s
         """, (final_status, session.get("employee_id") or session.get("eid"), cid))
@@ -2784,6 +4374,18 @@ def retrieve_customer_account_pg():
         # 3️⃣ Delete from closed tables
         cur.execute("DELETE FROM closed_cust_payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM closed_cust_account WHERE cid = %s", (cid,))
+
+        # 4️⃣ Unfreeze rating columns in customer table
+        cur.execute("""
+            UPDATE customer
+            SET final_frozen_rating = NULL,
+                final_risk_level = NULL,
+                freeze_date = NULL
+            WHERE cid = %s
+        """, (cid,))
+
+        # 5️⃣ Recalculate rating for reactivated loan
+        recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
         audit_log(
             action="retrieve_customer_account",
@@ -3079,6 +4681,7 @@ def accept_customer(feed_id):
         )
         VALUES
         (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        RETURNING cid
     """,
     (
         data.get("ano"),
@@ -3100,6 +4703,8 @@ def accept_customer(feed_id):
         data.get("phone_number"),
         data.get("eid")
     ))
+    cid = cur.fetchone()[0]
+    recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
     cur.execute("""
         UPDATE customer_feed
@@ -3368,25 +4973,114 @@ def update_customer_pg():
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            UPDATE customer
+        # Determine if customer is active or closed
+        cur.execute("SELECT 1 FROM customer WHERE cid = %s AND vid = %s", (cid, vid))
+        is_active = cur.fetchone() is not None
+        table_name = "customer" if is_active else "closed_cust_account"
+        payment_table = "payment" if is_active else "closed_cust_payment"
+
+        # Parse inputs
+        name = data.get("name")
+        total_amount = Decimal(str(data.get("total_amount") or 0))
+        installment_amount = Decimal(str(data.get("installment_amount") or 0))
+        payment_type = data.get("type")
+        if payment_type in ["Weekly", "weekly", "W"]:
+            payment_type = "W"
+        elif payment_type in ["Monthly", "monthly", "M"]:
+            payment_type = "M"
+        else:
+            payment_type = "W"
+        
+        period_val = data.get("period")
+        period = int(period_val) if period_val is not None and str(period_val).strip() != "" else None
+        
+        phone_number = data.get("phone_number")
+        pano = data.get("pano")
+        
+        # Start date
+        start_date_str = data.get("start_date")
+        start_date = None
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str.strip(), "%d/%m/%Y").date()
+            except ValueError:
+                try:
+                    start_date = datetime.strptime(start_date_str.strip(), "%d-%m-%Y").date()
+                except ValueError:
+                    try:
+                        start_date = datetime.fromisoformat(start_date_str.strip()).date()
+                    except ValueError:
+                        pass
+                    
+        # End date
+        end_date_str = data.get("end_date")
+        end_date = None
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str.strip(), "%d/%m/%Y").date()
+            except ValueError:
+                try:
+                    end_date = datetime.strptime(end_date_str.strip(), "%d-%m-%Y").date()
+                except ValueError:
+                    try:
+                        end_date = datetime.fromisoformat(end_date_str.strip()).date()
+                    except ValueError:
+                        pass
+
+        aadhaar_number = data.get("aadhaar_number")
+        
+        eid_val = data.get("eid")
+        eid = int(eid_val) if eid_val is not None and str(eid_val).strip() != "" else None
+        
+        lat_val = data.get("latitude")
+        latitude = Decimal(str(lat_val)) if lat_val is not None and str(lat_val).strip() != "" else None
+        
+        lng_val = data.get("longitude")
+        longitude = Decimal(str(lng_val)) if lng_val is not None and str(lng_val).strip() != "" else None
+        
+        notes = data.get("notes")
+
+        # Execute UPDATE
+        cur.execute(f"""
+            UPDATE {table_name}
             SET
               name = %s,
               total_amount = %s,
-              paid_amount = %s,
-              balance_amount = %s,
-              installment_amount = %s
+              installment_amount = %s,
+              type = %s,
+              period = %s,
+              phone_number = %s,
+              pano = %s,
+              start_date = %s,
+              end_date = %s,
+              aadhaar_number = %s,
+              eid = %s,
+              latitude = %s,
+              longitude = %s,
+              notes = %s
             WHERE cid = %s
               AND vid = %s
         """, (
-            data.get("name"),
-            data.get("total_amount"),
-            data.get("paid_amount"),
-            data.get("balance_amount"),
-            data.get("installment_amount"),
-            cid,
-            vid
+            name, total_amount, installment_amount, payment_type, period,
+            phone_number, pano, start_date, end_date, aadhaar_number,
+            eid, latitude, longitude, notes, cid, vid
         ))
+
+        # Recalculate paid_amount and balance_amount
+        cur.execute(f"SELECT COALESCE(SUM(amt), 0) FROM {payment_table} WHERE cid = %s", (cid,))
+        paid_amt = Decimal(str(cur.fetchone()[0]))
+        balance_amt = total_amount - paid_amt
+
+        cur.execute(f"""
+            UPDATE {table_name}
+            SET paid_amount = %s,
+                balance_amount = %s
+            WHERE cid = %s
+              AND vid = %s
+        """, (paid_amt, balance_amt, cid, vid))
+
+        # Force recalculation of repayment score and streaks
+        recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
         conn.commit()
         return jsonify(success=True)
@@ -3646,6 +5340,411 @@ def village_page():
         total_villages=len(data)
     )
 
+@app.route("/api/village/behavioral_analytics/<int:vid>")
+@login_required
+def api_village_behavioral_analytics(vid):
+    user_level = session.get("level")
+    allowed_villages = session.get("villages", [])
+    if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
+        return jsonify(success=False, error="Unauthorized village access"), 403
+
+    import pytz
+    KOLKATA = pytz.timezone('Asia/Kolkata')
+    today = datetime.now(KOLKATA).date()
+    
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Get village details
+        cur.execute("SELECT village_name, village_code FROM village WHERE vid = %s", (vid,))
+        v_row = cur.fetchone()
+        if not v_row:
+            return jsonify(success=False, error="Village not found"), 404
+        v_name, v_code = v_row
+
+        # Get all customers for the village
+        cur.execute("""
+            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
+            FROM (
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
+                FROM customer
+                UNION ALL
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                FROM closed_cust_account
+            ) all_cust
+            WHERE vid = %s
+        """, (vid,))
+        cust_rows = cur.fetchall()
+        if not cust_rows:
+            return jsonify(success=True, data={
+                "village_name": v_name,
+                "village_code": v_code,
+                "empty": True
+            })
+
+        cids = [r[0] for r in cust_rows]
+        
+        # Get all payments for these customers
+        cur.execute("""
+            SELECT cid, amt, payment_date FROM (
+                SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
+                UNION ALL
+                SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
+            ) all_pmts
+            ORDER BY payment_date
+        """, (cids, cids))
+        pmt_rows = cur.fetchall()
+        
+        payments_by_cid = {cid: [] for cid in cids}
+        for cid, amt, p_date in pmt_rows:
+            payments_by_cid[cid].append({"amt": amt, "payment_date": p_date})
+
+        # Precompute states for today and 5 weeks ago (6 weekly data points)
+        dates = [today - timedelta(days=7 * i) for i in range(5, -1, -1)]
+        
+        historical_ratings = {i: {} for i in range(6)}
+        historical_status = {i: {} for i in range(6)}
+        historical_missed = {i: {} for i in range(6)}
+        
+        cust_details = {}
+        
+        for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status in cust_rows:
+            cust_payments = payments_by_cid.get(cid, [])
+            
+            # Compute today's values
+            score_t, risk_t, pen_t, wk_details_t = calculate_customer_rating_details(
+                start_date, end_date, installment_amount, period, cust_payments, balance_amount, today=today
+            )
+            beh_t = calculate_behavioral_analytics(
+                start_date, end_date, installment_amount, period, cust_payments, balance_amount, wk_details_t, today=today
+            )
+            
+            # Find last payment date before or equal to today
+            last_pay_date = None
+            for p in cust_payments:
+                p_dt = p["payment_date"]
+                if isinstance(p_dt, datetime):
+                    p_dt = p_dt.date()
+                if p_dt <= today:
+                    if not last_pay_date or p_dt > last_pay_date:
+                        last_pay_date = p_dt
+            last_payment_date_str = last_pay_date.strftime("%d/%m/%Y") if last_pay_date else "-"
+            
+            consec_missed_count = 0
+            for wk in reversed(wk_details_t):
+                if wk["due_date"] <= today.isoformat():
+                    if wk["status"] in ["MISSED", "OVERDUE"] and wk["allocated"] == 0:
+                        consec_missed_count += 1
+                    else:
+                        break
+            
+            cust_details[cid] = {
+                "cid": cid,
+                "name": name,
+                "ano": ano,
+                "total_amount": float(total_amount or 0),
+                "paid_amount": float(paid_amount or 0),
+                "balance_amount": float(balance_amount or 0),
+                "rating": score_t,
+                "status": beh_t["status"],
+                "last_payment_date": last_payment_date_str,
+                "missed_cycles": consec_missed_count,
+                "predicted_next_risk": beh_t["predicted_next_risk"],
+                "stability_score": beh_t["stability"]["score"],
+                "stability_label": beh_t["stability"]["label"]
+            }
+            
+            # Compute historical values
+            for idx, dt in enumerate(dates):
+                sub_payments = [p for p in cust_payments if (p["payment_date"].date() if isinstance(p["payment_date"], datetime) else p["payment_date"]) <= dt]
+                
+                start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
+                if start_dt > dt:
+                    historical_ratings[idx][cid] = 100.0
+                    historical_status[idx][cid] = "OnTrack"
+                    historical_missed[idx][cid] = 0
+                    continue
+                
+                score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
+                    start_date, end_date, installment_amount, period, sub_payments, balance_amount, today=dt
+                )
+                beh_h = calculate_behavioral_analytics(
+                    start_date, end_date, installment_amount, period, sub_payments, balance_amount, wk_details_h, today=dt
+                )
+                
+                historical_ratings[idx][cid] = score_h
+                historical_status[idx][cid] = beh_h["status"]
+                historical_missed[idx][cid] = beh_h["discipline"]["missed"]
+
+        health_trend = []
+        for idx, dt in enumerate(dates):
+            ratings = list(historical_ratings[idx].values())
+            statuses = list(historical_status[idx].values())
+            
+            avg_rating = sum(ratings) / len(ratings) if ratings else 100.0
+            
+            overdue_count = sum(1 for s in statuses if s in ["Overdue", "To Be Defaulted"])
+            overdue_pct = (overdue_count / len(statuses) * 100.0) if statuses else 0.0
+            
+            high_risk_count = sum(1 for r in ratings if r < 40)
+            high_risk_pct = (high_risk_count / len(ratings) * 100.0) if ratings else 0.0
+            
+            stable_or_improving_count = 0
+            for cid in historical_ratings[idx].keys():
+                score_now = historical_ratings[idx][cid]
+                score_prev = historical_ratings[idx - 1].get(cid, score_now) if idx > 0 else score_now
+                if score_now >= score_prev:
+                    stable_or_improving_count += 1
+            stable_or_improving_pct = (stable_or_improving_count / len(ratings) * 100.0) if ratings else 100.0
+            
+            health_score = avg_rating * 0.6 + stable_or_improving_pct * 0.4 - (overdue_pct * 0.3) - (high_risk_pct * 0.3)
+            health_score = max(0.0, min(100.0, health_score))
+            
+            health_trend.append({
+                "date": dt.strftime("%d/%m"),
+                "health_score": round(health_score, 1),
+                "avg_rating": round(avg_rating, 1),
+                "overdue_pct": round(overdue_pct, 1)
+            })
+
+        current_health = health_trend[-1]["health_score"]
+        last_week_health = health_trend[-2]["health_score"]
+        trend_val = current_health - last_week_health
+        
+        if trend_val > 0:
+            trend_text = f"↑ {trend_val:.1f} points"
+        elif trend_val < 0:
+            trend_text = f"↓ {abs(trend_val):.1f} points"
+        else:
+            trend_text = "→ Stable"
+            
+        health_status = "Stable"
+        if current_health >= 80:
+            health_status = "Excellent"
+        elif current_health >= 70:
+            health_status = "Stable"
+        elif current_health >= 55:
+            health_status = "Warning"
+        else:
+            health_status = "Critical"
+            
+        predicted_risk = "Low"
+        if current_health >= 85:
+            predicted_risk = "Low"
+        elif current_health >= 70:
+            predicted_risk = "Medium"
+        elif current_health >= 55:
+            predicted_risk = "High"
+        else:
+            predicted_risk = "Critical"
+
+        risk_dist = {"Excellent": 0, "Good": 0, "LowRisk": 0, "HighRisk": 0}
+        risk_dist_last_week = {"Excellent": 0, "Good": 0, "LowRisk": 0, "HighRisk": 0}
+        
+        for cid in cust_details.keys():
+            score_now = historical_ratings[5][cid]
+            score_prev = historical_ratings[4].get(cid, score_now)
+            
+            if score_now > 80: risk_dist["Excellent"] += 1
+            elif score_now >= 60: risk_dist["Good"] += 1
+            elif score_now >= 40: risk_dist["LowRisk"] += 1
+            else: risk_dist["HighRisk"] += 1
+            
+            if score_prev > 80: risk_dist_last_week["Excellent"] += 1
+            elif score_prev >= 60: risk_dist_last_week["Good"] += 1
+            elif score_prev >= 40: risk_dist_last_week["LowRisk"] += 1
+            else: risk_dist_last_week["HighRisk"] += 1
+            
+        total_cust = len(cust_details)
+        risk_dist_payload = []
+        for cat in ["Excellent", "Good", "LowRisk", "HighRisk"]:
+            cnt = risk_dist[cat]
+            prev_cnt = risk_dist_last_week[cat]
+            diff = cnt - prev_cnt
+            pct = (cnt / total_cust * 100.0) if total_cust else 0.0
+            
+            risk_dist_payload.append({
+                "category": cat,
+                "label": "Low Risk" if cat == "LowRisk" else ("High Risk" if cat == "HighRisk" else cat),
+                "count": cnt,
+                "percentage": round(pct, 1),
+                "change": f"+{diff}" if diff > 0 else (str(diff) if diff < 0 else "0")
+            })
+
+        transitions = {
+            "Excellent_Good": [],
+            "Good_LowRisk": [],
+            "LowRisk_HighRisk": [],
+            "Newly_Overdue": [],
+            "Recovered": []
+        }
+        
+        for cid, details in cust_details.items():
+            score_now = historical_ratings[5][cid]
+            score_prev = historical_ratings[4].get(cid, score_now)
+            
+            status_now = historical_status[5][cid]
+            status_prev = historical_status[4].get(cid, status_now)
+            
+            cat_now = "Excellent" if score_now > 80 else ("Good" if score_now >= 60 else ("LowRisk" if score_now >= 40 else "HighRisk"))
+            cat_prev = "Excellent" if score_prev > 80 else ("Good" if score_prev >= 60 else ("LowRisk" if score_prev >= 40 else "HighRisk"))
+            
+            cust_payload = {
+                "ano": details["ano"],
+                "name": details["name"],
+                "total_amount": details["total_amount"],
+                "paid_amount": details["paid_amount"],
+                "balance_amount": details["balance_amount"],
+                "rating": details["rating"],
+                "last_payment_date": details["last_payment_date"],
+                "missed_cycles": details["missed_cycles"],
+                "status": details["status"]
+            }
+            
+            if cat_prev == "Excellent" and cat_now == "Good":
+                transitions["Excellent_Good"].append(cust_payload)
+            elif cat_prev == "Good" and cat_now == "LowRisk":
+                transitions["Good_LowRisk"].append(cust_payload)
+            elif cat_prev == "LowRisk" and cat_now == "HighRisk":
+                transitions["LowRisk_HighRisk"].append(cust_payload)
+                
+            was_overdue = status_prev in ["Overdue", "To Be Defaulted"]
+            is_overdue = status_now in ["Overdue", "To Be Defaulted"]
+            
+            if not was_overdue and is_overdue:
+                transitions["Newly_Overdue"].append(cust_payload)
+            elif was_overdue and not is_overdue:
+                transitions["Recovered"].append(cust_payload)
+
+        stress_alerts = []
+        weekly_payments = {1: Decimal(0), 2: Decimal(0), 3: Decimal(0)}
+        for p_list in payments_by_cid.values():
+            for p in p_list:
+                p_dt = p["payment_date"].date() if isinstance(p["payment_date"], datetime) else p["payment_date"]
+                if today - timedelta(days=7) < p_dt <= today:
+                    weekly_payments[1] += Decimal(str(p["amt"]))
+                elif today - timedelta(days=14) < p_dt <= today - timedelta(days=7):
+                    weekly_payments[2] += Decimal(str(p["amt"]))
+                elif today - timedelta(days=21) < p_dt <= today - timedelta(days=14):
+                    weekly_payments[3] += Decimal(str(p["amt"]))
+                    
+        if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
+            stress_alerts.append({
+                "type": "Collection Slowdown",
+                "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (₹{weekly_payments[3]:,.0f} → ₹{weekly_payments[2]:,.0f} → ₹{weekly_payments[1]:,.0f}).",
+                "severity": "High"
+            })
+            
+        partial_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] == "PARTIAL")
+        partial_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid, "OnTrack") == "PARTIAL")
+        if partial_today > partial_last_week:
+            pct_inc = ((partial_today - partial_last_week) / partial_last_week * 100.0) if partial_last_week > 0 else 100.0
+            if pct_inc >= 15.0:
+                stress_alerts.append({
+                    "type": "Quality Decline",
+                    "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
+                    "severity": "Medium"
+                })
+                
+        overdue_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] in ["Overdue", "To Be Defaulted"])
+        overdue_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid) in ["Overdue", "To Be Defaulted"])
+        if overdue_today > overdue_last_week:
+            stress_alerts.append({
+                "type": "Increasing Delay",
+                "message": f"Active overdue/delayed cases increased from {overdue_last_week} to {overdue_today} this week.",
+                "severity": "High"
+            })
+            
+        avg_rating_today = health_trend[-1]["avg_rating"]
+        avg_rating_3_weeks_ago = health_trend[-4]["avg_rating"]
+        if avg_rating_today < avg_rating_3_weeks_ago - 5.0:
+            stress_alerts.append({
+                "type": "Portfolio Stress",
+                "message": f"Deteriorating portfolio: Village average rating dropped from {avg_rating_3_weeks_ago:.1f} to {avg_rating_today:.1f} over the last 3 weeks.",
+                "severity": "Critical"
+            })
+
+        critical_attention = {
+            "Missed4Plus": [],
+            "RapidCollapse": [],
+            "SevereOverdue": [],
+            "RatingBelow40": []
+        }
+        
+        for cid, details in cust_details.items():
+            score_now = historical_ratings[5][cid]
+            score_2_w_ago = historical_ratings[3].get(cid, score_now)
+            
+            cust_payload = {
+                "ano": details["ano"],
+                "name": details["name"],
+                "rating": details["rating"],
+                "balance_amount": details["balance_amount"],
+                "missed_cycles": details["missed_cycles"],
+                "status": details["status"]
+            }
+            
+            if details["missed_cycles"] >= 4:
+                critical_attention["Missed4Plus"].append(cust_payload)
+            if score_now < score_2_w_ago - 15.0:
+                critical_attention["RapidCollapse"].append(cust_payload)
+            if details["status"] == "To Be Defaulted" or (details["status"] == "Overdue" and details["rating"] < 50):
+                critical_attention["SevereOverdue"].append(cust_payload)
+            if details["rating"] < 40:
+                critical_attention["RatingBelow40"].append(cust_payload)
+
+        payload = {
+            "village_name": v_name,
+            "village_code": v_code,
+            "empty": False,
+            "health": {
+                "score": round(current_health, 1),
+                "status": health_status,
+                "predicted_risk": predicted_risk,
+                "trend_text": trend_text,
+                "trend_val": round(trend_val, 1)
+            },
+            "health_trend": health_trend,
+            "risk_distribution": risk_dist_payload,
+            "transitions": {k: v for k, v in transitions.items()},
+            "stress_alerts": stress_alerts,
+            "critical_attention": {
+                "Missed4Plus": {
+                    "label": "4+ Consecutive Missed Cycles",
+                    "urgency": "Critical",
+                    "count": len(critical_attention["Missed4Plus"]),
+                    "list": critical_attention["Missed4Plus"]
+                },
+                "RapidCollapse": {
+                    "label": "Rapidly Collapsing Ratings (-15 pts)",
+                    "urgency": "High",
+                    "count": len(critical_attention["RapidCollapse"]),
+                    "list": critical_attention["RapidCollapse"]
+                },
+                "SevereOverdue": {
+                    "label": "Severe Overdue Behavior",
+                    "urgency": "Critical",
+                    "count": len(critical_attention["SevereOverdue"]),
+                    "list": critical_attention["SevereOverdue"]
+                },
+                "RatingBelow40": {
+                    "label": "Customer Ratings Below 40",
+                    "urgency": "Critical",
+                    "count": len(critical_attention["RatingBelow40"]),
+                    "list": critical_attention["RatingBelow40"]
+                }
+            }
+        }
+        
+        return jsonify(success=True, data=payload)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route("/api/village/toggle_status", methods=["POST"])
 @login_required
 def toggle_village_status():
@@ -3886,6 +5985,7 @@ def landing():
     session.pop("vid", None)
     session.pop("eid", None)
     session.pop("village_name", None)
+    session.pop("village_code", None)
     session.pop("employee_name", None)
     return render_template("landing.html")
 
@@ -4346,7 +6446,7 @@ def dashboard():
             sum_pamt=0,
             sum_bamt=0,
         )
-    print("DEBUG DASHBOARD SESSION → vid:", session.get("vid"))
+    print("DEBUG DASHBOARD SESSION -> vid:", session.get("vid"))
     totals = {
         "total_customers": 0,
         "sum_amt": 0,
@@ -4435,4 +6535,4 @@ def b64encode_filter(data):
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)

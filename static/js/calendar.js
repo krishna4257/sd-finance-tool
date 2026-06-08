@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentMonth = new Date().getMonth();
   let currentYear = new Date().getFullYear();
   let activeInputElement = null;
+  let currentSelectedDate = null;
 
   function renderCalendar(month, year) {
     calendarGrid.innerHTML = '';
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       const dayEl = document.createElement('div');
-      dayEl.classList.add('calendar-day');
+      dayEl.classList.add('day-cell');
       dayEl.textContent = i;
 
       const today = new Date();
@@ -44,10 +45,19 @@ document.addEventListener('DOMContentLoaded', () => {
         dayEl.classList.add('today');
       }
 
+      if (currentSelectedDate && i === currentSelectedDate.getDate() && month === currentSelectedDate.getMonth() && year === currentSelectedDate.getFullYear()) {
+        dayEl.classList.add('selected');
+      }
+
       dayEl.addEventListener('click', () => {
         if (activeInputElement) {
           const selectedDate = new Date(year, month, i);
           activeInputElement.value = formatDateToDDMMYYYY(selectedDate);
+          
+          // Dispatch input/change events to trigger any reactive calculations
+          activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
+          activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
+          
           calendar.style.display = 'none';
           activeInputElement = null;
         }
@@ -64,10 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
     calendar.style.left = `${inputRect.left + window.scrollX}px`;
 
     // Try to set calendar to the input's current date
-    const dateValue = parseDDMMYYYY(inputElement.value);
-    if (dateValue) {
-        currentMonth = dateValue.getMonth();
-        currentYear = dateValue.getFullYear();
+    currentSelectedDate = parseDDMMYYYY(inputElement.value);
+    if (currentSelectedDate) {
+        currentMonth = currentSelectedDate.getMonth();
+        currentYear = currentSelectedDate.getFullYear();
     } else {
         const today = new Date();
         currentMonth = today.getMonth();
@@ -147,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Create and append the icon
     const icon = document.createElement('span');
-    icon.innerHTML = '📆';
+    icon.innerHTML = '<i class="far fa-calendar-alt"></i>';
     icon.classList.add('calendar-icon');
     wrapper.appendChild(icon);
 

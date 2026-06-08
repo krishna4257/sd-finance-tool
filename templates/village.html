@@ -1,20 +1,20 @@
 {% extends "dashboard.html" %}
 {% block content %}
 
-<h2 class="page-title">🏘️ Village Table</h2>
-
+<h2 class="page-title">Village Table</h2>
+ 
 <div class="raised-box">
   <div class="control-row">
     <label class="search-label">
       <input type="text" id="searchBox" placeholder="Search village name or code...">
     </label>
-
-    <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
-    <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
-    <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
-    <button id="tableViewBtn" class="neumorphic-btn">🧩 Table View</button>
+ 
+    <button onclick="applySearch()" class="neumorphic-btn">Find</button>
+    <button onclick="resetSearch()" class="neumorphic-btn">Reset</button>
+    <button onclick="printSelected()" class="neumorphic-btn">Print</button>
+    <button id="tableViewBtn" class="neumorphic-btn">Table View</button>
   </div>
-
+ 
   <div class="summary-row">
     <div class="summary-item">
       <strong>Total Villages:</strong>
@@ -22,7 +22,7 @@
     </div>
   </div>
 </div>
-
+ 
 <div class="raised-box">
   <div class="customer-table-wrapper app-table-wrapper">
     <table id="villageTable" class="customer-table">
@@ -35,12 +35,12 @@
           <th>Actions</th>
         </tr>
       </thead>
-
+ 
       <tbody id="villageTableBody">
         {% for row in data %}
         <tr class="table-row {% if row['status'] == 'inactive' %}inactive-row{% endif %}">
           <td><input type="checkbox" /></td>
-
+ 
           {% for col in headers %}
             {% if col == 'status' %}
               <td class="table-cell">
@@ -50,14 +50,18 @@
               <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
             {% endif %}
           {% endfor %}
-
+ 
           <td class="table-cell">
-            <div class="action-buttons">
+            <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
+              <button class="neumorphic-btn ultrasmall" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.35);"
+                      onclick="openVillageDashboard('{{ row.vid }}')">
+                Dashboard
+              </button>
               <button class="neumorphic-btn ultrasmall edit-btn"
                       onclick="openEditModal(this)">
                 Edit
               </button>
-
+ 
               {% if row['status'] == 'active' %}
                 <button class="neumorphic-btn ultrasmall danger-btn"
                         onclick="toggleVillageStatus('{{ row.vid }}', this)">
@@ -80,44 +84,44 @@
 <!-- Edit Village Modal -->
 <div id="editVillageModal" class="column-modal hidden">
   <div class="column-modal-content">
-    <h3>✏️ Edit Village</h3>
-
+    <h3>Edit Village</h3>
+ 
     <div class="form-group">
       <label>VID</label>
       <input type="text" id="edit_vid" readonly>
     </div>
-
+ 
     <div class="form-group">
       <label>Village Code</label>
       <input type="text" id="edit_village_code">
     </div>
-
+ 
     <div class="form-group">
       <label>Village Name</label>
       <input type="text" id="edit_village_name">
     </div>
-
+ 
     <div class="form-group">
       <label>Employee 1</label>
       <select id="edit_emp1"></select>
     </div>
-
+ 
     <div class="form-group">
       <label>Employee 2</label>
       <select id="edit_emp2"></select>
     </div>
-
+ 
     <div class="modal-actions">
       <button class="neumorphic-btn small" onclick="saveVillageEdit()">Save</button>
       <button class="neumorphic-btn small" onclick="closeEditModal()">Cancel</button>
     </div>
   </div>
 </div>
-
+ 
 <!-- Column Modal -->
 <div id="columnModal" class="column-modal hidden">
   <div class="column-modal-content">
-    <h3>📋 Select Columns</h3>
+    <h3>Select Columns</h3>
     <div id="columnCheckboxList" class="column-list"></div>
     <div class="modal-actions">
       <button id="closeColumnModal" class="neumorphic-btn small">
@@ -130,5 +134,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/village.js') }}"></script>
+<script src="{{ url_for('static', filename='js/village.js') }}?v={{ range(1, 10000) | random }}"></script>
 {% endblock %}

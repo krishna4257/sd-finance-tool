@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-
+  <!-- Overview Summary Metrics Card Row -->
   <div class="summary-row">
     <div class="summary-item">
       <strong>Total Customers:</strong> <span id="totalCustomers">{{ total_customers }}</span>
@@ -16,4 +16,1232 @@
       <strong>Total Balance Amt:</strong> <span id="sumBamt" data-money>{{ sum_bamt }}</span>
     </div>
   </div>
+
+  {% if session.get("vid") %}
+    <!-- ======================================================== -->
+    <!-- VILLAGE BEHAVIORAL INTELLIGENCE DASHBOARD LAYER -->
+    <!-- ======================================================== -->
+    <div class="village-dashboard-container" style="display: flex; flex-direction: column; gap: 24px; margin-top: 24px;">
+      
+      <!-- TITLEBAR -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 8px;">
+        <h2 style="font-size: 1.2rem; font-weight: 700; margin: 0; color: #1a1a2e; display: flex; align-items: center; gap: 8px;">
+          <span>Village Intelligence: <span id="vpopNameTitle" style="color: #1a4d2e; font-weight: 700;">-</span> (<span id="vpopCodeTitle" style="color: #6b7280;">-</span>)</span>
+        </h2>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button id="vpopRecalcBtn" class="pop-recalc-btn" title="Refresh Dashboard Data" onclick="refreshDashboardData()"><i class='fas fa-sync-alt'></i></button>
+          <span id="vpopEvalStatus" class="status-badge status-live">LIVE PORTFOLIO INDEX</span>
+        </div>
+      </div>
+
+      <!-- LOADING INDICATOR -->
+      <div id="vpopLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: #f9fafb; border-radius: 18px; border: 1px dashed #e5e7eb;">
+        <div class="pop-recalc-btn spinning" style="width: 50px !important; height: 50px !important; font-size: 1.5rem;"><i class='fas fa-sync-alt'></i></div>
+        <span style="color: #6b7280; font-size: 0.95rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;">Analyzing Village Portfolio Data...</span>
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div id="vpopEmpty" style="display: none; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: #f9fafb; border-radius: 18px; border: 1px dashed #e5e7eb;">
+        <i class='fas fa-inbox' style='font-size:3rem;color:#9ca3af;'></i>
+        <span style="color: #6b7280; font-size: 1rem; font-weight: 600; text-transform: uppercase;">No active customers found in this village.</span>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div id="vpopContent" style="display: none; flex-direction: column; gap: 24px;">
+        
+        <!-- ROW 1: HEALTH ENGINE & CHART -->
+        <div style="display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch;">
+          
+          <!-- Village Health Score Card -->
+          <div class="card-glass" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; border-color: #e5e7eb;">
+            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Village Health Engine</span>
+              <span id="vpopHealthStatus" class="status-badge" style="font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: 10px;">STABLE</span>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin: 10px 0;">
+              <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 100px; height: 100px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 20px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
+                <span id="vpopHealthScore" style="font-size: 2.3rem; font-weight: 900; color: #1a4d2e; text-shadow: none;">-</span>
+              </div>
+              <div style="flex: 1; margin-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; flex-direction: column;">
+                  <span style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Predicted Risk</span>
+                  <span id="vpopPredictedRisk" style="font-size: 1rem; font-weight: 800; text-transform: uppercase; color: #fbbf24;">-</span>
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                  <span style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Weekly Trend</span>
+                  <span id="vpopWeeklyTrend" style="font-size: 1rem; font-weight: 800; color: #f87171;">-</span>
+                </div>
+              </div>
+            </div>
+            
+            <div style="font-size: 0.725rem; color: #9ca3af; line-height: 1.4; margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+              * Index computed dynamically based on average ratings, overdue concentrations, and transition dynamics.
+            </div>
+          </div>
+          
+          <!-- Health Trend Graph Card -->
+          <div class="card-glass" style="padding: 20px; display: flex; flex-direction: column; border-color: #e5e7eb; height: 100%;">
+            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em;">Portfolio Quality Trend Graph</span>
+            </div>
+            <div style="flex: 1; position: relative; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+              <canvas id="vHealthChart" style="width: 100%; max-height: 160px;"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 2: RISK DISTRIBUTION PANEL -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Village Risk Distribution Panel</h3>
+          <div id="vpopRiskDistGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+            <!-- Excellent Card -->
+            <div class="card-glass" style="padding: 16px; border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.02); display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Excellent (>80)</span>
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <span id="vRiskCount_Excellent" style="font-size: 1.8rem; font-weight: 800; color: #10b981;">0</span>
+                <span id="vRiskPct_Excellent" style="font-size: 0.85rem; color: #a7f3d0; font-weight: 700;">0%</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
+                Trend: <span id="vRiskChange_Excellent" style="font-weight: 700;">0</span> from last week
+              </div>
+            </div>
+            <!-- Good Card -->
+            <div class="card-glass" style="padding: 16px; border-left: 4px solid #84cc16; background: rgba(132, 204, 22, 0.02); display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Good (60-79)</span>
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <span id="vRiskCount_Good" style="font-size: 1.8rem; font-weight: 800; color: #a3e635;">0</span>
+                <span id="vRiskPct_Good" style="font-size: 0.85rem; color: #d9f99d; font-weight: 700;">0%</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
+                Trend: <span id="vRiskChange_Good" style="font-weight: 700;">0</span> from last week
+              </div>
+            </div>
+            <!-- Low Risk Card -->
+            <div class="card-glass" style="padding: 16px; border-left: 4px solid #eab308; background: rgba(234, 179, 8, 0.02); display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Low Risk (40-59)</span>
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <span id="vRiskCount_LowRisk" style="font-size: 1.8rem; font-weight: 800; color: #fbbf24;">0</span>
+                <span id="vRiskPct_LowRisk" style="font-size: 0.85rem; color: #fef08a; font-weight: 700;">0%</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
+                Trend: <span id="vRiskChange_LowRisk" style="font-weight: 700;">0</span> from last week
+              </div>
+            </div>
+            <!-- High Risk Card -->
+            <div class="card-glass" style="padding: 16px; border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.02); display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">High Risk (&lt;40)</span>
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <span id="vRiskCount_HighRisk" style="font-size: 1.8rem; font-weight: 800; color: #f87171;">0</span>
+                <span id="vRiskPct_HighRisk" style="font-size: 0.85rem; color: #fecaca; font-weight: 700;">0%</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
+                Trend: <span id="vRiskChange_HighRisk" style="font-weight: 700;">0</span> from last week
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 3: MOVEMENT ENGINE & TREND/STRESS ENGINE -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+          
+          <!-- Movement Engine -->
+          <div class="card-glass" style="padding: 20px; border-color: #e5e7eb; display: flex; flex-direction: column; gap: 14px;">
+            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 6px;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Village Movement Engine</span>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Exc -> Good -->
+              <div class="v-movement-row card-glass" onclick="toggleMovementList('Excellent_Good')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <i class='fas fa-chart-line' style="font-size: 1.1rem;"></i>
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #fbcfe8;">Excellent → Good</span>
+                </div>
+                <span id="vMoveCount_Excellent_Good" class="badge-count" style="font-weight: 700; background: rgba(251, 207, 232, 0.15); color: #fbcfe8;">0</span>
+              </div>
+              <div id="vMoveListContainer_Excellent_Good" class="v-drilldown-wrapper" style="display: none;"></div>
+
+              <!-- Good -> LowRisk -->
+              <div class="v-movement-row card-glass" onclick="toggleMovementList('Good_LowRisk')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <i class='fas fa-exclamation-triangle' style="font-size: 1.1rem;"></i>
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #fef08a;">Good → Low Risk</span>
+                </div>
+                <span id="vMoveCount_Good_LowRisk" class="badge-count" style="font-weight: 700; background: rgba(254, 240, 138, 0.15); color: #fef08a;">0</span>
+              </div>
+              <div id="vMoveListContainer_Good_LowRisk" class="v-drilldown-wrapper" style="display: none;"></div>
+
+              <!-- LowRisk -> HighRisk -->
+              <div class="v-movement-row card-glass" onclick="toggleMovementList('LowRisk_HighRisk')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <i class='fas fa-exclamation-circle' style="font-size: 1.1rem;"></i>
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #fecaca;">Low Risk → High Risk</span>
+                </div>
+                <span id="vMoveCount_LowRisk_HighRisk" class="badge-count" style="font-weight: 700; background: rgba(254, 202, 202, 0.15); color: #fecaca;">0</span>
+              </div>
+              <div id="vMoveListContainer_LowRisk_HighRisk" class="v-drilldown-wrapper" style="display: none;"></div>
+
+              <!-- Newly Overdue -->
+              <div class="v-movement-row card-glass" onclick="toggleMovementList('Newly_Overdue')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: rgba(239, 68, 68, 0.02);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <i class='fas fa-bolt' style="font-size: 1.1rem;"></i>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #f87171;">Newly Overdue (This Week)</span>
+                </div>
+                <span id="vMoveCount_Newly_Overdue" class="badge-count" style="font-weight: 800; background: rgba(239, 68, 68, 0.25); color: #f87171;">0</span>
+              </div>
+              <div id="vMoveListContainer_Newly_Overdue" class="v-drilldown-wrapper" style="display: none;"></div>
+
+              <!-- Recovered -->
+              <div class="v-movement-row card-glass" onclick="toggleMovementList('Recovered')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: rgba(16, 185, 129, 0.02);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <i class='fas fa-seedling' style="font-size: 1.1rem;"></i>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #34d399;">Recovered Customers</span>
+                </div>
+                <span id="vMoveCount_Recovered" class="badge-count" style="font-weight: 800; background: rgba(16, 185, 129, 0.25); color: #34d399;">0</span>
+              </div>
+              <div id="vMoveListContainer_Recovered" class="v-drilldown-wrapper" style="display: none;"></div>
+            </div>
+          </div>
+          
+          <!-- Stress Engine Alerts -->
+          <div class="card-glass" style="padding: 20px; border-color: #e5e7eb; display: flex; flex-direction: column; gap: 14px; height: 100%;">
+            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 6px;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em;">Village Trend & Stress Alerts</span>
+            </div>
+            
+            <div id="vpopStressContainer" style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 380px;">
+              <!-- Alerts populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 4: CRITICAL ATTENTION ENGINE -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Critical Attention Engine</h3>
+          <div id="vpopAttentionContainer" style="display: flex; flex-direction: column; gap: 14px;">
+            <!-- Categories populated dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- CUSTOMER DASHBOARD POPUP (GLASSMORPHISM PRESET) -->
+    <!-- ======================================================== -->
+    <div id="customerDetailPopup" class="customer-popup-backdrop">
+      <div class="customer-popup-content">
+        
+        <!-- Header -->
+        <div class="customer-popup-header">
+          <div class="header-left">
+            <span class="user-avatar-icon"><i class='fas fa-user'></i></span>
+            <h2>Customer Dashboard: <span id="popAnoTitle"></span></h2>
+            <span id="popStatusBadge" class="status-badge">Active</span>
+          </div>
+          <button class="popup-close-btn" onclick="closeCustomerPopup()">&times;</button>
+        </div>
+
+        <!-- Scrollable Grid Body -->
+        <div class="customer-popup-body popup-grid-body">
+          
+          <!-- COLUMN 1: Customer Details -->
+          <div class="popup-col card-glass" id="popColDetails">
+            <h3 class="col-title">Profile & Account</h3>
+            <div class="profile-avatar-sec">
+              <div class="avatar-circle">
+                <span id="popAvatarInitial">A</span>
+              </div>
+              <h4 id="popProfileName">Customer Name</h4>
+              <p class="profile-subtext">CID: <span id="popCid"></span></p>
+            </div>
+
+            <div class="details-form-grid">
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="popInputName" class="glass-input" placeholder="Enter Full Name">
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Total Loan (₹)</label>
+                  <input type="text" id="popInputTotalAmount" class="glass-input" placeholder="Enter Total Amount">
+                </div>
+                <div class="form-group">
+                  <label>Installment (₹)</label>
+                  <input type="text" id="popInputInstallment" class="glass-input" placeholder="Enter Installment">
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Paid Amount</label>
+                  <span id="popPaidAmount" class="read-only-badge" data-money>0.00</span>
+                </div>
+                <div class="form-group">
+                  <label>Balance Amount</label>
+                  <span id="popBalanceAmount" class="read-only-badge highlight-balance" data-money>0.00</span>
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Type</label>
+                  <select id="popInputType" class="glass-input">
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Period</label>
+                  <input type="number" id="popInputPeriod" class="glass-input" placeholder="Enter Period">
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Phone Number</label>
+                  <input type="text" id="popInputPhone" class="glass-input" placeholder="Phone Number">
+                </div>
+                <div class="form-group">
+                  <label>Parent Account</label>
+                  <input type="text" id="popInputPano" class="glass-input" placeholder="Pano">
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Start Date</label>
+                  <input type="text" id="popInputStartDate" class="glass-input" placeholder="dd/mm/yyyy">
+                </div>
+                <div class="form-group">
+                  <label>End Date</label>
+                  <input type="text" id="popInputEndDate" class="glass-input" placeholder="dd/mm/yyyy">
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Aadhaar Number</label>
+                  <input type="text" id="popInputAadhaar" class="glass-input" placeholder="Aadhaar">
+                </div>
+                <div class="form-group">
+                  <label>Collector EID</label>
+                  <input type="number" id="popInputEid" class="glass-input" placeholder="EID">
+                </div>
+              </div>
+
+              <div class="form-group-row">
+                <div class="form-group">
+                  <label>Latitude</label>
+                  <input type="text" id="popInputLatitude" class="glass-input" placeholder="Latitude">
+                </div>
+                <div class="form-group">
+                  <label>Longitude</label>
+                  <input type="text" id="popInputLongitude" class="glass-input" placeholder="Longitude">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Notes</label>
+                <textarea id="popInputNotes" class="glass-input" rows="2" placeholder="Enter notes..." style="resize: vertical; font-family: inherit;"></textarea>
+              </div>
+            </div>
+
+            <div class="details-actions">
+              <button id="popCloseAccountBtn" class="neumorphic-btn small danger-btn">Close Account</button>
+              <button id="popSaveDetailsBtn" class="neumorphic-btn small primary-save-btn glow-cyan" style="display: none;">Save Details</button>
+            </div>
+          </div>
+
+          <!-- COLUMN 2: Payments History -->
+          <div class="popup-col card-glass" id="popColPayments">
+            <h3 class="col-title">Add & View Payments</h3>
+            
+            <form id="popAddPaymentForm" class="subcard-glass form-grid-compact no-loader" onsubmit="event.preventDefault();">
+              <div class="form-group">
+                <label>Payment Date</label>
+                <input type="text" id="popNewPDT" class="glass-input compact" placeholder="dd/mm/yyyy" required>
+              </div>
+              <div class="form-group">
+                <label>Amount (₹)</label>
+                <input type="number" id="popNewAMT" step="0.01" class="glass-input compact" placeholder="0.00" required>
+              </div>
+              <button type="button" id="popAddPaymentBtn" class="neumorphic-btn small flex-center" style="width: 35px; min-width: 35px; padding: 0;"><i class='fas fa-plus'></i></button>
+            </form>
+
+            <div class="table-card-container">
+              <div class="popup-table-wrapper">
+                <table id="popPaymentTable" class="popup-mini-table no-datatable">
+                  <thead>
+                    <tr>
+                      <th>A.no</th>
+                      <th>Date</th>
+                      <th>Amt</th>
+                      <th>Cumulative</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="popPaymentTableBody">
+                    <!-- Rendered dynamically -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="mini-table-footer">
+                <div>Entries: <span id="popPaymentCount" class="badge-count">0</span></div>
+                <div>Total: <span id="popPaymentTotalAmt" class="badge-total" data-money>₹0.00</span></div>
+              </div>
+            </div>
+
+            <div class="col-tools">
+              <button id="popPrintBtn" class="neumorphic-btn small flex-center">Print Ledger</button>
+              <button id="popBulkDateBtn" class="neumorphic-btn small flex-center">Edit Dates</button>
+              <button id="popSavePaymentsBtn" class="neumorphic-btn small flex-center primary-save-btn glow-cyan" style="display: none; margin-left: auto;">Save Changes</button>
+            </div>
+          </div>
+
+          <!-- COLUMN 3: Analytics -->
+          <div class="popup-col card-glass" id="popColDiscipline">
+            <h3 class="col-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>Customer Analytics</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="popRecalcBtn" class="pop-recalc-btn" title="Refresh Cust Analytics"><i class='fas fa-sync-alt'></i></button>
+                <span id="popEvalStatus" class="status-badge status-live">LIVE</span>
+              </div>
+            </h3>
+            
+            <div class="score-display-container" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 16px; background: #f9fafb; border-radius: 16px; border: 1px solid #e5e7eb;">
+              <div class="score-circle-wrapper" style="position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 15px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
+                <span id="popScoreValue" style="font-size: 1.9rem; font-weight: 850; color: #1a4d2e; text-shadow: none;">100</span>
+              </div>
+              <div class="risk-info" style="flex: 1; margin-left: 18px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Risk Profile</span>
+                <span id="popRiskBadge" class="risk-badge" style="display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; width: fit-content; text-transform: uppercase; border: 1px solid transparent;">EXCELLENT</span>
+              </div>
+              <button id="popWeeklyLogBtn" class="pop-recalc-btn" style="width: 32px !important; height: 32px !important; font-size: 1rem;" title="View Weekly Repayment Log" onclick="openPopWeeklyLogModal()"><i class='fas fa-clipboard-list'></i></button>
+            </div>
+
+            <div id="popFreezeDetails" class="subcard-glass" style="display: none; padding: 14px 16px; margin-bottom: 16px; font-size: 0.95rem; border-color: rgba(26, 77, 46, 0.25); border-radius: 12px; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; color: #1a4d2e; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;">
+                <i class='fas fa-snowflake'></i> Frozen Account Rating
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #374151;">
+                <span>Frozen Rating:</span>
+                <span id="popFrozenRating" style="font-weight: 700; color: #1a4d2e; background: rgba(26, 77, 46, 0.1); padding: 2px 8px; border-radius: 4px;">0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #374151;">
+                <span>Freeze Date:</span>
+                <span id="popFreezeDate" style="font-weight: 600; color: #1a1a2e;">-</span>
+              </div>
+            </div>
+
+            <!-- Behavioral Intelligence Panel -->
+            <div id="popBehavioralIntelligencePanel" class="subcard-glass" style="padding: 16px; display: none; flex-direction: column; gap: 16px; margin-top: 10px; border-color: #e5e7eb;">
+              <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 4px;">
+                <span style="font-size: 0.9rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">Behavioral Intelligence</span>
+                <span id="popBehavioralStatus" class="status-badge" style="text-transform: uppercase; font-weight: 800; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;">ON TRACK</span>
+              </div>
+
+              <!-- Stacking Next Risk & Stability vertically for a cleaner, spacious layout -->
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- Next Risk -->
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Predicted Next Risk</span>
+                    <span id="popPredictedRisk" style="font-size: 1.1rem; font-weight: 800; text-transform: uppercase;">LOW</span>
+                  </div>
+                  <span id="popPredictedRiskIcon" style="font-size: 1.8rem; line-height: 1;"><i class='fas fa-circle' style='color:#16a34a;'></i></span>
+                </div>
+                
+                <!-- Stability -->
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Repayment Stability</span>
+                    <span id="popStabilityLabel" style="font-size: 0.85rem; font-weight: 700; color: #374151;">-</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 10px; margin-top: 4px; overflow: hidden; border: 1px solid #e5e7eb;">
+                    <div id="popStabilityBar" style="width: 0%; height: 100%; background: #84cc16; border-radius: 10px; transition: width 0.4s ease, background-color 0.4s ease;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Predicted Closure Card -->
+              <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Projected Closure</span>
+                  <span id="popClosureDiffBadge" style="font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; border: 1px solid transparent;">On Time</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0 2px 0;">
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Target Date</span>
+                    <span id="popActualEndDate" style="font-size: 0.9rem; font-weight: 600; color: #374151;">-</span>
+                  </div>
+                  <div style="color: #9ca3af; font-size: 1.1rem; font-weight: bold; padding: 0 8px;">➔</div>
+                  <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                    <span style="font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Predicted Date</span>
+                    <span id="popPredictedEndDate" style="font-size: 0.9rem; font-weight: 700; color: #1a1a2e;">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Discipline Profile (2x2 Grid) -->
+              <div style="margin-top: 4px;">
+                <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em; display: block; margin-bottom: 10px;">Discipline Profile</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <!-- On Time -->
+                  <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2));"><i class='fas fa-check-circle'></i></span>
+                      <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 600; letter-spacing: 0.02em;">On-Time</span>
+                    </div>
+                    <span id="popCountOnTime" style="font-size: 1rem; font-weight: 800; color: #34d399;">0</span>
+                  </div>
+                  <!-- Delayed -->
+                  <div style="background: rgba(56, 189, 248, 0.04); border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.2));"><i class='fas fa-clock'></i></span>
+                      <span style="font-size: 0.75rem; color: #bae6fd; font-weight: 600; letter-spacing: 0.02em;">Delayed</span>
+                    </div>
+                    <span id="popCountDelayed" style="font-size: 1rem; font-weight: 800; color: #38bdf8;">0</span>
+                  </div>
+                  <!-- Partial -->
+                  <div style="background: rgba(245, 158, 11, 0.04); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.2));"><i class='fas fa-adjust'></i></span>
+                      <span style="font-size: 0.75rem; color: #fde68a; font-weight: 600; letter-spacing: 0.02em;">Partial</span>
+                    </div>
+                    <span id="popCountPartial" style="font-size: 1rem; font-weight: 800; color: #fbbf24;">0</span>
+                  </div>
+                  <!-- Missed -->
+                  <div style="background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.2));"><i class='fas fa-times-circle'></i></span>
+                      <span style="font-size: 0.75rem; color: #fecaca; font-weight: 600; letter-spacing: 0.02em;">Missed</span>
+                    </div>
+                    <span id="popCountMissed" style="font-size: 1rem; font-weight: 800; color: #f87171;">0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Weekly Repayment Log Modal inside Dashboard Popup -->
+    <div id="popWeeklyLogModal" class="modal pop-inner-modal">
+      <div class="modal-content card-glass" style="max-width: 650px !important; margin-top: 5vh !important; max-height: 85vh; display: flex; flex-direction: column;">
+        <span class="close-btn" onclick="closePopWeeklyLogModal()">&times;</span>
+        <h3 style="font-size: 1.1rem; font-weight: 600; color: #374151; margin-top: 0; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.03em;">
+          Weekly Repayment Log
+        </h3>
+        <div class="table-card-container" style="margin-bottom: 0; flex: 1; min-height: 450px; display: flex; flex-direction: column; overflow: hidden;">
+          <div class="scroll-table-container popup-table-wrapper" style="max-height: 65vh; flex: 1; overflow-y: auto;">
+            <table class="popup-mini-table no-datatable" style="font-size: 0.75rem;">
+              <thead>
+                <tr>
+                  <th style="padding: 6px 8px;">Wk</th>
+                  <th style="padding: 6px 8px;">Due Date</th>
+                  <th style="padding: 6px 8px;">Paid Date</th>
+                  <th style="padding: 6px 8px;">Paid</th>
+                  <th style="padding: 6px 8px;">Status</th>
+                  <th style="padding: 6px 8px;">Rating</th>
+                </tr>
+              </thead>
+              <tbody id="popWeeklyLogBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    <!-- ======================================================== -->
+    <!-- EMPTY STATE / CONTEXT SELECTION PROMPT -->
+    <!-- ======================================================== -->
+    <div class="card-glass" style="padding: 60px 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; text-align: center; border-color: #e5e7eb; margin-top: 24px;">
+      <i class='fas fa-home' style='font-size: 4rem; color: #1a4d2e;'></i>
+      <h3 style="font-size: 1.3rem; font-weight: 700; color: #1a1a2e; margin: 0;">Select a Village Context to Begin</h3>
+      <p style="font-size: 0.95rem; color: #6b7280; max-width: 500px; line-height: 1.6; margin: 0;">
+        To view real-time portfolio behavioral intelligence, early warning signals, and collections prioritization lists, please select a village from the top header dropdown or click the Home button to use the main landing page.
+      </p>
+    </div>
+  {% endif %}
+
+  <!-- ======================================================== -->
+  <!-- PRESTIGE GLASSMORPHISM STYLE SYSTEM -->
+  <!-- ======================================================== -->
+  <style>
+    /* Card Glass Base styling */
+    .card-glass {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 18px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .subcard-glass {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    
+    /* Risk Badge Formatting */
+    .risk-badge-excellent {
+      background: rgba(16, 185, 129, 0.12) !important;
+      color: #10b981 !important;
+      border: 1px solid rgba(16, 185, 129, 0.2) !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+    }
+    .risk-badge-good {
+      background: rgba(132, 204, 22, 0.12) !important;
+      color: #a3e635 !important;
+      border: 1px solid rgba(132, 204, 22, 0.2) !important;
+    }
+    .risk-badge-risky {
+      background: rgba(245, 158, 11, 0.12) !important;
+      color: #fbbf24 !important;
+      border: 1px solid rgba(245, 158, 11, 0.2) !important;
+    }
+    .risk-badge-critical {
+      background: rgba(239, 68, 68, 0.12) !important;
+      color: #f87171 !important;
+      border: 1px solid rgba(239, 68, 68, 0.2) !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+    }
+
+    /* Recalculate button styling */
+    .pop-recalc-btn {
+      background: #f9fafb !important;
+      border: 1px solid #e5e7eb !important;
+      border-radius: 50% !important;
+      width: 28px !important;
+      height: 28px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: #1a4d2e !important;
+      cursor: pointer !important;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      padding: 0 !important;
+      margin: 0 !important;
+      outline: none !important;
+    }
+    .pop-recalc-btn:hover {
+      background: #e5e7eb !important;
+      border-color: #1a4d2e !important;
+      color: #1a4d2e !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      transform: rotate(180deg);
+    }
+    .pop-recalc-btn:active {
+      transform: rotate(180deg) scale(0.95);
+      background: #d1d5db !important;
+    }
+    .pop-recalc-btn.spinning {
+      animation: spin-btn 1s linear infinite !important;
+    }
+    @keyframes spin-btn {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Drill-down accordion wrappers */
+    .v-movement-row {
+      transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .v-movement-row:hover {
+      transform: translateX(4px);
+      border-color: #1a4d2e;
+      background: #f3f4f6 !important;
+    }
+    .v-drilldown-wrapper {
+      margin-top: -6px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      padding: 8px 12px;
+      max-height: 250px;
+      overflow-y: auto;
+      animation: slideDownFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideDownFade {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .v-drilldown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .v-drilldown-table th {
+      background: #f3f4f6 !important;
+      color: #6b7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.65rem;
+      letter-spacing: 0.04em;
+      padding: 8px 10px;
+      text-align: center;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .v-drilldown-table td {
+      padding: 8px 10px;
+      text-align: center;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .v-drilldown-table tr.clickable-row {
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .v-drilldown-table tr.clickable-row:hover {
+      background: rgba(26, 77, 46, 0.06) !important;
+    }
+
+    /* Trend & Stress alerts card */
+    .v-stress-card {
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .v-stress-card.stress-critical {
+      border-left: 4px solid #ef4444;
+      background: rgba(239, 68, 68, 0.02);
+    }
+    .v-stress-card.stress-high {
+      border-left: 4px solid #f97316;
+      background: rgba(249, 115, 22, 0.02);
+    }
+    .v-stress-card.stress-medium {
+      border-left: 4px solid #fbbf24;
+      background: rgba(251, 191, 36, 0.02);
+    }
+
+    /* Attention Accordion Headers */
+    .v-attention-header {
+      padding: 14px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .v-attention-header:hover {
+      border-color: #1a4d2e;
+      background: #f3f4f6;
+    }
+    .v-attention-header.critical {
+      border-left: 4px solid #ef4444;
+    }
+    .v-attention-header.high {
+      border-left: 4px solid #f97316;
+    }
+
+    /* Customer details popup backdrop with blur animation */
+    .customer-popup-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      z-index: 10000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .customer-popup-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .customer-popup-content {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 24px;
+      width: 95%;
+      max-width: 1380px;
+      height: 90vh;
+      display: flex;
+      flex-direction: column;
+      color: #1a1a2e;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+      transform: scale(0.96) translateY(10px);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    .customer-popup-backdrop.active .customer-popup-content {
+      transform: scale(1) translateY(0);
+    }
+    .customer-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 28px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-avatar-icon {
+      font-size: 20px;
+      color: #1a4d2e;
+    }
+    .customer-popup-header h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    .popup-close-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      color: #6b7280;
+      cursor: pointer;
+      transition: color 0.2s, transform 0.2s;
+      padding: 0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .popup-close-btn:hover {
+      color: #1a1a2e;
+      background: #e5e7eb;
+      transform: rotate(90deg);
+    }
+
+    /* Responsive grid body */
+    .popup-grid-body {
+      display: grid;
+      grid-template-columns: 380px 1fr 380px;
+      gap: 20px;
+      padding: 24px;
+      height: calc(100% - 68px);
+      overflow-y: auto;
+    }
+    @media (max-width: 1150px) {
+      .popup-grid-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .col-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-top: 0;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 8px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .profile-avatar-sec {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .avatar-circle {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #1a4d2e 0%, #2d6a4f 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(26, 77, 46, 0.15);
+      margin-bottom: 8px;
+    }
+    .profile-avatar-sec h4 {
+      margin: 4px 0 2px 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .profile-subtext {
+      margin: 0;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .details-form-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+    .form-group-row {
+      display: flex;
+      gap: 16px;
+    }
+    .form-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #6b7280;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
+    }
+    .glass-input {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #1a1a2e;
+      font-size: 0.95rem;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-input:focus {
+      border-color: #1a4d2e;
+      background: #ffffff;
+      box-shadow: 0 0 10px rgba(26, 77, 46, 0.1);
+      outline: none;
+    }
+    .read-only-badge {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #374151;
+      font-size: 0.95rem;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+    }
+    .highlight-balance {
+      color: #f43f5e;
+      font-weight: 600;
+      background: rgba(244, 63, 94, 0.08);
+      border-color: rgba(244, 63, 94, 0.15);
+      box-shadow: 0 0 10px rgba(244, 63, 94, 0.05);
+    }
+
+    /* Tables inside Popup */
+    .table-card-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      box-shadow: none;
+    }
+    .popup-table-wrapper {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .popup-mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      table-layout: auto;
+    }
+    .popup-mini-table th {
+      background: #f3f4f6 !important;
+      color: #6b7280;
+      text-transform: uppercase;
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      padding: 12px 14px;
+      text-align: center;
+      border-bottom: 1px solid #e5e7eb;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    .popup-mini-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f3f4f6;
+      color: #374151;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .popup-mini-table tr:hover {
+      background: #f9fafb;
+    }
+    .popup-mini-table td[contenteditable="true"] {
+      cursor: text;
+      transition: background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .popup-mini-table td[contenteditable="true"]:hover {
+      background: #f3f4f6;
+    }
+    .popup-mini-table td[contenteditable="true"]:focus {
+      background: #ffffff !important;
+      outline: 1px solid rgba(26, 77, 46, 0.5);
+      box-shadow: 0 0 8px rgba(26, 77, 46, 0.1);
+    }
+    .popup-mini-table td.highlighted {
+      background: rgba(26, 77, 46, 0.04);
+      border: 1px dashed rgba(26, 77, 46, 0.15);
+    }
+
+    .mini-table-footer {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #f3f4f6;
+      border-top: 1px solid #e5e7eb;
+      font-size: 0.78rem;
+      color: #374151;
+      font-weight: 500;
+    }
+
+    .form-grid-compact {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .form-grid-compact button {
+      margin-bottom: 0;
+      height: 35px;
+    }
+
+    .col-tools, .details-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: auto;
+    }
+    .details-actions {
+      padding-top: 18px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .flex-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .info-flex-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .info-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .info-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      letter-spacing: 0.05em;
+    }
+    .info-value {
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .text-cyan {
+      color: #1a4d2e;
+      text-shadow: none;
+    }
+
+    /* Badges */
+    .status-badge {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .status-badge.status-active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .status-badge.status-closed {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+    .status-badge.status-defaulted {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .status-badge.status-written-off {
+      background: rgba(99, 102, 241, 0.15);
+      color: #6366f1;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+
+    .primary-save-btn {
+      background: #1a4d2e !important;
+      color: #ffffff !important;
+      font-weight: 600 !important;
+      border: none !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+      transition: all 0.3s !important;
+    }
+    .primary-save-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(26, 77, 46, 0.25) !important;
+    }
+    .danger-btn {
+      background: rgba(239, 68, 68, 0.1) !important;
+      color: #ef4444 !important;
+      border: 1px solid rgba(239, 68, 68, 0.2) !important;
+      transition: all 0.2s !important;
+    }
+    .danger-btn:hover {
+      background: #ef4444 !important;
+      color: #fff !important;
+    }
+
+    /* Inner pop modal */
+    .pop-inner-modal {
+      z-index: 11000 !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+    }
+    .pop-inner-modal .modal-content {
+      width: 90% !important;
+      max-width: 420px !important;
+      border-radius: 16px !important;
+      padding: 24px !important;
+      margin-top: 15vh !important;
+      border: 1px solid #e5e7eb !important;
+    }
+    .pop-inner-modal .close-btn {
+      color: #6b7280;
+      font-size: 24px;
+    }
+    .pop-inner-modal .close-btn:hover {
+      color: #1a1a2e;
+    }
+
+    /* Evaluation Status Badges */
+    .status-badge.status-live {
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #10b981 !important;
+      border: 1px solid rgba(16, 185, 129, 0.25) !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+    }
+    .status-badge.status-live::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse-live 1.5s infinite;
+    }
+    @keyframes pulse-live {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    }
+
+    .status-badge.status-frozen {
+      background: rgba(26, 77, 46, 0.1) !important;
+      color: #1a4d2e !important;
+      border: 1px solid rgba(26, 77, 46, 0.2) !important;
+    }
+
+    /* Weekly Repayment Log Badges */
+    .wk-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-weight: 700;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+    }
+    .wk-badge-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .wk-badge-partial {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .wk-badge-missed {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+    .wk-badge-pending {
+      background: rgba(148, 163, 184, 0.15);
+      color: #6b7280;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .wk-badge-overdue {
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+
+    #popWeeklyLogBtn:hover {
+      transform: scale(1.15) !important;
+    }
+    #popWeeklyLogBtn:active {
+      transform: scale(0.95) !important;
+    }
+  </style>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    window.activeVillageId = "{{ session.get('vid') or '' }}";
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{{ url_for('static', filename='js/view_customer.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

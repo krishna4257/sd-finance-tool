@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="page-title">📄 Post Payment Report</h2>
-
+<h2 class="page-title">Post Payment Report</h2>
+ 
 <div class="form-grid-ppr filters">
   <label>
     ANO
@@ -18,9 +18,9 @@
   </label>
   <button class="neumorphic-btn" onclick="applyFilters()">Apply</button>
   <button class="neumorphic-btn" onclick="resetFilters()">Reset</button>
-  <button id="tableViewBtn" class="neumorphic-btn small">🧩 Table View</button>
+  <button id="tableViewBtn" class="neumorphic-btn small">Table View</button>
 </div>
-
+ 
 <div class="raised-box">
   <div class="customer-table-wrapper ">
     <table id="postingTable" class="dataTable customer-table">
@@ -44,7 +44,7 @@
         </tr>
         {% endfor %}
       </tbody>
-
+ 
       <tfoot>
         <tr>
           <td colspan="{{ headers|length }}">
@@ -64,11 +64,11 @@
     </table>
   </div>
 </div>
-
+ 
 <!-- Column selector modal (REUSED) -->
 <div id="columnModal" class="column-modal hidden">
   <div class="column-modal-content">
-    <h3>📋 Select Columns</h3>
+    <h3>Select Columns</h3>
     <div id="columnCheckboxList" class="column-list"></div>
     <div class="modal-actions">
       <button id="closeColumnModal" class="neumorphic-btn small">Close</button>

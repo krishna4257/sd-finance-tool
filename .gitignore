@@ -217,3 +217,4 @@ account.json
 procedures.txt
 data_processing
 data_processing/*
+.env

@@ -568,16 +568,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Add this inside DOMContentLoaded in search.js
   $('#paymentTable tbody').on('click', 'tr', function() {
       // Remove highlight from all rows
-      $('#paymentTable tbody tr').removeClass('highlighted').removeAttr('data-selected');
+      $('#paymentTable tbody tr').removeClass('highlighted-row').removeAttr('data-selected');
 
       // Add highlight & a 'selected' marker to the clicked row
-      $(this).addClass('highlighted').attr('data-selected', 'true');
+      $(this).addClass('highlighted-row').attr('data-selected', 'true');
+      window.currentRow = this; // Update global highlighted row for keyboard navigation!
   });
 
   // Reapply highlight after sorting
   $('#paymentTable').on('order.dt', function() {
-      $('#paymentTable tbody tr').removeClass('highlighted');
-      $('#paymentTable tbody tr[data-selected="true"]').addClass('highlighted');
+      $('#paymentTable tbody tr').removeClass('highlighted-row');
+      $('#paymentTable tbody tr[data-selected="true"]').addClass('highlighted-row');
   });
 
 

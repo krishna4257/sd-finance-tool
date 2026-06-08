@@ -24,6 +24,8 @@ function persistTempPayments() {
 
 let tempTable = loadTempPayments();
 let selectedDate = null;
+let lastWeekPaidCount = 0;
+let lastWeekCollection = 0;
 
 
 // --- Instant lookup mapping ---
@@ -44,6 +46,11 @@ window.CUSTOMERS.forEach(c => {
         CUSTOMER_MAP[normalized.ano] = normalized;
     }
 });
+
+// --- Expected Stats Calculations ---
+const activeCustomers = window.CUSTOMERS.filter(c => (Number(c.balance_amount) || 0) > 0);
+const expectedAccCount = activeCustomers.length;
+const expectedTotalAmount = activeCustomers.reduce((sum, c) => sum + (Number(c.installment_amount) || 0), 0);
 
 // --- Helper function to show errors and play sound ---
 function showError(message) {
@@ -99,7 +106,123 @@ document.addEventListener('keydown', function (e) {
   rows[nextIndex].scrollIntoView({ block: 'nearest' });
 });
 
+let isEditingCell = false; // Prevent multiple cell editing sessions simultaneously
 
+function makeCellEditable(cell, index, field, currentValue) {
+    if (isEditingCell) return;
+    isEditingCell = true;
+
+    // Clear highlights temporarily to avoid visual clash
+    document.querySelectorAll('#tempTable tbody tr').forEach(r => r.classList.remove('highlighted'));
+
+    const input = document.createElement("input");
+    input.className = "inline-edit-input";
+
+    if (field === 'amt') {
+        input.type = "number";
+        input.step = "0.01";
+        input.value = Number(currentValue).toFixed(2);
+    } else {
+        input.type = "text";
+        input.value = currentValue;
+    }
+
+    cell.innerHTML = "";
+    cell.appendChild(input);
+    input.focus();
+
+    let isFinished = false;
+
+    function finishEdit(save) {
+        if (isFinished) return;
+        isFinished = true;
+        isEditingCell = false;
+
+        const errorMsg = document.getElementById("errorMsg");
+        errorMsg.style.display = "none";
+
+        if (!save) {
+            updateTable();
+            return;
+        }
+
+        const rawVal = input.value.trim();
+        let parsedValue = rawVal;
+
+        if (field === 'ano') {
+            if (!parsedValue) {
+                showError("❌ Account Number cannot be empty.");
+                updateTable();
+                return;
+            }
+            if (!/^\d+$/.test(parsedValue)) {
+                showError("❌ Account Number must contain numbers only.");
+                updateTable();
+                return;
+            }
+            const customer = CUSTOMER_MAP[parsedValue];
+            if (!customer) {
+                showError("❌ Account Number not found in database!");
+                updateTable();
+                return;
+            }
+            // Check duplicates
+            const duplicate = tempTable.some((row, i) => i !== index && row.ano === parsedValue && row.pdt === tempTable[index].pdt);
+            if (duplicate) {
+                showError("❌ Duplicate Account Number + Date combination in table.");
+                updateTable();
+                return;
+            }
+        } else if (field === 'pdt') {
+            if (!parsedValue) {
+                showError("❌ Payment Date cannot be empty.");
+                updateTable();
+                return;
+            }
+            // Check duplicate
+            const duplicate = tempTable.some((row, i) => i !== index && row.ano === tempTable[index].ano && row.pdt === parsedValue);
+            if (duplicate) {
+                showError("❌ Duplicate Account Number + Date combination in table.");
+                updateTable();
+                return;
+            }
+        } else if (field === 'amt') {
+            parsedValue = parseFloat(rawVal);
+            if (isNaN(parsedValue) || parsedValue <= 0) {
+                showError("❌ Please enter a valid positive amount.");
+                updateTable();
+                return;
+            }
+        }
+
+        tempTable[index][field] = parsedValue;
+        saveAndUpdate();
+    }
+
+    input.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            finishEdit(true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            finishEdit(false);
+        }
+    });
+
+    if (field === 'pdt') {
+        flatpickr(input, {
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            onClose: function() {
+                setTimeout(() => finishEdit(true), 150);
+            }
+        });
+    } else {
+        input.addEventListener("blur", function() {
+            setTimeout(() => finishEdit(true), 150);
+        });
+    }
+}
 
 function updateTable() {
   console.log("DEBUG: updateTable() called. TempTable length:", tempTable.length, "Contents:", tempTable);
@@ -113,71 +236,59 @@ function updateTable() {
 
     const anoCell = document.createElement("td");
     anoCell.textContent = row.ano;
+    anoCell.style.cursor = "pointer";
+    anoCell.title = "Double-click to edit";
+    anoCell.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        makeCellEditable(anoCell, index, 'ano', row.ano);
+    });
 
     const pdtCell = document.createElement("td");
     pdtCell.textContent = row.pdt;
+    pdtCell.style.cursor = "pointer";
+    pdtCell.title = "Double-click to edit";
+    pdtCell.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        makeCellEditable(pdtCell, index, 'pdt', row.pdt);
+    });
 
     const amtCell = document.createElement("td");
     amtCell.classList.add("amount-paid");
+    amtCell.style.cursor = "pointer";
+    amtCell.title = "Double-click to edit";
 
     const amtText = document.createElement("span");
     amtText.textContent = row.amt?.toFixed(2) || "0.00";
-    amtText.setAttribute('data-money', '');  // ✅ ✅ Only on <span>
+    amtText.setAttribute('data-money', '');
     amtCell.appendChild(amtText);
 
-    const amtInput = document.createElement("input");
-    amtInput.type = "number";
-    amtInput.value = row.amt?.toFixed(2) || "0.00";
-    amtInput.style.display = "none";
-    amtInput.style.width = "100%";
-    amtCell.appendChild(amtInput);
+    amtCell.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        makeCellEditable(amtCell, index, 'amt', row.amt);
+    });
 
     const cumulativeCell = document.createElement("td");
     cumulativeCell.classList.add("cumulative-amt");
     cumulativeCell.textContent = "";
 
-    const editBtn = document.createElement("button");
-    editBtn.textContent = "✏️";
-    editBtn.classList.add("neumorphic-btn", "ultrasmall");
-    editBtn.onclick = () => {
-      if (editBtn.textContent === "✏️") {
-        amtText.style.display = "none";
-        amtInput.style.display = "inline-block";
-        amtInput.focus();
-        editBtn.textContent = "💾";
-      } else {
-        const newAmt = parseFloat(amtInput.value);
-        if (!isNaN(newAmt)) {
-          row.amt = newAmt;
-          tempTable[index].amt = newAmt;  // ✅ Update memory
-          amtText.textContent = newAmt.toFixed(2);
-          saveAndUpdate();
-        }
-        amtText.style.display = "inline-block";
-        amtInput.style.display = "none";
-        editBtn.textContent = "✏️";
-      }
-    };
+    const deleteCell = document.createElement("td");
+    deleteCell.style.textAlign = "center";
 
     const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "🗑️";
-    deleteBtn.classList.add("neumorphic-btn", "ultrasmall");
-    deleteBtn.onclick = () => {
-      tempTable.splice(index, 1);
-      saveAndUpdate();
-    };
+    deleteBtn.innerHTML = "&times;";
+    deleteBtn.className = "delete-row-btn";
+    deleteBtn.title = "Delete Row";
+    deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tempTable.splice(index, 1);
+        saveAndUpdate();
+    });
+    deleteCell.appendChild(deleteBtn);
 
     tr.appendChild(anoCell);
     tr.appendChild(pdtCell);
     tr.appendChild(amtCell);
     tr.appendChild(cumulativeCell);
-
-    const editCell = document.createElement("td");
-    editCell.appendChild(editBtn);
-    tr.appendChild(editCell);
-
-    const deleteCell = document.createElement("td");
-    deleteCell.appendChild(deleteBtn);
     tr.appendChild(deleteCell);
 
     tbody.appendChild(tr);
@@ -189,6 +300,18 @@ function updateTable() {
   document.getElementById("totalAmttop").textContent = totalAmt.toFixed(2);
   document.getElementById("totalAno").textContent = uniqueAno.size;
   document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
+
+  // Update expected and short-by stats in summary card widgets
+  document.getElementById("expectedAccs").textContent = expectedAccCount;
+  document.getElementById("shortAccs").textContent = Math.max(0, expectedAccCount - uniqueAno.size);
+
+  document.getElementById("expectedAmt").textContent = expectedTotalAmount.toFixed(2);
+  document.getElementById("expectedAmt").setAttribute("data-money", "");
+  
+  const shortAmtVal = Math.max(0, expectedTotalAmount - totalAmt);
+  document.getElementById("shortAmt").textContent = shortAmtVal.toFixed(2);
+  document.getElementById("shortAmt").setAttribute("data-money", "");
+
   persistTempPayments();
 
   // Cumulative Sum Logic
@@ -198,12 +321,22 @@ function updateTable() {
   rows.forEach(row => {
     const amtSpan = row.querySelector("td.amount-paid span");
     const cumulativeCell = row.querySelector("td.cumulative-amt");
-    const amt = parseFloat(amtSpan?.textContent.trim().replace(/[^\d.-]/g, '')) || 0;
-    runningTotal += amt;
-    cumulativeCell.textContent = runningTotal.toFixed(2);
-    cumulativeCell.setAttribute('data-money', '');
+    
+    if (amtSpan) {
+        const amt = parseFloat(amtSpan.textContent.trim().replace(/[^\d.-]/g, '')) || 0;
+        runningTotal += amt;
+        cumulativeCell.textContent = runningTotal.toFixed(2);
+        cumulativeCell.setAttribute('data-money', '');
+    } else {
+        const input = row.querySelector("td.amount-paid input");
+        const amt = parseFloat(input?.value) || 0;
+        runningTotal += amt;
+        cumulativeCell.textContent = runningTotal.toFixed(2);
+        cumulativeCell.setAttribute('data-money', '');
+    }
   });
 
+  updateComparativeStats();
   applyGlobalMoneyFormatting();
 }
 
@@ -283,7 +416,7 @@ function submitAllPayments() {
   
   const payload = tempTable.map(row => ({
   ano: Number(row.ano),
-  pdt: row.pdt,          // 👈 backend expects dd/mm/yyyy
+  pdt: row.pdt,
   amt: Number(row.amt)
 }));
 
@@ -304,6 +437,8 @@ function submitAllPayments() {
       successMsg.innerText = data.message;
       tempTable = data.skipped_rows;
       saveAndUpdate(); 
+      // Refresh analytics graph as well
+      loadAnalytics();
     })
     .catch(err => {
         showError(`An error occurred: ${err.message}`);
@@ -375,20 +510,311 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
     console.log("DEBUG: Customer found, displaying info:", customer);
     document.getElementById("customerName").innerText = customer.name;
     document.getElementById("customerLoanAmount").innerText = customer.amt;
-    document.getElementById("customerTotalRepaid").innerText = customer.pamt;
     document.getElementById("customerOutstanding").innerText = customer.bamt;
     document.getElementById("customerInstallmentAmount").innerText = customer.da;
 
-    customerInfo.style.display = "block";
+    customerInfo.style.display = "grid"; // Show tiles grid
     amtInput.disabled = false;
     amtInput.focus();
 });
 
+// --- Helper short formatting function (e.g. 1.2L, 60K) ---
+function formatAmountShort(value) {
+  if (value >= 100000) {
+    return (value / 100000).toFixed(value % 100000 === 0 ? 0 : 1) + 'L';
+  } else if (value >= 1000) {
+    return (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1) + 'K';
+  }
+  return value;
+}
+
+// --- Weekly Analytics Graph & Details Card ---
+let collectionChartInstance = null;
+
+function renderCollectionChart(weeks) {
+  const canvas = document.getElementById("collectionChart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (collectionChartInstance) {
+    collectionChartInstance.destroy();
+  }
+
+  // Use CSS Variables dynamically to match the light theme
+  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e5e7eb';
+  const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim() || '#6b7280';
+  const surfaceColor = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#ffffff';
+  const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#1f2937';
+
+  // Use the exact week ending dates as X-axis labels
+  const labels = weeks.map(w => w.end);
+  const paidCustomers = weeks.map(w => w.paid_customers);
+  const unpaidCustomers = weeks.map(w => w.unpaid_customers);
+  const expectedAmounts = weeks.map(w => w.expected_collection);
+  const actualAmounts = weeks.map(w => w.actual_collection);
+
+  collectionChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Paid Customers',
+          data: paidCustomers,
+          type: 'bar',
+          yAxisID: 'y-axis-counts',
+          backgroundColor: '#1a4d2e', // Forest green
+          borderColor: '#1a4d2e',
+          borderWidth: 0,
+          stack: 'stack-counts',
+          borderRadius: 0,
+          order: 3
+        },
+        {
+          label: 'Unpaid Customers',
+          data: unpaidCustomers,
+          type: 'bar',
+          yAxisID: 'y-axis-counts',
+          backgroundColor: '#bbf7d0', // Soft mint green
+          borderColor: '#bbf7d0',
+          borderWidth: 0,
+          stack: 'stack-counts',
+          borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+          order: 4
+        },
+        {
+          label: 'Expected Collection (₹)',
+          data: expectedAmounts,
+          type: 'line',
+          yAxisID: 'y-axis-amounts',
+          borderColor: '#10b981', // Flowy green line
+          backgroundColor: 'transparent',
+          pointBackgroundColor: '#10b981',
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          tension: 0.45,
+          borderWidth: 2.5,
+          order: 1
+        },
+        {
+          label: 'Actual Collected (₹)',
+          data: actualAmounts,
+          type: 'line',
+          yAxisID: 'y-axis-amounts',
+          borderColor: '#f59e0b', // Flowy orange line
+          backgroundColor: 'transparent',
+          pointBackgroundColor: '#f59e0b',
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          tension: 0.45,
+          borderWidth: 2.5,
+          order: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        tooltip: {
+          enabled: true,
+          backgroundColor: surfaceColor,
+          titleColor: textColor,
+          bodyColor: textColor,
+          borderColor: gridColor,
+          borderWidth: 1,
+          padding: 10,
+          titleFont: { size: 11, weight: 'bold' },
+          bodyFont: { size: 11 },
+          callbacks: {
+            title: function(context) {
+              return "Date: " + context[0].label;
+            },
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label = label.replace(' (₹)', '') + ': ';
+              }
+              if (context.parsed.y !== null) {
+                if (context.dataset.yAxisID === 'y-axis-amounts') {
+                  label += new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(context.parsed.y);
+                } else {
+                  label += context.parsed.y;
+                }
+              }
+              return label;
+            }
+          }
+        },
+        legend: {
+          display: false // Hide legend to match reference image
+        }
+      },
+      scales: {
+        'y-axis-counts': {
+          type: 'linear',
+          position: 'left',
+          stacked: true, // Stack the Paid and Unpaid bars
+          grid: {
+            color: gridColor,
+            drawOnChartArea: true
+          },
+          ticks: {
+            color: tickColor,
+            font: { size: 9 },
+            precision: 0
+          }
+        },
+        'y-axis-amounts': {
+          type: 'linear',
+          position: 'right',
+          grid: {
+            drawOnChartArea: false // prevent grid lines overlap
+          },
+          ticks: {
+            color: tickColor,
+            font: { size: 9 },
+            callback: function(value) {
+              return '₹' + formatAmountShort(value);
+            }
+          }
+        },
+        x: {
+          stacked: true, // X stack align
+          grid: {
+            color: gridColor
+          },
+          ticks: {
+            color: tickColor,
+            font: { size: 9 }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderAnalyticsTable(weeks) {
+  const tbody = document.getElementById("analyticsTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  weeks.forEach(w => {
+    const tr = document.createElement("tr");
+
+    const weekCell = document.createElement("td");
+    // Show exact posting date instead of relative weeks
+    weekCell.innerHTML = `<strong>${w.end}</strong>`;
+
+    const activeCell = document.createElement("td");
+    activeCell.textContent = w.active_customers;
+
+    const paidCell = document.createElement("td");
+    paidCell.textContent = w.paid_customers;
+
+    const expectedCell = document.createElement("td");
+    expectedCell.textContent = w.expected_collection.toFixed(2);
+    expectedCell.setAttribute("data-money", "");
+
+    const actualCell = document.createElement("td");
+    actualCell.textContent = w.actual_collection.toFixed(2);
+    actualCell.setAttribute("data-money", "");
+
+    const failedCell = document.createElement("td");
+    failedCell.textContent = w.failed_to_collect.toFixed(2);
+    failedCell.setAttribute("data-money", "");
+    failedCell.style.color = "#ef4444"; // red text for unpaid
+
+    tr.appendChild(weekCell);
+    tr.appendChild(activeCell);
+    tr.appendChild(paidCell);
+    tr.appendChild(expectedCell);
+    tr.appendChild(actualCell);
+    tr.appendChild(failedCell);
+
+    tbody.appendChild(tr);
+  });
+
+  applyGlobalMoneyFormatting();
+}
+
+function updateComparativeStats() {
+  const currentAno = parseInt(document.getElementById("totalAnotop").textContent) || 0;
+  const currentAmt = parseFloat(document.getElementById("totalAmttop").textContent.replace(/[^\d.-]/g, '')) || 0;
+
+  const lastAnoEl = document.getElementById("lastAnotop");
+  const lastAmtEl = document.getElementById("lastAmttop");
+  
+  if (lastAnoEl) lastAnoEl.textContent = lastWeekPaidCount;
+  if (lastAmtEl) {
+    lastAmtEl.textContent = lastWeekCollection.toFixed(2);
+    lastAmtEl.setAttribute("data-money", "");
+  }
+
+  // A.No comparison: Green up arrow if current > last, Red down arrow if current < last
+  const lastAnoArrow = document.getElementById("lastAnoArrow");
+  if (lastAnoArrow) {
+    if (currentAno > lastWeekPaidCount) {
+      lastAnoArrow.innerHTML = '<span style="color: #10b981;"><i class="fas fa-arrow-up"></i></span>';
+    } else if (currentAno < lastWeekPaidCount) {
+      lastAnoArrow.innerHTML = '<span style="color: #ef4444;"><i class="fas fa-arrow-down"></i></span>';
+    } else {
+      lastAnoArrow.innerHTML = '<span style="color: var(--text-secondary);"><i class="fas fa-minus"></i></span>';
+    }
+  }
+
+  // Amount comparison: Green up arrow if current > last, Red down arrow if current < last
+  const lastAmtArrow = document.getElementById("lastAmtArrow");
+  if (lastAmtArrow) {
+    if (currentAmt > lastWeekCollection) {
+      lastAmtArrow.innerHTML = '<span style="color: #10b981;"><i class="fas fa-arrow-up"></i></span>';
+    } else if (currentAmt < lastWeekCollection) {
+      lastAmtArrow.innerHTML = '<span style="color: #ef4444;"><i class="fas fa-arrow-down"></i></span>';
+    } else {
+      lastAmtArrow.innerHTML = '<span style="color: var(--text-secondary);"><i class="fas fa-minus"></i></span>';
+    }
+  }
+
+  applyGlobalMoneyFormatting();
+}
+
+function loadAnalytics() {
+  fetch("/api/post_payment_analytics")
+    .then(res => res.json())
+    .then(data => {
+      if (data.weeks && data.weeks.length > 0) {
+        const lastWeek = data.weeks[data.weeks.length - 1];
+        lastWeekPaidCount = lastWeek.paid_customers || 0;
+        lastWeekCollection = lastWeek.actual_collection || 0;
+      }
+      const lastPostingDisplay = document.getElementById("lastPostingDisplay");
+      if (lastPostingDisplay) {
+        lastPostingDisplay.textContent = data.last_posting_date;
+      }
+      renderCollectionChart(data.weeks);
+      renderAnalyticsTable(data.weeks);
+      updateComparativeStats();
+    })
+    .catch(err => console.error("Failed to load analytics data:", err));
+}
+
 updateTable();
 applyGlobalMoneyFormatting();
+loadAnalytics(); // Fetch analytics and render mixed chart on page load
 
-// --- Auto-focus the Date (PDT) field when Post Payment page loads ---
+// --- Auto-focus & flatpickr & flip card listeners ---
 document.addEventListener("DOMContentLoaded", () => {
+    flatpickr("#pdt", {
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        clickOpens: true,
+        wrap: false
+    });
+
     const pdtInput = document.getElementById("pdt");
     if (pdtInput) {
         pdtInput.focus();
@@ -399,5 +825,31 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
             try { pdtInput.setSelectionRange(len, len); } catch (e) {}
         }, 0);
+    }
+
+    // ── Flip Card Setup ──
+    const flipCardInner = document.getElementById("analyticsFlipCardInner");
+    const btnFlipToBack = document.getElementById("btnFlipToBack");
+    const btnFlipToFront = document.getElementById("btnFlipToFront");
+    const flipCard = document.querySelector(".flip-card");
+
+    if (flipCard && flipCardInner) {
+      flipCard.addEventListener("dblclick", () => {
+        flipCardInner.classList.toggle("flipped");
+      });
+    }
+
+    if (btnFlipToBack && flipCardInner) {
+      btnFlipToBack.addEventListener("click", (e) => {
+        e.stopPropagation();
+        flipCardInner.classList.add("flipped");
+      });
+    }
+
+    if (btnFlipToFront && flipCardInner) {
+      btnFlipToFront.addEventListener("click", (e) => {
+        e.stopPropagation();
+        flipCardInner.classList.remove("flipped");
+      });
     }
 });

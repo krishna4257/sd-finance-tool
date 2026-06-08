@@ -84,37 +84,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   updateSummary();
 
-  // === Sorting support (match customers page behavior) ===
-  function sortTable(colIndex) {
-    if (!window.sortState) window.sortState = {};
-    if (!window.sortState[colIndex]) window.sortState[colIndex] = 0;
-    window.sortState[colIndex]++;
+  const dt = $.fn.DataTable.isDataTable('#villageTable')
+    ? $('#villageTable').DataTable()
+    : $('#villageTable').DataTable({
+        paging: false,
+        info: false,
+        searching: false,
+        ordering: true
+      });
 
-    let visible = snapshot.filter(d => d.row.style.display !== "none");
-
-    const getCell = (row, i) => (row.children[i]?.textContent || "").trim();
-
-    if (window.sortState[colIndex] % 3 === 1) {
-      visible.sort((a, b) =>
-        getCell(a.row, colIndex).localeCompare(getCell(b.row, colIndex), undefined, { numeric: true })
-      );
-    } else if (window.sortState[colIndex] % 3 === 2) {
-      visible.sort((a, b) =>
-        getCell(b.row, colIndex).localeCompare(getCell(a.row, colIndex), undefined, { numeric: true })
-      );
-    } else {
-      visible = [...snapshot].filter(d => d.row.style.display !== "none");
-    }
-
-    body.innerHTML = "";
-    visible.forEach(d => body.appendChild(d.row));
+  dt.on('draw', () => {
     updateSummary();
-  }
-
-  table.querySelectorAll("thead th").forEach((th, i) => {
-    if (i === 0) return; // skip checkbox
-    th.style.cursor = "pointer";
-    th.addEventListener("click", () => sortTable(i));
   });
 });
 
@@ -323,3 +303,22 @@ function refreshVillageDropdown() {
       console.error("Dropdown refresh failed:", err);
     });
 }
+
+window.openVillageDashboard = function (vid) {
+  csrfFetch("/set_context", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vid })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      window.location.href = "/dashboard";
+    } else {
+      alert("Failed to set village context: " + (data.error || "Unknown error"));
+    }
+  })
+  .catch(err => {
+    alert("Connection error: " + err.message);
+  });
+};

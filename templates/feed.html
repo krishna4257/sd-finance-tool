@@ -2,14 +2,14 @@
 
 {% block content %}
 
-<h2 class="page-title">📥 Feed Queue</h2>
+<h2 class="page-title">Feed Queue</h2>
 
 <div class="raised-box">
 <h3>Customer Feed</h3>
 
 <div class="customer-table-wrapper">
 <table class="customer-table customer-feed-table">
-<thead style="position:sticky; top:0; z-index:2; background:#caa95a;">
+<thead>
 <tr>
 <th>ANO</th>
 <th>Name</th>
@@ -53,23 +53,23 @@
 <td style="white-space:nowrap;">
 
 <button class="neumorphic-btn ultrasmall"
-onclick="accept('{{ row.feed_id }}')">✅ Accept</button>
+onclick="accept('{{ row.feed_id }}')">Accept</button>
 
 <button class="neumorphic-btn ultrasmall"
-onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
+onclick="editCustomer('{{ row.feed_id }}')">Edit</button>
 
 {% if row.aadhaar_photo %}
 <button class="neumorphic-btn ultrasmall"
-onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Aadhar</button>
+onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">Aadhaar</button>
 {% endif %}
 
 {% if row.house_photo %}
 <button class="neumorphic-btn ultrasmall"
-onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 House</button>
+onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">House</button>
 {% endif %}
 
 <button class="neumorphic-btn ultrasmall"
-onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
+onclick="rejectCustomer('{{ row.feed_id }}')">Delete</button>
 
 </td>
 </tr>
@@ -103,7 +103,7 @@ onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
            style="display:none; width:160px;" />
 
     <button class="neumorphic-btn ultrasmall" onclick="selectAllPayments()">Select All</button>
-    <button id="acceptBtn" class="neumorphic-btn ultrasmall" onclick="acceptSelected()">✅ Accept Selected</button>
+    <button id="acceptBtn" class="neumorphic-btn ultrasmall" onclick="acceptSelected()">Accept Selected</button>
 
     <div style="margin-left:auto; font-weight:bold;">
         Total: ₹<span id="selectedTotal">0</span>
@@ -137,17 +137,17 @@ onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
 
 <button class="neumorphic-btn ultrasmall"
 onclick="acceptPayment('{{ row.feed_payment_id }}')">
-✅ Accept
+Accept
 </button>
 
 <button class="neumorphic-btn ultrasmall"
 onclick="editPayment('{{ row.feed_payment_id }}')">
-✏️ Edit
+Edit
 </button>
 
 <button class="neumorphic-btn ultrasmall"
 onclick="rejectPayment('{{ row.feed_payment_id }}')">
-❌ Reject
+Reject
 </button>
 
 </td>
@@ -173,7 +173,7 @@ onclick="rejectPayment('{{ row.feed_payment_id }}')">
 
 <div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
     <div style="position:relative; background:#222; padding:10px; border-radius:10px;">
-        <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">❌</span>
+        <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">&times;</span>
         <img id="modalImage" style="max-width:500px; max-height:500px; border-radius:8px;">
     </div>
 </div>
