@@ -1,371 +1,412 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set cust_list = customers if customers else customer_feed %}
 
 <h2 class="page-title">📥 Feed Queue</h2>
 
+<style>
+.feed-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.feed-card {
+  background: var(--sidebar);
+  border: 1px solid var(--input-border);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 4px 4px 10px rgba(0,0,0,0.06);
+}
+
+.feed-card-header,
+.feed-subsection-header,
+.feed-docs-grid,
+.feed-actions,
+.payment-feed-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.feed-card-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.feed-subsection {
+  background: rgba(0,0,0,0.02);
+  border: 1px solid var(--input-border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.feed-subsection-header {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.feed-meta-grid,
+.feed-payload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.feed-meta-item,
+.feed-payload-group {
+  background: var(--bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.feed-meta-item strong,
+.feed-payload-group strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--highlight);
+}
+
+.feed-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.14);
+  color: var(--highlight);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.feed-amount {
+  font-weight: 700;
+  color: var(--highlight);
+}
+
+.feed-doc-card {
+  flex: 1 1 240px;
+  min-width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--input-border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.feed-doc-preview {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--input-border);
+}
+
+.feed-doc-empty {
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px dashed var(--input-border);
+  border-radius: 10px;
+  text-align: center;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.feed-payload {
+  margin-top: 12px;
+}
+
+.feed-payload pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  margin: 0;
+}
+
+.payment-feed-toolbar {
+  margin-bottom: 12px;
+}
+
+.payment-feed-table {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .feed-card,
+  .feed-subsection {
+    padding: 14px;
+  }
+}
+</style>
+
 <div class="raised-box">
-<h3>Customer Feed</h3>
+  <h3>Customer Feed</h3>
 
-<div class="customer-table-wrapper">
-<table class="customer-table customer-feed-table">
-<thead style="position:sticky; top:0; z-index:2; background:#caa95a;">
-<tr>
-<th>ANO</th>
-<th>Name</th>
-<th>Pano</th>
-<th>Village</th>
-<th>Type</th>
-<th>Period</th>
-<th>Start Date</th>
-<th>End Date</th>
-<th>Total Amount</th>
-<th>Installment</th>
-<th>Aadhaar</th>
-<th>Notes</th>
-<th>Latitude</th>
-<th>Longitude</th>
-<th>Status</th>
-<th>Actions</th>
-</tr>
-</thead>
+  <div class="feed-stack">
+    {% for row in cust_list %}
+    <div class="feed-card">
+      <div class="feed-card-header">
+        <div>
+          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+          <h4 style="margin-top:8px;">{{ row.name or 'Unnamed Customer' }}</h4>
+          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
+        </div>
+        <div class="feed-actions">
+          <button class="neumorphic-btn ultrasmall" onclick="accept('{{ row.feed_id }}')">✅ Accept Customer</button>
+          <button class="neumorphic-btn ultrasmall" onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
+          <button class="neumorphic-btn ultrasmall" onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
+        </div>
+      </div>
 
-<tbody>
-{% set cust_list = customers if customers else customer_feed %}
-{% for row in cust_list %}
-<tr>
-<td>{{ row.ano }}</td>
-<td>{{ row.name }}</td>
-<td>{{ row.pano }}</td>
-<td>{{ row.vid }}</td>
-<td>{{ row.type }}</td>
-<td>{{ row.period }}</td>
-<td>{{ row.start_date }}</td>
-<td>{{ row.end_date }}</td>
-<td>₹{{ row.total_amount }}</td>
-<td>₹{{ row.installment_amount }}</td>
-<td>{{ row.aadhaar_number }}</td>
-<td>{{ row.notes }}</td>
-<td>{{ row.latitude }}</td>
-<td>{{ row.longitude }}</td>
-<td>{{ row.status }}</td>
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Customer Section</h5>
+        </div>
+        <div class="feed-meta-grid">
+          <div class="feed-meta-item"><strong>Name</strong>{{ row.name or '-' }}</div>
+          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
+          <div class="feed-meta-item"><strong>Parent Account</strong>{{ row.pano or '-' }}</div>
+          <div class="feed-meta-item"><strong>Village</strong>{{ row.vid or '-' }}</div>
+          <div class="feed-meta-item"><strong>Loan Type</strong>{{ row.type or '-' }}</div>
+          <div class="feed-meta-item"><strong>Period</strong>{{ row.period or '-' }}</div>
+          <div class="feed-meta-item"><strong>Start Date</strong>{{ row.start_date or '-' }}</div>
+          <div class="feed-meta-item"><strong>End Date</strong>{{ row.end_date or '-' }}</div>
+          <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Installment</strong><span class="feed-amount">₹{{ row.installment_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Aadhaar Number</strong>{{ row.aadhaar_number or '-' }}</div>
+          <div class="feed-meta-item"><strong>Latitude</strong>{{ row.latitude or '-' }}</div>
+          <div class="feed-meta-item"><strong>Longitude</strong>{{ row.longitude or '-' }}</div>
+          <div class="feed-meta-item" style="grid-column: 1 / -1;"><strong>Notes</strong>{{ row.notes or '-' }}</div>
+        </div>
+      </div>
 
-<td style="white-space:nowrap;">
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Customer Docs</h5>
+          <button class="neumorphic-btn ultrasmall" onclick="acceptDocs('{{ row.feed_id }}')">📄 Accept Docs</button>
+        </div>
 
-<button class="neumorphic-btn ultrasmall"
-onclick="accept('{{ row.feed_id }}')">✅ Accept</button>
+        <div class="feed-docs-grid">
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
+            {% if row.aadhaar_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+            {% endif %}
+          </div>
 
-<button class="neumorphic-btn ultrasmall"
-onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">House Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
+            {% if row.house_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
+            {% else %}
+              <div class="feed-doc-empty">No house photo received.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
 
-{% if row.aadhaar_photo %}
-<button class="neumorphic-btn ultrasmall"
-onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Aadhar</button>
-{% endif %}
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Full Payload</h5>
+          <button
+            class="neumorphic-btn ultrasmall"
+            type="button"
+            data-target="payload-{{ loop.index }}"
+            aria-expanded="false"
+            onclick="togglePayload(this)">
+            📦 View Payload
+          </button>
+        </div>
 
-{% if row.house_photo %}
-<button class="neumorphic-btn ultrasmall"
-onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 House</button>
-{% endif %}
+        <div id="payload-{{ loop.index }}" class="feed-payload" hidden>
+          <div class="feed-payload-grid">
+            <div class="feed-payload-group">
+              <strong>Customer</strong>
+              <pre>{{ {
+                'feed_id': row.feed_id,
+                'ano': row.ano,
+                'name': row.name,
+                'pano': row.pano,
+                'vid': row.vid,
+                'type': row.type,
+                'period': row.period,
+                'start_date': row.start_date,
+                'end_date': row.end_date,
+                'total_amount': row.total_amount,
+                'installment_amount': row.installment_amount,
+                'aadhaar_number': row.aadhaar_number,
+                'latitude': row.latitude,
+                'longitude': row.longitude,
+                'notes': row.notes,
+                'status': row.status
+              } | tojson(indent=2) }}</pre>
+            </div>
+            <div class="feed-payload-group">
+              <strong>Customer Docs</strong>
+              <pre>{{ {
+                'aadhaar_photo': 'available' if row.aadhaar_photo else 'missing',
+                'house_photo': 'available' if row.house_photo else 'missing'
+              } | tojson(indent=2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
 
-<button class="neumorphic-btn ultrasmall"
-onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
-
-</td>
-</tr>
-{% endfor %}
-{% if not cust_list %}
-<tr>
-  <td colspan="16" style="text-align:center; padding:20px;">
-    No data available in table
-  </td>
-</tr>
-{% endif %}
-</tbody>
-</table>
+    {% if not cust_list %}
+    <div class="feed-card" style="text-align:center;">No customer feed items available.</div>
+    {% endif %}
+  </div>
 </div>
-</div>
-
-
 
 <div class="raised-box">
-<h3>Payment Feed</h3>
+  <h3>Existing Customer Docs</h3>
+  <p style="opacity:0.75; margin-top:-6px; margin-bottom:12px;">
+    Documents submitted while collecting payment from customers who were missing Aadhaar or house photos.
+  </p>
 
-<div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+  <div class="feed-stack">
+    {% for row in existing_customer_docs or [] %}
+    <div class="feed-card">
+      <div class="feed-card-header">
+        <div>
+          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+          <h4 style="margin-top:8px;">{{ row.name or 'Existing Customer' }}</h4>
+          <div style="opacity:0.75;">
+            Account: {{ row.ano or '-' }}
+            {% if row.vid %} · Village: {{ row.vid }}{% endif %}
+            {% if row.cid %} · CID: {{ row.cid }}{% endif %}
+          </div>
+          {% if row.created_at %}
+          <div style="opacity:0.65; font-size:12px; margin-top:4px;">Submitted: {{ row.created_at }}</div>
+          {% endif %}
+        </div>
+        <div class="feed-actions">
+          <button class="neumorphic-btn ultrasmall" onclick="acceptExistingDocs('{{ row.docs_feed_id }}')">✅ Accept Docs</button>
+          <button class="neumorphic-btn ultrasmall" onclick="rejectExistingDocs('{{ row.docs_feed_id }}')">❌ Reject</button>
+        </div>
+      </div>
+
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Uploaded Documents</h5>
+        </div>
+
+        <div class="feed-docs-grid">
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
+            {% if row.aadhaar_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+            {% endif %}
+          </div>
+
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">House Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
+            {% if row.house_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
+            {% else %}
+              <div class="feed-doc-empty">No house photo received.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not existing_customer_docs %}
+    <div class="feed-card" style="text-align:center;">No existing customer document uploads pending review.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="raised-box">
+  <h3>Payment Feed</h3>
+
+  <div class="payment-feed-toolbar">
     <select id="groupBy" class="neumorphic-input ultrasmall" style="width:auto; min-width:140px;">
-        <option value="none">None</option>
-        <option value="date">Group by Date</option>
-        <option value="ano">Group by ANO</option>
+      <option value="none">None</option>
+      <option value="date">Group by Date</option>
+      <option value="ano">Group by ANO</option>
     </select>
 
-    <input id="groupInput" class="neumorphic-input ultrasmall" 
-           placeholder="Enter value" 
-           style="display:none; width:160px;" />
+    <input id="groupInput" class="neumorphic-input ultrasmall" placeholder="Enter value" style="display:none; width:160px;" />
 
     <button class="neumorphic-btn ultrasmall" onclick="selectAllPayments()">Select All</button>
     <button id="acceptBtn" class="neumorphic-btn ultrasmall" onclick="acceptSelected()">✅ Accept Selected</button>
 
     <div style="margin-left:auto; font-weight:bold;">
-        Total: ₹<span id="selectedTotal">0</span>
+      Total: ₹<span id="selectedTotal">0</span>
     </div>
-</div>
+  </div>
 
-<div class="customer-table-wrapper">
-<table class="customer-table" style="min-width:800px;">
-<thead>
-<tr>
-<th style="width:40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
-<th>A.no</th>
-<th>Date</th>
-<th>Amount</th>
-<th>Status</th>
-<th>Actions</th>
-</tr>
-</thead>
+  <div class="customer-table-wrapper">
+    <table class="customer-table payment-feed-table">
+      <thead>
+        <tr>
+          <th style="width:40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
+          <th>A.no</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Account Mapping</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in payments %}
+        <tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
+          <td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
+          <td>{{ row.ano }}</td>
+          <td>{{ row.pdt }}</td>
+          <td data-money="{{ row.amt }}">₹{{ row.amt }}</td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.ano }}</td>
+          <td>
+            <button class="neumorphic-btn ultrasmall" onclick="acceptPayment('{{ row.feed_payment_id }}')">✅ Accept</button>
+            <button class="neumorphic-btn ultrasmall" onclick="editPayment('{{ row.feed_payment_id }}')">✏️ Edit</button>
+            <button class="neumorphic-btn ultrasmall" onclick="rejectPayment('{{ row.feed_payment_id }}')">❌ Reject</button>
+          </td>
+        </tr>
+        {% endfor %}
 
-<tbody>
+        {% if not payments %}
+        <tr>
+          <td colspan="7" style="text-align:center; padding:20px;">No payment feed items available.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 
-{% for row in payments %}
-<tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
-<td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
-<td>{{ row.ano }}</td>
-<td>{{ row.pdt }}</td>
-<td data-money="{{ row.amt }}">₹{{ row.amt }}</td>
-<td>{{ row.status }}</td>
-
-<td>
-
-<button class="neumorphic-btn ultrasmall"
-onclick="acceptPayment('{{ row.feed_payment_id }}')">
-✅ Accept
-</button>
-
-<button class="neumorphic-btn ultrasmall"
-onclick="editPayment('{{ row.feed_payment_id }}')">
-✏️ Edit
-</button>
-
-<button class="neumorphic-btn ultrasmall"
-onclick="rejectPayment('{{ row.feed_payment_id }}')">
-❌ Reject
-</button>
-
-</td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
-</div>
-<div id="toast" style="
-    position:fixed;
-    bottom:20px;
-    right:20px;
-    background:#333;
-    color:#fff;
-    padding:10px 16px;
-    border-radius:8px;
-    display:none;
-    z-index:9999;
-    font-size:14px;">
-</div>
+  <div id="toast" style="position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 16px; border-radius:8px; display:none; z-index:9999; font-size:14px;"></div>
 </div>
 
 <div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
-    <div style="position:relative; background:#222; padding:10px; border-radius:10px;">
-        <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">❌</span>
-        <img id="modalImage" style="max-width:500px; max-height:500px; border-radius:8px;">
-    </div>
+  <div style="position:relative; background:#222; padding:10px; border-radius:10px;">
+    <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">❌</span>
+    <img id="modalImage" style="max-width:500px; max-height:500px; border-radius:8px;">
+  </div>
 </div>
+{% endblock %}
 
-<script>
-function setButtonLoading(btn, isLoading){
-    if(!btn) return;
-    if(isLoading){
-        btn.dataset.originalText = btn.innerText;
-        btn.innerText = "Processing...";
-        btn.disabled = true;
-    } else {
-        btn.innerText = btn.dataset.originalText || "Done";
-        btn.disabled = false;
-    }
-}
-
-function showSuccessBanner(msg){
-    let banner = document.getElementById("successBanner");
-    if(!banner){
-        banner = document.createElement("div");
-        banner.id = "successBanner";
-        banner.style.position = "fixed";
-        banner.style.top = "20px";
-        banner.style.right = "20px";
-        banner.style.background = "#28a745";
-        banner.style.color = "#fff";
-        banner.style.padding = "12px 18px";
-        banner.style.borderRadius = "8px";
-        banner.style.zIndex = "9999";
-        banner.style.fontSize = "14px";
-        document.body.appendChild(banner);
-    }
-    banner.innerText = msg;
-    banner.style.display = "block";
-    setTimeout(()=> banner.style.display = "none", 3000);
-}
-</script>
-
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/feed.js') }}"></script>
-
-<script>
-function toggleAll(source){
-    document.querySelectorAll('.pay-checkbox').forEach(cb => {
-        cb.checked = source.checked;
-    });
-    updateTotalPayment();
-}
-
-function selectAllPayments(){
-    const checkboxes = document.querySelectorAll('.pay-checkbox');
-    checkboxes.forEach(cb => cb.checked = true);
-    updateTotalPayment();
-}
-
-function updateTotalPayment(){
-    let total = 0;
-
-    const container = document.querySelectorAll('.raised-box')[1];
-    const checkboxes = container.querySelectorAll('.pay-checkbox');
-
-    checkboxes.forEach(cb => {
-        if(cb.checked){
-            const row = cb.closest('tr');
-            let raw = row.querySelector('[data-money]').getAttribute('data-money') || "0";
-            total += parseFloat(raw || 0);
-        }
-    });
-
-    const totalEl = container.querySelector('#selectedTotal');
-    if(totalEl){
-        totalEl.innerText = total.toLocaleString('en-IN');
-    }
-}
-
-function showToast(msg){
-    const t = document.getElementById("toast");
-    t.innerText = msg;
-    t.style.display = "block";
-    setTimeout(()=> t.style.display = "none", 3000);
-}
-
-function acceptSelected(){
-    const btn = document.getElementById("acceptBtn");
-    const selected = [];
-
-    document.querySelectorAll('.pay-checkbox:checked').forEach(cb => {
-        selected.push(cb.value);
-    });
-
-    if(selected.length === 0){
-        showToast("Select at least one payment");
-        return;
-    }
-
-    // disable button + show loading
-    btn.disabled = true;
-    const originalText = btn.innerText;
-    btn.innerText = "Processing...";
-
-    csrfFetch("/feed/payment/accept_batch", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ ids: selected })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            showToast(data.message);
-            setTimeout(()=> location.reload(), 1000);
-        } else {
-            showToast(data.error || "Failed");
-            btn.disabled = false;
-            btn.innerText = originalText;
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        showToast("Error processing payments");
-        btn.disabled = false;
-        btn.innerText = originalText;
-    });
-}
-
-
-const groupByEl = document.getElementById('groupBy');
-const groupInput = document.getElementById('groupInput');
-
-groupByEl.addEventListener('change', function(){
-    const type = this.value;
-
-    // reset input + selections
-    groupInput.value = '';
-    document.querySelectorAll('.pay-checkbox').forEach(cb => cb.checked = false);
-    updateTotalPayment();
-
-    if(type === 'none'){
-        groupInput.style.display = 'none';
-    } else {
-        groupInput.style.display = 'inline-block';
-        groupInput.placeholder = type === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter ANO';
-    }
-});
-
-groupInput.addEventListener('input', function(){
-    const type = groupByEl.value;
-    const value = this.value.trim();
-
-    if(!value) return;
-
-    const rows = document.querySelectorAll('.customer-table')[1].querySelectorAll('tbody tr');
-
-    rows.forEach(row => {
-        const match = row.dataset[type] == value;
-        const cb = row.querySelector('.pay-checkbox');
-        cb.checked = match;
-    });
-
-    updateTotalPayment();
-});
-
-document.addEventListener("DOMContentLoaded", function(){
-    updateTotalPayment();
-});
-
-function accept(feedId){
-    const btn = event.target;
-
-    setButtonLoading(btn, true);
-
-    csrfFetch(`/feed/customer/accept/${feedId}`, {
-        method: "POST"
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            showSuccessBanner("Customer inserted successfully");
-            showToast("Inserted into main table");
-            setTimeout(()=> location.reload(), 800);
-        } else {
-            showToast(data.error || "Failed");
-            setButtonLoading(btn, false);
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        showToast("Error processing request");
-        setButtonLoading(btn, false);
-    });
-}
-</script>
-
 {% endblock %}
