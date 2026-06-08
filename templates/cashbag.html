@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="section">
+    <!-- PAGE TITLE -->
+    <h2 class="page-title">💼 Cash Bag Management</h2>
+    <!-- SUMMARY CARDS -->
+    <div class="raised-box">
+        <div class="summary-row">
+            <div class="summary-item">
+                <strong>Cash Bag Total</strong>
+                <span data-money>
+                    ₹{{ "{:,.2f}".format(cashbag_total|float) if cashbag_total else "0.00" }}
+                </span>
+            </div>
+
+            <div class="summary-item">
+                <strong>Office Cash</strong>
+                <span data-money>
+                    ₹{{ "{:,.2f}".format(office_cash|float) if office_cash else "0.00" }}
+                </span>
+            </div>
+
+            <div class="summary-item">
+                <strong>Collections</strong>
+                <span data-money>
+                    ₹{{ "{:,.2f}".format(collections|float) if collections else "0.00" }}
+                </span>
+            </div>
+
+            <div class="summary-item">
+                <strong>Loans Dispensed</strong>
+                <span data-money>
+                    ₹{{ "{:,.2f}".format(loans_disbursed|float) if loans_disbursed else "0.00" }}
+                </span>
+            </div>
+
+            <div class="summary-item">
+                <strong>Expenses</strong>
+                <span data-money>
+                    ₹{{ "{:,.2f}".format(expenses|float) if expenses else "0.00" }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD TRANSACTION -->
+    <div class="raised-box">
+        <h3 style="margin-bottom:20px; color: var(--highlight); text-align:center;">
+            ➕ Add Cashbag Entry
+        </h3>
+
+        <form method="POST"
+              action="{{ url_for('add_cashbag_transaction') }}"
+              class="form-grid">
+            <!-- TRANSACTION TYPE -->
+            <label>
+                Transaction Type
+                <select name="txn_type" required>
+                    <option value="">-- Select Type --</option>
+                    <option value="office_credit">
+                        💰 Office Cash
+                    </option>
+                    <option value="expense">
+                        🧾 Expense
+                    </option>
+                    <option value="adjustment">
+                        🛠️ Adjustment
+                    </option>
+                </select>
+            </label>
+
+            <!-- AMOUNT -->
+            <label>
+                Amount
+                <input type="number"
+                       step="0.01"
+                       name="amount"
+                       placeholder="Enter Amount"
+                       required>
+            </label>
+
+            <!-- NOTES -->
+            <label>
+                Notes
+                <input type="text"
+                       name="notes"
+                       placeholder="Example: Petrol / Rent / Office Funding">
+            </label>
+
+            <!-- BUTTON -->
+            <div style="display:flex; align-items:end;">
+                <button type="submit"
+                        class="neumorphic-btn small">
+                    ➕ Add Entry
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- TRANSACTION TABLE -->
+    <div class="raised-box">
+
+        <div style="display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    margin-bottom:20px;
+                    flex-wrap:wrap;
+                    gap:10px;">
+
+            <h3 style="color: var(--highlight);">
+                📒 Cashbag Ledger
+            </h3>
+
+            <div style="font-size:14px; opacity:0.8;">
+                Total Entries:
+                <strong>{{ transactions|length }}</strong>
+            </div>
+        </div>
+
+        <div class="scroll-table-container">
+
+            <table id="cashbagTable"
+                   class="dataTable customer-table">
+
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Transaction Type</th>
+                        <th>Amount</th>
+                        <th>Notes</th>
+                        <th>Created By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if transactions %}
+                        {% for row in transactions %}
+                        <tr>
+                            <!-- DATE -->
+                            <td>
+                                {{ row.created_at }}
+                            </td>
+                            <!-- TYPE -->
+                            <td>
+                                {% if row.txn_type == 'office_credit' %}
+                                    💰 Office Cash
+                                {% elif row.txn_type == 'expense' %}
+                                    🧾 Expense
+                                {% elif row.txn_type == 'loan_disbursed' %}
+                                    📤 Loan Dispensed
+                                {% elif row.txn_type == 'customer_collection' %}
+                                    📥 Collection
+                                {% elif row.txn_type == 'adjustment' %}
+                                    🛠️ Adjustment
+                                {% else %}
+                                    {{ row.txn_type }}
+                                {% endif %}
+                            </td>
+                            <!-- AMOUNT -->
+                            <td class="
+                                {% if row.txn_type in ['office_credit', 'customer_collection'] %}
+                                    cumulative-amt
+                                {% endif %}
+                            ">
+                                {% if row.txn_type in ['expense', 'loan_disbursed'] %}
+                                    -
+                                {% else %}
+                                    +
+                                {% endif %}
+                                ₹{{ "{:,.2f}".format(row.amount|float) }}
+                            </td>
+                            <!-- NOTES -->
+                            <td>
+                                {{ row.notes or "-" }}
+                            </td>
+                            <!-- CREATED BY -->
+                            <td>
+                                {{ row.created_by or "-" }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5"
+                                style="padding:40px;
+                                       text-align:center;
+                                       opacity:0.7;">
+
+                                No cashbag transactions available.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

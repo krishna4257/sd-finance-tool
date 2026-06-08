@@ -312,7 +312,6 @@ anoInput.addEventListener("change", checkAno);
                 
                 anoInput.value = data.highest_ano + 1;
                 // Clear all dynamic fields to prepare for a new entry
-                document.getElementById('ano').value = '';
                 document.getElementById('name').value = '';
                 document.getElementById('aadhaar_number').value = '';
                 document.getElementById('pano').value = '';

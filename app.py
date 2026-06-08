@@ -167,6 +167,116 @@ def parse_mobile_timestamp(ts):
     except Exception as e:
         logger.warning("Timestamp parse error: %s", e)
         return None
+    
+def normalize_account_number(value):
+    if value is None:
+        return None
+    try:
+        return int(str(value).replace(".0", "").strip())
+    except Exception:
+        return None
+
+
+def normalize_mobile_customer_payload(payload):
+    """Normalize customer payload from mobile app to match DB column names."""
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid customer payload")
+
+    normalized = dict(payload)
+
+    base_amount = Decimal(str(normalized.get("base_amount") or 0))
+    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0))
+    interest_amount = Decimal(str(normalized.get("interest_amount") or 0))
+    total_amount = Decimal(str(normalized.get("total_amount") or 0))
+
+    normalized["base_amount"] = float(base_amount)
+    normalized["cutting_amount"] = float(cutting_amount)
+    normalized["interest_amount"] = float(interest_amount)
+
+    if total_amount > 0:
+        component_sum = base_amount + cutting_amount + interest_amount
+        if component_sum > 0 and component_sum != total_amount:
+            logger.warning(
+                "Customer ano=%s total_amount=%s does not equal base+cutting+interest=%s",
+                normalized.get("ano"),
+                total_amount,
+                component_sum,
+            )
+
+    loan_type = normalized.get("type")
+    if loan_type == "weekly":
+        normalized["type"] = "W"
+    elif loan_type == "monthly":
+        normalized["type"] = "M"
+
+    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0)
+    if normalized.get("balance_amount") is None and total_amount > 0:
+        normalized["balance_amount"] = float(
+            total_amount - Decimal(str(normalized["paid_amount"]))
+        )
+
+    return normalized
+
+
+def normalize_mobile_payment_payload(payload):
+    """Normalize payment payload from mobile app to match DB column names."""
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid payment payload")
+
+    normalized = dict(payload)
+
+    payment_type = (normalized.get("payment_type") or "cash").lower().strip()
+    if payment_type not in ("cash", "upi", "partial"):
+        payment_type = "cash"
+
+    amt = Decimal(str(normalized.get("amt") or 0))
+
+    cash_raw = normalized.get("cash_amount", normalized.get("cash_amt"))
+    upi_raw = normalized.get("upi_amount", normalized.get("upi_amt"))
+
+    if payment_type == "cash":
+        cash_amount = amt
+        upi_amount = Decimal("0")
+    elif payment_type == "upi":
+        cash_amount = Decimal("0")
+        upi_amount = amt
+    else:
+        cash_amount = Decimal(str(cash_raw or 0))
+        upi_amount = Decimal(str(upi_raw or 0))
+        if cash_amount <= 0 or upi_amount <= 0:
+            raise ValueError(
+                "Partial payment requires cash_amount and upi_amount greater than zero"
+            )
+        amt = cash_amount + upi_amount
+
+    if amt <= 0:
+        raise ValueError("Payment amount must be greater than zero")
+
+    payment_date_raw = normalized.get("payment_date") or normalized.get("pdate")
+    if not payment_date_raw:
+        raise ValueError("Payment date is required")
+
+    payment_date = datetime.fromisoformat(str(payment_date_raw)[:10]).date()
+
+    ano = normalize_account_number(normalized.get("ano"))
+    vid = normalize_account_number(normalized.get("vid"))
+    eid = normalize_account_number(normalized.get("eid"))
+    if ano is None or vid is None or eid is None:
+        raise ValueError("Payment requires ano, vid, and eid")
+
+    normalized["ano"] = ano
+    normalized["vid"] = vid
+    normalized["eid"] = eid
+    normalized["payment_type"] = payment_type
+    normalized["amt"] = float(amt)
+    normalized["cash_amount"] = float(cash_amount)
+    normalized["upi_amount"] = float(upi_amount)
+    normalized["payment_date"] = payment_date.isoformat()
+    normalized.pop("pdate", None)
+    normalized.pop("cash_amt", None)
+    normalized.pop("upi_amt", None)
+
+    return normalized
 # ----------------------------------------------------
 # FLASK APP SETUP
 # ----------------------------------------------------
@@ -569,7 +679,7 @@ def api_villages():
         if user_level in ["admin", "mgmt"]:
             if eid:
                 cur.execute("""
-                    SELECT vid, village_name, village_code
+                    SELECT vid, village_code, village_name
                     FROM village
                     WHERE (emp1 = %s OR emp2 = %s)
                       AND status = 'active'
@@ -577,7 +687,7 @@ def api_villages():
                 """, (eid, eid))
             else:
                 cur.execute("""
-                    SELECT vid, village_name, village_code
+                    SELECT vid, village_code, village_name
                     FROM village WHERE status = 'active'
                     ORDER BY village_name
                 """)
@@ -586,9 +696,9 @@ def api_villages():
         else:
             if not user_villages:
                 return jsonify([])
-
+ 
             cur.execute("""
-                SELECT vid, village_name, village_code
+                SELECT vid, village_code, village_name
                 FROM village
                 WHERE vid = ANY(%s)
                   AND status = 'active'
@@ -598,7 +708,7 @@ def api_villages():
         rows = cur.fetchall()
 
         return jsonify([
-            {"vid": r[0], "name": r[1], "code": r[2]}
+            {"vid": r[0], "code": r[1], "name": r[2], "display_name": f"{r[1]} - {r[2]}"}
             for r in rows
         ])
     finally:
@@ -1119,6 +1229,51 @@ def get_customer_info_by_ano(ano, vid):
         "bamt": float(row[3] or 0),
         "da": float(row[4] or 0)
     }
+
+@app.route("/check_parent_link")
+@login_required
+def check_parent_link():
+
+    pano = request.args.get("pano", "").strip()
+    vid = session.get("vid")
+
+    if not pano or not vid:
+        return jsonify({
+            "found": False,
+            "accounts": []
+        })
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT ano
+            FROM customer
+            WHERE pano = %s
+              AND vid = %s
+            ORDER BY ano
+        """, (pano, vid))
+
+        rows = cur.fetchall()
+
+        accounts = [str(r[0]) for r in rows]
+
+        return jsonify({
+            "found": len(accounts) > 0,
+            "accounts": accounts
+        })
+
+    except Exception as e:
+        return jsonify({
+            "found": False,
+            "accounts": [],
+            "error": str(e)
+        })
+
+    finally:
+        cur.close()
+        conn.close()
 
 def get_all_customers_by_context(vid):
     conn = get_pg_connection()
@@ -2315,6 +2470,66 @@ def mobile_payments():
         conn.close()
 
 @csrf.exempt
+@app.get("/api/mobile/closed_customers")
+def mobile_closed_customers():
+
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return {"error": "missing token"}, 401
+
+    data = verify_mobile_token(token)
+    if not data:
+        return {"error": "invalid token"}, 401
+
+    vid = request.args.get("vid")
+    updated_after_raw = request.args.get("updated_after")
+    updated_after = parse_mobile_timestamp(updated_after_raw)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SET TIME ZONE 'UTC'")
+
+        if updated_after:
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    status,
+                    balance_amount,
+                    closed_at,
+                    closed_at AS updated_at
+                FROM closed_cust_account
+                WHERE vid = %s
+                  AND closed_at > %s
+            """, (vid, updated_after))
+        else:
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    status,
+                    balance_amount,
+                    closed_at,
+                    closed_at AS updated_at
+                FROM closed_cust_account
+                WHERE vid = %s
+            """, (vid,))
+
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        rows = cur.fetchall()
+        customers = [dict(zip(columns, r)) for r in rows]
+
+        return {"customers": customers}
+    finally:
+        cur.close()
+        conn.close()
+
+@csrf.exempt
 @limiter.limit("200 per minute")
 @app.route("/api/mobile/customer_feed", methods=["POST"])
 def customer_feed():
@@ -2349,6 +2564,15 @@ def customer_feed():
 
         if isinstance(customer_payload, str):
            customer_payload = json.loads(customer_payload)
+
+        if not isinstance(customer_payload, dict):
+            return jsonify({"error": "invalid customer payload"}), 400
+
+        try:
+            customer_payload = normalize_mobile_customer_payload(customer_payload)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
         ano = customer_payload.get("ano")
         payload = json.dumps(customer_payload)
         logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
@@ -2451,13 +2675,23 @@ def payment_feed_batch():
         if not payments:
             return jsonify({"error": "no payments provided"}), 400
 
+        normalized_payments = []
+        for p in payments:
+            try:
+                normalized = normalize_mobile_payment_payload(p)
+                if p.get("local_uuid"):
+                    normalized["local_uuid"] = p.get("local_uuid")
+                normalized_payments.append(normalized)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        total_records = len(payments)
+        total_records = len(normalized_payments)
 
         # insert each payment as JSON payload
-        for p in payments:
+        for p in normalized_payments:
 
             local_uuid = p.get("local_uuid")
             payload = json.dumps(p)
@@ -2568,7 +2802,7 @@ def reset_database():
             RESTART IDENTITY CASCADE
         """)
         
-        cur.connection.commit()
+        conn.commit()
         audit_log(
             action="reset_database",
             entity_type="system",
@@ -2584,15 +2818,18 @@ def reset_database():
 
     except Exception as e:
         try:
-            cur.connection.rollback()
+            conn.rollback()
         except:
             pass
         return {"error": str(e)}, 500
 
     finally:
         try:
-            cur.close()
-            cur.connection.close()
+            if cur:
+                cur.close()
+
+            if conn:
+                conn.close()
         except:
             pass
 # ----------------------------------------------------
@@ -2600,6 +2837,13 @@ def reset_database():
 # ----------------------------------------------------
 
 def get_dashboard_totals(vid):
+    if not vid:
+        return {
+            "total_customers": 0,
+            "sum_amt": 0.0,
+            "sum_pamt": 0.0,
+            "sum_bamt": 0.0,
+        }
     conn = get_pg_connection()
     cur = conn.cursor()
 
@@ -2830,6 +3074,65 @@ def view_customers():
             WHERE vid = %s
             ORDER BY ano
         """, (vid,))
+    elif mode == "yearly":
+        cur.execute("""
+
+        SELECT
+            cid,
+            ano,
+            name,
+            vid,
+            start_date,
+            end_date,
+            total_amount,
+            paid_amount,
+            balance_amount,
+            installment_amount,
+            type,
+            period,
+            pano,
+            created_at,
+            aadhaar_number,
+            notes,
+            latitude,
+            longitude,
+            eid,
+            phone_number,
+            'active' AS status
+        FROM customer
+        WHERE vid = %s
+
+        UNION ALL
+
+        SELECT
+            cid,
+            ano,
+            name,
+            vid,
+            start_date,
+            end_date,
+            total_amount,
+            paid_amount,
+            balance_amount,
+            installment_amount,
+            type,
+            period,
+            pano,
+            created_at,
+            aadhaar_number,
+            notes,
+            latitude,
+            longitude,
+            eid,
+            phone_number,
+            status
+        FROM closed_cust_account
+        WHERE vid = %s
+        AND LOWER(TRIM(status)) != 'written_off'
+        AND LOWER(TRIM(status)) != 'closed'
+        ORDER BY ano
+
+    """, (vid, vid))
     else:
         cur.execute("""
             SELECT
@@ -3036,18 +3339,35 @@ def post_payment_report():
             created_at,
             eid,
             cid,
-            vid
+            vid,
+            'active' AS payment_status
         FROM payment
         WHERE vid = %s
+
+        UNION ALL
+
+        SELECT
+            pid,
+            ano,
+            payment_date,
+            amt,
+            created_at,
+            eid,
+            cid,
+            vid,
+            'closed' AS payment_status
+        FROM closed_cust_payment
+        WHERE vid = %s
+
         ORDER BY payment_date DESC, pid DESC
-    """, (vid,))
+    """, (vid, vid))
 
     rows = cur.fetchall()
     # cur.description can be None for some drivers or edge cases; guard against that
     if cur.description:
         headers = [desc[0] for desc in cur.description]
     else:
-        headers = ["pid", "ano", "payment_date", "amt", "created_at", "eid", "cid", "vid"]
+        headers = ["pid", "ano", "payment_date", "amt", "created_at", "eid", "cid", "vid", "payment_status"]
 
     cur.close()
     conn.close()
@@ -3143,7 +3463,123 @@ def get_customer_info():
         "installment_amount": row[5],
     })
 
+@app.route("/api/payment_day_stats")
+@login_required
+def payment_day_stats():
 
+    vid = session.get("vid")
+
+    if not vid:
+        return jsonify({"error": "Missing village context"}), 400
+
+    date_str = request.args.get("date")
+
+    if not date_str:
+        return jsonify({"error": "Missing date"}), 400
+
+    try:
+        payment_date = datetime.strptime(date_str, "%d/%m/%Y").date()
+    except Exception:
+        return jsonify({"error": "Invalid date"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        cur.execute("""
+
+            WITH village_collection_day AS (
+
+                SELECT DISTINCT ON (p.vid)
+
+                    p.vid,
+
+                    TRIM(TO_CHAR(p.payment_date, 'Day'))
+                        AS collection_day,
+
+                    COUNT(*) AS payment_count
+
+                FROM payment p
+
+                WHERE p.vid = %s
+
+                GROUP BY
+                    p.vid,
+                    collection_day
+
+                ORDER BY
+                    p.vid,
+                    payment_count DESC
+            ),
+
+            eligible_customers AS (
+
+                SELECT
+                    COUNT(*) AS expected_accounts
+
+                FROM customer c
+                JOIN village_collection_day vcd
+                    ON vcd.vid = c.vid
+
+                WHERE c.vid = %s
+                  AND c.type = 'W'
+
+                  AND (
+                        c.start_date + INTERVAL '7 days'
+                      )::date <= %s
+
+                  AND TRIM(TO_CHAR(%s::date, 'Day'))
+                      = vcd.collection_day
+            ),
+
+            actual_payments AS (
+
+                SELECT
+                    COUNT(DISTINCT ano) AS paid_accounts
+
+                FROM payment
+
+                WHERE vid = %s
+                  AND payment_date = %s
+            )
+
+            SELECT
+                COALESCE(ec.expected_accounts, 0)
+                    AS expected_accounts,
+
+                COALESCE(ap.paid_accounts, 0)
+                    AS already_paid
+
+            FROM eligible_customers ec
+            CROSS JOIN actual_payments ap
+
+        """, (
+            vid,
+            vid,
+            payment_date,
+            payment_date,
+            vid,
+            payment_date
+        ))
+
+        row = cur.fetchone()
+
+        expected_accounts = int(row[0] or 0) if row else 0
+        already_paid = int(row[1] or 0) if row else 0
+
+        return jsonify({
+            "expected_accounts": expected_accounts,
+            "already_paid": already_paid
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/api/post_payment_analytics", methods=["GET"])
 @login_required
@@ -3292,7 +3728,7 @@ def submit_post_payment():
 
     try:
         for row in rows:
-            ano = int(row["ano"])
+            ano = normalize_account_number(row.get("ano"))
             amt = Decimal(str(row["amt"]))
             payment_date = datetime.strptime(row["pdt"], "%d/%m/%Y").date()
 
@@ -3367,10 +3803,11 @@ def search_customer():
     customers = []
     pamt1_records = {}
     loanee_headers = [
-        "cid", "ano", "name",
+        "cid", "ano", "name", "vid", "start_date", "end_date",
         "total_amount", "paid_amount",
         "balance_amount", "installment_amount",
-        "type", "period", "created_at", "status"
+        "type", "period","pano", "created_at","aadhaar_number","notes","latitude", "longitude","eid", "status",
+        "updated_at","phone_number"
     ]
 
     if request.method == "POST":
@@ -3383,26 +3820,66 @@ def search_customer():
         cur.execute("""
             (
                 SELECT
-                    cid, ano, name,
-                    total_amount, paid_amount,
-                    balance_amount, installment_amount,
-                    type, period, created_at,
-                    'active' AS status
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    'active' AS status,
+                    updated_at,
+                    phone_number
                 FROM customer
                 WHERE vid = %s
-                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+                  AND (
+                        CAST(ano AS TEXT) = %s
+                        OR LOWER(name) LIKE LOWER(%s)
+                  )
             )
             UNION ALL
             (
                 SELECT
-                    cid, ano, name,
-                    total_amount, paid_amount,
-                    balance_amount, installment_amount,
-                    type, period, created_at,
-                    status
+                    cid,
+                    ano,
+                    name,
+                    vid,
+                    start_date,
+                    end_date,
+                    total_amount,
+                    paid_amount,
+                    balance_amount,
+                    installment_amount,
+                    type,
+                    period,
+                    pano,
+                    created_at,
+                    aadhaar_number,
+                    notes,
+                    latitude,
+                    longitude,
+                    eid,
+                    status,
+                    NULL AS updated_at,
+                    phone_number
                 FROM closed_cust_account
                 WHERE vid = %s
-                  AND (CAST(ano AS TEXT) = %s OR LOWER(name) LIKE LOWER(%s))
+                  AND (
+                        CAST(ano AS TEXT) = %s
+                        OR LOWER(name) LIKE LOWER(%s)
+                  )
             )
             ORDER BY ano
             LIMIT 1
@@ -3787,7 +4264,11 @@ def api_customer_family_full(account_no):
     cur = conn.cursor()
 
     try:
-        account_no = str(account_no).strip()
+        normalized = normalize_account_number(account_no)
+        if normalized is None:
+            return jsonify(success=False)
+
+        account_no = str(normalized)
 
         cur.execute("""
             SELECT
@@ -4201,6 +4682,8 @@ def search_postings():
 @app.route("/api/customer/close_account_pg", methods=["POST"])
 @login_required
 def close_customer_account_pg():
+    conn = None
+    cur = None
     try:
         data = request.get_json()
         cid = data.get("cid")
@@ -4318,15 +4801,22 @@ def close_customer_account_pg():
         })
 
     except Exception as e:
-        conn.rollback()
+        conn.rollback() # type: ignore
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if cur:
+            cur.close()
 
+        if conn:
+            conn.close()
 
 # ------------------ NEW: Retrieve closed/defaulted/written_off account ------------------
 @app.route("/api/customer/retrieve_account_pg", methods=["POST"])
 @login_required
 def retrieve_customer_account_pg():
+    conn = None
+    cur = None
     try:
         data = request.get_json()
         cid = data.get("cid")
@@ -4397,12 +4887,15 @@ def retrieve_customer_account_pg():
         return jsonify({"success": True})
 
     except Exception as e:
-        conn.rollback()
+        conn.rollback() # type: ignore
         return jsonify({"success": False, "error": str(e)})
 
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
 
 @app.route("/api/update_village", methods=["POST"])
 @login_required
@@ -4590,7 +5083,10 @@ def feed():
             feed_payment_id,
             payload->>'ano' AS ano,
             payload->>'amt' AS amt,
-            payload->>'pdate' AS pdt,
+            COALESCE(payload->>'payment_date', payload->>'pdate') AS pdt,
+            COALESCE(payload->>'payment_type', 'cash') AS payment_type,
+            payload->>'cash_amount' AS cash_amount,
+            payload->>'upi_amount' AS upi_amount,
             payload->>'vid' AS vid,
             status
         FROM payment_feed_items
@@ -4650,6 +5146,12 @@ def accept_customer(feed_id):
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
     print("PAYLOAD:", data)
+
+    try:
+        data = normalize_mobile_customer_payload(data)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
     loan_type = data.get("type")
     if loan_type == "weekly":
         loan_type = "W"
@@ -4665,6 +5167,9 @@ def accept_customer(feed_id):
             start_date,
             end_date,
             total_amount,
+            base_amount,
+            cutting_amount,
+            interest_amount,
             paid_amount,
             balance_amount,
             installment_amount,
@@ -4680,7 +5185,7 @@ def accept_customer(feed_id):
             status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
         RETURNING cid
     """,
     (
@@ -4690,6 +5195,9 @@ def accept_customer(feed_id):
         data.get("start_date"),
         data.get("end_date"),
         data.get("total_amount"),
+        data.get("base_amount", 0),
+        data.get("cutting_amount", 0),
+        data.get("interest_amount", 0),
         data.get("paid_amount"),
         data.get("balance_amount"),
         data.get("installment_amount"),
@@ -4700,8 +5208,9 @@ def accept_customer(feed_id):
         data.get("notes"),
         data.get("latitude"),
         data.get("longitude"),
-        data.get("phone_number"),
-        data.get("eid")
+        data.get("eid"),
+        data.get("phone_number")
+        
     ))
     cid = cur.fetchone()[0]
     recalc_customer_repayment_score(cur, cid, force_recalc=True)
@@ -4760,12 +5269,30 @@ def accept_payment(feed_payment_id):
         return {"success": False, "error": "Feed not found"}
 
     data = row[0]
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            return {"success": False, "error": "Invalid payload format"}
+
+    try:
+        data = normalize_mobile_payment_payload(data)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
 
     ano = data.get("ano")
     vid = data.get("vid")
     eid = data.get("eid")
+    if ano is None or vid is None or eid is None:
+        return {"success": False, "error": "Missing ano, vid, or eid in payment payload"}
+
     amt = Decimal(str(data.get("amt")))
-    pdate = datetime.fromisoformat(data.get("pdate")).date()
+    payment_date = datetime.fromisoformat(
+        str(data.get("payment_date") or data.get("pdate"))[:10]
+    ).date()
+    payment_type = data.get("payment_type", "cash")
+    cash_amount = Decimal(str(data.get("cash_amount", 0)))
+    upi_amount = Decimal(str(data.get("upi_amount", 0)))
 
     # 2️⃣ Get customer
     cur.execute("""
@@ -4784,15 +5311,18 @@ def accept_payment(feed_payment_id):
     # 3️⃣ Insert payment
     cur.execute("""
         INSERT INTO payment
-        (cid, vid, eid, ano, amt, payment_date)
-        VALUES (%s,%s,%s,%s,%s,%s)
+        (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         cid,
         vid,
         eid,
         ano,
         amt,
-        pdate
+        payment_date,
+        payment_type,
+        cash_amount,
+        upi_amount
     ))
 
     # 4️⃣ Recalculate balance
@@ -4863,36 +5393,101 @@ def accept_payment_batch():
         if not rows:
             return {"success": False, "error": "No valid payments found"}
 
-        insert_values = []
+        # -------------------------------------------------
+        # Batch prefetch customers
+        # -------------------------------------------------
+        anos = []
+
+        for r in rows:
+            payload = r[0]
+            ano = payload.get("ano")
+
+            if ano is not None:
+                try:
+                    anos.append(int(ano))
+                except Exception:
+                    pass
+
+        anos = list(set(anos))
+
         customer_map = {}
+
+        if anos:
+
+            # Use vid from first payload (all selected payments belong to same village)
+            first_payload = rows[0][0]
+            batch_vid = first_payload.get("vid")
+
+            cur.execute("""
+                SELECT
+                    cid,
+                    ano,
+                    total_amount,
+                    paid_amount,
+                    balance_amount
+                FROM customer
+                WHERE ano = ANY(%s)
+                  AND vid = %s
+            """, (anos, batch_vid))
+
+            for row in cur.fetchall():
+                customer_map[int(row[1])] = {
+                    "cid": row[0],
+                    "total_amount": row[2],
+                    "paid_amount": row[3],
+                    "balance_amount": row[4]
+                }
+
+        insert_values = []
 
         # 2️⃣ Prepare bulk insert
         for r in rows:
             p = r[0]
+            if isinstance(p, str):
+                p = json.loads(p)
+
+            try:
+                p = normalize_mobile_payment_payload(p)
+            except ValueError:
+                continue
 
             ano = p.get("ano")
             vid = p.get("vid")
             eid = p.get("eid")
+            if ano is None or vid is None or eid is None:
+                continue
+
+            try:
+                ano_int = int(ano)
+            except (TypeError, ValueError):
+                continue
+
             amt = Decimal(str(p.get("amt")))
-            pdate = datetime.fromisoformat(p.get("pdate")).date()
+            payment_date = datetime.fromisoformat(
+                str(p.get("payment_date") or p.get("pdate"))[:10]
+            ).date()
+            payment_type = p.get("payment_type", "cash")
+            cash_amount = Decimal(str(p.get("cash_amount", 0)))
+            upi_amount = Decimal(str(p.get("upi_amount", 0)))
 
-            # fetch customer only once per ano
-            if ano not in customer_map:
-                cur.execute("""
-                    SELECT cid, total_amount
-                    FROM customer
-                    WHERE ano = %s AND vid = %s
-                """, (ano, vid))
+            customer = customer_map.get(ano_int)
 
-                cust = cur.fetchone()
-                if not cust:
-                    continue
+            if not customer:
+                continue
 
-                customer_map[ano] = cust
+            cid = customer["cid"]
 
-            cid, total_amt = customer_map[ano]
-
-            insert_values.append((cid, vid, eid, ano, amt, pdate))
+            insert_values.append((
+                cid,
+                vid,
+                eid,
+                ano_int,
+                amt,
+                payment_date,
+                payment_type,
+                cash_amount,
+                upi_amount,
+            ))
 
         if not insert_values:
             return {"success": False, "error": "No valid payments to insert"}
@@ -4907,17 +5502,20 @@ def accept_payment_batch():
                     eid,
                     ano,
                     amt,
-                    payment_date
+                    payment_date,
+                    payment_type,
+                    cash_amount,
+                    upi_amount
                 )
                 VALUES %s
             """,
             insert_values,
-            template="(%s,%s,%s,%s,%s,%s)"
+            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
 
         # 4️⃣ Update customers (optimized)
-        for ano, (cid, total_amt) in customer_map.items():
-            recalc_customer_balance(cur, cid)
+        for customer in customer_map.values():
+            recalc_customer_balance(cur, customer["cid"])
 
         # 5️⃣ Mark all as accepted
         cur.execute("""
@@ -4958,6 +5556,7 @@ def update_customer_pg():
     payload = request.get_json()
 
     data = payload.get("data") if isinstance(payload, dict) else None
+
     if not data:
         return jsonify(success=False, error="Missing data"), 400
 
@@ -4966,6 +5565,7 @@ def update_customer_pg():
 
     if not cid:
         return jsonify(success=False, error="Missing cid"), 400
+
     if not vid:
         return jsonify(success=False, error="Missing vid in session"), 400
 
@@ -4973,120 +5573,138 @@ def update_customer_pg():
     cur = conn.cursor()
 
     try:
-        # Determine if customer is active or closed
-        cur.execute("SELECT 1 FROM customer WHERE cid = %s AND vid = %s", (cid, vid))
-        is_active = cur.fetchone() is not None
-        table_name = "customer" if is_active else "closed_cust_account"
-        payment_table = "payment" if is_active else "closed_cust_payment"
 
-        # Parse inputs
-        name = data.get("name")
-        total_amount = Decimal(str(data.get("total_amount") or 0))
-        installment_amount = Decimal(str(data.get("installment_amount") or 0))
-        payment_type = data.get("type")
-        if payment_type in ["Weekly", "weekly", "W"]:
-            payment_type = "W"
-        elif payment_type in ["Monthly", "monthly", "M"]:
-            payment_type = "M"
+        # 🔹 Detect table based on status
+        status = (data.get("status") or "active").strip().lower()
+
+        if status == "active":
+            table_name = "customer"
         else:
-            payment_type = "W"
-        
-        period_val = data.get("period")
-        period = int(period_val) if period_val is not None and str(period_val).strip() != "" else None
-        
-        phone_number = data.get("phone_number")
-        pano = data.get("pano")
-        
-        # Start date
-        start_date_str = data.get("start_date")
-        start_date = None
-        if start_date_str:
-            try:
-                start_date = datetime.strptime(start_date_str.strip(), "%d/%m/%Y").date()
-            except ValueError:
-                try:
-                    start_date = datetime.strptime(start_date_str.strip(), "%d-%m-%Y").date()
-                except ValueError:
-                    try:
-                        start_date = datetime.fromisoformat(start_date_str.strip()).date()
-                    except ValueError:
-                        pass
-                    
-        # End date
-        end_date_str = data.get("end_date")
-        end_date = None
-        if end_date_str:
-            try:
-                end_date = datetime.strptime(end_date_str.strip(), "%d/%m/%Y").date()
-            except ValueError:
-                try:
-                    end_date = datetime.strptime(end_date_str.strip(), "%d-%m-%Y").date()
-                except ValueError:
-                    try:
-                        end_date = datetime.fromisoformat(end_date_str.strip()).date()
-                    except ValueError:
-                        pass
+            table_name = "closed_cust_account"
 
-        aadhaar_number = data.get("aadhaar_number")
-        
-        eid_val = data.get("eid")
-        eid = int(eid_val) if eid_val is not None and str(eid_val).strip() != "" else None
-        
-        lat_val = data.get("latitude")
-        latitude = Decimal(str(lat_val)) if lat_val is not None and str(lat_val).strip() != "" else None
-        
-        lng_val = data.get("longitude")
-        longitude = Decimal(str(lng_val)) if lng_val is not None and str(lng_val).strip() != "" else None
-        
-        notes = data.get("notes")
+        # 🔹 Fetch existing paid amount
+        cur.execute(f"""
+            SELECT paid_amount
+            FROM {table_name}
+            WHERE cid = %s
+              AND vid = %s
+        """, (cid, vid))
 
-        # Execute UPDATE
+        existing = cur.fetchone()
+
+        if not existing:
+            return jsonify(success=False, error="Customer not found"), 404
+
+        paid_amount = float(existing[0] or 0)
+
+        # 🔹 Read editable fields
+        name = (data.get("name") or "").strip()
+        start_date_raw = (data.get("start_date") or "").strip()
+        loan_type = (data.get("type") or "").strip().upper()
+        pano = (data.get("pano") or "").strip() or None
+        notes = (data.get("notes") or "").strip() or None
+        phone_number = (data.get("phone_number") or "").strip()
+        if phone_number.lower() == "none":
+             phone_number = ""
+        phone_number = phone_number or None
+
+        try:
+            total_amount = float(data.get("total_amount") or 0)
+        except Exception:
+            return jsonify(success=False, error="Invalid total amount"), 400
+
+        try:
+            period = int(data.get("period") or 0)
+        except Exception:
+            return jsonify(success=False, error="Invalid period"), 400 
+
+        # 🔹 Validation
+        if not name:
+            return jsonify(success=False, error="Name is required"), 400
+
+        if loan_type not in ["W", "M"]:
+            return jsonify(success=False, error="Loan type must be W or M"), 400
+
+        if period <= 0:
+            return jsonify(success=False, error="Period must be greater than 0"), 400
+
+        if total_amount <= 0:
+            return jsonify(success=False, error="Total amount must be greater than 0"), 400
+
+        if phone_number:
+            if not phone_number.isdigit() or len(phone_number) != 10:
+                return jsonify(success=False, error="Phone number must be 10 digits"), 400
+
+        # 🔹 Parse frontend date safely
+        try:
+            if "/" in start_date_raw:
+                start_date = datetime.strptime(start_date_raw, "%d/%m/%Y").date()
+            else:
+                start_date = datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+        except Exception:
+            return jsonify(success=False, error="Invalid start date format"), 400
+
+        # 🔹 Recalculate derived fields
+        if loan_type == "M":
+            end_date = start_date + relativedelta(months=period)
+        else:
+            end_date = start_date + timedelta(weeks=period)
+
+        installment_amount = round(total_amount / period, 2)
+        balance_amount = round(total_amount - paid_amount, 2)
+
+        # 🔹 Update customer
         cur.execute(f"""
             UPDATE {table_name}
             SET
-              name = %s,
-              total_amount = %s,
-              installment_amount = %s,
-              type = %s,
-              period = %s,
-              phone_number = %s,
-              pano = %s,
-              start_date = %s,
-              end_date = %s,
-              aadhaar_number = %s,
-              eid = %s,
-              latitude = %s,
-              longitude = %s,
-              notes = %s
+                name = %s,
+                start_date = %s,
+                end_date = %s,
+                total_amount = %s,
+                balance_amount = %s,
+                installment_amount = %s,
+                type = %s,
+                period = %s,
+                pano = %s,
+                notes = %s,
+                phone_number = %s,
+                updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
             WHERE cid = %s
               AND vid = %s
         """, (
-            name, total_amount, installment_amount, payment_type, period,
-            phone_number, pano, start_date, end_date, aadhaar_number,
-            eid, latitude, longitude, notes, cid, vid
+            name,
+            start_date,
+            end_date,
+            total_amount,
+            balance_amount,
+            installment_amount,
+            loan_type,
+            period,
+            pano,
+            notes,
+            phone_number,
+            cid,
+            vid
         ))
-
-        # Recalculate paid_amount and balance_amount
-        cur.execute(f"SELECT COALESCE(SUM(amt), 0) FROM {payment_table} WHERE cid = %s", (cid,))
-        paid_amt = Decimal(str(cur.fetchone()[0]))
-        balance_amt = total_amount - paid_amt
-
-        cur.execute(f"""
-            UPDATE {table_name}
-            SET paid_amount = %s,
-                balance_amount = %s
-            WHERE cid = %s
-              AND vid = %s
-        """, (paid_amt, balance_amt, cid, vid))
 
         # Force recalculation of repayment score and streaks
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
         conn.commit()
-        return jsonify(success=True)
+
+        return jsonify(
+            success=True,
+            recalculated={
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+                "installment_amount": installment_amount,
+                "balance_amount": balance_amount
+            }
+        )
 
     except Exception as e:
         conn.rollback()
+        traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
 
     finally:
@@ -5284,19 +5902,23 @@ def village_page():
     if user_level in ["admin", "mgmt"]:
         cur.execute("""
         SELECT
-            vid,
-            village_code,
-            village_name,
-            district,
-            pincode,
-            state,
-            emp1,
-            emp2,
-            created_at,
-            status
-        FROM village
-        ORDER BY vid
-    """)
+            v.vid,
+            v.village_code,
+            v.village_name,
+            v.district,
+            v.pincode,
+            v.state,
+            v.emp1,
+            e1.name AS emp1_name,
+            v.emp2,
+            e2.name AS emp2_name,
+            v.created_at,
+            v.status
+        FROM village v
+        LEFT JOIN employee e1 ON e1.eid = v.emp1
+        LEFT JOIN employee e2 ON e2.eid = v.emp2
+        ORDER BY v.vid
+        """)
     else:
         if not allowed_villages:
             cur.close()
@@ -5306,24 +5928,28 @@ def village_page():
                 headers=[],
                 data=[],
                 total_villages=0
-        )
+            )
 
         cur.execute("""
         SELECT
-            vid,
-            village_code,
-            village_name,
-            district,
-            pincode,
-            state,
-            emp1,
-            emp2,
-            created_at,
-            status
-        FROM village
-        WHERE vid = ANY(%s)
-        ORDER BY vid
-    """, (allowed_villages,))
+            v.vid,
+            v.village_code,
+            v.village_name,
+            v.district,
+            v.pincode,
+            v.state,
+            v.emp1,
+            e1.name AS emp1_name,
+            v.emp2,
+            e2.name AS emp2_name,
+            v.created_at,
+            v.status
+        FROM village v
+        LEFT JOIN employee e1 ON e1.eid = v.emp1
+        LEFT JOIN employee e2 ON e2.eid = v.emp2
+        WHERE v.vid = ANY(%s)
+        ORDER BY v.vid
+        """, (allowed_villages,))
 
     rows = cur.fetchall()
 
@@ -5947,6 +6573,7 @@ def employee_page():
 
 @app.route("/api/update_employee", methods=["POST"])
 @login_required
+@admin_required
 def update_employee():
     data = request.json
     try:
@@ -6181,36 +6808,46 @@ def list_users():
     users = []
     rows = cur.fetchall()
 
-    for row in rows:
-        user_id, username, employee_id, is_active, emp_name, level = row
+    user_ids = [r[0] for r in rows]
 
-        # Fetch device
-        cur.execute("""
-            SELECT device_id 
-            FROM user_devices 
-            WHERE user_id = %s AND is_active = TRUE
-        """, (user_id,))
-        device = cur.fetchone()
+    devices_by_user = {}
+    villages_by_user = {}
 
-        # Fetch assigned villages
+    if user_ids:
+
+        # Batch fetch active devices
         cur.execute("""
-            SELECT v.vid, v.village_name, v.district
+            SELECT user_id, device_id
+            FROM user_devices
+            WHERE user_id = ANY(%s)
+              AND is_active = TRUE
+        """, (user_ids,))
+
+        for uid, device_id in cur.fetchall():
+            devices_by_user[uid] = device_id
+
+        # Batch fetch village access
+        cur.execute("""
+            SELECT
+                uva.user_id,
+                v.vid,
+                v.village_name,
+                v.district
             FROM user_village_access uva
             JOIN village v ON v.vid = uva.village_id
-            WHERE uva.user_id = %s
+            WHERE uva.user_id = ANY(%s)
             ORDER BY v.village_name
-        """, (user_id,))
+        """, (user_ids,))
 
-        village_rows = cur.fetchall()
+        for uid, vid, village_name, district in cur.fetchall():
+            villages_by_user.setdefault(uid, []).append({
+                "vid": vid,
+                "name": village_name,
+                "district": district
+            })
 
-        villages = [
-            {
-                "vid": v[0],
-                "name": v[1],
-                "district": v[2]
-            }
-            for v in village_rows
-        ]
+    for row in rows:
+        user_id, username, employee_id, is_active, emp_name, level = row
 
         users.append({
             "id": user_id,
@@ -6218,9 +6855,9 @@ def list_users():
             "employee_id": employee_id,
             "employee_name": emp_name,
             "role": level,
-            "device_id": device[0] if device else "",
+            "device_id": devices_by_user.get(user_id, ""),
             "is_active": is_active,
-            "villages": villages
+            "villages": villages_by_user.get(user_id, [])
         })
 
     cur.close()
@@ -6520,6 +7157,352 @@ def update_payment_date_bulk():
     except Exception as e:
         conn.rollback()
         return jsonify(success=False, error=str(e)), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+# ----------------------------------------------------
+# CASHBAG ROUTES
+# ----------------------------------------------------
+
+@app.route("/cashbag")
+@login_required
+def cashbag():
+
+    vid = session.get("vid")
+
+    # Enforce village context
+    if not vid:
+        flash("Please select Village from Dashboard first", "warning")
+        return redirect(url_for("dashboard"))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # ------------------------------------------------
+        # SUMMARY TOTALS
+        # ------------------------------------------------
+
+        # Office Cash
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'office_credit'
+        """, (vid,))
+
+        office_cash = float(cur.fetchone()[0] or 0)
+
+        # Collections
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'customer_collection'
+        """, (vid,))
+
+        collections = float(cur.fetchone()[0] or 0)
+
+        # Loans Dispensed
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'loan_disbursed'
+        """, (vid,))
+
+        loans_disbursed = float(cur.fetchone()[0] or 0)
+
+        # Expenses
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'expense'
+        """, (vid,))
+
+        expenses = float(cur.fetchone()[0] or 0)
+
+        # Adjustments
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE vid = %s
+              AND txn_type = 'adjustment'
+        """, (vid,))
+
+        adjustments = float(cur.fetchone()[0] or 0)
+
+        # ------------------------------------------------
+        # FINAL CASHBAG TOTAL
+        # ------------------------------------------------
+
+        cashbag_total = (
+            office_cash
+            + collections
+            + adjustments
+            - loans_disbursed
+            - expenses
+        )
+
+        # ------------------------------------------------
+        # TRANSACTION HISTORY
+        # ------------------------------------------------
+
+        cur.execute("""
+            SELECT
+                id,
+                txn_type,
+                amount,
+                notes,
+                created_by,
+                TO_CHAR(
+                    created_at AT TIME ZONE 'Asia/Kolkata',
+                    'DD/MM/YYYY HH12:MI AM'
+                ) AS created_at
+            FROM cashbag_transactions
+            WHERE vid = %s
+            ORDER BY created_at DESC, id DESC
+        """, (vid,))
+
+        rows = cur.fetchall()
+
+        transactions = []
+
+        for row in rows:
+
+            transactions.append({
+                "id": row[0],
+                "txn_type": row[1],
+                "amount": float(row[2] or 0),
+                "notes": row[3],
+                "created_by": row[4],
+                "created_at": row[5]
+            })
+
+        return render_template(
+            "cashbag.html",
+
+            cashbag_total=cashbag_total,
+            office_cash=office_cash,
+            collections=collections,
+            loans_disbursed=loans_disbursed,
+            expenses=expenses,
+
+            transactions=transactions
+        )
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        flash(f"Cashbag loading failed: {str(e)}", "danger")
+
+        return redirect(url_for("dashboard"))
+
+    finally:
+
+        cur.close()
+        conn.close()
+
+
+# ----------------------------------------------------
+# ADD CASHBAG TRANSACTION
+# ----------------------------------------------------
+
+@app.route("/cashbag/add", methods=["POST"])
+@login_required
+def add_cashbag_transaction():
+
+    vid = session.get("vid")
+
+    if not vid:
+        flash("Please select Village first", "warning")
+        return redirect(url_for("dashboard"))
+
+    txn_type = request.form.get("txn_type")
+    amount = request.form.get("amount")
+    notes = request.form.get("notes")
+
+    username = session.get("username") or "Unknown"
+
+    # Allowed transaction types
+    allowed_types = [
+        "office_credit",
+        "expense",
+        "adjustment"
+    ]
+
+    if txn_type not in allowed_types:
+
+        flash("Invalid transaction type", "danger")
+
+        return redirect(url_for("cashbag"))
+
+    try:
+        amount = float(amount or 0)
+        if amount <= 0:
+            flash("Amount must be greater than zero", "warning")
+            return redirect(url_for("cashbag"))
+    except Exception:
+        flash("Invalid amount", "danger")
+        return redirect(url_for("cashbag"))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        cur.execute("""
+            INSERT INTO cashbag_transactions (
+                vid,
+                eid,
+                txn_type,
+                amount,
+                notes,
+                created_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            vid,
+            session.get("eid"),
+            txn_type,
+            amount,
+            notes,
+            username
+        ))
+
+        conn.commit()
+
+        audit_log(
+            action="cashbag_transaction_added",
+            entity_type="cashbag_transaction",
+            entity_id=vid,
+            details={
+                "txn_type": txn_type,
+                "amount": amount,
+                "notes": notes
+            }
+        )
+
+        flash("Cashbag entry added successfully", "success")
+
+    except Exception as e:
+
+        conn.rollback()
+
+        traceback.print_exc()
+
+        flash(f"Failed to add transaction: {str(e)}", "danger")
+
+    finally:
+
+        cur.close()
+        conn.close()
+
+    return redirect(url_for("cashbag"))
+
+
+@app.route("/api/village/update_employee_pair", methods=["POST"])
+@login_required
+@admin_required
+def update_employee_pair():
+
+    data = request.get_json()
+
+    old_emp1 = data.get("old_emp1")
+    old_emp2 = data.get("old_emp2")
+
+    new_emp1 = data.get("new_emp1")
+    new_emp2 = data.get("new_emp2")
+
+    if old_emp1 == new_emp1 and old_emp2 == new_emp2:
+        return jsonify(success=True)
+
+    # Prevent duplicate employee assignment
+    if (
+        new_emp1
+        and new_emp2
+        and str(new_emp1) == str(new_emp2)
+    ):
+        return jsonify(
+            success=False,
+            error="Same employee cannot occupy both slots"
+        )
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # Check if target pair already exists
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM village
+            WHERE
+                COALESCE(emp1,-1) = COALESCE(%s,-1)
+            AND COALESCE(emp2,-1) = COALESCE(%s,-1)
+        """, (
+            new_emp1,
+            new_emp2
+        ))
+
+        existing_count = cur.fetchone()[0]
+
+        if (existing_count > 0 and not (str(old_emp1) == str(new_emp1) and str(old_emp2) == str(new_emp2))):
+            return jsonify(
+                success=False,
+                error="Employee pair already exists"
+            )
+
+        # Bulk update entire cluster
+        cur.execute("""
+            UPDATE village
+            SET
+                emp1 = %s,
+                emp2 = %s
+            WHERE
+                COALESCE(emp1,-1) = COALESCE(%s,-1)
+            AND COALESCE(emp2,-1) = COALESCE(%s,-1)
+        """, (
+            new_emp1,
+            new_emp2,
+            old_emp1,
+            old_emp2
+        ))
+
+        updated_rows = cur.rowcount
+
+        conn.commit()
+
+        audit_log(
+            action="update_employee_pair",
+            entity_type="village_cluster",
+            entity_id=f"{old_emp1}_{old_emp2}",
+            details={
+                "old_emp1": old_emp1,
+                "old_emp2": old_emp2,
+                "new_emp1": new_emp1,
+                "new_emp2": new_emp2,
+                "villages_updated": updated_rows
+            }
+        )
+
+        return jsonify(
+            success=True,
+            villages_updated=updated_rows
+        )
+
+    except Exception as e:
+        conn.rollback()
+
+        return jsonify(
+            success=False,
+            error=str(e)
+        )
 
     finally:
         cur.close()

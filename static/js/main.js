@@ -221,6 +221,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+
+  // ===================================================
+// KEYBOARD ROW NAVIGATION (GLOBAL)
+// ===================================================
+document.addEventListener("keydown", (e) => {
+
+  // Don't interfere while typing
+  const tag = document.activeElement?.tagName;
+
+  if (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    document.activeElement?.isContentEditable
+  ) {
+    return;
+  }
+
+  if (!window.currentRow) return;
+
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+    return;
+  }
+
+  e.preventDefault();
+
+  const tbody = window.currentRow.closest("tbody");
+  if (!tbody) return;
+
+  const visibleRows = Array.from(
+    tbody.querySelectorAll("tr")
+  ).filter(row =>
+    row.offsetParent !== null &&
+    row.style.display !== "none"
+  );
+
+  let index = visibleRows.indexOf(window.currentRow);
+
+  if (index === -1) return;
+
+  if (e.key === "ArrowDown" && index < visibleRows.length - 1) {
+    index++;
+  }
+
+  if (e.key === "ArrowUp" && index > 0) {
+    index--;
+  }
+
+  window.currentRow.classList.remove("highlighted-row");
+
+  window.currentRow = visibleRows[index];
+
+  window.currentRow.classList.add("highlighted-row");
+
+  window.currentRow.scrollIntoView({
+    block: "nearest",
+    behavior: "smooth"
+  });
+});
   // ===================================================
   // DASHBOARD CONTEXT DROPDOWNS (FIXED BI-DIRECTIONAL)
   // ===================================================

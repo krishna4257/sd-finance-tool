@@ -59,7 +59,7 @@
                     {{ cust.get(field, '') }}
                   </span>
                 {% else %}
-                  {{ cust.get(field, '') }}
+                  {{ '' if cust.get(field) is none else cust.get(field) }}
                 {% endif %}
               </td>
             {% endfor %}

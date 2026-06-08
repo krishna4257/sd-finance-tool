@@ -523,6 +523,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   };
 
+  window.filterYearlyReport = function () {
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "yearly");
+    window.location.href = url.toString();
+  };
+
   window.filterBalanceReport = async function () {
     try {
       const response = await fetch("/api/balance_report");

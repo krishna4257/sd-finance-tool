@@ -179,20 +179,6 @@ Reject
 </div>
 
 <script>
-async function csrfFetch(url, options = {}) {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                      document.querySelector('input[name="csrf_token"]')?.value || "";
-
-    options.headers = {
-        ...(options.headers || {}),
-        'X-CSRFToken': csrfToken
-    };
-
-    options.credentials = 'same-origin';
-
-    return fetch(url, options);
-}
-
 function setButtonLoading(btn, isLoading){
     if(!btn) return;
     if(isLoading){

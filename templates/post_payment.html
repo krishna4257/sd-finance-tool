@@ -223,9 +223,11 @@
   <div id="successMsg" class="message-box success" style="display: none; margin-top: 16px;"></div>
 </div>
 
-<!-- Scripts -->
+<script type="application/json" id="customers-data">
+  {{ customers | tojson | safe }}
+</script>
 <script>
-  window.CUSTOMERS = JSON.parse('{{ customers | tojson | safe }}');
+  window.CUSTOMERS = JSON.parse(document.getElementById("customers-data").textContent);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/post_payment.js') }}?v={{ range(1, 10000) | random }}"></script>

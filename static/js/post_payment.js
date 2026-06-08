@@ -22,28 +22,45 @@ function persistTempPayments() {
     );
 }
 
+
 let tempTable = loadTempPayments();
 let selectedDate = null;
 let lastWeekPaidCount = 0;
 let lastWeekCollection = 0;
+let isSubmittingPayments = false;
+let expectedPayments = 0;
+let alreadyPaidPayments = 0;
 
 
 // --- Instant lookup mapping ---
 const CUSTOMER_MAP = {};
-window.CUSTOMERS.forEach(c => {
-    // Normalize backend keys to the frontend expected shape
-    const normalized = {
-  ano: String(c.ano).trim(),
-  name: c.name,
-  amt: Number(c.total_amount) || 0,
-  pamt: Number(c.paid_amount) || 0,
-  bamt: Number(c.balance_amount) || 0,
-  da: Number(c.installment_amount) || 0
-};
 
-    console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
-    if (normalized.ano) {
-        CUSTOMER_MAP[normalized.ano] = normalized;
+(window.CUSTOMERS || []).forEach(c => {
+    try {
+
+        if (!c || c.ano === null || c.ano === undefined) {
+            console.warn("Skipping invalid customer:", c);
+            return;
+        }
+
+        // Normalize backend keys to the frontend expected shape
+        const normalized = {
+            ano: String(c.ano).trim(),
+            name: c.name || "",
+            amt: Number(c.total_amount) || 0,
+            pamt: Number(c.paid_amount) || 0,
+            bamt: Number(c.balance_amount) || 0,
+            da: Number(c.installment_amount) || 0
+        };
+
+        console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
+
+        if (normalized.ano) {
+            CUSTOMER_MAP[normalized.ano] = normalized;
+        }
+
+    } catch (err) {
+        console.error("Failed loading customer:", c, err);
     }
 });
 
@@ -61,10 +78,105 @@ function showError(message) {
     errorSound.play().catch(e => console.warn("Could not play error sound:", e));
 }
 
+
 function ddmmyyyyToIso(dateStr) {
   // "10/01/2026" → "2026-01-10"
   const [dd, mm, yyyy] = dateStr.split('/');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadPaymentDayStats() {
+
+    const pdt = document.getElementById("pdt")?.value?.trim();
+
+    if (!pdt) {
+        expectedPayments = 0;
+        alreadyPaidPayments = 0;
+        updateCollectionStats();
+        return;
+    }
+
+    try {
+
+        console.log("DEBUG PAYMENT STATS DATE =>", {
+            original: pdt
+        });
+
+        const response = await fetch(
+            `/api/payment_day_stats?date=${encodeURIComponent(pdt)}`
+        );
+
+        console.log("DEBUG PAYMENT STATS STATUS =>", response.status);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        console.log("DEBUG PAYMENT DAY STATS RESPONSE =>", data);
+
+        if (data.error) {
+            console.error("PAYMENT DAY STATS API ERROR =>", data.error);
+
+            expectedPayments = 0;
+            alreadyPaidPayments = 0;
+            updateCollectionStats();
+
+            return;
+        }
+
+        expectedPayments = Number(
+            data.expected_accounts ||
+            data.expectedPayments ||
+            data.eligible_accounts ||
+            0
+        );
+
+        alreadyPaidPayments = Number(
+            data.already_paid ||
+            data.paid_accounts ||
+            data.alreadyPaid ||
+            0
+        );
+
+        console.log("DEBUG FINAL COUNTS =>", {
+            expectedPayments,
+            alreadyPaidPayments
+        });
+
+        updateCollectionStats();
+
+    } catch (err) {
+        console.error("Failed loading collection stats:", err);
+
+        expectedPayments = 0;
+        alreadyPaidPayments = 0;
+        updateCollectionStats();
+    }
+}
+
+function updateCollectionStats() {
+
+    const enteredToday = tempTable.length;
+
+    const expected = expectedPayments;
+
+    const missed = Math.max(
+        expected - (alreadyPaidPayments + enteredToday),
+        0
+    );
+
+    const expectedEl = document.getElementById("expectedPayments");
+    const missedEl = document.getElementById("missedPayments");
+
+    if (expectedEl) {
+        expectedEl.textContent = expected;
+    }
+
+    if (missedEl) {
+        missedEl.textContent = missed;
+    }
 }
 
 document.addEventListener('click', function(e) {
@@ -338,6 +450,7 @@ function updateTable() {
 
   updateComparativeStats();
   applyGlobalMoneyFormatting();
+  updateCollectionStats();
 }
 
 
@@ -409,16 +522,33 @@ function printTemp() {
 }
 
 function submitAllPayments() {
+
+  if (isSubmittingPayments) {
+    console.log("Payment submission already in progress.");
+    return;
+  }
+
   if (tempTable.length === 0) {
     alert("There are no payments to submit.");
     return;
   }
-  
+
+  isSubmittingPayments = true;
+
+  const submitBtn = document.querySelector(
+    'button[onclick="submitAllPayments()"]'
+  );
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Submitting...";
+  }
+
   const payload = tempTable.map(row => ({
-  ano: Number(row.ano),
-  pdt: row.pdt,
-  amt: Number(row.amt)
-}));
+    ano: Number(row.ano),
+    pdt: row.pdt,
+    amt: Number(row.amt)
+  }));
 
   csrfFetch("/submit_post_payment", {
     method: "POST",
@@ -433,15 +563,26 @@ function submitAllPayments() {
     })
     .then(data => {
       const successMsg = document.getElementById("successMsg");
+
       successMsg.style.display = "block";
       successMsg.innerText = data.message;
+
       tempTable = data.skipped_rows;
       saveAndUpdate(); 
       // Refresh analytics graph as well
       loadAnalytics();
     })
     .catch(err => {
-        showError(`An error occurred: ${err.message}`);
+      showError(`An error occurred: ${err.message}`);
+    })
+    .finally(() => {
+
+      isSubmittingPayments = false;
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "📤 Submit All Payments";
+      }
     });
 }
 document.getElementById("ano").addEventListener("input", function () {
@@ -449,23 +590,63 @@ document.getElementById("ano").addEventListener("input", function () {
 });
 document.getElementById("paymentForm").addEventListener("submit", function (e) {
   e.preventDefault();
-  const pdt = document.getElementById("pdt").value;
-  const ano = document.getElementById("ano").value;
+
+  const pdt = document.getElementById("pdt").value.trim();
+  const ano = document.getElementById("ano").value.trim();
   const amt = parseFloat(document.getElementById("amt").value);
 
-  if (!pdt || !ano || isNaN(amt)) return;
+  console.log("DEBUG FORM SUBMIT =>", { pdt, ano, amt });
 
-  const duplicate = tempTable.some(row => row.ano === ano && row.pdt === pdt);
-  console.log("DEBUG: Submit pressed. ANO:", ano, "PDT:", pdt, "Amount:", amt, "Duplicate:", duplicate);
-  if (duplicate) {
-    showError("Duplicate A.no + Date combo exists.");
+  if (!pdt) {
+    showError("❌ Please enter payment date.");
     return;
   }
 
-  tempTable.unshift({ ano, pdt, amt });
+  if (!ano) {
+    showError("❌ Please enter account number.");
+    return;
+  }
+
+  if (isNaN(amt)) {
+    showError("❌ Please enter amount.");
+    return;
+  }
+
+  const customer = CUSTOMER_MAP[String(ano)];
+
+  console.log("DEBUG CUSTOMER LOOKUP =>", customer);
+
+  if (!customer) {
+    showError("❌ A.no not found in database!");
+    return;
+  }
+
+  const duplicate = tempTable.some(
+    row => String(row.ano) === String(ano) && row.pdt === pdt
+  );
+
+  console.log("DEBUG DUPLICATE CHECK =>", duplicate);
+
+  if (duplicate) {
+    showError("❌ Duplicate A.no + Date combo exists.");
+    return;
+  }
+
+  tempTable.unshift({
+    ano: String(ano),
+    pdt,
+    amt: Number(amt)
+  });
+
+  console.log("DEBUG ROW ADDED =>", tempTable[0]);
+
   saveAndUpdate();
+
   document.getElementById("ano").value = "";
   document.getElementById("amt").value = "";
+
+  document.getElementById("customerInfo").style.display = "none";
+
   document.getElementById("ano").focus();
 });
 
@@ -499,7 +680,7 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
     }
 
     // ---- INSTANT VALIDATION ----
-    const customer = CUSTOMER_MAP[ano];
+    const customer = CUSTOMER_MAP[String(ano).trim()];
     console.log("DEBUG: Typed ANO:", ano, "Lookup result:", customer);
     if (!customer) {
         showError("❌ A.no not found in database!");
@@ -806,7 +987,7 @@ updateTable();
 applyGlobalMoneyFormatting();
 loadAnalytics(); // Fetch analytics and render mixed chart on page load
 
-// --- Auto-focus & flatpickr & flip card listeners ---
+// --- Auto-focus & flatpickr & live collection stats loader & flip card listeners ---
 document.addEventListener("DOMContentLoaded", () => {
     flatpickr("#pdt", {
         dateFormat: 'd/m/Y',
@@ -851,5 +1032,50 @@ document.addEventListener("DOMContentLoaded", () => {
         e.stopPropagation();
         flipCardInner.classList.remove("flipped");
       });
+    }
+
+    // ── Centralized Stats Loader (Live stats) ──
+    if (pdtInput) {
+        let lastLoadedDate = "";
+
+        const triggerStatsLoad = () => {
+            const currentDate = pdtInput.value.trim();
+
+            // Prevent duplicate unnecessary calls
+            if (!currentDate || currentDate === lastLoadedDate) {
+                return;
+            }
+
+            lastLoadedDate = currentDate;
+
+            console.log(
+                "AUTO LOADING PAYMENT STATS FOR =>",
+                currentDate
+            );
+
+            loadPaymentDayStats();
+        };
+
+        // Safari/macOS calendar compatibility
+        pdtInput.addEventListener("change", triggerStatsLoad);
+        pdtInput.addEventListener("input", triggerStatsLoad);
+        pdtInput.addEventListener("blur", triggerStatsLoad);
+        pdtInput.addEventListener("keyup", triggerStatsLoad);
+
+        // IMPORTANT:
+        // Detect programmatic value changes too
+        let previousValue = pdtInput.value;
+
+        setInterval(() => {
+            if (pdtInput.value !== previousValue) {
+                previousValue = pdtInput.value;
+                triggerStatsLoad();
+            }
+        }, 150);
+
+        // Initial load if date already exists
+        setTimeout(() => {
+            triggerStatsLoad();
+        }, 100);
     }
 });
