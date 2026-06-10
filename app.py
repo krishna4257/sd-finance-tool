@@ -5,6 +5,7 @@ import uuid
 import platform
 import base64
 import hashlib
+import hmac
 import json
 from functools import wraps
 from decimal import Decimal
@@ -148,6 +149,141 @@ def verify_mobile_token(token):
     except Exception:
         return None
     
+
+def _canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def verify_queue_integrity(data, token_data):
+    if not isinstance(data, dict):
+        return False, "invalid envelope"
+
+    required_fields = [
+        "type",
+        "eid",
+        "vid",
+        "nonce",
+        "timestamp",
+        "idempotency_key",
+        "payload",
+        "signature",
+    ]
+    missing = [field for field in required_fields if data.get(field) in (None, "")]
+    if missing:
+        return False, f"missing integrity fields: {', '.join(missing)}"
+
+    try:
+        eid_val = data.get("eid")
+        vid_val = data.get("vid")
+        token_eid_val = token_data.get("eid")
+        
+        if eid_val is None or vid_val is None or token_eid_val is None:
+            return False, "invalid identity fields"
+        
+        envelope_eid = int(eid_val)
+        envelope_vid = int(vid_val)
+        token_eid = int(token_eid_val)
+    except Exception:
+        return False, "invalid identity fields"
+
+    if envelope_eid != token_eid:
+        return False, "eid mismatch"
+
+    ts = parse_mobile_timestamp(data.get("timestamp"))
+    if ts is None:
+        return False, "invalid timestamp"
+
+    age_seconds = abs((datetime.now(timezone.utc) - ts).total_seconds())
+    if age_seconds > 900:
+        return False, "stale timestamp"
+
+    signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or app.config["SECRET_KEY"]
+
+    signed_payload = {
+        "type": data.get("type"),
+        "eid": envelope_eid,
+        "vid": envelope_vid,
+        "nonce": data.get("nonce"),
+        "timestamp": data.get("timestamp"),
+        "idempotency_key": data.get("idempotency_key"),
+        "payload": data.get("payload"),
+    }
+
+    expected_signature = hmac.new(
+    signing_secret.encode("utf-8"),
+    _canonical_json(signed_payload).encode("utf-8"),
+    hashlib.sha256).hexdigest()
+
+
+    provided_signature = str(data.get("signature") or "")
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        return False, "invalid signature"
+
+    return True, None
+
+
+def register_mobile_request_integrity(
+    cur,
+    *,
+    endpoint,
+    eid,
+    vid,
+    local_uuid,
+    idempotency_key,
+    nonce,
+    request_signature,
+    request_timestamp,
+):
+    cur.execute("""
+        INSERT INTO mobile_request_integrity
+        (
+            endpoint,
+            eid,
+            vid,
+            local_uuid,
+            idempotency_key,
+            nonce,
+            request_signature,
+            request_timestamp
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (endpoint, idempotency_key) DO NOTHING
+        RETURNING id
+    """, (
+        endpoint,
+        eid,
+        vid,
+        local_uuid,
+        idempotency_key,
+        nonce,
+        request_signature,
+        request_timestamp,
+    ))
+
+    row = cur.fetchone()
+    if row:
+        return True, "accepted"
+
+    cur.execute("""
+        SELECT idempotency_key, nonce
+        FROM mobile_request_integrity
+        WHERE endpoint = %s
+          AND (idempotency_key = %s OR nonce = %s)
+        LIMIT 1
+    """, (endpoint, idempotency_key, nonce))
+
+    existing = cur.fetchone()
+    if not existing:
+        return False, "duplicate request"
+
+    existing_idempotency_key, existing_nonce = existing
+    if existing_nonce == nonce:
+        return False, "duplicate nonce"
+    if existing_idempotency_key == idempotency_key:
+        return False, "duplicate idempotency key"
+
+    return False, "duplicate request"
+
 
 def parse_mobile_timestamp(ts):
     if not ts:
@@ -1656,25 +1792,143 @@ def customer_feed():
             return {"error": "invalid token"}, 401
 
         payload_json = request.form.get("payload")
-        data = json.loads(payload_json) # type: ignore
+        if not payload_json:
+            return jsonify({"error": "missing payload"}), 400
+
+        try:
+            data = json.loads(payload_json)  # queue envelope from mobile
+        except Exception:
+            return jsonify({"error": "invalid payload json"}), 400
+
+        if not isinstance(data, dict):
+            return jsonify({"error": "invalid envelope"}), 400
+
+        required_fields = [
+            "type",
+            "eid",
+            "vid",
+            "nonce",
+            "timestamp",
+            "idempotency_key",
+            "payload",
+            "signature",
+        ]
+        missing = [field for field in required_fields if data.get(field) in (None, "")]
+        if missing:
+            return jsonify({
+                "error": f"missing integrity fields: {', '.join(missing)}"
+            }), 400
+
+        def _canonical_json(value):
+            return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+        try:
+            # use defaults to satisfy type checkers; presence/emptiness validated above
+            envelope_eid = int(data.get("eid", 0))
+            envelope_vid = int(data.get("vid", 0))
+            token_eid = int(data_token.get("eid", 0))
+        except Exception:
+            return jsonify({"error": "invalid identity fields"}), 400
+
+        if envelope_eid != token_eid:
+            return jsonify({"error": "eid mismatch"}), 403
+
+        parsed_ts = parse_mobile_timestamp(data.get("timestamp"))
+        if parsed_ts is None:
+            return jsonify({"error": "invalid timestamp"}), 400
+
+        age_seconds = abs((datetime.now(timezone.utc) - parsed_ts).total_seconds())
+        if age_seconds > 900:
+            return jsonify({"error": "stale timestamp"}), 400
+
+        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or app.config["SECRET_KEY"]
+
+        signed_payload = {
+            "type": data.get("type"),
+            "eid": envelope_eid,
+            "vid": envelope_vid,
+            "nonce": data.get("nonce"),
+            "timestamp": data.get("timestamp"),
+            "idempotency_key": data.get("idempotency_key"),
+            "payload": data.get("payload"),
+        }
+
+        expected_signature = hmac.new(
+            signing_secret.encode("utf-8"),
+            _canonical_json(signed_payload).encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        provided_signature = str(data.get("signature") or "")
+        if not hmac.compare_digest(provided_signature, expected_signature):
+            audit_log(
+                action="mobile_customer_upload_rejected",
+                entity_type="customer_feed",
+                entity_id=data.get("local_uuid"),
+                details={
+                    "reason": "invalid signature",
+                    "eid": data.get("eid"),
+                    "vid": data.get("vid"),
+                    "nonce": data.get("nonce"),
+                    "idempotency_key": data.get("idempotency_key"),
+                },
+                status="failed"
+            )
+            return jsonify({"error": "invalid signature"}), 400
 
         conn = get_pg_connection()
         cur = conn.cursor()
         cur.execute("SET TIME ZONE 'UTC'")
 
+        # Optional replay protection if you create a dedicated table:
+        # cur.execute(
+        #     "SELECT 1 FROM mobile_request_integrity WHERE idempotency_key = %s OR nonce = %s LIMIT 1",
+        #     (data.get("idempotency_key"), data.get("nonce"))
+        # )
+        # if cur.fetchone():
+        #     return jsonify({"error": "duplicate request"}), 409
+
         local_uuid = data.get("local_uuid")
         device_id = data.get("device_id", "mobile")
-        eid = data.get("eid")
-        vid = data.get("vid")
+        eid = envelope_eid
+        vid = envelope_vid
         status = data.get("status", "pending")
         latitude = data.get("latitude")
         longitude = data.get("longitude")
         gps_accuracy = data.get("gps_accuracy")
-        
+
+        ok, reason = register_mobile_request_integrity(
+            cur,
+            endpoint="/api/mobile/customer_feed",
+            eid=eid,
+            vid=vid,
+            local_uuid=local_uuid,
+            idempotency_key=data.get("idempotency_key"),
+            nonce=data.get("nonce"),
+            request_signature=provided_signature,
+            request_timestamp=parsed_ts,
+        )
+        if not ok:
+            conn.rollback()
+            audit_log(
+                action="mobile_customer_upload_rejected",
+                entity_type="customer_feed",
+                entity_id=local_uuid,
+                details={
+                    "reason": reason,
+                    "eid": eid,
+                    "vid": vid,
+                    "nonce": data.get("nonce"),
+                    "idempotency_key": data.get("idempotency_key"),
+                },
+                status="failed"
+            )
+            return jsonify({"error": reason}), 409
+
         customer_payload = data.get("payload")
 
         if isinstance(customer_payload, str):
-           customer_payload = json.loads(customer_payload)
+            customer_payload = json.loads(customer_payload)
 
         if not isinstance(customer_payload, dict):
             return jsonify({"error": "invalid customer payload"}), 400
@@ -1686,11 +1940,28 @@ def customer_feed():
 
         ano = customer_payload.get("ano")
         payload = json.dumps(customer_payload)
-        logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
-        # 1️⃣ Insert into customer_feed
+
+        logger.debug(
+            "Customer feed received for vid=%s ano=%s nonce=%s idempotency_key=%s",
+            vid,
+            ano,
+            data.get("nonce"),
+            data.get("idempotency_key"),
+        )
+
         cur.execute("""
             INSERT INTO customer_feed
-            (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
+            (
+                local_uuid,
+                device_id,
+                eid,
+                vid,
+                status,
+                payload,
+                latitude,
+                longitude,
+                gps_accuracy
+            )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (local_uuid) DO NOTHING
         """, (
@@ -1705,14 +1976,12 @@ def customer_feed():
             gps_accuracy
         ))
 
-        # 2️⃣ Read images
         aadhaar_file = request.files.get("aadhaar_photo")
         house_file = request.files.get("house_photo")
 
         aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
         house_bytes = house_file.read() if house_file else None
 
-        # 3️⃣ Insert into customer_docs
         if aadhaar_bytes or house_bytes:
             cur.execute("""
                 INSERT INTO customer_docs (vid, ano, aadhaar_photo, house_photo)
@@ -1728,6 +1997,20 @@ def customer_feed():
                 house_bytes
             ))
 
+        # Optional replay ledger insert if you create the table:
+        # cur.execute("""
+        #     INSERT INTO mobile_request_integrity
+        #     (idempotency_key, nonce, eid, vid, endpoint, local_uuid, created_at)
+        #     VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        # """, (
+        #     data.get("idempotency_key"),
+        #     data.get("nonce"),
+        #     eid,
+        #     vid,
+        #     "/api/mobile/customer_feed",
+        #     local_uuid,
+        # ))
+
         conn.commit()
         audit_log(
             action="mobile_customer_upload",
@@ -1738,7 +2021,9 @@ def customer_feed():
                 "vid": vid,
                 "ano": ano,
                 "device_id": device_id,
-                "status": status
+                "status": status,
+                "nonce": data.get("nonce"),
+                "idempotency_key": data.get("idempotency_key"),
             }
         )
 
@@ -1757,6 +2042,7 @@ def customer_feed():
 
         if conn:
             conn.close()
+
 
 # ----------------------------------------------------
 # /api/mobile/customer_docs_update
