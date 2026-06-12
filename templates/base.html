@@ -4,7 +4,8 @@
 
 <script>
 (function() {
-    document.documentElement.setAttribute("data-theme", "light");
+    var saved = localStorage.getItem('sd-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
 })();
 </script>
 
@@ -34,8 +35,6 @@
   <!-- Main site-wide script -->
   <script src="{{ url_for('static', filename='js/main.js') }}?v={{ range(1, 10000) | random }}"></script>
   <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="{{ url_for('static', filename='js/calculator.js') }}"></script>
   
   <script>
@@ -50,6 +49,8 @@
 
       return fetch(url, options);
     };
+
+    window.activeVillageId = "{{ session.get('vid') or '' }}";
 
     document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('form').forEach(form => {
@@ -143,7 +144,7 @@
 
   <aside>
     <div class="logo-container">
-      <a href="/landing"><img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Smart Counting Logo"></a>
+      <a href="/village"><img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Smart Counting Logo"></a>
     </div>
 
     <div class="nav-section-label">MENU</div>
@@ -163,16 +164,15 @@
     <!-- ── APP / VILLAGE DASHBOARD SIDEBAR ── -->
     <a href="/dashboard"                      class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"><i class="fas fa-th-large"></i> Dashboard</a>
     <a href="/add_customer"                   class="nav-link {% if request.endpoint == 'add_customer' %}active{% endif %}"><i class="fas fa-user-plus"></i> Add Customer</a>
-    <a href="/post_payment"                   class="nav-link {% if request.endpoint == 'post_payment_page' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Add Payment</a>
+    <a href="/posting"                        class="nav-link {% if request.endpoint == 'posting_page' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Posting</a>
     <a href="{{ url_for('view_customers') }}" class="nav-link {% if request.endpoint == 'view_customers' %}active{% endif %}"><i class="fas fa-users"></i> Customers</a>
-    <a href="/post_payment_report"            class="nav-link {% if request.endpoint == 'post_payment_report' %}active{% endif %}"><i class="fas fa-file-alt"></i> Posting Report</a>
     <a href="/feed"                           class="nav-link {% if request.endpoint == 'feed' %}active{% endif %}"><i class="fas fa-inbox"></i> Feed</a>
     <a href="/search"                         class="nav-link {% if request.endpoint == 'search_customer' %}active{% endif %}"><i class="fas fa-search"></i> Search | Edit</a>
     <a href="/cashbag"                        class="nav-link {% if request.endpoint == 'cashbag' %}active{% endif %}"><i class="fas fa-briefcase"></i> Cashbag</a>
     {% endif %}
 
     <div class="nav-section-label">GENERAL</div>
-    <a href="/landing" class="nav-link"><i class="fas fa-home"></i> Home</a>
+    <a href="/village" class="nav-link"><i class="fas fa-home"></i> Home</a>
 
   </aside>
 
@@ -186,12 +186,40 @@
         </button>
 
         <!-- Context tiles -->
-        {% if session.get("vid") %}
+        {% if request.endpoint == 'users_page' %}
         <div class="header-context-tiles">
-          <div class="header-tile header-tile-employee" title="Active Employee">
+          <div class="header-tile header-tile-employee" title="Total Users">
+            <i class="fas fa-users"></i>
+            <span>Users: <strong id="headerTotalUsers">{{ total_users }}</strong></span>
+          </div>
+        </div>
+        {% elif request.endpoint in ['village_page', 'employee_page'] %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-village" title="Total Villages">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>Villages: <strong id="headerTotalVillages">{{ total_villages }}</strong></span>
+          </div>
+          <div class="header-tile header-tile-employee" title="Total Employees">
+            <i class="fas fa-user-tie"></i>
+            <span>Employees: <strong id="headerTotalEmployees">{{ total_employees }}</strong></span>
+          </div>
+          <div class="header-tile header-tile-pairs" title="Employee Pairs">
+            <i class="fas fa-link"></i>
+            <span>Pairs: <strong id="headerEmployeePairs">0</strong></span>
+          </div>
+        </div>
+        {% elif session.get("vid") %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-employee" title="Active Primary Employee">
             <i class="fas fa-user-tie"></i>
             <span>{{ session.get("employee_name", "—") }}</span>
           </div>
+          {% if session.get("employee_name2") %}
+          <div class="header-tile header-tile-employee" title="Active Secondary Employee">
+            <i class="fas fa-user-tie"></i>
+            <span>{{ session.get("employee_name2") }}</span>
+          </div>
+          {% endif %}
           <div class="header-tile header-tile-village" title="Active Village">
             <i class="fas fa-map-marker-alt"></i>
             <span>
@@ -207,13 +235,48 @@
 
       <!-- ── Right: Calculator + Notification + Profile ── -->
       <div class="header-right-group">
+        {% if request.endpoint == 'dashboard' and session.get("vid") %}
+        <!-- Dashboard View Toggle (Active / Complete) -->
+        <div class="sliding-toggle-container dashboard-toggle-container mode-active" id="dashboardViewToggle" onclick="toggleDashboardView()">
+          <div class="sliding-toggle-pill"></div>
+          <span class="toggle-label active-label">Active</span>
+          <span class="toggle-label complete-label">Complete</span>
+        </div>
+
+        <button id="vpopRecalcBtn" class="icon-btn" title="Refresh Dashboard Data" onclick="refreshDashboardData()">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        {% endif %}
+
         <button id="calculatorToggleBtn" class="icon-btn" title="Calculator">
           <i class="fas fa-calculator"></i>
         </button>
 
-        <button class="icon-btn" title="Notifications">
-          <i class="fas fa-bell"></i>
-        </button>
+        <!-- Notifications System -->
+        <div class="notifications-wrapper" id="notificationsWrapper">
+          <button class="icon-btn" id="notificationBtn" title="Notifications" onclick="toggleNotificationsDropdown(event)">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+          </button>
+          
+          <div id="notificationDropdown" class="notifications-dropdown">
+            <div class="notifications-header">
+              <h4 class="notifications-title">Notifications</h4>
+              <button onclick="toggleNotificationsDropdown(event)" style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1rem;" title="Close">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div class="notifications-tabs">
+              <button class="notification-tab-btn active" id="btnTabIntelligence" onclick="switchNotificationTab('intelligence')">Intelligence</button>
+              <button class="notification-tab-btn" id="btnTabEvents" onclick="switchNotificationTab('events')">Events</button>
+            </div>
+            
+            <div class="notifications-content" id="notificationsContent">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
 
         <!-- USER PROFILE -->
         {% if session.get("user_id") %}
@@ -231,6 +294,20 @@
           <!-- Dropdown panel -->
           <div id="userDropdown" class="user-dropdown" role="menu">
 
+            <!-- Dark Mode Toggle -->
+            <div class="dropdown-theme-row">
+              <span>Dark Mode</span>
+              <div class="theme-toggle-icons">
+                <i class="fas fa-sun"></i>
+                <label class="theme-toggle-switch">
+                  <input type="checkbox" id="themeToggleCheckbox">
+                  <span class="theme-toggle-slider"></span>
+                </label>
+                <i class="fas fa-moon"></i>
+              </div>
+            </div>
+
+            <div class="dropdown-divider"></div>
             <a href="{{ url_for('logout') }}" class="dropdown-logout-link">Logout</a>
           </div>
         </div>

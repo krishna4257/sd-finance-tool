@@ -2,6 +2,12 @@
 <html lang="en">
 
 <head>
+    <script>
+    (function() {
+        var saved = localStorage.getItem('sd-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved);
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Counting – Login</title>
@@ -117,6 +123,54 @@
         }
         .login-card .submit-btn:active {
             transform: scale(0.98);
+        }
+
+        /* Dark Mode Overrides for Login */
+        [data-theme="dark"] body {
+            background: #0f1117;
+        }
+        [data-theme="dark"] .login-card {
+            background: #1a1d27;
+            border-color: #2a2e3a;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+        [data-theme="dark"] .login-card .logo-wrap img {
+            filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.35))
+                    drop-shadow(0 0 30px rgba(16, 185, 129, 0.15));
+        }
+        [data-theme="dark"] .login-brand-name .smart {
+            color: #10b981;
+        }
+        [data-theme="dark"] .login-brand-name .counting {
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card h2 {
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card .error-msg {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: rgba(248, 113, 113, 0.25);
+            color: #f87171;
+        }
+        [data-theme="dark"] .login-card label {
+            color: #9ca3af;
+        }
+        [data-theme="dark"] .login-card input[type="text"],
+        [data-theme="dark"] .login-card input[type="password"] {
+            background: #151821;
+            border-color: #2a2e3a;
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card input[type="text"]:focus,
+        [data-theme="dark"] .login-card input[type="password"]:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+        [data-theme="dark"] .login-card .submit-btn {
+            background: #10b981;
+        }
+        [data-theme="dark"] .login-card .submit-btn:hover {
+            background: #34d399;
         }
     </style>
 </head>

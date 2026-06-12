@@ -202,3 +202,127 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
 document.addEventListener('DOMContentLoaded', () => {
   applyGlobalMoneyFormatting();
 });
+
+// -------------------- Modernized Success Animations & Sounds --------------------
+
+/**
+ * Synthesizes a bright, high-quality double-tone chime sound (payment success style)
+ * using Web Audio API. Requires no external audio file assets.
+ */
+function playSuccessSound() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    // Tone 1: E5 (659.25 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, ctx.currentTime);
+    gain1.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    
+    // Tone 2: B5 (987.77 Hz) - delayed slightly for chime effect
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(987.77, ctx.currentTime + 0.08);
+    gain2.gain.setValueAtTime(0, ctx.currentTime);
+    gain2.gain.setValueAtTime(0.12, ctx.currentTime + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    
+    osc1.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.4);
+    
+    osc2.start(ctx.currentTime + 0.08);
+    osc2.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    console.warn("Could not play success chime sound:", e);
+  }
+}
+
+/**
+ * Triggers a PhonePe-style modernized success animation:
+ * 1. Flashes the background of the sectionElement green.
+ * 2. Overlays a tick mark and success message.
+ * 3. Plays a synthesized success sound.
+ * 4. Highlights specified elements for 5 seconds.
+ *
+ * @param {Object} options Configuration options:
+ * @param {HTMLElement} options.sectionElement The card/column container that receives the flash and overlay.
+ * @param {Array<HTMLElement>} options.highlightElements List of elements to highlight for 5 seconds.
+ * @param {string} options.message Text message to show under the success checkmark.
+ * @param {number} options.highlightDuration Duration of the input highlight in ms (default 5000).
+ * @param {Function} options.onComplete Callback executed after the success overlay fades out.
+ */
+function triggerSuccessFeedback({
+  sectionElement,
+  highlightElements = [],
+  message = "Change successful",
+  highlightDuration = 5000,
+  onComplete = null
+}) {
+  if (!sectionElement) return;
+
+  // 1. Play audio chime
+  playSuccessSound();
+
+  // 2. Trigger the green background flash animation
+  sectionElement.classList.remove("success-flash-active");
+  // Force reflow to restart animation if it was run recently
+  void sectionElement.offsetWidth; 
+  sectionElement.classList.add("success-flash-active");
+  setTimeout(() => {
+    sectionElement.classList.remove("success-flash-active");
+  }, 1500);
+
+  // 3. Create and show the PhonePe-like checkmark overlay
+  let overlay = sectionElement.querySelector(".success-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "success-overlay";
+    overlay.innerHTML = `
+      <div class="success-checkmark-wrapper">
+        <svg class="success-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+          <circle class="success-checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+          <path class="success-checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        </svg>
+        <div class="success-message"></div>
+      </div>
+    `;
+    sectionElement.appendChild(overlay);
+  }
+
+  overlay.querySelector(".success-message").textContent = message;
+  
+  // Activate overlay
+  overlay.classList.add("active");
+
+  // Fade out overlay after 1.5 seconds
+  setTimeout(() => {
+    overlay.classList.remove("active");
+    if (onComplete) onComplete();
+  }, 1600);
+
+  // 4. Highlight modified fields/rows for 5 seconds
+  highlightElements.forEach(el => {
+    if (!el) return;
+    el.classList.add("field-highlight");
+  });
+
+  setTimeout(() => {
+    highlightElements.forEach(el => {
+      if (!el) return;
+      el.classList.remove("field-highlight");
+    });
+  }, highlightDuration);
+}
+
+// Expose animation helpers globally
+window.playSuccessSound = playSuccessSound;
+window.triggerSuccessFeedback = triggerSuccessFeedback;

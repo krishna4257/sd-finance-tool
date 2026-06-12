@@ -80,6 +80,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const row = e.target.closest("tbody tr");
     if (!row) return;
 
+    // Ignore rows inside the Weekly Repayment Log only
+    if (row.closest("#popWeeklyLogTable") || row.closest("#popWeeklyLogModal")) {
+      return;
+    }
+
     // Ignore if clicking on interactive form elements inside rows
     if (e.target.closest("input") || e.target.closest("button") || e.target.closest("a") || e.target.closest("span.delete-btn")) {
       return;
@@ -154,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (activeInput && !isSearchBox && (
           activeInput.tagName === "INPUT" || 
           activeInput.tagName === "TEXTAREA" || 
+          activeInput.tagName === "SELECT" || 
           activeInput.getAttribute("contenteditable") === "true"
       )) {
           return;
@@ -222,64 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
-  // ===================================================
-// KEYBOARD ROW NAVIGATION (GLOBAL)
-// ===================================================
-document.addEventListener("keydown", (e) => {
-
-  // Don't interfere while typing
-  const tag = document.activeElement?.tagName;
-
-  if (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    document.activeElement?.isContentEditable
-  ) {
-    return;
-  }
-
-  if (!window.currentRow) return;
-
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") {
-    return;
-  }
-
-  e.preventDefault();
-
-  const tbody = window.currentRow.closest("tbody");
-  if (!tbody) return;
-
-  const visibleRows = Array.from(
-    tbody.querySelectorAll("tr")
-  ).filter(row =>
-    row.offsetParent !== null &&
-    row.style.display !== "none"
-  );
-
-  let index = visibleRows.indexOf(window.currentRow);
-
-  if (index === -1) return;
-
-  if (e.key === "ArrowDown" && index < visibleRows.length - 1) {
-    index++;
-  }
-
-  if (e.key === "ArrowUp" && index > 0) {
-    index--;
-  }
-
-  window.currentRow.classList.remove("highlighted-row");
-
-  window.currentRow = visibleRows[index];
-
-  window.currentRow.classList.add("highlighted-row");
-
-  window.currentRow.scrollIntoView({
-    block: "nearest",
-    behavior: "smooth"
-  });
-});
+  // Keyboard row navigation is handled by the primary keydown handler above
   // ===================================================
   // DASHBOARD CONTEXT DROPDOWNS (FIXED BI-DIRECTIONAL)
   // ===================================================
@@ -478,9 +427,9 @@ document.addEventListener("keydown", (e) => {
   // ===================================================
   // CREATE VILLAGE MODAL
   // ===================================================
-  window.openCreateVillageModal = () => {
+  window.openCreateVillageModal = (preSelectEmp1, preSelectEmp2) => {
     document.getElementById("createVillageModal").style.display = "block";
-    loadEmployeesForVillageModal();
+    loadEmployeesForVillageModal(preSelectEmp1, preSelectEmp2);
   };
 
   window.closeCreateVillageModal = () => {
@@ -614,7 +563,7 @@ document.addEventListener("keydown", (e) => {
   // ===================================================
   // LOAD EMPLOYEES FOR MODAL
   // ===================================================
-  window.loadEmployeesForVillageModal = () => {
+  window.loadEmployeesForVillageModal = (preSelectEmp1, preSelectEmp2) => {
     fetch("/api/employees")
       .then(r => r.json())
       .then(list => {
@@ -626,8 +575,19 @@ document.addEventListener("keydown", (e) => {
           emp1Select.add(o1);
           emp2Select.add(o2);
         });
+        if (preSelectEmp1) {
+          emp1Select.value = preSelectEmp1;
+        }
+        if (preSelectEmp2) {
+          emp2Select.value = preSelectEmp2 === "None" ? "" : preSelectEmp2;
+        }
       });
   };
+
+  // Pre-fetch notifications count on DOM ready if village is active
+  if (window.activeVillageId) {
+    fetchNotificationCounts(window.activeVillageId);
+  }
 });
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -676,11 +636,8 @@ document.addEventListener('DOMContentLoaded', function () {
           e.target.value = input;
         });
 
-        flatpickr('#newPDT', {
-          dateFormat: 'd/m/Y',
-          allowInput: true,
-          clickOpens: true,
-          wrap: false
+        window.initCustomCalendar(newPDT, {
+          clickOpens: true
         });
       }
 });
@@ -704,6 +661,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (loader) {
     setTimeout(() => {
       loader.classList.add("fade-out");
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 450);
     }, 150);
   }
 
@@ -715,6 +675,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const target = link.getAttribute("target");
       if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !target && !e.ctrlKey && !e.metaKey) {
         if (loader) {
+          loader.style.display = "flex";
+          loader.offsetHeight; // Force reflow
           loader.classList.remove("fade-out");
         }
       }
@@ -734,3 +696,394 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // Mouse glow tracking removed for light mode design
+
+// =====================================================
+// NOTIFICATIONS DROPDOWN SYSTEM
+// =====================================================
+let cachedNotifications = {
+  stress_alerts: [],
+  events: []
+};
+let currentActiveNotifTab = 'intelligence';
+
+function getNotificationId(item, type) {
+  const vid = window.activeVillageId || 'global';
+  if (type === 'intelligence') {
+    const textKey = (item.type + "-" + item.message).replace(/[^a-zA-Z0-9]/g, '-');
+    return `stress-${vid}-${textKey}`;
+  } else {
+    const timeKey = (item.action + "-" + (item.created_at || 'unknown')).replace(/[^a-zA-Z0-9]/g, '-');
+    return `event-${vid}-${timeKey}`;
+  }
+}
+
+async function fetchNotificationCounts(vid) {
+  try {
+    const [resAnalytics, resPosting] = await Promise.all([
+      fetch(`/api/village/behavioral_analytics/${vid}`),
+      fetch(`/api/dashboard/posting_analytics/${vid}`)
+    ]);
+    const dataAnalytics = await resAnalytics.json();
+    const dataPosting = await resPosting.json();
+    
+    let alerts = [];
+    if (dataAnalytics.success && dataAnalytics.stress_alerts) {
+      alerts = [...dataAnalytics.stress_alerts];
+    }
+    const postingData = dataPosting.success ? (dataPosting.data || {}) : {};
+    if (postingData.employee_breakdown) {
+      postingData.employee_breakdown.forEach(emp => {
+        const avgLag = parseFloat(emp.avg_lag_days || 0);
+        if (avgLag > 0) {
+          alerts.push({
+            type: "Employee Performance Lag",
+            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${avgLag.toFixed(1)} days.`,
+            severity: avgLag > 14 ? "Critical" : (avgLag > 7 ? "High" : "Normal")
+          });
+        }
+      });
+    }
+    cachedNotifications.stress_alerts = alerts;
+    updateNotificationBadge();
+  } catch (e) {
+    console.error("Failed to pre-fetch notification counts:", e);
+  }
+}
+
+function updateNotificationBadge() {
+  const badge = document.getElementById("notificationBadge");
+  if (!badge) return;
+  
+  let unreadStates = JSON.parse(localStorage.getItem('sd-notifications-unread') || '{}');
+  let count = 0;
+  
+  cachedNotifications.stress_alerts.forEach(item => {
+    const id = getNotificationId(item, 'intelligence');
+    if (unreadStates[id] !== false) {
+      count++;
+    }
+  });
+  
+  cachedNotifications.events.forEach(item => {
+    const id = getNotificationId(item, 'event');
+    if (unreadStates[id] !== false) {
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = "flex";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function toggleNotificationsDropdown(event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  const dropdown = document.getElementById("notificationDropdown");
+  if (!dropdown) return;
+  
+  const isShown = dropdown.classList.contains("show");
+  
+  // Close user profile dropdown if open
+  const userDropdown = document.getElementById("userDropdown");
+  if (userDropdown) userDropdown.classList.remove("show");
+  
+  if (!isShown) {
+    dropdown.classList.add("show");
+    document.addEventListener("click", closeNotificationsOnOutsideClick);
+    
+    // Load fresh data
+    loadNotificationsContent();
+  } else {
+    dropdown.classList.remove("show");
+    document.removeEventListener("click", closeNotificationsOnOutsideClick);
+  }
+}
+
+function closeNotificationsOnOutsideClick(event) {
+  const dropdown = document.getElementById("notificationDropdown");
+  const wrapper = document.getElementById("notificationsWrapper");
+  if (dropdown && !wrapper.contains(event.target)) {
+    dropdown.classList.remove("show");
+    document.removeEventListener("click", closeNotificationsOnOutsideClick);
+  }
+}
+
+async function loadNotificationsContent() {
+  const contentEl = document.getElementById("notificationsContent");
+  if (!contentEl) return;
+  
+  const vid = window.activeVillageId;
+  if (!vid) {
+    contentEl.innerHTML = `
+      <div class="notification-empty">
+        <i class="fas fa-info-circle" style="font-size:1.5rem; color:#94a3b8; margin-bottom:8px; display:block;"></i>
+        Please select a village to view behavioral intelligence and system events.
+      </div>
+    `;
+    return;
+  }
+  
+  // Show loading spinner
+  contentEl.innerHTML = `
+    <div class="notification-loading">
+      <i class="fas fa-sync-alt" style="font-size:1.2rem; color:#1a4d2e;"></i>
+      <span>Loading intelligence & system events...</span>
+    </div>
+  `;
+  
+  try {
+    // Fetch behavioral analytics, health history, and posting analytics concurrently
+    const [resAnalytics, resHistory, resPosting] = await Promise.all([
+      fetch(`/api/village/behavioral_analytics/${vid}`),
+      fetch(`/api/village/health_history/${vid}?view=active&sub_view=active_only&range=weekly&event_days=30`),
+      fetch(`/api/dashboard/posting_analytics/${vid}`)
+    ]);
+    
+    const dataAnalytics = await resAnalytics.json();
+    const dataHistory = await resHistory.json();
+    const dataPosting = await resPosting.json();
+    
+    let alerts = [];
+    if (dataAnalytics.success && dataAnalytics.stress_alerts) {
+      alerts = [...dataAnalytics.stress_alerts];
+    }
+    const postingData2 = dataPosting.success ? (dataPosting.data || {}) : {};
+    if (postingData2.employee_breakdown) {
+      postingData2.employee_breakdown.forEach(emp => {
+        const avgLag = parseFloat(emp.avg_lag_days || 0);
+        if (avgLag > 0) {
+          alerts.push({
+            type: "Employee Performance Lag",
+            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${avgLag.toFixed(1)} days.`,
+            severity: avgLag > 14 ? "Critical" : (avgLag > 7 ? "High" : "Normal")
+          });
+        }
+      });
+    }
+    cachedNotifications.stress_alerts = alerts;
+
+    if (dataHistory.success) {
+      cachedNotifications.events = dataHistory.events || [];
+    }
+    
+    // Mark all currently loaded alerts as read upon opening the dropdown
+    let unreadStates = JSON.parse(localStorage.getItem('sd-notifications-unread') || '{}');
+    cachedNotifications.stress_alerts.forEach(item => {
+      const id = getNotificationId(item, 'intelligence');
+      unreadStates[id] = false;
+    });
+    cachedNotifications.events.forEach(item => {
+      const id = getNotificationId(item, 'event');
+      unreadStates[id] = false;
+    });
+    localStorage.setItem('sd-notifications-unread', JSON.stringify(unreadStates));
+
+    // Update badge count (will clear since all are set to read)
+    updateNotificationBadge();
+    
+    // Render current active tab
+    renderNotificationTabContent(currentActiveNotifTab);
+    
+  } catch (err) {
+    console.error("Error loading notification details:", err);
+    contentEl.innerHTML = `
+      <div class="notification-empty" style="color: #ef4444;">
+        <i class="fas fa-exclamation-triangle" style="font-size:1.5rem; margin-bottom:8px; display:block;"></i>
+        Failed to load notifications. Please check connection.
+      </div>
+    `;
+  }
+}
+
+function switchNotificationTab(tab) {
+  currentActiveNotifTab = tab;
+  
+  // Update active tab button classes
+  const btnIntel = document.getElementById("btnTabIntelligence");
+  const btnEvt = document.getElementById("btnTabEvents");
+  
+  if (tab === 'intelligence') {
+    if (btnIntel) btnIntel.classList.add("active");
+    if (btnEvt) btnEvt.classList.remove("active");
+  } else {
+    if (btnIntel) btnIntel.classList.remove("active");
+    if (btnEvt) btnEvt.classList.add("active");
+  }
+  
+  renderNotificationTabContent(tab);
+}
+
+function toggleReadStatus(id, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  let unreadStates = JSON.parse(localStorage.getItem('sd-notifications-unread') || '{}');
+  const currentVal = unreadStates[id] !== false; // Default is unread (true)
+  unreadStates[id] = !currentVal;
+  localStorage.setItem('sd-notifications-unread', JSON.stringify(unreadStates));
+  
+  updateNotificationBadge();
+  renderNotificationTabContent(currentActiveNotifTab);
+}
+
+function renderNotificationTabContent(tab) {
+  const contentEl = document.getElementById("notificationsContent");
+  if (!contentEl) return;
+  
+  contentEl.innerHTML = "";
+  let unreadStates = JSON.parse(localStorage.getItem('sd-notifications-unread') || '{}');
+  
+  if (tab === 'intelligence') {
+    const alerts = cachedNotifications.stress_alerts;
+    if (alerts.length === 0) {
+      contentEl.innerHTML = `
+        <div class="notification-empty">
+          <i class="fas fa-check-circle" style="font-size:1.8rem; color:#10b981; margin-bottom:8px; display:block;"></i>
+          <strong>All clear!</strong><br/>No intelligence anomalies or portfolio stress alerts detected.
+        </div>
+      `;
+      return;
+    }
+    
+    alerts.forEach(alertItem => {
+      const severity = (alertItem.severity || 'normal').toLowerCase();
+      let icon = "⚠️";
+      if (alertItem.severity === "Critical") icon = "🚨";
+      else if (alertItem.severity === "High") icon = "⚡";
+      
+      const id = getNotificationId(alertItem, 'intelligence');
+      const isUnread = unreadStates[id] !== false;
+      const dotClass = isUnread ? 'unread' : 'read';
+      const dotTitle = isUnread ? 'Mark as Read' : 'Mark as Unread';
+      
+      const item = document.createElement("div");
+      item.className = `intel-alert-item severity-${severity}`;
+      item.style.display = "flex";
+      item.style.alignItems = "center";
+      item.style.width = "100%";
+      item.style.boxSizing = "border-box";
+      
+      item.innerHTML = `
+        <div class="intel-icon-wrapper" style="flex-shrink:0;">${icon}</div>
+        <div class="intel-body" style="flex:1; margin-right:8px;">
+          <span class="intel-title" style="font-weight: 700; display:block;">${alertItem.type}</span>
+          <span class="intel-desc" style="font-size: 0.725rem; color: #475569; line-height: 1.3; display:block;">${alertItem.message}</span>
+        </div>
+        <span class="notif-status-dot ${dotClass}" onclick="toggleReadStatus('${id}', event)" title="${dotTitle}"></span>
+      `;
+      contentEl.appendChild(item);
+    });
+    
+  } else {
+    // Events Timeline Tab
+    const events = cachedNotifications.events;
+    if (events.length === 0) {
+      contentEl.innerHTML = `
+        <div class="notification-empty">
+          <i class="fas fa-calendar-alt" style="font-size:1.8rem; color:#94a3b8; margin-bottom:8px; display:block;"></i>
+          No system events recorded in this range.
+        </div>
+      `;
+      return;
+    }
+    
+    events.forEach(evt => {
+      let icon = "🔧";
+      let color = "#f1f5f9";
+      let iconColor = "#64748b";
+      
+      if (evt.action === "submit_post_payment") {
+        icon = "💰";
+        color = "rgba(16, 185, 129, 0.1)";
+        iconColor = "#10b981";
+      } else if (evt.action === "close_customer_account") {
+        icon = "🔒";
+        color = "rgba(239, 68, 68, 0.1)";
+        iconColor = "#ef4444";
+      } else if (evt.action.includes("village")) {
+        icon = "⚙️";
+        color = "rgba(59, 130, 246, 0.1)";
+        iconColor = "#3b82f6";
+      }
+      
+      let desc = "";
+      if (evt.action === "submit_post_payment" && evt.details) {
+        desc = `Posted <strong>${evt.details.submitted_count}</strong> payment(s) successfully for this village.`;
+      } else if (evt.action === "close_customer_account" && evt.details) {
+        desc = `Closed account with status <strong>${evt.details.status}</strong>, paid amount ₹${parseFloat(evt.details.paid_amount || 0).toLocaleString()}.`;
+      } else {
+        desc = `${evt.action.replace(/_/g, " ")}: ${JSON.stringify(evt.details)}`;
+      }
+      
+      const id = getNotificationId(evt, 'event');
+      const isUnread = unreadStates[id] !== false;
+      const dotClass = isUnread ? 'unread' : 'read';
+      const dotTitle = isUnread ? 'Mark as Read' : 'Mark as Unread';
+      
+      const row = document.createElement("div");
+      row.className = "timeline-event-item";
+      row.style.margin = "0";
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.width = "100%";
+      row.style.boxSizing = "border-box";
+      
+      row.innerHTML = `
+        <div class="timeline-icon" style="background: ${color}; color: ${iconColor}; flex-shrink: 0;">
+          ${icon}
+        </div>
+        <div class="timeline-details" style="flex: 1; margin-right: 8px;">
+          <span style="font-size: 0.775rem; color: var(--text, #334155); line-height: 1.3;">${desc}</span>
+          <span style="font-size: 0.675rem; color: #94a3b8; margin-top: 2px; display: block;">
+            By <strong>${evt.username}</strong> &bull; ${evt.created_at}
+          </span>
+        </div>
+        <span class="notif-status-dot ${dotClass}" onclick="toggleReadStatus('${id}', event)" title="${dotTitle}"></span>
+      `;
+      contentEl.appendChild(row);
+    });
+  }
+}
+
+// Bind functions to window context
+window.fetchNotificationCounts = fetchNotificationCounts;
+window.toggleNotificationsDropdown = toggleNotificationsDropdown;
+window.switchNotificationTab = switchNotificationTab;
+window.toggleReadStatus = toggleReadStatus;
+
+// =====================================================
+// THEME MANAGER — Dark / Light Mode Toggle
+// =====================================================
+window.ThemeManager = {
+  toggle() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('sd-theme', next);
+    this.syncCheckbox(next);
+  },
+  syncCheckbox(theme) {
+    const cb = document.getElementById('themeToggleCheckbox');
+    if (cb) cb.checked = (theme === 'dark');
+  },
+  init() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    this.syncCheckbox(current);
+
+    const cb = document.getElementById('themeToggleCheckbox');
+    if (cb) {
+      cb.addEventListener('change', () => this.toggle());
+    }
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  ThemeManager.init();
+});

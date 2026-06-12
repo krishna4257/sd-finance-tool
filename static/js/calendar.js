@@ -11,6 +11,39 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentYear = new Date().getFullYear();
   let activeInputElement = null;
   let currentSelectedDate = null;
+  let rangeStart = null;
+  let rangeEnd = null;
+
+  function getSeparator(input) {
+    if (!input) return '/';
+    const options = input.customCalendarOptions || {};
+    if (options.dateFormat && options.dateFormat.includes('-')) return '-';
+    if (input.placeholder && input.placeholder.includes('-')) return '-';
+    return '/';
+  }
+
+  function formatDate(date, input) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    const separator = getSeparator(input);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}${separator}${month}${separator}${year}`;
+  }
+
+  function parseDate(dateString, input) {
+    if (!dateString || typeof dateString !== 'string') return null;
+    const separator = getSeparator(input);
+    const parts = dateString.split(separator);
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JavaScript months are 0-indexed
+    const year = parseInt(parts[2], 10);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+      return null;
+    }
+    return new Date(year, month, day);
+  }
 
   function renderCalendar(month, year) {
     calendarGrid.innerHTML = '';
@@ -40,26 +73,94 @@ document.addEventListener('DOMContentLoaded', () => {
       dayEl.classList.add('day-cell');
       dayEl.textContent = i;
 
+      const date = new Date(year, month, i);
       const today = new Date();
       if (i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
         dayEl.classList.add('today');
       }
 
-      if (currentSelectedDate && i === currentSelectedDate.getDate() && month === currentSelectedDate.getMonth() && year === currentSelectedDate.getFullYear()) {
-        dayEl.classList.add('selected');
+      const options = activeInputElement ? (activeInputElement.customCalendarOptions || {}) : {};
+
+      if (options.mode === 'range') {
+        if (rangeStart && date.toDateString() === rangeStart.toDateString()) {
+          dayEl.classList.add('selected', 'range-start');
+        } else if (rangeEnd && date.toDateString() === rangeEnd.toDateString()) {
+          dayEl.classList.add('selected', 'range-end');
+        } else if (rangeStart && rangeEnd && date > rangeStart && date < rangeEnd) {
+          dayEl.classList.add('in-range');
+        }
+      } else {
+        if (currentSelectedDate && date.toDateString() === currentSelectedDate.toDateString()) {
+          dayEl.classList.add('selected');
+        }
+      }
+
+      // Add hover interaction for range selection
+      if (options.mode === 'range') {
+        dayEl.addEventListener('mouseenter', () => {
+          if (rangeStart && !rangeEnd) {
+            const cells = calendarGrid.querySelectorAll('.day-cell');
+            cells.forEach(cell => {
+              const cellDay = parseInt(cell.textContent, 10);
+              if (isNaN(cellDay)) return;
+              const cellDate = new Date(year, month, cellDay);
+              if (cellDate > rangeStart && cellDate <= date) {
+                cell.classList.add('in-range');
+              } else if (cellDate.toDateString() !== rangeStart.toDateString()) {
+                cell.classList.remove('in-range');
+              }
+            });
+          }
+        });
       }
 
       dayEl.addEventListener('click', () => {
         if (activeInputElement) {
           const selectedDate = new Date(year, month, i);
-          activeInputElement.value = formatDateToDDMMYYYY(selectedDate);
           
-          // Dispatch input/change events to trigger any reactive calculations
-          activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
-          activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
-          
-          calendar.style.display = 'none';
-          activeInputElement = null;
+          if (options.mode === 'range') {
+            if (!rangeStart || (rangeStart && rangeEnd)) {
+              rangeStart = selectedDate;
+              rangeEnd = null;
+              activeInputElement.value = formatDate(rangeStart, activeInputElement);
+              activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
+              activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
+              renderCalendar(month, year);
+            } else {
+              // Clicked end date
+              if (selectedDate < rangeStart) {
+                // If end date is before start date, make it the new start date
+                rangeStart = selectedDate;
+                rangeEnd = null;
+                activeInputElement.value = formatDate(rangeStart, activeInputElement);
+                activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
+                renderCalendar(month, year);
+              } else {
+                rangeEnd = selectedDate;
+                activeInputElement.value = `${formatDate(rangeStart, activeInputElement)} to ${formatDate(rangeEnd, activeInputElement)}`;
+                activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                calendar.style.display = 'none';
+                activeInputElement = null;
+                if (options.onClose) {
+                  options.onClose();
+                }
+              }
+            }
+          } else {
+            // Single mode
+            activeInputElement.value = formatDate(selectedDate, activeInputElement);
+            activeInputElement.dispatchEvent(new Event('input', { bubbles: true }));
+            activeInputElement.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            calendar.style.display = 'none';
+            activeInputElement = null;
+            if (options.onClose) {
+              options.onClose();
+            }
+          }
         }
       });
       calendarGrid.appendChild(dayEl);
@@ -69,20 +170,49 @@ document.addEventListener('DOMContentLoaded', () => {
   function showCalendar(inputElement) {
     activeInputElement = inputElement;
     const inputRect = inputElement.getBoundingClientRect();
-    calendar.style.display = 'block';
-    calendar.style.top = `${inputRect.bottom + window.scrollY + 5}px`;
-    calendar.style.left = `${inputRect.left + window.scrollX}px`;
+    const calWidth = 280;
+    const gap = 6;
 
-    // Try to set calendar to the input's current date
-    currentSelectedDate = parseDDMMYYYY(inputElement.value);
-    if (currentSelectedDate) {
-        currentMonth = currentSelectedDate.getMonth();
-        currentYear = currentSelectedDate.getFullYear();
-    } else {
+    let top = inputRect.bottom + gap;
+    let left = inputRect.left;
+
+    if (left + calWidth > window.innerWidth - 8) {
+      left = window.innerWidth - calWidth - 8;
+    }
+    if (top + 320 > window.innerHeight) {
+      top = inputRect.top - 320 - gap;
+    }
+
+    calendar.style.top = `${top}px`;
+    calendar.style.left = `${left}px`;
+    calendar.style.display = 'block';
+
+    const options = inputElement.customCalendarOptions || {};
+    
+    if (options.mode === 'range') {
+      const parts = inputElement.value.split(" to ");
+      rangeStart = parseDate(parts[0], inputElement);
+      rangeEnd = parts.length === 2 ? parseDate(parts[1], inputElement) : null;
+      if (rangeStart) {
+        currentMonth = rangeStart.getMonth();
+        currentYear = rangeStart.getFullYear();
+      } else {
         const today = new Date();
         currentMonth = today.getMonth();
         currentYear = today.getFullYear();
+      }
+    } else {
+      currentSelectedDate = parseDate(inputElement.value, inputElement);
+      if (currentSelectedDate) {
+        currentMonth = currentSelectedDate.getMonth();
+        currentYear = currentSelectedDate.getFullYear();
+      } else {
+        const today = new Date();
+        currentMonth = today.getMonth();
+        currentYear = today.getFullYear();
+      }
     }
+    
     renderCalendar(currentMonth, currentYear);
   }
 
@@ -106,71 +236,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Hide calendar if clicking outside
   document.addEventListener('click', (e) => {
-    if (!calendar.contains(e.target) && activeInputElement && !activeInputElement.contains(e.target)) {
+    if (activeInputElement && !calendar.contains(e.target) && !activeInputElement.contains(e.target)) {
+      const input = activeInputElement;
+      const options = input.customCalendarOptions || {};
       calendar.style.display = 'none';
       activeInputElement = null;
+      if (options.onClose) {
+        options.onClose();
+      }
     }
   });
 
-    // --- Initialization ---
-
-    // New function to handle automatic date formatting (dd/mm/yyyy)
-    function autoFormatDate(e) {
+  // New function to handle automatic date formatting (dd/mm/yyyy)
+  function autoFormatDate(e) {
     const input = e.target;
-    // Remove all non-digit characters from the input
+    const separator = getSeparator(input);
+    const isRange = input.customCalendarOptions && input.customCalendarOptions.mode === 'range';
+    
     let value = input.value.replace(/\D/g, '');
     let formattedValue = '';
 
-    // Add the 'dd' part
-    if (value.length > 0) {
+    if (isRange) {
+      // Range formatting: dd/mm/yyyy to dd/mm/yyyy
+      if (value.length > 0) {
         formattedValue = value.substring(0, 2);
-    }
-    // Add the '/' and 'mm' part
-    if (value.length > 2) {
+      }
+      if (value.length > 2) {
         formattedValue += '/' + value.substring(2, 4);
-    }
-    // Add the '/' and 'yyyy' part
-    if (value.length > 4) {
+      }
+      if (value.length > 4) {
         formattedValue += '/' + value.substring(4, 8);
+      }
+      if (value.length > 8) {
+        formattedValue += ' to ' + value.substring(8, 10);
+      }
+      if (value.length > 10) {
+        formattedValue += '/' + value.substring(10, 12);
+      }
+      if (value.length > 12) {
+        formattedValue += '/' + value.substring(12, 16);
+      }
+    } else {
+      // Single formatting
+      if (value.length > 0) {
+        formattedValue = value.substring(0, 2);
+      }
+      if (value.length > 2) {
+        formattedValue += separator + value.substring(2, 4);
+      }
+      if (value.length > 4) {
+        formattedValue += separator + value.substring(4, 8);
+      }
     }
     
-    // Update the input field with the formatted value
     input.value = formattedValue;
+  }
+
+  // --- Programmatic API initialization ---
+  window.initCustomCalendar = function(input, options = {}) {
+    if (!input) return;
+
+    let wrapper = input.parentNode;
+    let icon = null;
+    if (wrapper.classList.contains('date-input-wrapper')) {
+      icon = wrapper.querySelector('.calendar-icon');
     }
 
-    // Find all text inputs with a 'date' placeholder, wrap them, and attach functionality
-    const dateInputs = document.querySelectorAll('input[type="text"][placeholder*="dd/mm/yyyy"]');
+    // 1. Create wrapper and icon if wrapper doesn't exist and noWrapper is false
+    if (!options.noWrapper && !wrapper.classList.contains('date-input-wrapper')) {
+      wrapper = document.createElement('div');
+      wrapper.classList.add('date-input-wrapper');
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
 
-    dateInputs.forEach(input => {
-    // Check if the wrapper already exists to prevent re-wrapping on re-renders
-    if (input.parentNode.classList.contains('date-input-wrapper')) {
-        return;
+      icon = document.createElement('span');
+      icon.innerHTML = '<i class="far fa-calendar-alt"></i>';
+      icon.classList.add('calendar-icon');
+      wrapper.appendChild(icon);
     }
 
-    // 1. Create a wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.classList.add('date-input-wrapper');
+    // 2. Set options
+    input.customCalendarOptions = options;
+    input.removeAttribute('readonly'); 
+    input.style.cursor = 'text'; 
+    input.setAttribute('maxlength', options.mode === 'range' ? '24' : '10');
 
-    // 2. Insert the wrapper and move the input inside it
-    input.parentNode.insertBefore(wrapper, input);
-    wrapper.appendChild(input);
-
-    // 3. Create and append the icon
-    const icon = document.createElement('span');
-    icon.innerHTML = '<i class="far fa-calendar-alt"></i>';
-    icon.classList.add('calendar-icon');
-    wrapper.appendChild(icon);
-
-    // 4. Enable manual typing and add auto-formatting
-    input.removeAttribute('readonly'); // Allow typing
-    input.style.cursor = 'text'; // Use a normal text cursor
-    input.addEventListener('input', autoFormatDate); // Add the auto-slashing logic
-    input.setAttribute('maxlength', '10'); // Limit input to dd/mm/yyyy length
-
-    // 5. Add click listener ONLY to the icon to open the calendar
-    icon.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent the document click listener from firing
+    // 3. Attach listeners idempotently
+    if (icon && !icon.dataset.hasCalendarListener) {
+      icon.addEventListener('click', (e) => {
+        e.stopPropagation();
         showCalendar(input);
+      });
+      icon.dataset.hasCalendarListener = 'true';
+    }
+
+    if (options.clickOpens && !input.dataset.hasCalendarClickListener) {
+      input.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showCalendar(input);
+      });
+      input.dataset.hasCalendarClickListener = 'true';
+    }
+
+    if (!input.dataset.hasCalendarInputListener) {
+      input.addEventListener('input', autoFormatDate);
+      input.dataset.hasCalendarInputListener = 'true';
+    }
+  };
+
+  // --- Automatic initialization for static fields ---
+  const dateInputs = document.querySelectorAll('input[type="text"][placeholder*="dd/mm/yyyy"]');
+  dateInputs.forEach(input => {
+    // If it's a range filter, initialize it as range mode
+    const isRange = input.id === 'filterDateRange' || input.placeholder.includes('range');
+    window.initCustomCalendar(input, {
+      mode: isRange ? 'range' : 'single'
     });
-    });
+  });
 });

@@ -219,3 +219,7 @@ data_processing/*
 .env
 testing
 testing/*
+
+
+# own python files folder
+Python Files/*

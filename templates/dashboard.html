@@ -1,19 +1,76 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <!-- Overview Summary Metrics Card Row -->
-  <div class="summary-row">
-    <div class="summary-item">
-      <strong>Total Customers:</strong> <span id="totalCustomers">{{ total_customers }}</span>
+  <!-- Overview Summary Metrics Card Row (Redesigned Grid) -->
+  <div class="dashboard-tiles-grid">
+    <!-- Tile 1: Customers -->
+    <div class="dashboard-tile-card" id="tileCustomers">
+      <div class="tile-header">
+        <span class="tile-title">CUSTOMERS</span>
+        <span class="tile-badge"><i class="fas fa-users"></i></span>
+      </div>
+      <div class="tile-main">
+        <span class="tile-value-large" id="lblTotalCustomers">0</span>
+        <span class="trend-indicator-large" id="trendTotalCustomers"></span>
+      </div>
+      <div class="tile-splits">
+        <div class="tile-progress-bar">
+          <div class="progress-segment segment-active" id="barActiveCustomers" style="width: 0%;"></div>
+          <div class="progress-segment segment-defaulted" id="barDefaultedCustomers" style="width: 0%;"></div>
+          <div class="progress-segment segment-closed" id="barClosedCustomers" style="width: 0%;"></div>
+        </div>
+        <div class="tile-bar-legend">
+          <span class="legend-item"><span class="legend-dot dot-active"></span> Act: <strong id="lblActiveCustomers">0</strong> <span class="legend-pct" id="pctActiveCustomers">(0%)</span></span>
+          <span class="legend-item"><span class="legend-dot dot-defaulted"></span> Def: <strong id="lblDefaultedCustomers">0</strong> <span class="legend-pct" id="pctDefaultedCustomers">(0%)</span></span>
+          <span class="legend-item" id="legendClosedCustomers"><span class="legend-dot dot-closed"></span> Cls: <strong id="lblClosedCustomers">0</strong> <span class="legend-pct" id="pctClosedCustomers">(0%)</span></span>
+        </div>
+      </div>
     </div>
-    <div class="summary-item">
-      <strong>Total Loan Amt:</strong> <span id="sumAmt" data-money>{{ sum_amt }}</span>
+
+    <!-- Tile 2: Loan Amount -->
+    <div class="dashboard-tile-card" id="tileLoanAmount">
+      <div class="tile-header">
+        <span class="tile-title">LOAN AMOUNT</span>
+        <span class="tile-badge"><i class="fas fa-hand-holding-usd"></i></span>
+      </div>
+      <div class="tile-main">
+        <span class="tile-value-large" id="lblTotalLoanAmount">₹0</span>
+        <span class="trend-indicator-large" id="trendTotalLoanAmount"></span>
+      </div>
+      <div class="tile-splits">
+        <div class="tile-progress-bar">
+          <div class="progress-segment segment-active" id="barActiveLoanAmount" style="width: 0%;"></div>
+          <div class="progress-segment segment-defaulted" id="barDefaultedLoanAmount" style="width: 0%;"></div>
+          <div class="progress-segment segment-closed" id="barClosedLoanAmount" style="width: 0%;"></div>
+        </div>
+        <div class="tile-bar-legend">
+          <span class="legend-item"><span class="legend-dot dot-active"></span> Act: <strong id="lblActiveLoanAmount">₹0</strong> <span class="legend-pct" id="pctActiveLoanAmount">(0%)</span></span>
+          <span class="legend-item"><span class="legend-dot dot-defaulted"></span> Def: <strong id="lblDefaultedLoanAmount">₹0</strong> <span class="legend-pct" id="pctDefaultedLoanAmount">(0%)</span></span>
+          <span class="legend-item" id="legendClosedLoanAmount"><span class="legend-dot dot-closed"></span> Cls: <strong id="lblClosedLoanAmount">₹0</strong> <span class="legend-pct" id="pctClosedLoanAmount">(0%)</span></span>
+        </div>
+      </div>
     </div>
-    <div class="summary-item">
-      <strong>Total Paid Amt:</strong> <span id="sumPamt" data-money>{{ sum_pamt }}</span>
-    </div>
-    <div class="summary-item">
-      <strong>Total Balance Amt:</strong> <span id="sumBamt" data-money>{{ sum_bamt }}</span>
+
+    <!-- Tile 3: Outstanding Balance -->
+    <div class="dashboard-tile-card" id="tileBalance">
+      <div class="tile-header">
+        <span class="tile-title">OUTSTANDING BALANCE</span>
+        <span class="tile-badge"><i class="fas fa-wallet"></i></span>
+      </div>
+      <div class="tile-main">
+        <span class="tile-value-large" id="lblTotalBalance">₹0</span>
+        <span class="trend-indicator-large" id="trendTotalBalance"></span>
+      </div>
+      <div class="tile-splits">
+        <div class="tile-progress-bar">
+          <div class="progress-segment segment-active" id="barActiveBalance" style="width: 0%;"></div>
+          <div class="progress-segment segment-defaulted" id="barDefaultedBalance" style="width: 0%;"></div>
+        </div>
+        <div class="tile-bar-legend">
+          <span class="legend-item"><span class="legend-dot dot-active"></span> Act: <strong id="lblActiveBalance">₹0</strong> <span class="legend-pct" id="pctActiveBalance">(0%)</span></span>
+          <span class="legend-item"><span class="legend-dot dot-defaulted"></span> Def: <strong id="lblDefaultedBalance">₹0</strong> <span class="legend-pct" id="pctDefaultedBalance">(0%)</span></span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -22,17 +79,6 @@
     <!-- VILLAGE BEHAVIORAL INTELLIGENCE DASHBOARD LAYER -->
     <!-- ======================================================== -->
     <div class="village-dashboard-container" style="display: flex; flex-direction: column; gap: 24px; margin-top: 24px;">
-      
-      <!-- TITLEBAR -->
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 8px;">
-        <h2 style="font-size: 1.2rem; font-weight: 700; margin: 0; color: #1a1a2e; display: flex; align-items: center; gap: 8px;">
-          <span>Village Intelligence: <span id="vpopNameTitle" style="color: #1a4d2e; font-weight: 700;">-</span> (<span id="vpopCodeTitle" style="color: #6b7280;">-</span>)</span>
-        </h2>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <button id="vpopRecalcBtn" class="pop-recalc-btn" title="Refresh Dashboard Data" onclick="refreshDashboardData()"><i class='fas fa-sync-alt'></i></button>
-          <span id="vpopEvalStatus" class="status-badge status-live">LIVE PORTFOLIO INDEX</span>
-        </div>
-      </div>
 
       <!-- LOADING INDICATOR -->
       <div id="vpopLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: #f9fafb; border-radius: 18px; border: 1px dashed #e5e7eb;">
@@ -49,183 +95,374 @@
       <!-- MAIN CONTENT -->
       <div id="vpopContent" style="display: none; flex-direction: column; gap: 24px;">
         
-        <!-- ROW 1: HEALTH ENGINE & CHART -->
+        <!-- ROW 1: VILLAGE HEALTH & RISK PANEL -->
         <div style="display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: stretch;">
           
-          <!-- Village Health Score Card -->
-          <div class="card-glass" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; border-color: #e5e7eb;">
-            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Village Health Engine</span>
-              <span id="vpopHealthStatus" class="status-badge" style="font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: 10px;">STABLE</span>
-            </div>
-            
-            <div style="display: flex; align-items: center; justify-content: space-between; margin: 10px 0;">
-              <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 100px; height: 100px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 20px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
-                <span id="vpopHealthScore" style="font-size: 2.3rem; font-weight: 900; color: #1a4d2e; text-shadow: none;">-</span>
-              </div>
-              <div style="flex: 1; margin-left: 20px; display: flex; flex-direction: column; gap: 6px;">
-                <div style="display: flex; flex-direction: column;">
-                  <span style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Predicted Risk</span>
-                  <span id="vpopPredictedRisk" style="font-size: 1rem; font-weight: 800; text-transform: uppercase; color: #fbbf24;">-</span>
+          <!-- Flipping Village Health Card -->
+          <div class="flip-card-container">
+            <div id="villageHealthCard" class="flip-card-inner">
+              
+              <!-- Front Face: Overall Score -->
+              <div class="flip-card-front card-glass" style="padding: 20px; border-color: #e5e7eb;">
+                <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                  <span class="health-card-title" style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Village Health</span>
+                  
+                  <!-- Sub-Toggle Switch: only shown if dashboard view is Active -->
+                  <div id="healthSubToggleContainer" class="health-sub-toggle-container mode-active_only" onclick="toggleHealthSubView(event)" style="display: none;">
+                    <div class="health-sub-toggle-pill"></div>
+                    <span class="health-sub-toggle-label active-only-label">Active</span>
+                    <span class="health-sub-toggle-label default-label">Default</span>
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <!-- Flip button (Info circle) -->
+                    <button class="tile-flip-btn" onclick="flipVillageHealthCard(event)" title="View Individual Metrics">
+                      <i class="fas fa-info-circle"></i>
+                    </button>
+                  </div>
                 </div>
-                <div style="display: flex; flex-direction: column;">
-                  <span style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Weekly Trend</span>
-                  <span id="vpopWeeklyTrend" style="font-size: 1rem; font-weight: 800; color: #f87171;">-</span>
+                
+                <div style="display: flex; align-items: center; justify-content: space-between; margin: 10px 0;">
+                  <!-- Circle & Status Wrapper -->
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; width: 110px;">
+                    <!-- SVG Circular Progress Ring -->
+                    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 110px; height: 110px;">
+                      <svg width="110" height="110" viewBox="0 0 110 110" style="transform: rotate(-90deg);">
+                        <!-- Background track -->
+                        <circle class="vpop-track-circle" cx="55" cy="55" r="48" stroke="#f1f5f9" stroke-width="8" fill="transparent" />
+                        <!-- Animated ring -->
+                        <circle id="vpopHealthProgressRing" cx="55" cy="55" r="48" stroke="#10b981" stroke-width="8" fill="transparent"
+                                stroke-dasharray="301.6" stroke-dashoffset="301.6" stroke-linecap="round"
+                                style="transition: stroke-dashoffset 0.8s ease-out, stroke 0.8s ease-out;" />
+                      </svg>
+                      <div style="position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <span id="vpopHealthScore" style="font-size: 2.1rem; font-weight: 900; color: #1a4d2e; line-height: 1;">-</span>
+                        <span style="font-size: 0.55rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 2px;">Score</span>
+                      </div>
+                    </div>
+                    <!-- Status Badge -->
+                    <span id="vpopHealthStatus" class="status-badge" style="font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 10px; width: fit-content; text-align: center; display: inline-block;">STABLE</span>
+                  </div>
+                  
+                  <div style="flex: 1; margin-left: 15px; display: flex; flex-direction: column; gap: 8px;">
+                    <div class="health-trend-box" style="display: flex; flex-direction: column; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
+                      <span class="health-trend-label" style="font-size: 0.6rem; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em;">Predicted Risk</span>
+                      <span id="vpopPredictedRisk" style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; color: #fbbf24; margin-top: 1px;">-</span>
+                    </div>
+                    <div class="health-trend-box" style="display: flex; flex-direction: column; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
+                      <span class="health-trend-label" style="font-size: 0.6rem; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em;">Weekly Trend</span>
+                      <span id="vpopWeeklyTrend" style="font-size: 0.9rem; font-weight: 800; color: #94a3b8; margin-top: 1px;">-</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div style="font-size: 0.725rem; color: #9ca3af; line-height: 1.4; margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
-              * Index computed dynamically based on average ratings, overdue concentrations, and transition dynamics.
+              
+              <!-- Back Face: Individual Health Metrics -->
+              <div class="flip-card-back card-glass" style="padding: 20px; border-color: #e5e7eb;">
+                <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                  <span class="health-metrics-title" style="font-size: 0.8rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em;">Individual Metrics</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.55rem; color: #94a3b8; font-style: italic; font-weight: 600;">Dbl-click to view history</span>
+                    <!-- Flip back button (Arrow left) -->
+                    <button class="tile-flip-btn" onclick="flipVillageHealthCard(event)" title="View Overall Score">
+                      <i class="fas fa-arrow-left"></i>
+                    </button>
+                  </div>
+                </div>
+                
+                <div id="vpopMetricsList" style="flex: 1; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; margin-top: 10px; padding-right: 4px; max-height: 175px;">
+                  <!-- Dynamic Metric Items will be injected here as list items -->
+                </div>
+              </div>
+              
             </div>
           </div>
           
-          <!-- Health Trend Graph Card -->
-          <div class="card-glass" style="padding: 20px; display: flex; flex-direction: column; border-color: #e5e7eb; height: 100%;">
-            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px;">
-              <span style="font-size: 0.85rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em;">Portfolio Quality Trend Graph</span>
+          <!-- Column 2: Consolidated Risk Flow Board -->
+          <div class="risk-flow-card">
+            <div style="border-bottom: 1px solid rgba(226, 232, 240, 0.8); padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <span class="risk-flow-title">Village Risk Flow</span>
+              
+              <div style="display: flex; gap: 8px;">
+                <div id="vAuxRecovered" class="aux-flow-btn success" onclick="inspectCohortFlow('Recovered')" title="View Recovered Customers">
+                  <i class="fas fa-seedling"></i> Recovered: <span id="vMoveCount_Recovered" style="font-weight: 800;">0</span>
+                </div>
+                <div id="vAuxOverdue" class="aux-flow-btn danger" onclick="inspectCohortFlow('Newly_Overdue')" title="View Newly Overdue (This Week)">
+                  <i class="fas fa-bolt"></i> Newly Overdue: <span id="vMoveCount_Newly_Overdue" style="font-weight: 800;">0</span>
+                </div>
+              </div>
             </div>
-            <div style="flex: 1; position: relative; min-height: 150px; display: flex; align-items: center; justify-content: center;">
-              <canvas id="vHealthChart" style="width: 100%; max-height: 160px;"></canvas>
+            
+            <!-- Attention Mini-Tiles Grid -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
+              <!-- 4+ Missed Card -->
+              <div id="vAttentionCard_Missed4Plus" class="attention-capsule danger" onclick="inspectCohortFlow('Missed4Plus')" title="4+ Consecutive Missed Cycles">
+                <div class="capsule-left">
+                  <div class="capsule-dot"></div>
+                  <span class="capsule-label">4+ Missed</span>
+                </div>
+                <span id="vAttentionCount_Missed4Plus" class="capsule-count">0</span>
+              </div>
+              
+              <!-- Collapse Card -->
+              <div id="vAttentionCard_RapidCollapse" class="attention-capsule warning" onclick="inspectCohortFlow('RapidCollapse')" title="Rapidly Collapsing Ratings (-15 pts)">
+                <div class="capsule-left">
+                  <div class="capsule-dot"></div>
+                  <span class="capsule-label">Collapse</span>
+                </div>
+                <span id="vAttentionCount_RapidCollapse" class="capsule-count">0</span>
+              </div>
+              
+              <!-- Severe Overdue Card -->
+              <div id="vAttentionCard_SevereOverdue" class="attention-capsule danger" onclick="inspectCohortFlow('SevereOverdue')" title="Severe Overdue Behavior">
+                <div class="capsule-left">
+                  <div class="capsule-dot"></div>
+                  <span class="capsule-label">Severe Delay</span>
+                </div>
+                <span id="vAttentionCount_SevereOverdue" class="capsule-count">0</span>
+              </div>
+              
+              <!-- Rating < 40 Card -->
+              <div id="vAttentionCard_RatingBelow40" class="attention-capsule danger" onclick="inspectCohortFlow('RatingBelow40')" title="Customer Ratings Below 40">
+                <div class="capsule-left">
+                  <div class="capsule-dot"></div>
+                  <span class="capsule-label">Rating &lt; 40</span>
+                </div>
+                <span id="vAttentionCount_RatingBelow40" class="capsule-count">0</span>
+              </div>
+            </div>
+            
+            <div class="flow-board-wrapper" style="display: flex; align-items: center; justify-content: space-between; gap: 4px; flex: 1; margin-bottom: 4px;">
+              <!-- Excellent Card -->
+              <div id="vRiskCard_Excellent" class="premium-cohort-card cohort-card-excellent" onclick="inspectCohortFlow('Excellent')" title="Click to inspect Excellent customers">
+                <div class="cohort-card-header">
+                  <span class="cohort-card-label">Excellent (>80)</span>
+                  <div class="cohort-card-indicator"></div>
+                </div>
+                <div class="cohort-card-val-row">
+                  <span id="vRiskCount_Excellent" class="cohort-card-count">0</span>
+                  <span id="vRiskPct_Excellent" class="cohort-card-pct">0%</span>
+                </div>
+                <div class="cohort-card-trend-row">
+                  <span>Trend</span>
+                  <span id="vRiskChange_Excellent" style="font-weight: 700;">0</span>
+                </div>
+              </div>
+              
+              <!-- Flow Connector 1 -->
+              <div id="vFlowConnector_Excellent_Good" class="premium-flow-connector" onclick="inspectCohortFlow('Excellent_Good')" title="Click to view Excellent → Good transitions">
+                <svg class="flow-arrow-svg" viewBox="0 0 42 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 2,8 L 36,8" stroke-width="3" stroke-linecap="round" class="arrow-shaft" />
+                  <path d="M 32,3 L 38,8 L 32,13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="arrow-head" />
+                </svg>
+                <span id="vMoveCount_Excellent_Good" class="premium-flow-badge">0</span>
+              </div>
+              
+              <!-- Good Card -->
+              <div id="vRiskCard_Good" class="premium-cohort-card cohort-card-good" onclick="inspectCohortFlow('Good')" title="Click to inspect Good customers">
+                <div class="cohort-card-header">
+                  <span class="cohort-card-label">Good (60-79)</span>
+                  <div class="cohort-card-indicator"></div>
+                </div>
+                <div class="cohort-card-val-row">
+                  <span id="vRiskCount_Good" class="cohort-card-count">0</span>
+                  <span id="vRiskPct_Good" class="cohort-card-pct">0%</span>
+                </div>
+                <div class="cohort-card-trend-row">
+                  <span>Trend</span>
+                  <span id="vRiskChange_Good" style="font-weight: 700;">0</span>
+                </div>
+              </div>
+              
+              <!-- Flow Connector 2 -->
+              <div id="vFlowConnector_Good_LowRisk" class="premium-flow-connector" onclick="inspectCohortFlow('Good_LowRisk')" title="Click to view Good → Low Risk transitions">
+                <svg class="flow-arrow-svg" viewBox="0 0 42 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 2,8 L 36,8" stroke-width="3" stroke-linecap="round" class="arrow-shaft" />
+                  <path d="M 32,3 L 38,8 L 32,13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="arrow-head" />
+                </svg>
+                <span id="vMoveCount_Good_LowRisk" class="premium-flow-badge">0</span>
+              </div>
+              
+              <!-- Low Risk Card -->
+              <div id="vRiskCard_LowRisk" class="premium-cohort-card cohort-card-low" onclick="inspectCohortFlow('LowRisk')" title="Click to inspect Low Risk customers">
+                <div class="cohort-card-header">
+                  <span class="cohort-card-label">Low Risk (40-59)</span>
+                  <div class="cohort-card-indicator"></div>
+                </div>
+                <div class="cohort-card-val-row">
+                  <span id="vRiskCount_LowRisk" class="cohort-card-count">0</span>
+                  <span id="vRiskPct_LowRisk" class="cohort-card-pct">0%</span>
+                </div>
+                <div class="cohort-card-trend-row">
+                  <span>Trend</span>
+                  <span id="vRiskChange_LowRisk" style="font-weight: 700;">0</span>
+                </div>
+              </div>
+              
+              <!-- Flow Connector 3 -->
+              <div id="vFlowConnector_LowRisk_HighRisk" class="premium-flow-connector" onclick="inspectCohortFlow('LowRisk_HighRisk')" title="Click to view Low Risk → High Risk transitions">
+                <svg class="flow-arrow-svg" viewBox="0 0 42 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 2,8 L 36,8" stroke-width="3" stroke-linecap="round" class="arrow-shaft" />
+                  <path d="M 32,3 L 38,8 L 32,13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="arrow-head" />
+                </svg>
+                <span id="vMoveCount_LowRisk_HighRisk" class="premium-flow-badge">0</span>
+              </div>
+              
+              <!-- High Risk Card -->
+              <div id="vRiskCard_HighRisk" class="premium-cohort-card cohort-card-high" onclick="inspectCohortFlow('HighRisk')" title="Click to inspect High Risk customers">
+                <div class="cohort-card-header">
+                  <span class="cohort-card-label">High Risk (<40)</span>
+                  <div class="cohort-card-indicator"></div>
+                </div>
+                <div class="cohort-card-val-row">
+                  <span id="vRiskCount_HighRisk" class="cohort-card-count">0</span>
+                  <span id="vRiskPct_HighRisk" class="cohort-card-pct">0%</span>
+                </div>
+                <div class="cohort-card-trend-row">
+                  <span>Trend</span>
+                  <span id="vRiskChange_HighRisk" style="font-weight: 700;">0</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- ROW 2: RISK DISTRIBUTION PANEL -->
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Village Risk Distribution Panel</h3>
-          <div id="vpopRiskDistGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
-            <!-- Excellent Card -->
-            <div class="card-glass" style="padding: 16px; border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.02); display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Excellent (>80)</span>
-              <div style="display: flex; align-items: baseline; justify-content: space-between;">
-                <span id="vRiskCount_Excellent" style="font-size: 1.8rem; font-weight: 800; color: #10b981;">0</span>
-                <span id="vRiskPct_Excellent" style="font-size: 0.85rem; color: #a7f3d0; font-weight: 700;">0%</span>
-              </div>
-              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
-                Trend: <span id="vRiskChange_Excellent" style="font-weight: 700;">0</span> from last week
-              </div>
+        <!-- ROW 1.5: RISK FLOW DRILLDOWN INSPECTOR (DYNAMICALLY TOGGLED) -->
+        <div id="vpopCohortInspector" class="card-glass" style="display: none; padding: 20px; border-color: #e5e7eb; flex-direction: column; gap: 12px; margin-top: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="vCohortInspectorTitle" style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Cohort Details</span>
+              <span id="vCohortInspectorSubtitle" style="font-size: 0.725rem; color: #64748b; font-weight: 600;"></span>
             </div>
-            <!-- Good Card -->
-            <div class="card-glass" style="padding: 16px; border-left: 4px solid #84cc16; background: rgba(132, 204, 22, 0.02); display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Good (60-79)</span>
-              <div style="display: flex; align-items: baseline; justify-content: space-between;">
-                <span id="vRiskCount_Good" style="font-size: 1.8rem; font-weight: 800; color: #a3e635;">0</span>
-                <span id="vRiskPct_Good" style="font-size: 0.85rem; color: #d9f99d; font-weight: 700;">0%</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <!-- Search box -->
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="text" id="vCohortInspectorSearch" onkeyup="filterCohortInspectorTable()" placeholder="Search name or A/C..." 
+                       style="font-size: 0.75rem; padding: 4px 10px 4px 28px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none; width: 180px; background: rgba(255,255,255,0.6);" />
+                <i class="fas fa-search" style="position: absolute; left: 10px; font-size: 0.7rem; color: #94a3b8;"></i>
               </div>
-              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
-                Trend: <span id="vRiskChange_Good" style="font-weight: 700;">0</span> from last week
-              </div>
-            </div>
-            <!-- Low Risk Card -->
-            <div class="card-glass" style="padding: 16px; border-left: 4px solid #eab308; background: rgba(234, 179, 8, 0.02); display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Low Risk (40-59)</span>
-              <div style="display: flex; align-items: baseline; justify-content: space-between;">
-                <span id="vRiskCount_LowRisk" style="font-size: 1.8rem; font-weight: 800; color: #fbbf24;">0</span>
-                <span id="vRiskPct_LowRisk" style="font-size: 0.85rem; color: #fef08a; font-weight: 700;">0%</span>
-              </div>
-              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
-                Trend: <span id="vRiskChange_LowRisk" style="font-weight: 700;">0</span> from last week
-              </div>
-            </div>
-            <!-- High Risk Card -->
-            <div class="card-glass" style="padding: 16px; border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.02); display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-size: 0.725rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">High Risk (&lt;40)</span>
-              <div style="display: flex; align-items: baseline; justify-content: space-between;">
-                <span id="vRiskCount_HighRisk" style="font-size: 1.8rem; font-weight: 800; color: #f87171;">0</span>
-                <span id="vRiskPct_HighRisk" style="font-size: 0.85rem; color: #fecaca; font-weight: 700;">0%</span>
-              </div>
-              <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">
-                Trend: <span id="vRiskChange_HighRisk" style="font-weight: 700;">0</span> from last week
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ROW 3: MOVEMENT ENGINE & TREND/STRESS ENGINE -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
-          
-          <!-- Movement Engine -->
-          <div class="card-glass" style="padding: 20px; border-color: #e5e7eb; display: flex; flex-direction: column; gap: 14px;">
-            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 6px;">
-              <span style="font-size: 0.85rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em;">Village Movement Engine</span>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <!-- Exc -> Good -->
-              <div class="v-movement-row card-glass" onclick="toggleMovementList('Excellent_Good')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <i class='fas fa-chart-line' style="font-size: 1.1rem;"></i>
-                  <span style="font-size: 0.85rem; font-weight: 600; color: #fbcfe8;">Excellent → Good</span>
-                </div>
-                <span id="vMoveCount_Excellent_Good" class="badge-count" style="font-weight: 700; background: rgba(251, 207, 232, 0.15); color: #fbcfe8;">0</span>
-              </div>
-              <div id="vMoveListContainer_Excellent_Good" class="v-drilldown-wrapper" style="display: none;"></div>
-
-              <!-- Good -> LowRisk -->
-              <div class="v-movement-row card-glass" onclick="toggleMovementList('Good_LowRisk')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <i class='fas fa-exclamation-triangle' style="font-size: 1.1rem;"></i>
-                  <span style="font-size: 0.85rem; font-weight: 600; color: #fef08a;">Good → Low Risk</span>
-                </div>
-                <span id="vMoveCount_Good_LowRisk" class="badge-count" style="font-weight: 700; background: rgba(254, 240, 138, 0.15); color: #fef08a;">0</span>
-              </div>
-              <div id="vMoveListContainer_Good_LowRisk" class="v-drilldown-wrapper" style="display: none;"></div>
-
-              <!-- LowRisk -> HighRisk -->
-              <div class="v-movement-row card-glass" onclick="toggleMovementList('LowRisk_HighRisk')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: #f9fafb;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <i class='fas fa-exclamation-circle' style="font-size: 1.1rem;"></i>
-                  <span style="font-size: 0.85rem; font-weight: 600; color: #fecaca;">Low Risk → High Risk</span>
-                </div>
-                <span id="vMoveCount_LowRisk_HighRisk" class="badge-count" style="font-weight: 700; background: rgba(254, 202, 202, 0.15); color: #fecaca;">0</span>
-              </div>
-              <div id="vMoveListContainer_LowRisk_HighRisk" class="v-drilldown-wrapper" style="display: none;"></div>
-
-              <!-- Newly Overdue -->
-              <div class="v-movement-row card-glass" onclick="toggleMovementList('Newly_Overdue')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: rgba(239, 68, 68, 0.02);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <i class='fas fa-bolt' style="font-size: 1.1rem;"></i>
-                  <span style="font-size: 0.85rem; font-weight: 700; color: #f87171;">Newly Overdue (This Week)</span>
-                </div>
-                <span id="vMoveCount_Newly_Overdue" class="badge-count" style="font-weight: 800; background: rgba(239, 68, 68, 0.25); color: #f87171;">0</span>
-              </div>
-              <div id="vMoveListContainer_Newly_Overdue" class="v-drilldown-wrapper" style="display: none;"></div>
-
-              <!-- Recovered -->
-              <div class="v-movement-row card-glass" onclick="toggleMovementList('Recovered')" style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-color: #e5e7eb; background: rgba(16, 185, 129, 0.02);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <i class='fas fa-seedling' style="font-size: 1.1rem;"></i>
-                  <span style="font-size: 0.85rem; font-weight: 700; color: #34d399;">Recovered Customers</span>
-                </div>
-                <span id="vMoveCount_Recovered" class="badge-count" style="font-weight: 800; background: rgba(16, 185, 129, 0.25); color: #34d399;">0</span>
-              </div>
-              <div id="vMoveListContainer_Recovered" class="v-drilldown-wrapper" style="display: none;"></div>
+              <button onclick="closeCohortInspector()" style="background: none; border: none; cursor: pointer; color: #64748b; font-size: 1.15rem; display: flex; align-items: center; justify-content: center; transition: color 0.2s;" title="Close Inspector">
+                <i class="fas fa-times-circle"></i>
+              </button>
             </div>
           </div>
           
-          <!-- Stress Engine Alerts -->
-          <div class="card-glass" style="padding: 20px; border-color: #e5e7eb; display: flex; flex-direction: column; gap: 14px; height: 100%;">
-            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 6px;">
-              <span style="font-size: 0.85rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em;">Village Trend & Stress Alerts</span>
-            </div>
-            
-            <div id="vpopStressContainer" style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 380px;">
-              <!-- Alerts populated dynamically -->
-            </div>
+          <div style="overflow-x: auto; max-height: 280px; overflow-y: auto;">
+            <table class="v-drilldown-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr>
+                  <th>A/C No</th>
+                  <th>Customer Name</th>
+                  <th>Total Loan</th>
+                  <th>Paid Amount</th>
+                  <th>Balance Amount</th>
+                  <th>Current Rating</th>
+                  <th>Last Payment</th>
+                  <th>Missed Cycles</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="vCohortInspectorTableBody">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <!-- ROW 4: CRITICAL ATTENTION ENGINE -->
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Critical Attention Engine</h3>
-          <div id="vpopAttentionContainer" style="display: flex; flex-direction: column; gap: 14px;">
-            <!-- Categories populated dynamically -->
+
+        <!-- ROW 2: POSTING ANALYTICS SECTION -->
+        <div id="vpopPostingAnalyticsSection" style="display: flex; flex-direction: column; gap: 20px; margin-top: 8px;">
+          
+          <!-- Summary Cards Grid -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch;">
+            
+            <!-- Card 1: Posting Lag & Status -->
+            <div class="card-glass posting-anal-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-color: #e5e7eb;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Posting Delay Status</span>
+                  <span id="badgePostingLagStatus" class="status-badge" style="font-size: 0.65rem; font-weight: 800; padding: 2px 8px; border-radius: 10px;">ACTIVE</span>
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 6px; margin: 4px 0;">
+                  <span id="lblPostingElapsedDays" style="font-size: 2.1rem; font-weight: 900; color: #1a4d2e; line-height: 1;">0</span>
+                  <span style="font-size: 0.8rem; color: #64748b; font-weight: 700;">days elapsed</span>
+                </div>
+                <span id="lblPostingLastDate" style="font-size: 0.95rem; color: var(--primary); font-weight: 800; display: block; margin-top: 6px; padding: 4px 10px; background: var(--primary-light); border-radius: 6px; width: max-content;">Last Posting: N/A</span>
+              </div>
+              <div style="border-top: 1px solid rgba(226, 232, 240, 0.6); padding-top: 8px; font-size: 0.725rem; color: #64748b; display: flex; justify-content: space-between; align-items: center;">
+                <span>Average Entry Lag:</span>
+                <strong id="lblPostingAvgLag" style="color: #334155; font-weight: 800;">0.0 days</strong>
+              </div>
+            </div>
+
+            <!-- Card 2: Recent Collection Performance -->
+            <div class="card-glass posting-anal-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-color: #e5e7eb; cursor: pointer;" ondblclick="openPostingChartModal()" title="Double click to view trend chart">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Latest Week Collection</span>
+                  <span id="lblPostingAmountvsHist" style="font-size: 0.7rem; font-weight: 700; color: #10b981;">+0% vs hist</span>
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 6px; margin: 4px 0;">
+                  <span id="lblPostingAmtCollected" style="font-size: 1.8rem; font-weight: 900; color: #1a4d2e; line-height: 1;">₹0</span>
+                  <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">/ expected <span id="lblPostingAmtExpected">₹0</span></span>
+                </div>
+                <!-- Progress Bar for Collection Rate -->
+                <div style="width: 100%; height: 6px; background: #e5e7eb; border-radius: 10px; margin-top: 8px; overflow: hidden;" class="collection-rate-bar-track">
+                  <div id="barPostingCollectionRate" style="width: 0%; height: 100%; background: #10b981; border-radius: 10px; transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+              <div style="border-top: 1px solid rgba(226, 232, 240, 0.6); padding-top: 8px; font-size: 0.725rem; color: #64748b; display: flex; justify-content: space-between; align-items: center;">
+                <span>Collection Rate:</span>
+                <strong id="lblPostingCollectionRatePct" style="color: #10b981; font-weight: 800;">0.0%</strong>
+              </div>
+            </div>
+
+            <!-- Card 3: Delinquency & Skippers -->
+            <div class="card-glass posting-anal-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-color: #e5e7eb;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Skipping & Unpaid</span>
+                  <span id="lblPostingSkippingvsPrev" style="font-size: 0.7rem; font-weight: 700; color: #ef4444;">+0% vs prev week</span>
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 6px; margin: 4px 0;">
+                  <span id="lblPostingSkippingPct" style="font-size: 1.8rem; font-weight: 900; color: #ef4444; line-height: 1;">0%</span>
+                  <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">unpaid / <span id="lblPostingSkippedCustomers">0</span> customers skipped</span>
+                </div>
+                <span style="font-size: 0.725rem; color: #94a3b8; font-weight: 600; display: block; margin-top: 2px;">Expected weekly installments missed: <span id="lblPostingAmtUnpaid" style="color:#ef4444;font-weight:700;">₹0</span></span>
+              </div>
+              <div style="border-top: 1px solid rgba(226, 232, 240, 0.6); padding-top: 8px; display: flex; gap: 8px; justify-content: space-between; align-items: center;">
+                <button id="vAuxConsecutiveSkippers" class="aux-flow-btn danger small" onclick="inspectCohortFlow('ConsecutiveSkippers')" style="margin: 0; padding: 2px 8px; font-size: 0.65rem; font-weight: 800; border-radius: 8px; flex: 1; text-align: center;" title="Consecutive Skippers">
+                  <span id="lblPostingConsecutiveSkippers">0</span> Consecutive
+                </button>
+                <button id="vAuxFirstTimeSkippers" class="aux-flow-btn warning small" onclick="inspectCohortFlow('FirstTimeSkippers')" style="margin: 0; padding: 2px 8px; font-size: 0.65rem; font-weight: 800; border-radius: 8px; flex: 1; text-align: center;" title="First-Time Skippers (Streak of 2+ paid prior)">
+                  <span id="lblPostingFirstTimeSkippers">0</span> First-Time
+                </button>
+              </div>
+            </div>
+
           </div>
+
         </div>
 
       </div>
 
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TREND CHART POPUP MODAL -->
+    <!-- ======================================================== -->
+    <div id="postingChartModal" class="customer-popup-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 21000;">
+      <div class="card-glass" style="width: 90%; max-width: 800px; padding: 24px; position: relative; display: flex; flex-direction: column; gap: 16px; border-color: #e5e7eb;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(226, 232, 240, 0.8); padding-bottom: 12px;">
+          <span class="posting-chart-title" style="font-size: 0.95rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-chart-line"></i> Collection Trend & Coverage (Last 10 Weeks)
+          </span>
+          <button class="popup-close-btn" onclick="closePostingChartModal()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-muted);">&times;</button>
+        </div>
+        <div style="position: relative; height: 400px; width: 100%;">
+          <canvas id="vpopPostingTrendChart"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- ======================================================== -->
@@ -290,8 +527,8 @@
                 <div class="form-group">
                   <label>Type</label>
                   <select id="popInputType" class="glass-input">
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
+                    <option value="W">Weekly</option>
+                    <option value="M">Monthly</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -412,8 +649,8 @@
               </div>
             </h3>
             
-            <div class="score-display-container" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 16px; background: #f9fafb; border-radius: 16px; border: 1px solid #e5e7eb;">
-              <div class="score-circle-wrapper" style="position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 15px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
+            <div class="score-display-container pop-score-container" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 16px; background: #f9fafb; border-radius: 16px; border: 1px solid #e5e7eb;">
+              <div class="score-circle-wrapper pop-score-circle" style="position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 15px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
                 <span id="popScoreValue" style="font-size: 1.9rem; font-weight: 850; color: #1a4d2e; text-shadow: none;">100</span>
               </div>
               <div class="risk-info" style="flex: 1; margin-left: 18px; display: flex; flex-direction: column; gap: 6px;">
@@ -440,14 +677,14 @@
             <!-- Behavioral Intelligence Panel -->
             <div id="popBehavioralIntelligencePanel" class="subcard-glass" style="padding: 16px; display: none; flex-direction: column; gap: 16px; margin-top: 10px; border-color: #e5e7eb;">
               <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 4px;">
-                <span style="font-size: 0.9rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">Behavioral Intelligence</span>
+                <span class="pop-behavioral-title" style="font-size: 0.9rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">Behavioral Intelligence</span>
                 <span id="popBehavioralStatus" class="status-badge" style="text-transform: uppercase; font-weight: 800; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;">ON TRACK</span>
               </div>
 
               <!-- Stacking Next Risk & Stability vertically for a cleaner, spacious layout -->
               <div style="display: flex; flex-direction: column; gap: 12px;">
                 <!-- Next Risk -->
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
                   <div style="display: flex; flex-direction: column; gap: 4px;">
                     <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Predicted Next Risk</span>
                     <span id="popPredictedRisk" style="font-size: 1.1rem; font-weight: 800; text-transform: uppercase;">LOW</span>
@@ -456,20 +693,20 @@
                 </div>
                 
                 <!-- Stability -->
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
+                <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Repayment Stability</span>
                     <span id="popStabilityLabel" style="font-size: 0.85rem; font-weight: 700; color: #374151;">-</span>
                   </div>
-                  <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 10px; margin-top: 4px; overflow: hidden; border: 1px solid #e5e7eb;">
+                  <div class="stability-bar-track" style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 10px; margin-top: 4px; overflow: hidden; border: 1px solid #e5e7eb;">
                     <div id="popStabilityBar" style="width: 0%; height: 100%; background: #84cc16; border-radius: 10px; transition: width 0.4s ease, background-color 0.4s ease;"></div>
                   </div>
                 </div>
               </div>
 
               <!-- Predicted Closure Card -->
-              <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: justify-content: space-between; align-items: center; display: flex;">
                   <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Projected Closure</span>
                   <span id="popClosureDiffBadge" style="font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; border: 1px solid transparent;">On Time</span>
                 </div>
@@ -488,13 +725,13 @@
 
               <!-- Discipline Profile (2x2 Grid) -->
               <div style="margin-top: 4px;">
-                <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em; display: block; margin-bottom: 10px;">Discipline Profile</span>
+                <span class="pop-discipline-title" style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em; display: block; margin-bottom: 10px;">Discipline Profile</span>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                   <!-- On Time -->
                   <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2));"><i class='fas fa-check-circle'></i></span>
-                      <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 600; letter-spacing: 0.02em;">On-Time</span>
+                      <span class="discipline-label-on-time" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">On-Time</span>
                     </div>
                     <span id="popCountOnTime" style="font-size: 1rem; font-weight: 800; color: #34d399;">0</span>
                   </div>
@@ -502,7 +739,7 @@
                   <div style="background: rgba(56, 189, 248, 0.04); border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.2));"><i class='fas fa-clock'></i></span>
-                      <span style="font-size: 0.75rem; color: #bae6fd; font-weight: 600; letter-spacing: 0.02em;">Delayed</span>
+                      <span class="discipline-label-delayed" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Delayed</span>
                     </div>
                     <span id="popCountDelayed" style="font-size: 1rem; font-weight: 800; color: #38bdf8;">0</span>
                   </div>
@@ -510,7 +747,7 @@
                   <div style="background: rgba(245, 158, 11, 0.04); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.2));"><i class='fas fa-adjust'></i></span>
-                      <span style="font-size: 0.75rem; color: #fde68a; font-weight: 600; letter-spacing: 0.02em;">Partial</span>
+                      <span class="discipline-label-partial" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Partial</span>
                     </div>
                     <span id="popCountPartial" style="font-size: 1rem; font-weight: 800; color: #fbbf24;">0</span>
                   </div>
@@ -518,7 +755,7 @@
                   <div style="background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.2));"><i class='fas fa-times-circle'></i></span>
-                      <span style="font-size: 0.75rem; color: #fecaca; font-weight: 600; letter-spacing: 0.02em;">Missed</span>
+                      <span class="discipline-label-missed" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Missed</span>
                     </div>
                     <span id="popCountMissed" style="font-size: 1rem; font-weight: 800; color: #f87171;">0</span>
                   </div>
@@ -571,13 +808,621 @@
       <p style="font-size: 0.95rem; color: #6b7280; max-width: 500px; line-height: 1.6; margin: 0;">
         To view real-time portfolio behavioral intelligence, early warning signals, and collections prioritization lists, please select a village from the top header dropdown or click the Home button to use the main landing page.
       </p>
-    </div>
   {% endif %}
+
+  <!-- Historical Trends popup modal -->
+  <div id="historyModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-content">
+      <div class="dashboard-modal-header">
+        <h3 id="modalChartTitle">Historical Trends</h3>
+        <div class="modal-time-toggle">
+          <button class="time-btn active" id="btnTimeWeekly" onclick="switchModalTimeRange('weekly')">Weekly</button>
+          <button class="time-btn" id="btnTimeMonthly" onclick="switchModalTimeRange('monthly')">Monthly</button>
+          <button class="time-btn" id="btnTimeYearly" onclick="switchModalTimeRange('yearly')">Yearly</button>
+        </div>
+        <button class="modal-close-btn" onclick="closeHistoryModal()">&times;</button>
+      </div>
+      <div class="dashboard-modal-body">
+        <div class="chart-container-wrapper">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Village Health History Popup Modal -->
+  <div id="villageHealthModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-content" style="max-width: 900px; width: 95%;">
+      <div class="dashboard-modal-header" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 id="vHealthModalTitle" style="font-size: 1.1rem; font-weight: 800; color: #1a4d2e; margin: 0;">Village Health & Metrics History</h3>
+          <span id="vHealthModalSubtitle" style="font-size: 0.75rem; color: #6b7280; font-weight: 500;">-</span>
+        </div>
+        <div class="modal-time-toggle" id="vHealthModalTimeToggle" style="display: flex; gap: 8px;">
+          <button class="time-btn active" data-range="weekly" onclick="switchHealthModalRange('weekly')">Weekly</button>
+          <button class="time-btn" data-range="monthly" onclick="switchHealthModalRange('monthly')">Monthly</button>
+          <button class="time-btn" data-range="yearly" onclick="switchHealthModalRange('yearly')">Yearly</button>
+          <button class="time-btn" data-range="complete" onclick="switchHealthModalRange('complete')">Complete</button>
+        </div>
+        <button class="modal-close-btn" onclick="closeHealthModal()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer; color: #9ca3af;">&times;</button>
+      </div>
+      
+      <div class="dashboard-modal-body" style="display: flex; flex-direction: column; gap: 20px; padding: 20px 0 0 0;">
+        <!-- Chart Section -->
+        <div class="chart-container-wrapper" style="position: relative; height: 320px; width: 100%;">
+          <canvas id="vHealthHistoryChart"></canvas>
+        </div>
+        
+        <!-- Events Section -->
+        <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+          <h4 style="font-size: 0.85rem; font-weight: 700; color: #374151; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+            <span>📅</span> Village System Events Timeline
+          </h4>
+          <div id="vHealthEventsTimeline" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 8px;">
+            <!-- Events will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ======================================================== -->
   <!-- PRESTIGE GLASSMORPHISM STYLE SYSTEM -->
   <!-- ======================================================== -->
   <style>
+    /* Tile flip styling */
+    .flip-card-container {
+      perspective: 1000px;
+      width: 340px;
+      height: 250px;
+    }
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+    .flip-card-container.flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+    .flip-card-front, .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      margin: 0;
+      top: 0;
+      left: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .flip-card-back {
+      transform: rotateY(180deg);
+    }
+    .tile-flip-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: #64748b;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, transform 0.2s;
+    }
+    .tile-flip-btn:hover {
+      color: #1a4d2e !important;
+      transform: scale(1.15);
+    }
+    .metric-list-item {
+      background: #f8fafc;
+      border: 1px solid #f1f5f9;
+      border-radius: 8px;
+      padding: 6px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .metric-list-item:hover {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+      transform: translateY(-0.5px);
+    }
+
+    /* Card-specific sub-toggle styling */
+    .health-sub-toggle-container {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      background: #f1f5f9;
+      border-radius: 20px;
+      padding: 2px;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid #e2e8f0;
+      width: 130px;
+      height: 26px;
+      transition: all 0.2s ease;
+    }
+    .health-sub-toggle-pill {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      left: 2px;
+      width: calc(50% - 2px);
+      background: #1a4d2e;
+      border-radius: 18px;
+      transition: all 0.2s ease;
+      z-index: 1;
+    }
+    .health-sub-toggle-container.mode-default .health-sub-toggle-pill {
+      left: 50%;
+    }
+    .health-sub-toggle-label {
+      position: relative;
+      flex: 1;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 800;
+      z-index: 2;
+      color: #64748b;
+      transition: color 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .health-sub-toggle-container.mode-active_only .active-only-label {
+      color: #ffffff !important;
+    }
+    .health-sub-toggle-container.mode-default .default-label {
+      color: #ffffff !important;
+    }
+    
+    /* Consolidated Village Risk Flow - Premium Design */
+    
+    /* Panel container */
+    .risk-flow-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 40px -12px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.01);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+      box-sizing: border-box;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* Header Typography */
+    .risk-flow-title {
+      font-size: 0.9rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: linear-gradient(135deg, #1b4d2e, #475569);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin: 0;
+    }
+    
+    /* Attention Tiles (Mini-Capsules) */
+    .attention-capsule {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 12px;
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.01);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .attention-capsule:hover {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+    }
+    
+    .attention-capsule.danger.has-items {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(239, 68, 68, 0.01) 100%);
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+    .attention-capsule.warning.has-items {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.06) 0%, rgba(249, 115, 22, 0.01) 100%);
+      border-color: rgba(249, 115, 22, 0.25);
+    }
+    
+    .attention-capsule.active {
+      background: #ffffff !important;
+    }
+    .attention-capsule.active.danger {
+      box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.15), 0 8px 20px -6px rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5) !important;
+    }
+    .attention-capsule.active.warning {
+      box-shadow: 0 0 0 2.5px rgba(249, 115, 22, 0.15), 0 8px 20px -6px rgba(249, 115, 22, 0.2);
+      border-color: rgba(249, 115, 22, 0.5) !important;
+    }
+    
+    .capsule-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .capsule-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #94a3b8;
+      transition: all 0.3s;
+    }
+    .attention-capsule.has-items .capsule-dot {
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      animation: capsule-pulse 2s infinite;
+    }
+    .attention-capsule.warning.has-items .capsule-dot {
+      background: #f97316;
+      box-shadow: 0 0 8px #f97316;
+      animation: capsule-pulse-warning 2s infinite;
+    }
+    .capsule-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .attention-capsule.has-items .capsule-label {
+      color: #334155;
+    }
+    .capsule-count {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: #94a3b8;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 6px;
+      min-width: 16px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .attention-capsule.has-items .capsule-count {
+      color: #ffffff;
+      background: #ef4444;
+    }
+    .attention-capsule.warning.has-items .capsule-count {
+      color: #ffffff;
+      background: #f97316;
+    }
+    
+    @keyframes capsule-pulse {
+      0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+      70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+      }
+      100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+    @keyframes capsule-pulse-warning {
+      0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+      }
+      70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);
+      }
+      100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+      }
+    }
+    
+    /* Cohort Cards - High-End Premium styling */
+    .premium-cohort-card {
+      flex: 1;
+      min-width: 100px;
+      height: 102px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      background: rgba(255, 255, 255, 0.4);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.01);
+    }
+    .premium-cohort-card:hover {
+      transform: translateY(-3px);
+      background: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.08);
+      border-color: #cbd5e1;
+    }
+    
+    /* Excellent card state */
+    .cohort-card-excellent:hover {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.02) 0%, rgba(16, 185, 129, 0.08) 100%);
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 8px 20px -8px rgba(16, 185, 129, 0.25);
+    }
+    .cohort-card-excellent.active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(16, 185, 129, 0.16) 100%) !important;
+      border-color: rgba(16, 185, 129, 0.5) !important;
+      box-shadow: 0 0 0 2.5px rgba(16, 185, 129, 0.15), 0 12px 24px -10px rgba(16, 185, 129, 0.3) !important;
+    }
+    
+    /* Good card state */
+    .cohort-card-good:hover {
+      background: linear-gradient(135deg, rgba(132, 204, 22, 0.02) 0%, rgba(132, 204, 22, 0.08) 100%);
+      border-color: rgba(132, 204, 22, 0.3);
+      box-shadow: 0 8px 20px -8px rgba(132, 204, 22, 0.25);
+    }
+    .cohort-card-good.active {
+      background: linear-gradient(135deg, rgba(132, 204, 22, 0.06) 0%, rgba(132, 204, 22, 0.16) 100%) !important;
+      border-color: rgba(132, 204, 22, 0.5) !important;
+      box-shadow: 0 0 0 2.5px rgba(132, 204, 22, 0.15), 0 12px 24px -10px rgba(132, 204, 22, 0.3) !important;
+    }
+    
+    /* Low Risk card state */
+    .cohort-card-low:hover {
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.02) 0%, rgba(234, 179, 8, 0.08) 100%);
+      border-color: rgba(234, 179, 8, 0.3);
+      box-shadow: 0 8px 20px -8px rgba(234, 179, 8, 0.25);
+    }
+    .cohort-card-low.active {
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.06) 0%, rgba(234, 179, 8, 0.16) 100%) !important;
+      border-color: rgba(234, 179, 8, 0.5) !important;
+      box-shadow: 0 0 0 2.5px rgba(234, 179, 8, 0.15), 0 12px 24px -10px rgba(234, 179, 8, 0.3) !important;
+    }
+    
+    /* High Risk card state */
+    .cohort-card-high:hover {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.02) 0%, rgba(239, 68, 68, 0.08) 100%);
+      border-color: rgba(239, 68, 68, 0.3);
+      box-shadow: 0 8px 20px -8px rgba(239, 68, 68, 0.25);
+    }
+    .cohort-card-high.active {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(239, 68, 68, 0.16) 100%) !important;
+      border-color: rgba(239, 68, 68, 0.5) !important;
+      box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.15), 0 12px 24px -10px rgba(239, 68, 68, 0.3) !important;
+    }
+    
+    .cohort-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cohort-card-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .premium-cohort-card.active .cohort-card-label {
+      color: #1e293b;
+    }
+    .cohort-card-indicator {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+    .cohort-card-excellent .cohort-card-indicator { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .cohort-card-good .cohort-card-indicator { background: #84cc16; box-shadow: 0 0 6px #84cc16; }
+    .cohort-card-low .cohort-card-indicator { background: #eab308; box-shadow: 0 0 6px #eab308; }
+    .cohort-card-high .cohort-card-indicator { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    
+    .cohort-card-val-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+    .cohort-card-count {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #1e293b;
+      line-height: 1;
+    }
+    .cohort-card-pct {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+    .premium-cohort-card.active .cohort-card-pct {
+      color: #475569;
+    }
+    .cohort-card-trend-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    
+    /* Flow Connectors - Moving gradient paths */
+    .premium-flow-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 102px;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.25s ease;
+    }
+    .premium-flow-connector:hover {
+      transform: scale(1.1);
+    }
+    .flow-arrow-svg {
+      width: 100%;
+      height: 16px;
+      overflow: visible;
+    }
+    .arrow-shaft {
+      stroke: #cbd5e1;
+      stroke-dasharray: 6 4;
+      transition: stroke 0.3s ease;
+    }
+    .arrow-head {
+      stroke: #cbd5e1;
+      transition: stroke 0.3s ease, transform 0.3s ease;
+    }
+    .premium-flow-connector:hover .arrow-shaft,
+    .premium-flow-connector.active .arrow-shaft {
+      stroke: #ef4444;
+      animation: flow-arrow-dash 0.8s linear infinite;
+    }
+    .premium-flow-connector:hover .arrow-head,
+    .premium-flow-connector.active .arrow-head {
+      stroke: #ef4444;
+      animation: flow-arrow-bounce 0.8s ease-in-out infinite;
+    }
+    
+    @keyframes flow-arrow-dash {
+      to {
+        stroke-dashoffset: -10;
+      }
+    }
+    @keyframes flow-arrow-bounce {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+    }
+    
+    .premium-flow-badge {
+      position: absolute;
+      top: 14px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #475569;
+      padding: 1px 6px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+      transition: all 0.25s ease;
+    }
+    .premium-flow-connector:hover .premium-flow-badge,
+    .premium-flow-connector.active .premium-flow-badge {
+      background: #ef4444;
+      border-color: #ef4444;
+      color: #ffffff;
+      box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2);
+    }
+    
+    /* Auxiliary buttons */
+    .aux-flow-btn {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .aux-flow-btn.active {
+      box-shadow: 0 0 0 2px #1a4d2e;
+    }
+    .aux-flow-btn.success {
+      background: rgba(16, 185, 129, 0.05);
+      color: #10b981;
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    .aux-flow-btn.success:hover {
+      background: rgba(16, 185, 129, 0.12);
+      transform: translateY(-0.5px);
+    }
+    .aux-flow-btn.danger {
+      background: rgba(239, 68, 68, 0.05);
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+    .aux-flow-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.12);
+      transform: translateY(-0.5px);
+    }
+    .aux-flow-btn:active {
+      transform: translateY(0.5px);
+    }
+    
+    /* Metrics panel components */
+    .metric-grid-card {
+      background: #f8fafc;
+      border: 1px solid #f1f5f9;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .metric-grid-card:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+    }
+    
+    /* Timeline system events */
+    .timeline-event-item {
+      display: flex;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border: 1px solid #f1f5f9;
+      border-radius: 10px;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .timeline-event-item:hover {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+    }
+    .timeline-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .timeline-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
     /* Card Glass Base styling */
     .card-glass {
       background: #ffffff;
@@ -681,58 +1526,7 @@
       from { opacity: 0; transform: translateY(-8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .v-drilldown-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-    }
-    .v-drilldown-table th {
-      background: #f3f4f6 !important;
-      color: #6b7280;
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 0.65rem;
-      letter-spacing: 0.04em;
-      padding: 8px 10px;
-      text-align: center;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .v-drilldown-table td {
-      padding: 8px 10px;
-      text-align: center;
-      border-bottom: 1px solid #f3f4f6;
-    }
-    .v-drilldown-table tr.clickable-row {
-      cursor: pointer;
-      transition: background 0.15s ease;
-    }
-    .v-drilldown-table tr.clickable-row:hover {
-      background: rgba(26, 77, 46, 0.06) !important;
-    }
 
-    /* Trend & Stress alerts card */
-    .v-stress-card {
-      padding: 12px 16px;
-      border-radius: 10px;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      transition: all 0.2s ease;
-    }
-    .v-stress-card.stress-critical {
-      border-left: 4px solid #ef4444;
-      background: rgba(239, 68, 68, 0.02);
-    }
-    .v-stress-card.stress-high {
-      border-left: 4px solid #f97316;
-      background: rgba(249, 115, 22, 0.02);
-    }
-    .v-stress-card.stress-medium {
-      border-left: 4px solid #fbbf24;
-      background: rgba(251, 191, 36, 0.02);
-    }
 
     /* Attention Accordion Headers */
     .v-attention-header {
@@ -1014,9 +1808,10 @@
       background: #f3f4f6;
     }
     .popup-mini-table td[contenteditable="true"]:focus {
-      background: #ffffff !important;
-      outline: 1px solid rgba(26, 77, 46, 0.5);
-      box-shadow: 0 0 8px rgba(26, 77, 46, 0.1);
+      background: inherit !important;
+      outline: 2px solid rgba(26, 77, 46, 0.8);
+      outline-offset: -2px;
+      box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.15);
     }
     .popup-mini-table td.highlighted {
       background: rgba(26, 77, 46, 0.04);
@@ -1234,7 +2029,203 @@
     #popWeeklyLogBtn:active {
       transform: scale(0.95) !important;
     }
+
+    /* ── Dashboard Dark Mode Overrides ── */
+    [data-theme="dark"] .risk-flow-card {
+      background: linear-gradient(135deg, rgba(26,29,39,0.95) 0%, rgba(22,25,35,0.85) 100%);
+      border-color: rgba(255,255,255,0.06);
+      box-shadow: 0 10px 40px -12px rgba(0,0,0,0.5);
+    }
+    [data-theme="dark"] .risk-flow-title {
+      background: linear-gradient(135deg, #10b981, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    [data-theme="dark"] .premium-cohort-card {
+      background: rgba(26,29,39,0.8);
+      border-color: rgba(255,255,255,0.07);
+    }
+    [data-theme="dark"] .premium-cohort-card:hover {
+      background: rgba(34,38,54,0.95);
+      border-color: rgba(255,255,255,0.12);
+    }
+    [data-theme="dark"] .cohort-card-excellent.active {
+      background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.18) 100%) !important;
+    }
+    [data-theme="dark"] .cohort-card-good.active {
+      background: linear-gradient(135deg, rgba(132,204,22,0.1) 0%, rgba(132,204,22,0.18) 100%) !important;
+    }
+    [data-theme="dark"] .cohort-card-low.active {
+      background: linear-gradient(135deg, rgba(234,179,8,0.1) 0%, rgba(234,179,8,0.18) 100%) !important;
+    }
+    [data-theme="dark"] .cohort-card-high.active {
+      background: linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.18) 100%) !important;
+    }
+    [data-theme="dark"] .cohort-card-count { color: #e8eaed; }
+    [data-theme="dark"] .cohort-card-label { color: #9ca3af; }
+    [data-theme="dark"] .premium-cohort-card.active .cohort-card-label { color: #e8eaed; }
+    [data-theme="dark"] .attention-capsule {
+      background: rgba(26,29,39,0.8);
+      border-color: rgba(255,255,255,0.07);
+    }
+    [data-theme="dark"] .attention-capsule:hover {
+      background: rgba(34,38,54,0.95);
+      border-color: rgba(255,255,255,0.12);
+    }
+    [data-theme="dark"] .attention-capsule.active {
+      background: rgba(34,38,54,0.95) !important;
+    }
+    [data-theme="dark"] .capsule-label { color: #9ca3af; }
+    [data-theme="dark"] .attention-capsule.has-items .capsule-label { color: #e8eaed; }
+    [data-theme="dark"] .capsule-count { background: #2a2e3a; color: #9ca3af; }
+    [data-theme="dark"] .premium-flow-badge {
+      background: #1a1d27;
+      border-color: #2a2e3a;
+      color: #9ca3af;
+    }
+    [data-theme="dark"] .arrow-shaft,
+    [data-theme="dark"] .arrow-head { stroke: #3a3f4b; }
+    [data-theme="dark"] .metric-list-item {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .metric-list-item:hover {
+      background: #1a1d27;
+      border-color: #3a3f4b;
+    }
+    [data-theme="dark"] .metric-grid-card {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .metric-grid-card:hover {
+      background: #1a1d27;
+      border-color: #3a3f4b;
+    }
+    [data-theme="dark"] .timeline-event-item {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .timeline-event-item:hover {
+      background: #1a1d27;
+      border-color: #3a3f4b;
+    }
+    [data-theme="dark"] .health-sub-toggle-container {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .health-sub-toggle-pill { background: #10b981; }
+    [data-theme="dark"] .card-glass {
+      background: #1a1d27;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .subcard-glass {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .pop-recalc-btn {
+      background: #1a1d27 !important;
+      border-color: #2a2e3a !important;
+      color: #10b981 !important;
+    }
+    [data-theme="dark"] .pop-recalc-btn:hover {
+      background: #222636 !important;
+      border-color: #10b981 !important;
+    }
+    [data-theme="dark"] .v-drilldown-wrapper {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .v-movement-row:hover {
+      background: rgba(16,185,129,0.06) !important;
+      border-color: #10b981;
+    }
+    [data-theme="dark"] .v-attention-header {
+      background: #151821;
+      border-color: #2a2e3a;
+    }
+    [data-theme="dark"] .v-attention-header:hover {
+      background: #1a1d27;
+      border-color: #10b981;
+    }
+    [data-theme="dark"] .v-drilldown-table th { background: #1a1d27 !important; }
+    [data-theme="dark"] .tile-flip-btn { color: #9ca3af; }
+    [data-theme="dark"] .tile-flip-btn:hover { color: #10b981 !important; }
+    [data-theme="dark"] .wk-badge-pending {
+      background: #151821;
+      color: #9ca3af;
+      border-color: #2a2e3a;
+    }
+
+    /* Light Mode Discipline Labels & Flipped Card Metrics */
+    .discipline-label-on-time { color: #047857; }
+    .discipline-label-delayed { color: #0369a1; }
+    .discipline-label-partial { color: #b45309; }
+    .discipline-label-missed { color: #b91c1c; }
+
+    .metric-item-label { color: #334155; }
+    .metric-item-weight { color: #64748b; background: #f1f5f9; }
+    .metric-item-value { color: #1e293b; }
+
+    /* Dark Mode overrides */
+    [data-theme="dark"] .health-card-title { color: var(--primary) !important; }
+    [data-theme="dark"] .vpop-track-circle { stroke: var(--border) !important; }
+    [data-theme="dark"] #vpopHealthScore { color: var(--primary) !important; }
+    [data-theme="dark"] .health-trend-box { background: var(--surface) !important; border-color: var(--border) !important; }
+    [data-theme="dark"] .health-metrics-title { color: var(--text) !important; }
+    [data-theme="dark"] .metric-item-label { color: var(--text) !important; }
+    [data-theme="dark"] .metric-item-weight { color: var(--text-secondary) !important; background: var(--surface-elevated) !important; border: 1px solid var(--border) !important; }
+    [data-theme="dark"] .metric-item-value { color: var(--text) !important; }
+
+    /* Dark Mode Customer Details Popup overrides */
+    [data-theme="dark"] .customer-popup-header h2 { color: var(--text) !important; }
+    [data-theme="dark"] .col-title { color: var(--text) !important; border-bottom-color: var(--border) !important; }
+    [data-theme="dark"] .profile-avatar-sec h4 { color: var(--text) !important; }
+    [data-theme="dark"] .profile-subtext { color: var(--text-secondary) !important; }
+    [data-theme="dark"] .glass-input { background: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
+    [data-theme="dark"] .glass-input:focus { background: var(--surface-elevated) !important; border-color: var(--primary) !important; box-shadow: 0 0 10px rgba(16, 185, 129, 0.15) !important; color: var(--text) !important; }
+    [data-theme="dark"] .glass-input option { background: var(--surface-elevated) !important; color: var(--text) !important; }
+    [data-theme="dark"] .read-only-badge { background: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
+
+    /* Dark Mode Popup Tables */
+    [data-theme="dark"] .popup-mini-table th { background: var(--surface-elevated) !important; color: var(--text-secondary) !important; border-bottom-color: var(--border) !important; }
+    [data-theme="dark"] .popup-mini-table td { border-bottom-color: var(--border-light) !important; color: var(--text) !important; }
+    [data-theme="dark"] .popup-mini-table tr:hover { background: rgba(255, 255, 255, 0.02) !important; }
+    [data-theme="dark"] .popup-mini-table td[contenteditable="true"]:hover { background: var(--border) !important; }
+    [data-theme="dark"] .popup-mini-table td[contenteditable="true"]:focus { outline-color: var(--primary) !important; }
+    [data-theme="dark"] .mini-table-footer { background: var(--surface-elevated) !important; border-top-color: var(--border) !important; color: var(--text) !important; }
+
+    /* Dark Mode Popup Analytics Column */
+    [data-theme="dark"] .pop-score-container { background: var(--surface) !important; border-color: var(--border) !important; }
+    [data-theme="dark"] .pop-score-circle { background: radial-gradient(circle, var(--surface-elevated) 60%, var(--border) 100%) !important; border-color: var(--border) !important; box-shadow: inset 0 0 16px rgba(0,0,0,0.2), 0 0 15px rgba(16, 185, 129, 0.15) !important; }
+    [data-theme="dark"] #popScoreValue { color: var(--primary) !important; }
+    [data-theme="dark"] #popFrozenRating { color: var(--primary) !important; background: rgba(16, 185, 129, 0.15) !important; }
+    [data-theme="dark"] .pop-behavioral-title { color: var(--primary) !important; }
+    [data-theme="dark"] .pop-analytics-box { background: var(--surface) !important; border-color: var(--border) !important; }
+    [data-theme="dark"] #popStabilityLabel { color: var(--text) !important; }
+    [data-theme="dark"] .stability-bar-track { background: var(--border) !important; border-color: var(--border) !important; }
+    [data-theme="dark"] #popActualEndDate { color: var(--text) !important; }
+    [data-theme="dark"] #popPredictedEndDate { color: var(--text) !important; }
+    [data-theme="dark"] .pop-discipline-title { color: var(--text-secondary) !important; }
+
+    /* Dark Mode Discipline Profile Grid Labels */
+    [data-theme="dark"] .discipline-label-on-time { color: #a7f3d0 !important; }
+    [data-theme="dark"] .discipline-label-delayed { color: #bae6fd !important; }
+    [data-theme="dark"] .discipline-label-partial { color: #fde68a !important; }
+    [data-theme="dark"] .discipline-label-missed { color: #fecaca !important; }
+
+    /* Dark Mode Posting Analytics Overrides */
+    [data-theme="dark"] .posting-analytics-title { color: var(--primary) !important; }
+    [data-theme="dark"] .posting-chart-title { color: var(--primary) !important; }
+    [data-theme="dark"] .employee-breakdown-title { color: var(--primary) !important; }
+    [data-theme="dark"] #lblPostingElapsedDays { color: var(--text) !important; }
+    [data-theme="dark"] #lblPostingAmtCollected { color: var(--text) !important; }
+    [data-theme="dark"] #lblPostingAvgLag { color: var(--text) !important; }
+    [data-theme="dark"] .collection-rate-bar-track { background: var(--border) !important; }
+    [data-theme="dark"] .posting-anal-card { border-color: var(--border) !important; }
+    [data-theme="dark"] .posting-anal-card div[style*="border-top"] { border-top-color: var(--border) !important; }
+    [data-theme="dark"] #vpopPostingRiskIntelTitle { color: var(--text) !important; }
   </style>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1242,6 +2233,6 @@
     window.activeVillageId = "{{ session.get('vid') or '' }}";
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="{{ url_for('static', filename='js/view_customer.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ range(1, 10000) | random }}"></script>
 {% endblock %}

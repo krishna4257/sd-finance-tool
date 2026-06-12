@@ -9,6 +9,8 @@
 
     .cyl {
       animation: grow-piston infinite cubic-bezier(0.45, 0, 0.55, 1);
+      will-change: transform;
+      backface-visibility: hidden;
     }
 
     /* Anchored origins at the bottom-center of each cylinder so they grow upwards from the floor.

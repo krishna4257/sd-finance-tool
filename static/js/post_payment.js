@@ -30,6 +30,8 @@ let lastWeekCollection = 0;
 let isSubmittingPayments = false;
 let expectedPayments = 0;
 let alreadyPaidPayments = 0;
+window.expandedDateTiles = window.expandedDateTiles || new Set();
+window.tileSortStates = window.tileSortStates || {};
 
 
 // --- Instant lookup mapping ---
@@ -179,45 +181,6 @@ function updateCollectionStats() {
     }
 }
 
-document.addEventListener('click', function(e) {
-    const row = e.target.closest('tr');
-    if (row && row.parentElement.tagName === 'TBODY' && row.closest('.customer-table')) {
-        document.querySelectorAll('.customer-table tbody tr').forEach(r => r.classList.remove('highlighted'));
-        row.classList.add('highlighted');
-    }
-});
-
-document.addEventListener('keydown', function (e) {
-  const highlighted = document.querySelector('tbody tr.highlighted');
-  if (!highlighted) return;
-
-  const tbody = highlighted.closest('tbody');
-  if (!tbody) return;
-
-  // Only navigate within THIS table body, and only across visible rows
-  const rows = Array.from(tbody.querySelectorAll('tr'))
-    .filter(r => r.offsetParent !== null); // skip hidden rows
-
-  const currIndex = rows.indexOf(highlighted);
-  if (currIndex === -1) return;
-
-  let nextIndex = currIndex;
-
-  if (e.key === 'ArrowDown' || e.keyCode === 40) {
-    e.preventDefault();
-    nextIndex = Math.min(currIndex + 1, rows.length - 1);
-  } else if (e.key === 'ArrowUp' || e.keyCode === 38) {
-    e.preventDefault();
-    nextIndex = Math.max(currIndex - 1, 0);
-  } else {
-    return;
-  }
-
-  rows.forEach(r => r.classList.remove('highlighted'));
-  rows[nextIndex].classList.add('highlighted');
-  rows[nextIndex].scrollIntoView({ block: 'nearest' });
-});
-
 let isEditingCell = false; // Prevent multiple cell editing sessions simultaneously
 
 function makeCellEditable(cell, index, field, currentValue) {
@@ -225,7 +188,11 @@ function makeCellEditable(cell, index, field, currentValue) {
     isEditingCell = true;
 
     // Clear highlights temporarily to avoid visual clash
-    document.querySelectorAll('#tempTable tbody tr').forEach(r => r.classList.remove('highlighted'));
+    document.querySelectorAll('#tempTable tbody tr').forEach(r => {
+        r.classList.remove('highlighted');
+        r.classList.remove('highlighted-row');
+    });
+    window.currentRow = null;
 
     const input = document.createElement("input");
     input.className = "inline-edit-input";
@@ -322,13 +289,18 @@ function makeCellEditable(cell, index, field, currentValue) {
     });
 
     if (field === 'pdt') {
-        flatpickr(input, {
-            dateFormat: 'd/m/Y',
-            allowInput: true,
+        window.initCustomCalendar(input, {
+            clickOpens: true,
+            noWrapper: true,
             onClose: function() {
                 setTimeout(() => finishEdit(true), 150);
             }
         });
+        setTimeout(() => {
+            if (document.activeElement === input) {
+                input.click();
+            }
+        }, 50);
     } else {
         input.addEventListener("blur", function() {
             setTimeout(() => finishEdit(true), 150);
@@ -989,22 +961,22 @@ loadAnalytics(); // Fetch analytics and render mixed chart on page load
 
 // --- Auto-focus & flatpickr & live collection stats loader & flip card listeners ---
 document.addEventListener("DOMContentLoaded", () => {
-    flatpickr("#pdt", {
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        wrap: false
-    });
-
     const pdtInput = document.getElementById("pdt");
     if (pdtInput) {
-        pdtInput.focus();
+        window.initCustomCalendar(pdtInput, {
+            clickOpens: true
+        });
+    }
+
+    const pdtInput_init = document.getElementById("pdt");
+    if (pdtInput_init) {
+        pdtInput_init.focus();
 
         // Place cursor at the end — Safari-safe fallback
-        const len = pdtInput.value.length;
-        try { pdtInput.setSelectionRange(len, len); } catch (e) {}
+        const len = pdtInput_init.value.length;
+        try { pdtInput_init.setSelectionRange(len, len); } catch (e) {}
         setTimeout(() => {
-            try { pdtInput.setSelectionRange(len, len); } catch (e) {}
+            try { pdtInput_init.setSelectionRange(len, len); } catch (e) {}
         }, 0);
     }
 
@@ -1078,4 +1050,943 @@ document.addEventListener("DOMContentLoaded", () => {
             triggerStatsLoad();
         }, 100);
     }
+
+    // ── Posting Report Filter Flatpickrs ──
+    const filterDateRange = document.getElementById("filterDateRange");
+    if (filterDateRange) {
+        window.initCustomCalendar(filterDateRange, {
+            mode: "range",
+            clickOpens: true
+        });
+    }
+
+    const bulkFindDate = document.getElementById("bulkFindDate");
+    if (bulkFindDate) {
+        window.initCustomCalendar(bulkFindDate, {
+            clickOpens: true,
+            onClose: function() {
+                applyReportFiltersOnly();
+            }
+        });
+    }
+
+    // Handle typing filter input directly on Find Date input
+    document.getElementById("bulkFindDate")?.addEventListener("input", () => {
+        applyReportFiltersOnly();
+    });
+
+    const bulkReplaceDate = document.getElementById("bulkReplaceDate");
+    if (bulkReplaceDate) {
+        window.initCustomCalendar(bulkReplaceDate, {
+            clickOpens: true
+        });
+    }
+
+    // Handle typing filter input directly on ANO filter
+    document.getElementById("filterAno")?.addEventListener("input", () => {
+        applyReportFiltersOnly();
+    });
+
+    // Close button for column selector modal
+    document.getElementById("closeColumnModal")?.addEventListener("click", () => {
+        document.getElementById("columnModal")?.classList.add("hidden");
+    });
 });
+
+// --- Consolidated Posting Report State and Logic ---
+let originalReportData = [];
+let filteredReportData = [];
+let currentView = 'table';
+let highlightedPids = new Set();
+
+window.switchTab = function(tab) {
+    const tabNew = document.getElementById("tabNewPayments");
+    const tabRep = document.getElementById("tabReport");
+    const inputForm = document.getElementById("inputFormBox");
+    const tempTable = document.getElementById("tempTableBox");
+    const reportContainer = document.getElementById("reportContainer");
+
+    if (!tabNew || !tabRep) return;
+
+    if (tab === 'new-payments') {
+        if (tabNew.classList.contains("active")) return;
+        tabNew.classList.add("active");
+        tabRep.classList.remove("active");
+        if (inputForm) inputForm.style.display = "block";
+        if (tempTable) tempTable.style.display = "block";
+        if (reportContainer) reportContainer.style.display = "none";
+        updateTable();
+    } else if (tab === 'report') {
+        if (tabRep.classList.contains("active")) return;
+        tabNew.classList.remove("active");
+        tabRep.classList.add("active");
+        if (inputForm) inputForm.style.display = "none";
+        if (tempTable) tempTable.style.display = "none";
+        if (reportContainer) reportContainer.style.display = "block";
+        fetchReportData();
+    }
+};
+
+function fetchReportData() {
+    fetch("/api/posting_report")
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            originalReportData = data.payments;
+            applyReportFiltersOnly();
+        } else {
+            console.error("Failed to fetch report data:", data.error);
+        }
+    })
+    .catch(err => console.error("Error fetching report data:", err));
+}
+
+function fetchReportDataSilently(updatedPid) {
+    if (updatedPid) {
+        highlightReportRecord(updatedPid);
+    }
+    fetch("/api/posting_report")
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            originalReportData = data.payments;
+            applyReportFiltersOnly();
+        }
+    })
+    .catch(err => console.error("Silent refresh failed:", err));
+}
+
+window.applyReportFilters = function() {
+    applyReportFiltersOnly();
+};
+
+window.resetReportFilters = function() {
+    const filterDate = document.getElementById("filterDateRange");
+    const filterAno = document.getElementById("filterAno");
+    if (filterDate) filterDate.value = "";
+    if (filterAno) filterAno.value = "";
+    
+    const bulkFindDate = document.getElementById("bulkFindDate");
+    const bulkReplaceDate = document.getElementById("bulkReplaceDate");
+    if (bulkFindDate) bulkFindDate.value = "";
+    if (bulkReplaceDate) bulkReplaceDate.value = "";
+
+    applyReportFiltersOnly();
+};
+
+function applyReportFiltersOnly() {
+    let data = [...originalReportData];
+
+    // Date Range Filter
+    const dateRangeVal = document.getElementById("filterDateRange")?.value?.trim();
+    if (dateRangeVal) {
+        const dates = dateRangeVal.split(" to ");
+        const startDate = parseISOorDDMMYYYY(dates[0]);
+        const endDate = dates.length === 2 ? parseISOorDDMMYYYY(dates[1]) : startDate;
+
+        if (startDate && endDate) {
+            const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+            const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
+
+            data = data.filter(p => {
+                const payDate = parseISOorDDMMYYYY(p.payment_date);
+                if (!payDate) return false;
+                const payTime = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate()).getTime();
+                return payTime >= startTime && payTime <= endTime;
+            });
+        }
+    }
+
+    // Account Number Filter
+    const filterAnoVal = document.getElementById("filterAno")?.value?.trim();
+    if (filterAnoVal) {
+        data = data.filter(p => String(p.ano).trim() === filterAnoVal);
+    }
+
+    // Bulk Find Date Filter (when bulk date panel is open)
+    const bulkPanel = document.getElementById("bulkDatePanel");
+    const bulkFindDateVal = document.getElementById("bulkFindDate")?.value?.trim();
+    if (bulkPanel && bulkPanel.style.display !== "none" && bulkFindDateVal) {
+        const findDate = parseISOorDDMMYYYY(bulkFindDateVal);
+        if (findDate) {
+            const findTime = new Date(findDate.getFullYear(), findDate.getMonth(), findDate.getDate()).getTime();
+            data = data.filter(p => {
+                const payDate = parseISOorDDMMYYYY(p.payment_date);
+                if (!payDate) return false;
+                const payTime = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate()).getTime();
+                return payTime === findTime;
+            });
+        }
+    }
+
+    filteredReportData = data;
+    renderReport();
+}
+
+window.toggleBulkDatePanel = function() {
+    const panel = document.getElementById("bulkDatePanel");
+    const btn = document.getElementById("btnToggleBulkDate");
+    if (!panel || !btn) return;
+
+    if (panel.style.display === "none") {
+        panel.style.display = "flex";
+        btn.classList.add("active");
+    } else {
+        panel.style.display = "none";
+        btn.classList.remove("active");
+        const bulkFind = document.getElementById("bulkFindDate");
+        const bulkReplace = document.getElementById("bulkReplaceDate");
+        if (bulkFind) bulkFind.value = "";
+        if (bulkReplace) bulkReplace.value = "";
+    }
+    applyReportFiltersOnly();
+};
+
+window.submitBulkDateReplace = function() {
+    const findDate = document.getElementById("bulkFindDate")?.value?.trim();
+    const replaceDate = document.getElementById("bulkReplaceDate")?.value?.trim();
+
+    if (!findDate || !replaceDate) {
+        alert("❌ Please enter both Find Date and Replace Date.");
+        return;
+    }
+
+    const fDate = parseISOorDDMMYYYY(findDate);
+    const affectedPids = [];
+    if (fDate) {
+        const findTime = new Date(fDate.getFullYear(), fDate.getMonth(), fDate.getDate()).getTime();
+        originalReportData.forEach(p => {
+            const payDate = parseISOorDDMMYYYY(p.payment_date);
+            if (payDate) {
+                const payTime = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate()).getTime();
+                if (payTime === findTime) {
+                    affectedPids.push(p.pid);
+                }
+            }
+        });
+    }
+
+    if (affectedPids.length === 0) {
+        alert("❌ No payment records found matching the Find Date.");
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to change the date of ${affectedPids.length} payment record(s) from ${findDate} to ${replaceDate}?`)) {
+        return;
+    }
+
+    csrfFetch("/update_payment_date_bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            find_date: findDate,
+            replace_date: replaceDate
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const reportDisplayBox = document.getElementById("reportDisplayBox");
+
+            affectedPids.forEach(pid => {
+                highlightReportRecord(pid);
+            });
+
+            triggerSuccessFeedback({
+                sectionElement: reportDisplayBox,
+                message: `${affectedPids.length} dates updated successfully`,
+                highlightDuration: 5000
+            });
+
+            const bulkFind = document.getElementById("bulkFindDate");
+            const bulkReplace = document.getElementById("bulkReplaceDate");
+            if (bulkFind) bulkFind.value = "";
+            if (bulkReplace) bulkReplace.value = "";
+
+            fetchReportDataSilently();
+        } else {
+            alert("❌ Failed to bulk update dates: " + (data.error || "Unknown error"));
+        }
+    })
+    .catch(err => {
+        alert("❌ Error: " + err.message);
+    });
+};
+
+window.toggleReportView = function() {
+    const toggle = document.getElementById("viewToggle");
+    const tableView = document.getElementById("reportTableView");
+    const tileView = document.getElementById("reportTileViewWrapper");
+    const columnBtn = document.getElementById("tableViewBtn");
+
+    if (!toggle || !tableView || !tileView || !columnBtn) return;
+
+    if (toggle.classList.contains("mode-active")) {
+        toggle.classList.remove("mode-active");
+        toggle.classList.add("mode-closed");
+        tableView.style.display = "none";
+        tileView.style.display = "block";
+        columnBtn.style.display = "none";
+        currentView = 'tile';
+    } else {
+        toggle.classList.remove("mode-closed");
+        toggle.classList.add("mode-active");
+        tableView.style.display = "block";
+        tileView.style.display = "none";
+        columnBtn.style.display = "block";
+        currentView = 'table';
+    }
+    renderReport();
+};
+
+window.toggleColumnModal = function() {
+    const modal = document.getElementById("columnModal");
+    const list = document.getElementById("columnCheckboxList");
+    const table = document.getElementById("reportTable");
+
+    if (!modal || !list || !table) return;
+
+    if (modal.classList.contains("hidden")) {
+        list.innerHTML = "";
+        table.querySelectorAll("thead th").forEach((th, index) => {
+            const wrapper = document.createElement("label");
+            wrapper.className = "column-item";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = th.style.display !== "none";
+
+            checkbox.addEventListener("change", () => {
+                table.querySelectorAll("tr").forEach(row => {
+                    if (row.children[index]) {
+                        row.children[index].style.display = checkbox.checked ? "" : "none";
+                    }
+                });
+            });
+
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(document.createTextNode(th.innerText));
+            list.appendChild(wrapper);
+        });
+        modal.classList.remove("hidden");
+    } else {
+        modal.classList.add("hidden");
+    }
+};
+
+function renderReport() {
+    if (currentView === 'table') {
+        renderReportTable();
+    } else {
+        renderReportTileView();
+    }
+}
+
+function renderReportTable() {
+    const table = document.getElementById("reportTable");
+    if (!table) return;
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    const tfoot = table.querySelector("tfoot");
+
+    if ($.fn.DataTable.isDataTable(table)) {
+        $(table).DataTable().destroy();
+    }
+
+    const hiddenColumnIndexes = [];
+    const existingHeaders = table.querySelectorAll("thead th");
+    if (existingHeaders.length === 0) {
+        hiddenColumnIndexes.push(0, 2, 5); // Default hidden: PID (0), Customer Name (2), Status (5)
+    } else {
+        existingHeaders.forEach((th, index) => {
+            if (th.style.display === "none") {
+                hiddenColumnIndexes.push(index);
+            }
+        });
+    }
+
+    thead.innerHTML = `
+        <tr>
+            <th>PID</th>
+            <th>ANO</th>
+            <th>Customer Name</th>
+            <th>Payment Date</th>
+            <th class="amount-paid">Amount</th>
+            <th>Status</th>
+        </tr>
+    `;
+
+    tbody.innerHTML = "";
+    let totalUniqueAnos = new Set();
+    let totalAmount = 0;
+
+    filteredReportData.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-pid", p.pid);
+        if (highlightedPids.has(Number(p.pid))) {
+            tr.classList.add("field-highlight");
+        }
+
+        const pidCell = document.createElement("td");
+        pidCell.textContent = p.pid;
+        tr.appendChild(pidCell);
+
+        const anoCell = document.createElement("td");
+        anoCell.textContent = p.ano;
+        anoCell.style.cursor = "pointer";
+        anoCell.title = "Double-click to edit";
+        anoCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(anoCell, p.pid, 'ano', p.ano);
+        });
+        tr.appendChild(anoCell);
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = p.customer_name || "Unknown";
+        tr.appendChild(nameCell);
+
+        const dateCell = document.createElement("td");
+        const dateObj = parseISOorDDMMYYYY(p.payment_date);
+        const displayDate = dateObj ? formatDateDDMMYYYY(dateObj) : p.payment_date;
+        dateCell.textContent = displayDate;
+        dateCell.style.cursor = "pointer";
+        dateCell.title = "Double-click to edit";
+        dateCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(dateCell, p.pid, 'payment_date', displayDate);
+        });
+        tr.appendChild(dateCell);
+
+        const amtCell = document.createElement("td");
+        amtCell.classList.add("amount-paid");
+        amtCell.style.cursor = "pointer";
+        amtCell.title = "Double-click to edit";
+        
+        const amtText = document.createElement("span");
+        amtText.textContent = Number(p.amt).toFixed(2);
+        amtText.setAttribute('data-money', '');
+        amtCell.appendChild(amtText);
+        
+        amtCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(amtCell, p.pid, 'amt', p.amt);
+        });
+        tr.appendChild(amtCell);
+
+        const statusCell = document.createElement("td");
+        statusCell.textContent = p.payment_status || "active";
+        tr.appendChild(statusCell);
+
+        tbody.appendChild(tr);
+
+        totalUniqueAnos.add(p.ano);
+        totalAmount += Number(p.amt);
+    });
+
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="6">
+                <div class="summary-row" style="display: flex; gap: 40px; font-weight: bold; padding: 10px 0;">
+                    <div>Total Unique ANOs: <span id="reportTotalAno">${totalUniqueAnos.size}</span></div>
+                    <div>Total Amount: <span id="reportTotalAmt" data-money>${totalAmount.toFixed(2)}</span></div>
+                </div>
+            </td>
+        </tr>
+    `;
+
+    hiddenColumnIndexes.forEach(index => {
+        table.querySelectorAll("tr").forEach(row => {
+            if (row.children[index]) {
+                row.children[index].style.display = "none";
+            }
+        });
+    });
+
+    $(table).DataTable({
+        paging: false,
+        info: false,
+        searching: false,
+        ordering: true,
+        responsive: true,
+        order: [[3, 'desc'], [1, 'desc']],
+        columnDefs: [
+            { type: 'date-ddmmyyyy', targets: 3 }
+        ]
+    });
+
+    applyGlobalMoneyFormatting();
+}
+
+function renderReportTileView() {
+    const container = document.getElementById("reportTileView");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const groups = groupPaymentsByDate(filteredReportData);
+    
+    const sortedDates = Object.keys(groups).sort((a, b) => {
+        const da = parseISOorDDMMYYYY(a);
+        const db = parseISOorDDMMYYYY(b);
+        return db - da;
+    });
+
+    if (sortedDates.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No records found</div>`;
+        return;
+    }
+
+    sortedDates.forEach(dateStr => {
+        const groupPayments = groups[dateStr];
+        const groupTotal = groupPayments.reduce((sum, p) => sum + Number(p.amt), 0);
+        const uniqueCustomers = new Set(groupPayments.map(p => p.ano)).size;
+
+        const tileContainer = document.createElement("div");
+        tileContainer.className = "date-tile-container";
+        tileContainer.setAttribute("data-date", dateStr);
+        if (window.expandedDateTiles.has(dateStr)) {
+            tileContainer.classList.add("expanded");
+        }
+
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "date-tile-header";
+        headerDiv.onclick = () => toggleDateTileDropdown(dateStr);
+        
+        headerDiv.innerHTML = `
+            <div class="date-tile-left">
+                <i class="far fa-calendar-alt" style="color: var(--primary); margin-right: 8px;"></i>
+                <span class="date-tile-date-label">${dateStr}</span>
+            </div>
+            <div class="date-tile-right">
+                <span class="date-tile-badge badge-customers"><i class="fas fa-users"></i> ${uniqueCustomers} ${uniqueCustomers === 1 ? 'Customer' : 'Customers'}</span>
+                <span class="date-tile-badge badge-amount"><i class="fas fa-rupee-sign"></i> <span data-money>${groupTotal.toFixed(2)}</span></span>
+                <i class="fas fa-chevron-down date-tile-chevron"></i>
+            </div>
+        `;
+        tileContainer.appendChild(headerDiv);
+
+        const dropdownDiv = document.createElement("div");
+        dropdownDiv.className = "date-tile-dropdown";
+        if (!window.expandedDateTiles.has(dateStr)) {
+            dropdownDiv.classList.add("hidden");
+        } else {
+            renderTileDropdownTable(dateStr, dropdownDiv, groupPayments);
+        }
+        tileContainer.appendChild(dropdownDiv);
+
+        container.appendChild(tileContainer);
+    });
+
+    applyGlobalMoneyFormatting();
+}
+
+window.toggleDateTileDropdown = function(dateStr) {
+    const container = document.querySelector(`.date-tile-container[data-date="${dateStr}"]`);
+    if (!container) return;
+    
+    const dropdown = container.querySelector(".date-tile-dropdown");
+    if (!dropdown) return;
+    
+    if (window.expandedDateTiles.has(dateStr)) {
+        window.expandedDateTiles.delete(dateStr);
+        container.classList.remove("expanded");
+        dropdown.classList.add("hidden");
+    } else {
+        window.expandedDateTiles.add(dateStr);
+        container.classList.add("expanded");
+        dropdown.classList.remove("hidden");
+        const groups = groupPaymentsByDate(filteredReportData);
+        const groupPayments = groups[dateStr] || [];
+        renderTileDropdownTable(dateStr, dropdown, groupPayments);
+        applyGlobalMoneyFormatting();
+    }
+};
+
+function renderTileDropdownTable(dateStr, dropdownDiv, groupPayments) {
+    dropdownDiv.innerHTML = "";
+    
+    const sortState = window.tileSortStates[dateStr] || { column: 'ano', direction: 'asc' };
+    window.tileSortStates[dateStr] = sortState;
+
+    const sortedPayments = [...groupPayments];
+    sortedPayments.sort((a, b) => {
+        let valA, valB;
+        if (sortState.column === 'ano') {
+            valA = Number(a.ano) || 0;
+            valB = Number(b.ano) || 0;
+        } else if (sortState.column === 'payment_date') {
+            valA = parseISOorDDMMYYYY(a.payment_date) || 0;
+            valB = parseISOorDDMMYYYY(b.payment_date) || 0;
+        } else if (sortState.column === 'amt') {
+            valA = Number(a.amt) || 0;
+            valB = Number(b.amt) || 0;
+        } else {
+            valA = 0; valB = 0;
+        }
+        
+        if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    const table = document.createElement("table");
+    table.className = "tile-dropdown-table";
+
+    const thead = document.createElement("thead");
+    thead.innerHTML = `
+        <tr>
+            <th class="sortable-header" onclick="event.stopPropagation(); sortTileTable('${dateStr}', 'ano')">ANO${getSortIcon(dateStr, 'ano')}</th>
+            <th class="sortable-header" onclick="event.stopPropagation(); sortTileTable('${dateStr}', 'payment_date')">Payment Date${getSortIcon(dateStr, 'payment_date')}</th>
+            <th class="sortable-header" onclick="event.stopPropagation(); sortTileTable('${dateStr}', 'amt')">Amount${getSortIcon(dateStr, 'amt')}</th>
+            <th>Cumulative Amount</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    let cumulativeAmount = 0;
+
+    sortedPayments.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-pid", p.pid);
+        if (highlightedPids.has(Number(p.pid))) {
+            tr.classList.add("field-highlight");
+        }
+
+        const anoCell = document.createElement("td");
+        anoCell.textContent = p.ano;
+        anoCell.style.cursor = "pointer";
+        anoCell.title = "Double-click to edit";
+        anoCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(anoCell, p.pid, 'ano', p.ano);
+        });
+        tr.appendChild(anoCell);
+
+        const dateCell = document.createElement("td");
+        const dateObj = parseISOorDDMMYYYY(p.payment_date);
+        const displayDate = dateObj ? formatDateDDMMYYYY(dateObj) : p.payment_date;
+        dateCell.textContent = displayDate;
+        dateCell.style.cursor = "pointer";
+        dateCell.title = "Double-click to edit";
+        dateCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(dateCell, p.pid, 'payment_date', displayDate);
+        });
+        tr.appendChild(dateCell);
+
+        const amtCell = document.createElement("td");
+        amtCell.style.cursor = "pointer";
+        amtCell.title = "Double-click to edit";
+        const amtText = document.createElement("span");
+        amtText.textContent = Number(p.amt).toFixed(2);
+        amtText.setAttribute('data-money', '');
+        amtCell.appendChild(amtText);
+        amtCell.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            makeReportCellEditable(amtCell, p.pid, 'amt', p.amt);
+        });
+        tr.appendChild(amtCell);
+
+        cumulativeAmount += Number(p.amt);
+        const cumCell = document.createElement("td");
+        cumCell.innerHTML = `<span data-money>${cumulativeAmount.toFixed(2)}</span>`;
+        tr.appendChild(cumCell);
+
+        tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    dropdownDiv.appendChild(table);
+}
+
+window.sortTileTable = function(dateStr, column) {
+    if (!window.tileSortStates[dateStr]) {
+        window.tileSortStates[dateStr] = { column: 'ano', direction: 'asc' };
+    }
+    
+    if (window.tileSortStates[dateStr].column === column) {
+        window.tileSortStates[dateStr].direction = window.tileSortStates[dateStr].direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        window.tileSortStates[dateStr].column = column;
+        window.tileSortStates[dateStr].direction = 'asc';
+    }
+    
+    renderReportTileView();
+};
+
+function getSortIcon(dateStr, column) {
+    const state = window.tileSortStates[dateStr] || { column: 'ano', direction: 'asc' };
+    if (state.column === column) {
+        return state.direction === 'asc' ? ' <i class="fas fa-sort-up"></i>' : ' <i class="fas fa-sort-down"></i>';
+    }
+    return ' <i class="fas fa-sort" style="opacity: 0.3;"></i>';
+}
+
+function groupPaymentsByDate(payments) {
+    const groups = {};
+    payments.forEach(p => {
+        const dObj = parseISOorDDMMYYYY(p.payment_date);
+        const groupKey = dObj ? formatDateDDMMYYYY(dObj) : p.payment_date;
+        if (!groups[groupKey]) {
+            groups[groupKey] = [];
+        }
+        groups[groupKey].push(p);
+    });
+    return groups;
+}
+
+function makeReportCellEditable(cell, pid, field, currentValue) {
+    if (isEditingCell) return;
+    isEditingCell = true;
+
+    const input = document.createElement("input");
+    input.className = "inline-edit-input";
+
+    if (field === 'amt') {
+        input.type = "number";
+        input.step = "0.01";
+        input.value = Number(currentValue).toFixed(2);
+    } else {
+        input.type = "text";
+        input.value = currentValue;
+    }
+
+    cell.innerHTML = "";
+    cell.appendChild(input);
+    input.focus();
+
+    let isFinished = false;
+
+    function finishEdit(save) {
+        if (isFinished) return;
+        isFinished = true;
+        isEditingCell = false;
+
+        if (!save) {
+            renderReport();
+            return;
+        }
+
+        const rawVal = input.value.trim();
+        let parsedValue = rawVal;
+
+        if (field === 'ano') {
+            if (!parsedValue) {
+                alert("❌ Account Number cannot be empty.");
+                renderReport();
+                return;
+            }
+            if (!/^\d+$/.test(parsedValue)) {
+                alert("❌ Account Number must contain numbers only.");
+                renderReport();
+                return;
+            }
+            const customer = CUSTOMER_MAP[parsedValue];
+            if (!customer) {
+                alert("❌ Account Number not found in database!");
+                renderReport();
+                return;
+            }
+        } else if (field === 'payment_date') {
+            if (!parsedValue) {
+                alert("❌ Payment Date cannot be empty.");
+                renderReport();
+                return;
+            }
+        } else if (field === 'amt') {
+            parsedValue = parseFloat(rawVal);
+            if (isNaN(parsedValue) || parsedValue <= 0) {
+                alert("❌ Please enter a valid positive amount.");
+                renderReport();
+                return;
+            }
+        }
+
+        updateReportRecord(pid, field, parsedValue);
+    }
+
+    input.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            finishEdit(true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            finishEdit(false);
+        }
+    });
+
+    if (field === 'payment_date') {
+        window.initCustomCalendar(input, {
+            clickOpens: true,
+            noWrapper: true,
+            onClose: function() {
+                setTimeout(() => finishEdit(true), 150);
+            }
+        });
+        setTimeout(() => {
+            if (document.activeElement === input) {
+                input.click();
+            }
+        }, 50);
+    } else {
+        input.addEventListener("blur", function() {
+            setTimeout(() => finishEdit(true), 150);
+        });
+    }
+}
+
+
+function updateReportRecord(pid, field, value) {
+    const currentPayment = originalReportData.find(p => p.pid === pid);
+    if (!currentPayment) {
+        alert("❌ Error: Payment record not found locally.");
+        renderReport();
+        return;
+    }
+
+    const updatedPayment = { ...currentPayment };
+    if (field === 'payment_date') {
+        updatedPayment.payment_date = ddmmyyyyToIso(value);
+    } else {
+        updatedPayment[field] = value;
+    }
+
+    csrfFetch("/api/payment/update_record_pg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            data: {
+                pid: updatedPayment.pid,
+                ano: updatedPayment.ano,
+                amt: updatedPayment.amt,
+                payment_date: updatedPayment.payment_date
+            }
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const reportDisplayBox = document.getElementById("reportDisplayBox");
+
+            triggerSuccessFeedback({
+                sectionElement: reportDisplayBox,
+                message: "Change successful",
+                highlightDuration: 5000
+            });
+
+            fetchReportDataSilently(pid);
+        } else {
+            alert("❌ Failed to update payment: " + (data.error || "Unknown error"));
+            renderReport();
+        }
+    })
+    .catch(err => {
+        alert("❌ Error updating payment: " + err.message);
+        renderReport();
+    });
+}
+
+function highlightReportRecord(pid) {
+    highlightedPids.add(Number(pid));
+    
+    const el = getReportElementByPid(pid);
+    if (el) el.classList.add("field-highlight");
+
+    setTimeout(() => {
+        highlightedPids.delete(Number(pid));
+        const el2 = getReportElementByPid(pid);
+        if (el2) el2.classList.remove("field-highlight");
+    }, 5000);
+}
+
+function getReportElementByPid(pid) {
+    if (currentView === 'table') {
+        return document.querySelector(`#reportTable tbody tr[data-pid="${pid}"]`);
+    } else {
+        return document.querySelector(`#reportTileView tr[data-pid="${pid}"]`);
+    }
+}
+
+function parseISOorDDMMYYYY(dateStr) {
+    if (!dateStr) return null;
+    const str = String(dateStr).trim();
+    if (str.includes('-')) {
+        const parts = str.split('-');
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    if (str.includes('/')) {
+        const parts = str.split('/');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    return new Date(str);
+}
+
+function formatDateDDMMYYYY(date) {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+}
+
+// --- Shortfall / Non-paying Customers Modal ---
+window.showShortfallModal = function() {
+    const uniquePaidAnos = new Set(tempTable.map(row => String(row.ano).trim()));
+    const shortfallCustomers = activeCustomers
+        .map(c => CUSTOMER_MAP[String(c.ano).trim()])
+        .filter(c => c && !uniquePaidAnos.has(c.ano));
+
+    const tbody = document.getElementById("shortfallTableBody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (shortfallCustomers.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4" style="text-align: center; padding: 12px; color: var(--text-secondary);">No short/non-paying customers for this week!</td>`;
+        tbody.appendChild(tr);
+    } else {
+        shortfallCustomers.forEach(c => {
+            const tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid var(--border)";
+            
+            const expectedAmt = Number(c.da) || 0;
+            const balanceAmt = Number(c.bamt) || 0;
+            
+            tr.innerHTML = `
+                <td style="padding: 10px; text-align: left;">${c.ano}</td>
+                <td style="padding: 10px; text-align: left;">${c.name || ""}</td>
+                <td style="padding: 10px; text-align: right;" data-money>${expectedAmt.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right;" data-money>${balanceAmt.toFixed(2)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    const modal = document.getElementById("shortfallModal");
+    if (modal) {
+        modal.style.display = "flex";
+    }
+};
+
+window.closeShortfallModal = function() {
+    const modal = document.getElementById("shortfallModal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+};
+
+function bindShortfallListeners() {
+    const shortAccsEl = document.getElementById("shortAccs");
+    const shortAmtEl = document.getElementById("shortAmt");
+    if (shortAccsEl) {
+        shortAccsEl.addEventListener("click", window.showShortfallModal);
+    }
+    if (shortAmtEl) {
+        shortAmtEl.addEventListener("click", window.showShortfallModal);
+    }
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindShortfallListeners);
+} else {
+    bindShortfallListeners();
+}

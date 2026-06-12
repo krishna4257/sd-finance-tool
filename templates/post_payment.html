@@ -1,14 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="section">
-  <h2 class="page-title">Post Payments</h2>
+  <div class="posting-header-row">
+    <h2 class="page-title" style="margin: 0;">Posting</h2>
+    <!-- Tab Switcher -->
+    <div class="posting-tabs-container" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">
+      <button class="posting-tab-btn active" id="tabNewPayments" onclick="switchTab('new-payments')"><i
+          class="fas fa-plus-circle"></i> New Payments</button>
+      <button class="posting-tab-btn" id="tabReport" onclick="switchTab('report')"><i class="fas fa-file-alt"></i>
+        Report</button>
+    </div>
+  </div>
 
   <div class="post-payment-layout">
     <!-- LEFT COLUMN: Main Form, Info Tiles, Flippable Analytics Graph, and Temp Table -->
     <div class="main-payment-panel">
 
       <!-- Input Form Box + Control Actions -->
-      <div class="raised-box">
+      <div class="raised-box" id="inputFormBox">
         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;">
 
           <form id="paymentForm" class="payment-form-row no-loader" method="POST"
@@ -31,17 +40,13 @@
             </label>
 
             <button class="neumorphic-btn small" type="submit" id="submitBtn" style="margin-bottom: 12px;">Add</button>
-          </form>
-
-          <!-- Control Hub -->
-          <div class="form-actions-hub" style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
-            <button class="neumorphic-btn small flex-center submit-btn" style="margin: 0; gap: 6px; color: #16521e;"
+            <button class="neumorphic-btn small submit-btn" style="margin-bottom: 12px; gap: 6px; color: #16521e;"
               onclick="submitAllPayments()"><i class="fas fa-check-circle"></i> Submit All</button>
-            <button class="neumorphic-btn small flex-center" style="margin: 0; gap: 6px;" onclick="printTemp()"><i
+            <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px;" onclick="printTemp()"><i
                 class="fas fa-print"></i> Print</button>
-            <button class="neumorphic-btn small flex-center danger-btn" style="margin: 0; gap: 6px; color: #dc3545;"
+            <button class="neumorphic-btn small danger-btn" style="margin-bottom: 12px; gap: 6px; color: #dc3545;"
               onclick="resetTempTable()"><i class="fas fa-trash-alt"></i> Reset</button>
-          </div>
+          </form>
 
         </div>
 
@@ -71,7 +76,7 @@
 
 
       <!-- Temporary Table Box -->
-      <div class="raised-box">
+      <div class="raised-box" id="tempTableBox">
         <div class="scroll-table-container">
           <table id="tempTable" class="customer-table no-datatable">
             <thead>
@@ -96,13 +101,92 @@
         </div>
       </div>
 
+      <!-- REPORT CONTAINER BOX (Initially Hidden) -->
+      <div id="reportContainer" style="display: none;">
+
+        <!-- Filter Controls Row -->
+        <div class="posting-filters-row">
+          <label style="margin:0">
+            Date Range
+            <input type="text" id="filterDateRange" placeholder="Select single or range date">
+          </label>
+          <label style="margin:0">
+            Account Number (ANO)
+            <input type="text" id="filterAno" placeholder="Enter ANO">
+          </label>
+          <button class="neumorphic-btn small" onclick="applyReportFilters()" style="margin-bottom: 2px;">Apply
+            Filters</button>
+          <button class="neumorphic-btn small" onclick="resetReportFilters()" style="margin-bottom: 2px;">Reset</button>
+
+          <!-- Bulk Date Change Tool Trigger Button -->
+          <button class="neumorphic-btn small warning-btn" id="btnToggleBulkDate" onclick="toggleBulkDatePanel()"
+            style="margin-left: auto; color: #b45309; margin-bottom: 2px;"><i class="fas fa-calendar-alt"></i> Date
+            Change</button>
+        </div>
+
+        <!-- Bulk Date Change Tool Panel (Initially Hidden) -->
+        <div class="bulk-date-panel" id="bulkDatePanel" style="display: none;">
+          <label>
+            Find Date
+            <input type="text" id="bulkFindDate" placeholder="dd/mm/yyyy">
+          </label>
+          <label>
+            Replace Date
+            <input type="text" id="bulkReplaceDate" placeholder="dd/mm/yyyy">
+          </label>
+          <button class="neumorphic-btn small warning-btn" onclick="submitBulkDateReplace()"
+            style="color: #b45309; margin-bottom: 2px;">Submit</button>
+        </div>
+
+        <!-- Table / Tile View Toggle Row -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <!-- View Toggle Switch -->
+          <div class="sliding-toggle-container mode-active" id="viewToggle" onclick="toggleReportView()">
+            <div class="sliding-toggle-pill" id="viewTogglePill"></div>
+            <span class="toggle-label active-label" id="labelTable">Table View</span>
+            <span class="toggle-label closed-label" id="labelTile">Tile View</span>
+          </div>
+
+          <!-- Table View Column Selector Button -->
+          <button id="tableViewBtn" class="neumorphic-btn small" onclick="toggleColumnModal()" style="margin: 0;"><i
+              class="fas fa-columns"></i> Columns</button>
+        </div>
+
+        <!-- Raised Box for Report Views -->
+        <div class="raised-box" style="position: relative;" id="reportDisplayBox">
+
+          <!-- View 1: Table View -->
+          <div id="reportTableView" class="customer-table-wrapper">
+            <table id="reportTable" class="customer-table no-datatable">
+              <thead>
+                <!-- Will be dynamically populated -->
+              </thead>
+              <tbody>
+                <!-- Will be dynamically populated -->
+              </tbody>
+              <tfoot>
+                <!-- Will be dynamically populated -->
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- View 2: Tile View (Initially Hidden) -->
+          <div id="reportTileViewWrapper" class="customer-table-wrapper" style="display: none;">
+            <div id="reportTileView" class="posting-tiles-grid">
+              <!-- Will be dynamically populated -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
     <!-- RIGHT COLUMN: Live Summary -->
     <div class="payment-analytics-panel">
 
       <!-- Last Posting Date Card -->
-      <div class="analytics-title">Posting Info</div>
       <div class="analytics-card">
         <div class="analytics-icon"><i class="far fa-calendar-alt"></i></div>
         <div class="analytics-details">
@@ -115,19 +199,23 @@
       <div class="analytics-title">Live Summary</div>
 
       <!-- Acc Numbers Summary Card -->
-      <div class="analytics-card" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
+      <div class="analytics-card"
+        style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
         <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
           <div class="analytics-icon"><i class="fas fa-hashtag"></i></div>
           <div class="analytics-details">
             <span class="analytics-label">Total A.No</span>
             <span class="analytics-value" id="totalAnotop" style="font-size: 24px;">0</span>
             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
-              Expected: <strong id="expectedAccs">0</strong> | Short: <strong id="shortAccs" style="color: #dc3545;">0</strong>
+              Expected: <strong id="expectedAccs">0</strong> | Short: <strong id="shortAccs"
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;" title="Click to view non-paying customers">0</strong>
             </div>
           </div>
         </div>
-        <div style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
-          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last Time</span>
+        <div
+          style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
+          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last
+            Time</span>
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
             <span class="analytics-value last-week-val" id="lastAnotop" style="font-size: 20px;">0</span>
             <span id="lastAnoArrow" style="font-size: 14px;"></span>
@@ -136,19 +224,23 @@
       </div>
 
       <!-- Amount Summary Card -->
-      <div class="analytics-card" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
+      <div class="analytics-card"
+        style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
         <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
           <div class="analytics-icon"><i class="fas fa-rupee-sign"></i></div>
           <div class="analytics-details">
             <span class="analytics-label">Total Amount</span>
             <span class="analytics-value" id="totalAmttop" data-money style="font-size: 24px;">0.00</span>
             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
-              Expected: <strong id="expectedAmt" data-money>0.00</strong> | Short: <strong id="shortAmt" style="color: #dc3545;" data-money>0.00</strong>
+              Expected: <strong id="expectedAmt" data-money>0.00</strong> | Short: <strong id="shortAmt"
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;" data-money title="Click to view non-paying customers">0.00</strong>
             </div>
           </div>
         </div>
-        <div style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
-          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last Time</span>
+        <div
+          style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
+          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last
+            Time</span>
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
             <span class="analytics-value last-week-val" id="lastAmttop" data-money style="font-size: 20px;">0.00</span>
             <span id="lastAmtArrow" style="font-size: 14px;"></span>
@@ -221,7 +313,45 @@
   </div>
 
   <div id="successMsg" class="message-box success" style="display: none; margin-top: 16px;"></div>
+
+  <!-- Column Selector Modal -->
+  <div id="columnModal" class="column-modal hidden">
+    <div class="column-modal-content">
+      <h3>Select Columns</h3>
+      <div id="columnCheckboxList" class="column-list"></div>
+      <div class="modal-actions">
+        <button id="closeColumnModal" class="neumorphic-btn small">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shortfall / Non-paying Customers Modal -->
+  <div id="shortfallModal" class="modal" style="display:none; justify-content: center; align-items: center;">
+    <div class="modal-content" style="max-width: 600px; width: 90%;">
+      <span class="close-btn" onclick="closeShortfallModal()">&times;</span>
+      <h3>Non-Paying Customers (Shortfall)</h3>
+      <div style="margin: 16px 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+        <table class="no-datatable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border);">
+              <th style="text-align: left; padding: 10px; color: var(--text-secondary);">A.No</th>
+              <th style="text-align: left; padding: 10px; color: var(--text-secondary);">Name</th>
+              <th style="text-align: right; padding: 10px; color: var(--text-secondary);">Expected Amt</th>
+              <th style="text-align: right; padding: 10px; color: var(--text-secondary);">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="shortfallTableBody">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeShortfallModal()" class="btn btn-outline" style="margin: 0;">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
+
 
 <script type="application/json" id="customers-data">
   {{ customers | tojson | safe }}

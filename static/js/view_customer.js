@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) return value;
       const [, year, month, day] = match;
-      return `${day}-${month}-${year}`;
+      return `${day}/${month}/${year}`;
     };
     return;
   }
@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) return value;
     const [, year, month, day] = match;
-    return `${day}-${month}-${year}`;
+    return `${day}/${month}/${year}`;
   }
 
   function createSnapshotItem(row) {
@@ -488,6 +488,7 @@ document.addEventListener("DOMContentLoaded", function () {
         info: false,
         searching: false,
         ordering: true,
+        order: [[1, 'desc']],
         autoWidth: false,
         scrollX: true,
         scrollCollapse: true,
@@ -606,6 +607,7 @@ document.addEventListener("DOMContentLoaded", function () {
         info: false,
         searching: false,
         ordering: true,
+        order: [[1, 'desc']],
         autoWidth: false,
         scrollX: true,
         scrollCollapse: true,
@@ -718,12 +720,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const hasCustTable = document.getElementById("customerTable") !== null;
   if (hasCustTable) {
     const table = $.fn.DataTable.isDataTable('#customerTable')
-      ? $('#customerTable').DataTable()
+      ? $('#customerTable').DataTable().order([1, 'desc'])
       : $('#customerTable').DataTable({
           paging: false,
           info: false,
           searching: false,
           ordering: true,
+          order: [[1, 'desc']],
           autoWidth: false,
           scrollX: true,
           scrollCollapse: true,
@@ -762,7 +765,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) return value;
     const [, year, month, day] = match;
-    return `${day}-${month}-${year}`;
+    return `${day}/${month}/${year}`;
   }
 
   // Standard Money Formatter
@@ -800,63 +803,65 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Open Popup and load details/payments/postings
-  window.openCustomerPopup = async function(ano) {
+  window.openCustomerPopup = async function(ano, silent = false) {
     activeCustomerAno = ano;
     
-    // Set UI to loading state
-    document.getElementById("popAnoTitle").textContent = "Loading...";
-    document.getElementById("popProfileName").textContent = "Loading...";
-    document.getElementById("popAvatarInitial").textContent = "...";
-    document.getElementById("popCid").textContent = "";
-    document.getElementById("popInputName").value = "";
-    document.getElementById("popInputTotalAmount").value = "";
-    document.getElementById("popPaidAmount").textContent = "0.00";
-    document.getElementById("popBalanceAmount").textContent = "0.00";
-    document.getElementById("popInputInstallment").value = "";
-    document.getElementById("popInputType").value = "Weekly";
-    document.getElementById("popInputPeriod").value = "";
-    document.getElementById("popInputPhone").value = "";
-    document.getElementById("popInputPano").value = "";
-    document.getElementById("popInputStartDate").value = "";
-    document.getElementById("popInputEndDate").value = "";
-    document.getElementById("popInputAadhaar").value = "";
-    document.getElementById("popInputEid").value = "";
-    document.getElementById("popInputLatitude").value = "";
-    document.getElementById("popInputLongitude").value = "";
-    document.getElementById("popInputNotes").value = "";
-    
-    // Reset Score Display
-    document.getElementById("popScoreValue").textContent = "100";
-    document.getElementById("popScoreValue").style.color = "#10b981";
-    document.getElementById("popScoreValue").style.textShadow = "none";
-    document.getElementById("popRiskBadge").textContent = "EXCELLENT";
-    document.getElementById("popRiskBadge").className = "risk-badge risk-badge-excellent";
-    
-    // Reset Evaluation status details
-    const evalStatus = document.getElementById("popEvalStatus");
-    if (evalStatus) {
-      evalStatus.textContent = "LIVE";
-      evalStatus.className = "status-badge status-live";
+    if (!silent) {
+      // Set UI to loading state
+      document.getElementById("popAnoTitle").textContent = "Loading...";
+      document.getElementById("popProfileName").textContent = "Loading...";
+      document.getElementById("popAvatarInitial").textContent = "...";
+      document.getElementById("popCid").textContent = "";
+      document.getElementById("popInputName").value = "";
+      document.getElementById("popInputTotalAmount").value = "";
+      document.getElementById("popPaidAmount").textContent = "0.00";
+      document.getElementById("popBalanceAmount").textContent = "0.00";
+      document.getElementById("popInputInstallment").value = "";
+      document.getElementById("popInputType").value = "W";
+      document.getElementById("popInputPeriod").value = "";
+      document.getElementById("popInputPhone").value = "";
+      document.getElementById("popInputPano").value = "";
+      document.getElementById("popInputStartDate").value = "";
+      document.getElementById("popInputEndDate").value = "";
+      document.getElementById("popInputAadhaar").value = "";
+      document.getElementById("popInputEid").value = "";
+      document.getElementById("popInputLatitude").value = "";
+      document.getElementById("popInputLongitude").value = "";
+      document.getElementById("popInputNotes").value = "";
+      
+      // Reset Score Display
+      document.getElementById("popScoreValue").textContent = "100";
+      document.getElementById("popScoreValue").style.color = "#10b981";
+      document.getElementById("popScoreValue").style.textShadow = "none";
+      document.getElementById("popRiskBadge").textContent = "EXCELLENT";
+      document.getElementById("popRiskBadge").className = "risk-badge risk-badge-excellent";
+      
+      // Reset Evaluation status details
+      const evalStatus = document.getElementById("popEvalStatus");
+      if (evalStatus) {
+        evalStatus.textContent = "LIVE";
+        evalStatus.className = "status-badge status-live";
+      }
+      const freezeDetails = document.getElementById("popFreezeDetails");
+      if (freezeDetails) freezeDetails.style.display = "none";
+      const frozenRating = document.getElementById("popFrozenRating");
+      if (frozenRating) frozenRating.textContent = "0";
+      const freezeDate = document.getElementById("popFreezeDate");
+      if (freezeDate) freezeDate.textContent = "-";
+
+      const popBehavioralPanel = document.getElementById("popBehavioralIntelligencePanel");
+      if (popBehavioralPanel) popBehavioralPanel.style.display = "none";
+
+      const weeklyLogBody = document.getElementById("popWeeklyLogBody");
+      if (weeklyLogBody) {
+        weeklyLogBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading logs...</td></tr>`;
+      }
+
+      document.getElementById("popPaymentTableBody").innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading payments...</td></tr>`;
+      
+      // Display popup modal backdrop
+      popModal.classList.add("active");
     }
-    const freezeDetails = document.getElementById("popFreezeDetails");
-    if (freezeDetails) freezeDetails.style.display = "none";
-    const frozenRating = document.getElementById("popFrozenRating");
-    if (frozenRating) frozenRating.textContent = "0";
-    const freezeDate = document.getElementById("popFreezeDate");
-    if (freezeDate) freezeDate.textContent = "-";
-
-    const popBehavioralPanel = document.getElementById("popBehavioralIntelligencePanel");
-    if (popBehavioralPanel) popBehavioralPanel.style.display = "none";
-
-    const weeklyLogBody = document.getElementById("popWeeklyLogBody");
-    if (weeklyLogBody) {
-      weeklyLogBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading logs...</td></tr>`;
-    }
-
-    document.getElementById("popPaymentTableBody").innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading payments...</td></tr>`;
-    
-    // Display popup modal backdrop
-    popModal.classList.add("active");
 
     try {
       // 1. Fetch customer profile details and payment logs
@@ -879,7 +884,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputName").value = cust.name || "";
       document.getElementById("popInputTotalAmount").value = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
       document.getElementById("popInputInstallment").value = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
-      document.getElementById("popInputType").value = cust.type === "M" ? "Monthly" : "Weekly";
+      document.getElementById("popInputType").value = cust.type === "M" ? "M" : "W";
       document.getElementById("popInputPeriod").value = cust.period || "";
       document.getElementById("popInputPhone").value = cust.phone_number || "";
       document.getElementById("popInputPano").value = cust.pano || "";
@@ -895,7 +900,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputName").dataset.original = cust.name || "";
       document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount || 0;
       document.getElementById("popInputInstallment").dataset.original = cust.installment_amount || 0;
-      document.getElementById("popInputType").dataset.original = cust.type === "M" ? "Monthly" : "Weekly";
+      document.getElementById("popInputType").dataset.original = cust.type === "M" ? "M" : "W";
       document.getElementById("popInputPeriod").dataset.original = cust.period || "";
       document.getElementById("popInputPhone").dataset.original = cust.phone_number || "";
       document.getElementById("popInputPano").dataset.original = cust.pano || "";
@@ -1407,15 +1412,27 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
       if (!data.success) throw new Error(data.error || "Save failed");
 
-      alert("Customer details updated successfully");
-      
-      // Reset originals
-      [
+      // Identify modified fields before resetting originals
+      const inputIds = [
         "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
         "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
         "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
         "popInputLongitude", "popInputNotes"
-      ].forEach(id => {
+      ];
+      const changedElements = [];
+      inputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          const original = (el.dataset.original || "").trim();
+          const current = el.value.trim();
+          if (original !== current) {
+            changedElements.push(el);
+          }
+        }
+      });
+      
+      // Reset originals
+      inputIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.dataset.original = el.value.trim();
       });
@@ -1424,8 +1441,18 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popAvatarInitial").textContent = name.trim().charAt(0).toUpperCase();
       this.style.display = "none";
 
-      // Refresh parent window row state
-      window.location.reload();
+      // Trigger PhonePe-style feedback and highlight changed fields
+      triggerSuccessFeedback({
+        sectionElement: document.getElementById("popColDetails"),
+        highlightElements: changedElements.length > 0 ? changedElements : [document.getElementById("popInputName")],
+        message: "Details updated successfully",
+        highlightDuration: 5000
+      });
+
+      // Refresh parent window row state after 5 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 5000);
 
     } catch (err) {
       alert("Failed to save customer: " + err.message);
@@ -1519,6 +1546,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Save payments changes action
   document.getElementById("popSavePaymentsBtn").addEventListener("click", async function() {
+    // Identify original payments to know what is new/changed later
+    const originalKeys = new Set(originalPayments.map(p => `${p.payment_date}_${p.amt}`));
+
     const payload = {
       cid: activeCustomerCid,
       ano: activeCustomerAno,
@@ -1534,8 +1564,41 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
       if (!data.success) throw new Error(data.error || "Save payments failed");
 
-      alert("Payments saved successfully!");
-      openCustomerPopup(activeCustomerAno);
+      // Perform a silent update to refresh table rows and data in place
+      await openCustomerPopup(activeCustomerAno, true);
+
+      // Scan new table rows to find which ones were newly added or modified
+      const rows = document.querySelectorAll("#popPaymentTableBody tr");
+      const highlightRows = [];
+      rows.forEach(row => {
+        const dateTd = row.querySelector('[data-field="payment_date"]');
+        const amtTd = row.querySelector('[data-field="amt"]');
+        if (dateTd && amtTd) {
+          const dateVal = dateTd.textContent.trim();
+          const amtVal = parseFloat(amtTd.textContent.replace(/[^\d.-]/g, "")) || 0;
+          
+          // Parse dd/mm/yyyy to yyyy-mm-dd
+          const dateParts = dateVal.split('/');
+          let isoDate = "";
+          if (dateParts.length === 3) {
+            isoDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+          }
+          
+          const key = `${isoDate}_${amtVal}`;
+          if (!originalKeys.has(key)) {
+            highlightRows.push(row);
+          }
+        }
+      });
+
+      // Trigger modernized success notification and highlights
+      triggerSuccessFeedback({
+        sectionElement: document.getElementById("popColPayments"),
+        highlightElements: highlightRows,
+        message: "Payments saved successfully",
+        highlightDuration: 5000
+      });
+
     } catch (err) {
       console.error(err);
       alert("Error saving payments: " + err.message);
@@ -1607,9 +1670,16 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert("Dates updated successfully");
         closePopDateModal();
-        openCustomerPopup(activeCustomerAno);
+        openCustomerPopup(activeCustomerAno, true).then(() => {
+          // Flash the payments column and highlight all its rows to show they were updated
+          triggerSuccessFeedback({
+            sectionElement: document.getElementById("popColPayments"),
+            highlightElements: Array.from(document.querySelectorAll("#popPaymentTableBody tr")),
+            message: "Dates updated successfully",
+            highlightDuration: 5000
+          });
+        });
       } else {
         alert("Bulk date change failed: " + data.error);
       }
@@ -1638,8 +1708,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Recalculation failed");
         
-        // Re-load the customer details to refresh the UI
-        await openCustomerPopup(activeCustomerAno);
+        // Re-load the customer details to refresh the UI silently
+        await openCustomerPopup(activeCustomerAno, true);
+
+        // Flash the analytics column
+        triggerSuccessFeedback({
+          sectionElement: document.getElementById("popColDiscipline"),
+          message: "Analytics recalculated",
+          highlightElements: [
+            document.getElementById("popScoreValue"),
+            document.getElementById("popRiskBadge")
+          ],
+          highlightDuration: 5000
+        });
       } catch (err) {
         console.error(err);
         alert("Failed to run recalculation: " + err.message);

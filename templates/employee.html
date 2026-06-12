@@ -1,103 +1,162 @@
 {% extends "base.html" %}
 {% block content %}
+
 <style>
-/* Fix only employee table layout */
-#employeeTable {
-  min-width: unset !important;   /* remove 1800px forcing */
-  width: 100%;
-  table-layout: auto;
-}
+  /* ── Table Inline Inputs & Glow ── */
+  .row-editing {
+    background: var(--primary-lighter, #f0fdf4) !important;
+    border-left: 3px solid var(--primary) !important;
+  }
 
-/* Fix name column width (no wrapping, clean look with horizontal scroll) */
-#employeeTable td[data-field="name"],
-#employeeTable th:nth-child(3) {
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .inline-edit-input {
+    width: 95%;
+    padding: 6px 10px;
+    background: var(--surface, #ffffff) !important;
+    border: 1px solid var(--border, #e5e7eb) !important;
+    color: var(--text, #1a1a2e) !important;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
 
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-}
+  .inline-edit-input:focus {
+    outline: none;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 6px rgba(26, 77, 46, 0.15);
+  }
 
-.status-badge.active {
-  background: #2ecc71;
-  color: white;
-}
+  @keyframes rowSuccessGlow {
+    0% {
+      background-color: var(--success-light, #e8f5e9) !important;
+      box-shadow: inset 0 0 15px rgba(22, 163, 74, 0.2);
+    }
 
-.status-badge.inactive {
-  background: #e74c3c;
-  color: white;
-}
+    100% {
+      background-color: transparent;
+      box-shadow: inset 0 0 0 rgba(22, 163, 74, 0);
+    }
+  }
 
+  .row-updated-glow {
+    animation: rowSuccessGlow 2.5s ease-out forwards;
+  }
+
+  /* Control Row Grid Layout for perfect alignment */
+  .control-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .search-wrapper {
+    justify-self: start;
+    width: 100%;
+  }
+
+  .button-group {
+    justify-self: end;
+  }
+
+  @media (max-width: 900px) {
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-wrapper {
+      max-width: 100% !important;
+      justify-self: stretch;
+    }
+
+    .button-group {
+      justify-self: center;
+    }
+  }
+
+  /* Status Badges */
+  .status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+  }
+
+  .status-badge.status-active {
+    background: var(--success-light, #e8f5e9);
+    color: var(--success, #16a34a);
+    border: 1px solid rgba(22, 163, 74, 0.2);
+  }
+
+  .status-badge.status-inactive {
+    background: var(--danger-light, #fef2f2);
+    color: var(--danger, #dc2626);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+  }
+
+  #employeeTable tr {
+    cursor: pointer;
+  }
 </style>
 
 <h2 class="page-title">Employee Table</h2>
- 
-<div class="raised-box">
+
+<div class="raised-box" style="padding: 16px 20px;">
   <div class="control-row">
-    <label class="search-label">
-      <input type="text" id="searchBox" placeholder="Search employee name or code...">
-    </label>
- 
-    <button onclick="applySearch()" class="neumorphic-btn">Find</button>
-    <button onclick="resetSearch()" class="neumorphic-btn">Reset</button>
-    <button onclick="printSelected()" class="neumorphic-btn">Print</button>
-    <button id="tableViewBtn" class="neumorphic-btn">Table View</button>
-  </div>
-  
-  <div class="summary-row">
-    <div class="summary-item">
-      <strong>Total Employees:</strong>
-      <span id="totalCount">{{ total_employees }}</span>
+    <div class="search-wrapper" style="max-width: 450px; position: relative; min-width: 250px;">
+      <i class="fas fa-search"
+        style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.9rem;"></i>
+      <input type="search" id="searchBox" placeholder="Search employee name, code, or phone..." autocomplete="off"
+        style="width: 100%; padding: 10px 14px 10px 38px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);">
+    </div>
+
+    <div class="button-group" style="display: flex; gap: 10px; align-items: center;">
+      <button onclick="printSelected()" class="neumorphic-btn"
+        style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">Print</button>
+      <button id="columnSelectorBtn" class="neumorphic-btn"
+        style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">Columns</button>
     </div>
   </div>
 </div>
- 
-<div class="raised-box">
-  <div class="customer-table-wrapper">
+
+<div class="raised-box" id="tableViewContainer" style="margin-top: 24px;">
+  <div class="customer-table-wrapper app-table-wrapper">
     <table id="employeeTable" class="customer-table">
       <thead>
         <tr>
-          <th><input type="checkbox" onclick="toggleAll(this)" /></th>
           {% for header in headers %}
-          <th class="table-header">{{ header }}</th>
+          <th class="table-header" onclick="sortTableColumn('{{ header }}')">{{ header }}</th>
           {% endfor %}
           <th>Actions</th>
         </tr>
       </thead>
- 
+
       <tbody id="employeeTableBody">
         {% for row in data %}
-        <tr class="table-row">
-          <td><input type="checkbox" /></td>
- 
+        <tr class="table-row {% if not row['is_active'] %}inactive-row{% endif %}" data-eid="{{ row.eid }}">
           {% for col in headers %}
-            {% if col == 'is_active' %}
-            <td class="table-cell status-cell">
-              <span class="status-badge status-{{ 'active' if row[col] else 'inactive' }}">
-                {{ 'Active' if row[col] else 'Inactive' }}
-              </span>
-            </td>
-            {% else %}
-            <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
-            {% endif %}
+          {% if col == 'is_active' %}
+          <td class="table-cell status-cell" data-field="{{ col }}">
+            <span class="status-badge status-{{ 'active' if row[col] else 'inactive' }}">
+              {{ 'Active' if row[col] else 'Inactive' }}
+            </span>
+          </td>
+          {% else %}
+          <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
+          {% endif %}
           {% endfor %}
- 
-          <td class="table-cell">
-            <div class="action-buttons">
-              <button class="neumorphic-btn ultrasmall edit-btn"
-                      onclick="enableEdit(this)">
-                Edit
-              </button>
+
+          <td class="table-cell" data-field="actions">
+            <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
               {% set is_active = row.get('is_active') %}
-              <button class="neumorphic-btn ultrasmall {{ 'deactivate-btn' if is_active else 'activate-btn' }}"
-                      onclick="toggleEmployeeStatus('{{ row.eid }}', this)">
+              <button class="neumorphic-btn ultrasmall {{ 'danger-btn' if is_active else '' }}"
+                onclick="event.stopPropagation(); toggleEmployeeStatus('{{ row.eid }}', this)">
                 {{ 'Deactivate' if is_active else 'Activate' }}
               </button>
             </div>
@@ -108,7 +167,7 @@
     </table>
   </div>
 </div>
- 
+
 <!-- Column Modal -->
 <div id="columnModal" class="column-modal hidden">
   <div class="column-modal-content">

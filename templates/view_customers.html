@@ -5,7 +5,7 @@
   <div class="control-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
     <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; flex: 1;">
       <label class="search-label" style="margin: 0; min-width: 250px; flex: 1; max-width: 400px;">
-        <input type="text" id="searchBox" placeholder="Type account number or name..." style="width: 100%;">
+        <input type="search" id="searchBox" placeholder="Type account number or name..." autocomplete="off" style="width: 100%;">
       </label>
       <button onclick="applySearch()" class="neumorphic-btn" style="margin: 0;">Find</button>
       <button onclick="filterBalanceReport()" class="neumorphic-btn" style="margin: 0;">Report</button>
@@ -257,8 +257,8 @@
             <div class="form-group">
               <label>Type</label>
               <select id="popInputType" class="glass-input">
-                <option value="Weekly">Weekly</option>
-                <option value="Monthly">Monthly</option>
+                <option value="W">Weekly</option>
+                <option value="M">Monthly</option>
               </select>
             </div>
             <div class="form-group">
