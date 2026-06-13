@@ -4200,6 +4200,7 @@ def payment_day_stats():
 @app.route("/api/post_payment_analytics", methods=["GET"])
 @login_required
 def post_payment_analytics():
+    KOLKATA = pytz.timezone('Asia/Kolkata')
     vid = session.get("vid")
     if not vid:
         return jsonify(error="Village context not set"), 400
