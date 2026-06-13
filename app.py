@@ -2075,11 +2075,26 @@ def customer_docs_update():
 
         aadhaar_file = request.files.get("aadhaar_photo")
         house_file = request.files.get("house_photo")
+        logger.info(
+            "customer_docs_update request: local_uuid=%s vid=%s ano=%s eid=%s has_aadhaar=%s has_house=%s",
+            local_uuid,
+            vid,
+            ano,
+            eid,
+            bool(aadhaar_file),
+            bool(house_file),
+        )
 
         aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
         house_bytes = house_file.read() if house_file else None
 
         if not aadhaar_bytes and not house_bytes:
+            logger.warning(
+                "customer_docs_update no documents provided: local_uuid=%s vid=%s ano=%s",
+                local_uuid,
+                vid,
+                ano,
+            )
             return jsonify({"error": "no documents provided"}), 400
 
         if not local_uuid:
@@ -2098,6 +2113,13 @@ def customer_docs_update():
 
         resolved_cid = None
         if customer_row:
+            logger.info(
+                "customer_docs_update matched existing customer: local_uuid=%s vid=%s ano=%s cid=%s",
+                local_uuid,
+                vid,
+                ano,
+                customer_row[0],
+            )
             resolved_cid = cid or customer_row[0]
         else:
             # Allow docs while collecting payment for customers still pending
@@ -2108,13 +2130,30 @@ def customer_docs_update():
                 FROM customer_feed
                 WHERE vid = %s
                   AND status = 'pending'
-                  AND (payload->>'ano')::bigint = %s
+                  AND COALESCE(
+                      (payload->'payload'->>'ano')::bigint,
+                      (payload->>'ano')::bigint
+                  ) = %s
                 ORDER BY feed_id DESC
                 LIMIT 1
             """, (vid, ano))
             feed_row = cur.fetchone()
 
-            if not feed_row:
+            if feed_row:
+                logger.info(
+                    "customer_docs_update matched pending customer_feed: local_uuid=%s vid=%s ano=%s feed_id=%s",
+                    local_uuid,
+                    vid,
+                    ano,
+                    feed_row[0],
+                )
+            else:
+                logger.warning(
+                    "customer_docs_update no customer/customer_feed match yet: local_uuid=%s vid=%s ano=%s",
+                    local_uuid,
+                    vid,
+                    ano,
+                )
                 cur.execute("""
                     SELECT 1
                     FROM payment_feed_items
@@ -2124,7 +2163,20 @@ def customer_docs_update():
                     LIMIT 1
                 """, (ano, vid))
                 payment_row = cur.fetchone()
-                if not payment_row:
+                if payment_row:
+                    logger.info(
+                        "customer_docs_update matched pending payment_feed_items: local_uuid=%s vid=%s ano=%s",
+                        local_uuid,
+                        vid,
+                        ano,
+                    )
+                else:
+                    logger.warning(
+                        "customer_docs_update customer not found: local_uuid=%s vid=%s ano=%s",
+                        local_uuid,
+                        vid,
+                        ano,
+                    )
                     return jsonify({"error": "customer not found"}), 404
 
             resolved_cid = cid or None
@@ -3918,7 +3970,10 @@ def feed():
                     cd.house_photo
                 FROM customer_docs cd
                 WHERE cd.vid = cf.vid
-                  AND cd.ano = (cf.payload->>'ano')::INT
+                  AND cd.ano = COALESCE(
+                      (cf.payload->'payload'->>'ano')::INT,
+                      (cf.payload->>'ano')::INT
+                  )
                 ORDER BY cd.uploaded_at DESC NULLS LAST, cd.doc_id DESC
                 LIMIT 1
             ) AS docs ON TRUE
@@ -3944,28 +3999,30 @@ def feed():
             elif payload is None:
                 payload = {}
 
+            customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
             # ✅ Flatten payload into row_dict (VERY IMPORTANT)
             row_dict.update({
-                "ano": payload.get("ano"),
-                "name": payload.get("name"),
-                "pano": payload.get("pano"),
-                "phone_number": payload.get("phone_number"),
-                "type": payload.get("type"),
-                "period": payload.get("period"),
-                "start_date": payload.get("start_date"),
-                "end_date": payload.get("end_date"),
-                "total_amount": payload.get("total_amount"),
-                "installment_amount": payload.get("installment_amount"),
-                "aadhaar_number": payload.get("aadhaar_number"),
-                "notes": payload.get("notes"),
-                "latitude": payload.get("latitude"),
-                "longitude": payload.get("longitude"),
-                "eid": payload.get("eid"),
-                "vid": payload.get("vid"),
+                "ano": customer_payload.get("ano"), # type: ignore
+                "name": customer_payload.get("name"), # type: ignore
+                "pano": customer_payload.get("pano"), # type: ignore
+                "phone_number": customer_payload.get("phone_number"), # type: ignore
+                "type": customer_payload.get("type"), # type: ignore
+                "period": customer_payload.get("period"), # type: ignore
+                "start_date": customer_payload.get("start_date"), # type: ignore
+                "end_date": customer_payload.get("end_date"), # type: ignore
+                "total_amount": customer_payload.get("total_amount"), # type: ignore
+                "installment_amount": customer_payload.get("installment_amount"), # type: ignore
+                "aadhaar_number": customer_payload.get("aadhaar_number"), # type: ignore
+                "notes": customer_payload.get("notes"), # type: ignore
+                "latitude": customer_payload.get("latitude"), # type: ignore
+                "longitude": customer_payload.get("longitude"), # type: ignore
+                "eid": customer_payload.get("eid"), # type: ignore
+                "vid": customer_payload.get("vid"), # type: ignore
             })
 
             # keep payload also (optional)
-            row_dict["payload"] = payload
+            row_dict["payload"] = customer_payload
+            row_dict["raw_payload"] = payload
 
             customers.append(row_dict)
         # PAYMENT FEED
@@ -4202,7 +4259,9 @@ def accept_customer_feed_docs(feed_id):
             conn.close()
             return {"success": False, "error": "Invalid payload format"}
 
-    ano = normalize_account_number(payload.get("ano"))
+    customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+    ano = normalize_account_number(customer_payload.get("ano"))
+    vid = payload.get("vid") or customer_payload.get("vid") or vid
     if ano is None or vid is None:
         cur.close()
         conn.close()
