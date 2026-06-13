@@ -197,7 +197,7 @@ def verify_queue_integrity(data, token_data):
     if age_seconds > 900:
         return False, "stale timestamp"
 
-    signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET=dev-mobile-queue-secret ") or app.config["SECRET_KEY"]
+    signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
 
     signed_payload = {
         "type": data.get("type"),
@@ -1841,7 +1841,7 @@ def customer_feed():
         if age_seconds > 900:
             return jsonify({"error": "stale timestamp"}), 400
 
-        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET=dev-mobile-queue-secret ") or app.config["SECRET_KEY"]
+        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
 
         signed_payload = {
             "type": data.get("type"),
