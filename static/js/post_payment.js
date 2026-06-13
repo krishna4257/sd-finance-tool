@@ -81,8 +81,12 @@ function showError(message) {
 
 
 function ddmmyyyyToIso(dateStr) {
-  // "10/01/2026" → "2026-01-10"
-  const [dd, mm, yyyy] = dateStr.split('/');
+  if (!dateStr) return "";
+  const parts = dateStr.split(/[-/]/);
+  if (parts.length < 3) return dateStr;
+  const dd = parts[0].padStart(2, '0');
+  const mm = parts[1].padStart(2, '0');
+  const yyyy = parts[2];
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -1070,6 +1074,26 @@ document.addEventListener("DOMContentLoaded", () => {
         applyReportFiltersOnly();
     });
 
+    // Handle change event on filterDateRange (when calendar date/range is selected)
+    document.getElementById("filterDateRange")?.addEventListener("change", () => {
+        applyReportFilters();
+    });
+
+    // Support pressing Enter in filter inputs to trigger the query
+    document.getElementById("filterDateRange")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            applyReportFilters();
+        }
+    });
+
+    document.getElementById("filterAno")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            applyReportFilters();
+        }
+    });
+
     // Close button for column selector modal
     document.getElementById("closeColumnModal")?.addEventListener("click", () => {
         document.getElementById("columnModal")?.classList.add("hidden");
@@ -1110,8 +1134,52 @@ window.switchTab = function(tab) {
     }
 };
 
+window.currentReportView = "current";
+
+window.togglePostingReportView = function() {
+    const toggleContainer = document.getElementById("postingReportToggle");
+    if (!toggleContainer) return;
+    
+    if (window.currentReportView === "current") {
+        window.currentReportView = "historic";
+        toggleContainer.classList.remove("mode-current");
+        toggleContainer.classList.add("mode-historic");
+    } else {
+        window.currentReportView = "current";
+        toggleContainer.classList.remove("mode-historic");
+        toggleContainer.classList.add("mode-current");
+    }
+    
+    fetchReportData();
+};
+
+function formatDateToYYYYMMDD(dateObj) {
+    if (!dateObj || isNaN(dateObj.getTime())) return "";
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
 function fetchReportData() {
-    fetch("/api/posting_report")
+    const view = window.currentReportView;
+    const dateRangeVal = document.getElementById("filterDateRange")?.value?.trim() || "";
+    const filterAnoVal = document.getElementById("filterAno")?.value?.trim() || "";
+    
+    let url = `/api/posting_report?view=${view}`;
+    if (dateRangeVal) {
+        const dates = dateRangeVal.split(" to ");
+        const startDate = parseISOorDDMMYYYY(dates[0]);
+        const endDate = (dates.length === 2 && dates[1].trim()) ? parseISOorDDMMYYYY(dates[1]) : startDate;
+        if (startDate && endDate) {
+            url += `&start_date=${formatDateToYYYYMMDD(startDate)}&end_date=${formatDateToYYYYMMDD(endDate)}`;
+        }
+    }
+    if (filterAnoVal) {
+        url += `&ano=${encodeURIComponent(filterAnoVal)}`;
+    }
+
+    fetch(url)
     .then(res => res.json())
     .then(data => {
         if (data.success) {
@@ -1128,7 +1196,24 @@ function fetchReportDataSilently(updatedPid) {
     if (updatedPid) {
         highlightReportRecord(updatedPid);
     }
-    fetch("/api/posting_report")
+    const view = window.currentReportView;
+    const dateRangeVal = document.getElementById("filterDateRange")?.value?.trim() || "";
+    const filterAnoVal = document.getElementById("filterAno")?.value?.trim() || "";
+    
+    let url = `/api/posting_report?view=${view}`;
+    if (dateRangeVal) {
+        const dates = dateRangeVal.split(" to ");
+        const startDate = parseISOorDDMMYYYY(dates[0]);
+        const endDate = (dates.length === 2 && dates[1].trim()) ? parseISOorDDMMYYYY(dates[1]) : startDate;
+        if (startDate && endDate) {
+            url += `&start_date=${formatDateToYYYYMMDD(startDate)}&end_date=${formatDateToYYYYMMDD(endDate)}`;
+        }
+    }
+    if (filterAnoVal) {
+        url += `&ano=${encodeURIComponent(filterAnoVal)}`;
+    }
+
+    fetch(url)
     .then(res => res.json())
     .then(data => {
         if (data.success) {
@@ -1140,7 +1225,7 @@ function fetchReportDataSilently(updatedPid) {
 }
 
 window.applyReportFilters = function() {
-    applyReportFiltersOnly();
+    fetchReportData();
 };
 
 window.resetReportFilters = function() {
@@ -1154,7 +1239,7 @@ window.resetReportFilters = function() {
     if (bulkFindDate) bulkFindDate.value = "";
     if (bulkReplaceDate) bulkReplaceDate.value = "";
 
-    applyReportFiltersOnly();
+    fetchReportData();
 };
 
 function applyReportFiltersOnly() {
@@ -1165,7 +1250,7 @@ function applyReportFiltersOnly() {
     if (dateRangeVal) {
         const dates = dateRangeVal.split(" to ");
         const startDate = parseISOorDDMMYYYY(dates[0]);
-        const endDate = dates.length === 2 ? parseISOorDDMMYYYY(dates[1]) : startDate;
+        const endDate = (dates.length === 2 && dates[1].trim()) ? parseISOorDDMMYYYY(dates[1]) : startDate;
 
         if (startDate && endDate) {
             const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
@@ -1510,6 +1595,9 @@ function renderReportTileView() {
     const sortedDates = Object.keys(groups).sort((a, b) => {
         const da = parseISOorDDMMYYYY(a);
         const db = parseISOorDDMMYYYY(b);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
         return db - da;
     });
 
@@ -1998,15 +2086,21 @@ function getReportElementByPid(pid) {
 function parseISOorDDMMYYYY(dateStr) {
     if (!dateStr) return null;
     const str = String(dateStr).trim();
-    if (str.includes('-')) {
-        const parts = str.split('-');
-        return new Date(parts[0], parts[1] - 1, parts[2]);
+    
+    // Match yyyy-mm-dd or yyyy/mm/dd
+    const matchIso = str.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (matchIso) {
+        return new Date(parseInt(matchIso[1], 10), parseInt(matchIso[2], 10) - 1, parseInt(matchIso[3], 10));
     }
-    if (str.includes('/')) {
-        const parts = str.split('/');
-        return new Date(parts[2], parts[1] - 1, parts[0]);
+    
+    // Match dd-mm-yyyy or dd/mm/yyyy
+    const matchDd = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (matchDd) {
+        return new Date(parseInt(matchDd[3], 10), parseInt(matchDd[2], 10) - 1, parseInt(matchDd[1], 10));
     }
-    return new Date(str);
+    
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
 }
 
 const formatDateDDMMYYYY = window.formatDate;

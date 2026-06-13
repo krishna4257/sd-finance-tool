@@ -52,6 +52,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const paid_amount = parseFloat(clean(row.querySelector(".col-paid_amount")?.textContent || "0")) || 0;
     const balance_amount = parseFloat(clean(row.querySelector(".col-balance_amount")?.textContent || "0")) || 0;
     const statusText = (row.querySelector(".col-status")?.textContent || "").trim().toLowerCase();
+    const source = row.getAttribute("data-source") || "active";
+    const raw_rating = parseFloat(clean(row.querySelector(".col-customer_rating")?.textContent || "100"));
+    const customer_rating = isNaN(raw_rating) ? 100 : raw_rating;
     return {
       row,
       ano,
@@ -61,12 +64,14 @@ document.addEventListener("DOMContentLoaded", function () {
       total_amount,
       paid_amount,
       balance_amount,
-      status: statusText
+      status: statusText,
+      source: source,
+      customer_rating: customer_rating
     };
   }
 
-  // 🔒 Immutable snapshot
-  const snapshot = rows.map(row => createSnapshotItem(row));
+  // 🔒 Mutable snapshot
+  let snapshot = rows.map(row => createSnapshotItem(row));
 
   function updateSummary() {
     const searchBox = document.getElementById("searchBox");
@@ -90,32 +95,35 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (!isFiltered) {
-      // Restore initial server-side totals (incorporating all active & closed village data)
+      // Restore initial server-side totals (incorporating Active, Defaulted, Closed and Average Scores)
       const grid = document.querySelector(".customer-analytics-grid");
       if (grid) {
         const activeCount = grid.dataset.initActiveCount || "0";
-        const closedCount = grid.dataset.initClosedCount || "0";
         const defaultedCount = grid.dataset.initDefaultedCount || "0";
-        const activeLoan = parseFloat(grid.dataset.initActiveLoan || "0") || 0;
-        const closedLoan = parseFloat(grid.dataset.initClosedLoan || "0") || 0;
+        const closedCount = grid.dataset.initClosedCount || "0";
         const activeBal = parseFloat(grid.dataset.initActiveBal || "0") || 0;
         const defaultedBal = parseFloat(grid.dataset.initDefaultedBal || "0") || 0;
+        const activeScore = parseFloat(grid.dataset.initActiveScore || "100") || 100;
+        const defaultedScore = parseFloat(grid.dataset.initDefaultedScore || "100") || 100;
+        const completeScore = parseFloat(grid.dataset.initCompleteScore || "100") || 100;
 
         const activeCountEl = document.getElementById("activeCustomersCount");
         const defaultedCountEl = document.getElementById("defaultedCustomersCount");
         const closedCountEl = document.getElementById("closedCustomersCount");
-        const totalLoanAmtEl = document.getElementById("totalLoanAmt");
-        const closedLoanAmtEl = document.getElementById("closedLoanAmt");
         const activeBalAmtEl = document.getElementById("activeBalAmt");
         const defaultedBalAmtEl = document.getElementById("defaultedBalAmt");
+        const activeAvgScoreEl = document.getElementById("activeAvgScore");
+        const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
+        const completeAvgScoreEl = document.getElementById("completeAvgScore");
 
         if (activeCountEl) activeCountEl.textContent = activeCount;
         if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
         if (closedCountEl) closedCountEl.textContent = closedCount;
-        if (totalLoanAmtEl) totalLoanAmtEl.textContent = activeLoan.toFixed(2);
-        if (closedLoanAmtEl) closedLoanAmtEl.textContent = closedLoan.toFixed(2);
         if (activeBalAmtEl) activeBalAmtEl.textContent = activeBal.toFixed(2);
         if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBal.toFixed(2);
+        if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeScore.toFixed(1);
+        if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedScore.toFixed(1);
+        if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeScore.toFixed(1);
       }
     } else {
       // Filtered/searched state: calculate from visible rows in the table
@@ -123,41 +131,72 @@ document.addEventListener("DOMContentLoaded", function () {
       let activeCount = 0;
       let defaultedCount = 0;
       let closedCount = 0;
-      let totalLoanSum = 0;
-      let closedLoanSum = 0;
+      
       let activeBalSum = 0;
       let defaultedBalSum = 0;
       
+      let activeScoreSum = 0;
+      let activeScoreCount = 0;
+      
+      let defaultedScoreSum = 0;
+      let defaultedScoreCount = 0;
+      
+      let completeScoreSum = 0;
+      let completeScoreCount = 0;
+      
       visible.forEach(d => {
-        if (d.status === 'active') {
+        if (d.source === 'active') {
           activeCount++;
-          totalLoanSum += d.total_amount;
           activeBalSum += d.balance_amount;
-        } else {
-          closedCount++;
-          closedLoanSum += d.total_amount; // Sum of total_amount of all closed customers
+          
+          activeScoreSum += d.customer_rating;
+          activeScoreCount++;
+          
+          defaultedScoreSum += d.customer_rating;
+          defaultedScoreCount++;
+          
+          completeScoreSum += d.customer_rating;
+          completeScoreCount++;
+        } else if (d.source === 'closed') {
           if (d.balance_amount > 0) {
             defaultedCount++;
             defaultedBalSum += d.balance_amount;
+            
+            defaultedScoreSum += d.customer_rating;
+            defaultedScoreCount++;
+            
+            completeScoreSum += d.customer_rating;
+            completeScoreCount++;
+          } else {
+            closedCount++;
           }
+        } else if (d.source === 'historic') {
+          completeScoreSum += d.customer_rating;
+          completeScoreCount++;
         }
       });
+
+      const activeAvgScoreVal = activeScoreCount > 0 ? (activeScoreSum / activeScoreCount) : 100.0;
+      const defaultedAvgScoreVal = defaultedScoreCount > 0 ? (defaultedScoreSum / defaultedScoreCount) : 100.0;
+      const completeAvgScoreVal = completeScoreCount > 0 ? (completeScoreSum / completeScoreCount) : 100.0;
 
       const activeCountEl = document.getElementById("activeCustomersCount");
       const defaultedCountEl = document.getElementById("defaultedCustomersCount");
       const closedCountEl = document.getElementById("closedCustomersCount");
-      const totalLoanAmtEl = document.getElementById("totalLoanAmt");
-      const closedLoanAmtEl = document.getElementById("closedLoanAmt");
       const activeBalAmtEl = document.getElementById("activeBalAmt");
       const defaultedBalAmtEl = document.getElementById("defaultedBalAmt");
+      const activeAvgScoreEl = document.getElementById("activeAvgScore");
+      const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
+      const completeAvgScoreEl = document.getElementById("completeAvgScore");
 
       if (activeCountEl) activeCountEl.textContent = activeCount;
       if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
       if (closedCountEl) closedCountEl.textContent = closedCount;
-      if (totalLoanAmtEl) totalLoanAmtEl.textContent = totalLoanSum.toFixed(2);
-      if (closedLoanAmtEl) closedLoanAmtEl.textContent = closedLoanSum.toFixed(2);
       if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(2);
       if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(2);
+      if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
+      if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
+      if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
     }
 
     // Apply ₹ formatting after updating values
@@ -393,7 +432,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     try {
-      const response = await fetch(`/api/customer_family_full/${encodeURIComponent(term)}`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const currentMode = urlParams.get("mode") || "active";
+      const response = await fetch(`/api/customer_family_full/${encodeURIComponent(term)}?mode=${currentMode}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -423,6 +464,7 @@ document.addEventListener("DOMContentLoaded", function () {
         tr.className = "table-row";
         tr.setAttribute("data-ano", customer.ano);
         tr.setAttribute("data-cid", customer.cid);
+        tr.setAttribute("data-source", currentMode);
 
         // Checkbox column
         const checkboxTd = document.createElement("td");
@@ -461,25 +503,13 @@ document.addEventListener("DOMContentLoaded", function () {
         tableBody.appendChild(tr);
       });
 
-      // Update toggle switch container highlight based on returned customer statuses
-      let hasActive = false;
-      let hasClosed = false;
-      customers.forEach(customer => {
-        if (String(customer.status).toLowerCase() === 'active') {
-          hasActive = true;
-        } else {
-          hasClosed = true;
-        }
-      });
+      // Rebuild snapshot
+      const newRows = Array.from(tableBody.querySelectorAll("tr"));
+      snapshot = newRows.map(row => createSnapshotItem(row));
+
       const toggleContainer = document.getElementById("customerModeToggle");
       if (toggleContainer) {
-        if (hasActive && hasClosed) {
-          toggleContainer.className = "sliding-toggle-container mode-both";
-        } else if (hasClosed) {
-          toggleContainer.className = "sliding-toggle-container mode-closed";
-        } else {
-          toggleContainer.className = "sliding-toggle-container mode-active";
-        }
+        toggleContainer.className = `sliding-toggle-container three-way mode-${currentMode}`;
       }
 
       // Reinitialize DataTable matching standard views
@@ -558,6 +588,17 @@ document.addEventListener("DOMContentLoaded", function () {
         tr.setAttribute("data-ano", customer.ano);
         tr.setAttribute("data-cid", customer.cid);
 
+        // Determine source based on status
+        let source = "active";
+        if (customer.status && customer.status.toLowerCase() === "closed") {
+          source = "closed";
+        } else if (customer.status && customer.status.toLowerCase() === "historic") {
+          source = "historic";
+        } else if (customer.status && customer.status.toLowerCase() === "written_off") {
+          source = "closed";
+        }
+        tr.setAttribute("data-source", source);
+
         // Checkbox column
         const checkboxTd = document.createElement("td");
         checkboxTd.className = "checkbox-column";
@@ -595,10 +636,14 @@ document.addEventListener("DOMContentLoaded", function () {
         tableBody.appendChild(tr);
       });
 
+      // Rebuild snapshot
+      const newRows = Array.from(tableBody.querySelectorAll("tr"));
+      snapshot = newRows.map(row => createSnapshotItem(row));
+
       // Update toggle switch container highlight
       const toggleContainer = document.getElementById("customerModeToggle");
       if (toggleContainer) {
-        toggleContainer.className = "sliding-toggle-container mode-both";
+        toggleContainer.className = "sliding-toggle-container three-way mode-both";
       }
 
       // Reinitialize DataTable

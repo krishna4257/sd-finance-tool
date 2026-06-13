@@ -26,10 +26,11 @@
     </div>
 
     <!-- Premium Sliding Toggle Switch -->
-    <div class="sliding-toggle-container mode-{{ mode if mode else 'active' }}" id="customerModeToggle">
+    <div class="sliding-toggle-container three-way mode-{{ mode if mode else 'active' }}" id="customerModeToggle">
       <div class="sliding-toggle-pill"></div>
-      <span class="toggle-label active-label">Active</span>
-      <span class="toggle-label closed-label">Closed</span>
+      <span class="toggle-label active-label" data-mode="active">Active</span>
+      <span class="toggle-label closed-label" data-mode="closed">Closed</span>
+      <span class="toggle-label historic-label" data-mode="historic">Historic</span>
     </div>
   </div>
   
@@ -52,10 +53,11 @@
        data-init-active-count="{{ active_customers }}"
        data-init-defaulted-count="{{ defaulted_customers }}"
        data-init-closed-count="{{ closed_customers }}"
-       data-init-active-loan="{{ total_loan_amount }}"
-       data-init-closed-loan="{{ closed_loan_amount }}"
        data-init-active-bal="{{ active_balance_amount }}"
-       data-init-defaulted-bal="{{ defaulted_balance_amount }}">
+       data-init-defaulted-bal="{{ defaulted_balance_amount }}"
+       data-init-active-score="{{ active_avg_score }}"
+       data-init-defaulted-score="{{ defaulted_avg_score }}"
+       data-init-complete-score="{{ complete_avg_score }}">
     
     <!-- Tile 1: Customers -->
     <div class="analytics-card card-glass">
@@ -69,36 +71,18 @@
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
-          <span class="label">Closed</span>
-          <span class="value" id="closedCustomersCount">{{ closed_customers }}</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item align-center">
           <span class="label">Defaulted</span>
           <span class="value" id="defaultedCustomersCount">{{ defaulted_customers }}</span>
         </div>
-      </div>
-    </div>
-
-    <!-- Tile 2: Loan Amount -->
-    <div class="analytics-card card-glass">
-      <div class="card-header">
-        <h3>Loan Amount</h3>
-      </div>
-      <div class="card-stats">
-        <div class="stat-item align-center">
-          <span class="label">Active</span>
-          <span class="value" id="totalLoanAmt" data-money>{{ total_loan_amount }}</span>
-        </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Closed</span>
-          <span class="value" id="closedLoanAmt" data-money>{{ closed_loan_amount }}</span>
+          <span class="value" id="closedCustomersCount">{{ closed_customers }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Tile 3: Balance Amount -->
+    <!-- Tile 2: Balance Amount -->
     <div class="analytics-card card-glass">
       <div class="card-header">
         <h3>Balance Amount</h3>
@@ -115,6 +99,31 @@
         </div>
       </div>
     </div>
+
+    <!-- Tile 3: Average Scores -->
+    <div class="analytics-card card-glass">
+      <div class="card-header">
+        <h3>Average Scores</h3>
+      </div>
+      <div class="card-stats">
+        <div class="stat-item align-center">
+          <span class="label">Active</span>
+          <span class="value" id="activeAvgScore">{{ "%.1f"|format(active_avg_score) }}</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Defaulted</span>
+          <span class="value" id="defaultedAvgScore">{{ "%.1f"|format(defaulted_avg_score) }}</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Complete</span>
+          <span class="value" id="completeAvgScore">{{ "%.1f"|format(complete_avg_score) }}</span>
+        </div>
+      </div>
+    </div>
+    
+  </div>
     
   </div>
 </div>
@@ -154,7 +163,7 @@
       </thead>
       <tbody id="customerTableBody">
         {% for row in data %}
-        <tr class="table-row" data-ano="{{ row['ano'] }}" data-cid="{{ row['cid'] }}">
+        <tr class="table-row" data-ano="{{ row['ano'] }}" data-cid="{{ row['cid'] }}" data-source="{{ 'active' if mode == 'active' else 'closed' if mode == 'closed' else 'historic' if mode == 'historic' else 'active' }}">
           <td class="checkbox-column" style="text-align: center;"><input type="checkbox" /></td>
           <td class="col-ano">{{ row['ano'] }}</td>
           <td class="col-name">{{ row['name'] }}</td>
@@ -202,21 +211,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleContainer = document.getElementById("customerModeToggle");
   if (toggleContainer) {
     toggleContainer.addEventListener("click", function (e) {
-      const activeLabel = e.target.closest(".active-label");
-      const closedLabel = e.target.closest(".closed-label");
-      const isReportMode = toggleContainer.classList.contains("mode-both");
-      
-      if (activeLabel) {
-        window.location.href = "/view_customers?mode=active";
-      } else if (closedLabel) {
-        window.location.href = "/view_customers?mode=closed";
-      } else {
-        if (isReportMode) {
-          window.location.href = "/view_customers?mode=active";
-        } else {
-          const isClosed = toggleContainer.classList.contains("mode-closed");
-          const nextMode = isClosed ? "active" : "closed";
-          window.location.href = `/view_customers?mode=${nextMode}`;
+      const label = e.target.closest(".toggle-label");
+      if (label) {
+        const selectedMode = label.getAttribute("data-mode");
+        if (selectedMode) {
+          window.location.href = "/view_customers?mode=" + selectedMode;
         }
       }
     });

@@ -2329,29 +2329,46 @@ def invalidate_village_health_cache(cur, vid, invalidation_date=None):
 
 
 def recalc_customer_balance(cur, cid):
-    # Get old balance
-    cur.execute("SELECT balance_amount FROM customer WHERE cid = %s", (cid,))
-    row = cur.fetchone()
-    old_balance = row[0] if row else Decimal("0")
+    # Determine which table the customer is in
+    table_customer = None
+    table_payment = None
+    amt_col = "amt"
+    
+    cur.execute("SELECT 1 FROM customer WHERE cid = %s", (cid,))
+    if cur.fetchone():
+        table_customer = "customer"
+        table_payment = "payment"
+    else:
+        cur.execute("SELECT 1 FROM closed_cust_account WHERE cid = %s", (cid,))
+        if cur.fetchone():
+            table_customer = "closed_cust_account"
+            table_payment = "closed_cust_payment"
+        else:
+            cur.execute("SELECT 1 FROM historic_customer_data WHERE cid = %s", (cid,))
+            if cur.fetchone():
+                table_customer = "historic_customer_data"
+                table_payment = "historic_payment_data"
+                amt_col = "amount"
+                
+    if not table_customer or not table_payment:
+        return
 
-    cur.execute("SELECT total_amount FROM customer WHERE cid = %s", (cid,))
+    cur.execute(f"SELECT total_amount FROM {table_customer} WHERE cid = %s", (cid,))
     row = cur.fetchone()
     if not row:
         return
-
     total_amt = row[0]
 
-    cur.execute("""
-        SELECT COALESCE(SUM(amt), 0)
-        FROM payment
+    cur.execute(f"""
+        SELECT COALESCE(SUM({amt_col}), 0)
+        FROM {table_payment}
         WHERE cid = %s
     """, (cid,))
-
     paid_amt = cur.fetchone()[0]
     balance_amt = total_amt - paid_amt
 
-    cur.execute("""
-        UPDATE customer
+    cur.execute(f"""
+        UPDATE {table_customer}
         SET paid_amount = %s,
             balance_amount = %s
         WHERE cid = %s
@@ -3475,55 +3492,71 @@ def add_customer():
 def view_customers():
     vid = session.get("vid")
 
-    # â— Enforce context
+    # 🚨 Enforce context
     if not vid:
         flash("Please select Village from Dashboard first", "warning")
         return redirect(url_for("dashboard"))
 
-    # ðŸ”¹ NEW: mode toggle (active / closed)
+    # 🔸 NEW: mode toggle (active / closed / historic)
     mode = request.args.get("mode", "active")  # default = active
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # ðŸ“Š Overhauled Analytics Calculations
+    # 📊 Overhauled Analytics Calculations
     # Active Stats (from customer table)
     cur.execute("""
         SELECT 
             COALESCE(COUNT(*), 0),
-            COALESCE(SUM(total_amount), 0.0),
             COALESCE(SUM(balance_amount), 0.0)
         FROM customer
         WHERE vid = %s
     """, (vid,))
-    active_count, active_loan_sum, active_bal_sum = cur.fetchone()
+    active_count, active_bal_sum = cur.fetchone()
 
-    # Closed Stats (from closed_cust_account & historic_customer_data tables)
+    # Closed Stats: Defaulted (balance_amount > 0) and Closed (balance_amount <= 0) from closed_cust_account
     cur.execute("""
         SELECT 
-            COALESCE(COUNT(*), 0),
-            COALESCE(SUM(total_amount), 0.0)
-        FROM (
-            SELECT total_amount FROM closed_cust_account WHERE vid = %s
-            UNION ALL
-            SELECT total_amount FROM historic_customer_data WHERE vid = %s
-        ) all_closed
-    """, (vid, vid))
-    closed_count, closed_loan_sum = cur.fetchone()
+            COALESCE(COUNT(*) FILTER (WHERE balance_amount > 0), 0),
+            COALESCE(SUM(balance_amount) FILTER (WHERE balance_amount > 0), 0.0),
+            COALESCE(COUNT(*) FILTER (WHERE balance_amount <= 0), 0)
+        FROM closed_cust_account
+        WHERE vid = %s
+    """, (vid,))
+    defaulted_count, defaulted_bal_sum, closed_count = cur.fetchone()
 
-    # Defaulted Stats (balance > 0 in closed_cust_account & historic_customer_data tables)
+    # Average Scores Calculations
+    # 1. Active average score
     cur.execute("""
-        SELECT 
-            COALESCE(COUNT(*), 0),
-            COALESCE(SUM(total_amount), 0.0),
-            COALESCE(SUM(balance_amount), 0.0)
+        SELECT COALESCE(AVG(customer_rating), 100.0)
+        FROM customer
+        WHERE vid = %s
+    """, (vid,))
+    active_avg_score = float(cur.fetchone()[0])
+
+    # 2. Defaulted average score: (closed_cust_account balance > 0) + (customer)
+    cur.execute("""
+        SELECT COALESCE(AVG(customer_rating), 100.0)
         FROM (
-            SELECT total_amount, balance_amount FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
+            SELECT customer_rating FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
             UNION ALL
-            SELECT total_amount, balance_amount FROM historic_customer_data WHERE vid = %s AND balance_amount > 0
-        ) all_defaulted
+            SELECT customer_rating FROM customer WHERE vid = %s
+        ) defaulted_group
     """, (vid, vid))
-    defaulted_count, defaulted_loan_sum, defaulted_bal_sum = cur.fetchone()
+    defaulted_avg_score = float(cur.fetchone()[0])
+
+    # 3. Complete average score: (closed_cust_account balance > 0) + (customer) + (historic_customer_data)
+    cur.execute("""
+        SELECT COALESCE(AVG(customer_rating), 100.0)
+        FROM (
+            SELECT customer_rating FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
+            UNION ALL
+            SELECT customer_rating FROM customer WHERE vid = %s
+            UNION ALL
+            SELECT customer_rating FROM historic_customer_data WHERE vid = %s
+        ) complete_group
+    """, (vid, vid, vid))
+    complete_avg_score = float(cur.fetchone()[0])
 
     # Fetch Table Rows based on mode
     if mode == "closed":
@@ -3556,9 +3589,10 @@ def view_customers():
                 freeze_date
             FROM closed_cust_account
             WHERE vid = %s
-            
-            UNION ALL
-            
+            ORDER BY ano DESC
+        """, (vid,))
+    elif mode == "historic":
+        cur.execute("""
             SELECT
                 cid,
                 ano,
@@ -3589,7 +3623,7 @@ def view_customers():
             WHERE vid = %s
             
             ORDER BY ano DESC
-        """, (vid, vid))
+        """, (vid,))
     elif mode == "yearly":
         cur.execute("""
 
@@ -3735,10 +3769,11 @@ def view_customers():
         active_customers=active_count,
         defaulted_customers=defaulted_count,
         closed_customers=closed_count,
-        total_loan_amount=active_loan_sum,
-        closed_loan_amount=closed_loan_sum,
         active_balance_amount=active_bal_sum,
         defaulted_balance_amount=defaulted_bal_sum,
+        active_avg_score=active_avg_score,
+        defaulted_avg_score=defaulted_avg_score,
+        complete_avg_score=complete_avg_score,
         mode=mode
     )
 
@@ -3911,62 +3946,135 @@ def api_posting_report():
     if not vid:
         return jsonify(success=False, error="Please select Village first"), 400
 
+    view = request.args.get("view", "current")
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+    ano_val = request.args.get("ano", "").strip()
+
     conn = get_pg_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT
-                p.pid,
-                p.ano,
-                p.payment_date,
-                p.amt,
-                p.created_at,
-                p.eid,
-                p.cid,
-                p.vid,
-                'active' AS payment_status,
-                c.name AS customer_name
-            FROM payment p
-            LEFT JOIN customer c ON p.cid = c.cid
-            WHERE p.vid = %s
+        # Build dynamic queries based on view
+        if view == "historic":
+            conditions = ["hp.vid = %s"]
+            params = [vid]
 
-            UNION ALL
+            if start_date_str:
+                try:
+                    start_date = parse_date_input(start_date_str)
+                    if start_date:
+                        conditions.append("hp.payment_date >= %s")
+                        params.append(start_date)
+                except Exception:
+                    pass
 
-            SELECT
-                cp.pid,
-                cp.ano,
-                cp.payment_date,
-                cp.amt,
-                cp.created_at,
-                cp.eid,
-                cp.cid,
-                cp.vid,
-                'closed' AS payment_status,
-                cc.name AS customer_name
-            FROM closed_cust_payment cp
-            LEFT JOIN closed_cust_account cc ON cp.cid = cc.cid
-            WHERE cp.vid = %s
-            
-            UNION ALL
+            if end_date_str:
+                try:
+                    end_date = parse_date_input(end_date_str)
+                    if end_date:
+                        conditions.append("hp.payment_date <= %s")
+                        params.append(end_date)
+                except Exception:
+                    pass
 
-            SELECT
-                hp.pid,
-                hp.ano,
-                hp.payment_date,
-                hp.amount AS amt,
-                hp.created_at,
-                hp.eid,
-                hp.cid,
-                hp.vid,
-                'historic' AS payment_status,
-                hc.name AS customer_name
-            FROM historic_payment_data hp
-            LEFT JOIN historic_customer_data hc ON hp.cid = hc.cid
-            WHERE hp.vid = %s
+            if ano_val and ano_val.isdigit():
+                conditions.append("hp.ano = %s")
+                params.append(int(ano_val))
 
-            ORDER BY payment_date DESC, pid DESC
-        """, (vid, vid, vid))
+            where_clause = " AND ".join(conditions)
+            query = f"""
+                SELECT
+                    hp.pid,
+                    hp.ano,
+                    hp.payment_date,
+                    hp.amount AS amt,
+                    hp.created_at,
+                    hp.eid,
+                    hp.cid,
+                    hp.vid,
+                    'historic' AS payment_status,
+                    hc.name AS customer_name
+                FROM historic_payment_data hp
+                LEFT JOIN historic_customer_data hc ON hp.cid = hc.cid
+                WHERE {where_clause}
+                ORDER BY hp.payment_date DESC, hp.pid DESC
+            """
+            cur.execute(query, tuple(params))
+        else: # current
+            conditions_active = ["p.vid = %s"]
+            params_active = [vid]
+            conditions_closed = ["cp.vid = %s"]
+            params_closed = [vid]
+
+            if start_date_str:
+                try:
+                    start_date = parse_date_input(start_date_str)
+                    if start_date:
+                        conditions_active.append("p.payment_date >= %s")
+                        params_active.append(start_date)
+                        conditions_closed.append("cp.payment_date >= %s")
+                        params_closed.append(start_date)
+                except Exception:
+                    pass
+
+            if end_date_str:
+                try:
+                    end_date = parse_date_input(end_date_str)
+                    if end_date:
+                        conditions_active.append("p.payment_date <= %s")
+                        params_active.append(end_date)
+                        conditions_closed.append("cp.payment_date <= %s")
+                        params_closed.append(end_date)
+                except Exception:
+                    pass
+
+            if ano_val and ano_val.isdigit():
+                val = int(ano_val)
+                conditions_active.append("p.ano = %s")
+                params_active.append(val)
+                conditions_closed.append("cp.ano = %s")
+                params_closed.append(val)
+
+            where_active = " AND ".join(conditions_active)
+            where_closed = " AND ".join(conditions_closed)
+
+            query = f"""
+                SELECT
+                    p.pid,
+                    p.ano,
+                    p.payment_date,
+                    p.amt,
+                    p.created_at,
+                    p.eid,
+                    p.cid,
+                    p.vid,
+                    'active' AS payment_status,
+                    c.name AS customer_name
+                FROM payment p
+                LEFT JOIN customer c ON p.cid = c.cid
+                WHERE {where_active}
+
+                UNION ALL
+
+                SELECT
+                    cp.pid,
+                    cp.ano,
+                    cp.payment_date,
+                    cp.amt,
+                    cp.created_at,
+                    cp.eid,
+                    cp.cid,
+                    cp.vid,
+                    'closed' AS payment_status,
+                    cc.name AS customer_name
+                FROM closed_cust_payment cp
+                LEFT JOIN closed_cust_account cc ON cp.cid = cc.cid
+                WHERE {where_closed}
+
+                ORDER BY payment_date DESC, pid DESC
+            """
+            cur.execute(query, tuple(params_active + params_closed))
 
         rows = cur.fetchall()
         if cur.description:
@@ -4966,126 +5074,74 @@ def api_customer_family_full(account_no):
 
         account_no = str(normalized)
 
-        cur.execute("""
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date
-            FROM (
+        mode = request.args.get("mode", "active")
+        
+        if mode == "closed":
+            query = """
                 SELECT
-                    cid,
-                    ano,
-                    name,
-                    vid,
-                    start_date,
-                    end_date,
-                    total_amount,
-                    paid_amount,
-                    balance_amount,
-                    installment_amount,
-                    type,
-                    period,
-                    pano,
-                    created_at,
-                    aadhaar_number,
-                    notes,
-                    latitude,
-                    longitude,
-                    eid,
-                    phone_number,
-                    'active' AS status,
-                    customer_rating,
-                    final_frozen_rating,
-                    final_risk_level,
-                    freeze_date
-                FROM customer
-                WHERE vid = %s
-
-                UNION ALL
-
-                SELECT
-                    cid,
-                    ano,
-                    name,
-                    vid,
-                    start_date,
-                    end_date,
-                    total_amount,
-                    paid_amount,
-                    balance_amount,
-                    installment_amount,
-                    type,
-                    period,
-                    pano,
-                    created_at,
-                    aadhaar_number,
-                    notes,
-                    latitude,
-                    longitude,
-                    eid,
-                    phone_number,
-                    status,
-                    customer_rating,
-                    final_frozen_rating,
-                    final_risk_level,
-                    freeze_date
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
                 FROM closed_cust_account
                 WHERE vid = %s
-                
-                UNION ALL
-
+            """
+            params = (vid,)
+        elif mode == "historic":
+            query = """
                 SELECT
-                    cid,
-                    ano,
-                    name,
-                    vid,
-                    start_date,
-                    end_date,
-                    total_amount,
-                    paid_amount,
-                    balance_amount,
-                    installment_amount,
-                    type,
-                    period,
-                    pano,
-                    created_at,
-                    aadhaar_number,
-                    notes,
-                    latitude,
-                    longitude,
-                    eid,
-                    phone_number,
-                    status,
-                    customer_rating,
-                    final_frozen_rating,
-                    final_risk_level,
-                    freeze_date
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
                 FROM historic_customer_data
                 WHERE vid = %s
-            ) all_customers
-        """, (vid, vid, vid))
+            """
+            params = (vid,)
+        elif mode == "yearly":
+            query = """
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                FROM (
+                    SELECT
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM customer
+                    WHERE vid = %s
+
+                    UNION ALL
+
+                    SELECT
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM closed_cust_account
+                    WHERE vid = %s
+                    
+                    UNION ALL
+
+                    SELECT
+                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    FROM historic_customer_data
+                    WHERE vid = %s
+                ) all_customers
+            """
+            params = (vid, vid, vid)
+        else: # active
+            query = """
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' as status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                FROM customer
+                WHERE vid = %s
+            """
+            params = (vid,)
+
+        cur.execute(query, params)
 
         rows = cur.fetchall()
 
@@ -6924,10 +6980,15 @@ def update_payment_record_pg():
         cur.execute("SELECT cid, ano, vid, payment_date FROM payment WHERE pid = %s", (pid,))
         payment_row = cur.fetchone()
         is_active = True
+        is_historic = False
         if not payment_row:
-            cur.execute("SELECT cid, ano, vid FROM closed_cust_payment WHERE pid = %s", (pid,))
+            cur.execute("SELECT cid, ano, vid, payment_date FROM closed_cust_payment WHERE pid = %s", (pid,))
             payment_row = cur.fetchone()
             is_active = False
+        if not payment_row:
+            cur.execute("SELECT cid, ano, vid, payment_date FROM historic_payment_data WHERE pid = %s", (pid,))
+            payment_row = cur.fetchone()
+            is_historic = True
 
         if not payment_row:
             return jsonify(success=False, error="Payment record not found"), 404
@@ -6936,8 +6997,14 @@ def update_payment_record_pg():
         if p_vid != vid:
             return jsonify(success=False, error="Access denied: Different village context"), 403
 
-        table_payment = "payment" if is_active else "closed_cust_payment"
-        table_customer = "customer" if is_active else "closed_cust_account"
+        if is_historic:
+            table_payment = "historic_payment_data"
+            table_customer = "historic_customer_data"
+            amount_col = "amount"
+        else:
+            table_payment = "payment" if is_active else "closed_cust_payment"
+            table_customer = "customer" if is_active else "closed_cust_account"
+            amount_col = "amt"
 
         # 2. If ano is changing, we must fetch the new customer's cid
         new_cid = old_cid
@@ -6949,15 +7016,25 @@ def update_payment_record_pg():
             new_cid = cust_row[0]
 
         # 3. Update the payment record
-        cur.execute(f"""
-            UPDATE {table_payment}
-            SET ano = %s,
-                cid = %s,
-                payment_date = %s,
-                amt = %s,
-                updated_at = NOW()
-            WHERE pid = %s
-        """, (ano, new_cid, pdt, amt, pid))
+        if is_historic:
+            cur.execute("""
+                UPDATE historic_payment_data
+                SET ano = %s,
+                    cid = %s,
+                    payment_date = %s,
+                    amount = %s
+                WHERE pid = %s
+            """, (ano, new_cid, pdt, amt, pid))
+        else:
+            cur.execute(f"""
+                UPDATE {table_payment}
+                SET ano = %s,
+                    cid = %s,
+                    payment_date = %s,
+                    amt = %s,
+                    updated_at = NOW()
+                WHERE pid = %s
+            """, (ano, new_cid, pdt, amt, pid))
 
         # 4. Recalculate balances for old and new customers
         recalc_customer_balance(cur, old_cid)

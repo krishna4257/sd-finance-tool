@@ -104,6 +104,15 @@
       <!-- REPORT CONTAINER BOX (Initially Hidden) -->
       <div id="reportContainer" style="display: none;">
 
+        <!-- Toggle Switch for Current vs Historic -->
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 15px;">
+          <div class="sliding-toggle-container mode-current" id="postingReportToggle" onclick="togglePostingReportView()">
+            <div class="sliding-toggle-pill"></div>
+            <span class="toggle-label current-label">Current</span>
+            <span class="toggle-label historic-label">Historic</span>
+          </div>
+        </div>
+
         <!-- Filter Controls Row -->
         <div class="posting-filters-row">
           <label style="margin:0">

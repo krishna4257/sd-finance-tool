@@ -3620,6 +3620,63 @@ table.dataTable thead th.sorting_disabled {
   color: #ffffff !important;
 }
 
+/* 3-Way Toggle Switches */
+.sliding-toggle-container.three-way {
+  width: 270px !important;
+}
+
+.sliding-toggle-container.three-way .sliding-toggle-pill {
+  width: calc(33.333% - 4px);
+}
+
+.sliding-toggle-container.three-way.mode-active .sliding-toggle-pill {
+  left: 4px;
+}
+
+.sliding-toggle-container.three-way.mode-closed .sliding-toggle-pill {
+  left: calc(33.333% + 2px);
+}
+
+.sliding-toggle-container.three-way.mode-historic .sliding-toggle-pill {
+  left: calc(66.666% + 2px);
+}
+
+.sliding-toggle-container.three-way.mode-active .active-label,
+.sliding-toggle-container.three-way.mode-closed .closed-label,
+.sliding-toggle-container.three-way.mode-historic .historic-label {
+  color: #ffffff !important;
+}
+
+.sliding-toggle-container.three-way.mode-both .sliding-toggle-pill {
+  left: 4px;
+  width: calc(100% - 8px);
+}
+
+.sliding-toggle-container.three-way.mode-both .active-label,
+.sliding-toggle-container.three-way.mode-both .closed-label,
+.sliding-toggle-container.three-way.mode-both .historic-label {
+  color: #ffffff !important;
+}
+
+/* Posting Report Current vs Historic Toggle */
+.sliding-toggle-container.mode-current .sliding-toggle-pill {
+  left: 4px;
+  width: calc(50% - 4px);
+}
+
+.sliding-toggle-container.mode-current .current-label {
+  color: #ffffff !important;
+}
+
+.sliding-toggle-container.mode-historic .sliding-toggle-pill {
+  left: 50%;
+  width: calc(50% - 4px);
+}
+
+.sliding-toggle-container.mode-historic .historic-label {
+  color: #ffffff !important;
+}
+
 /* ── Typography Bold Rule ── */
 #customerTable tbody td.col-balance_amount {
   font-weight: bold !important;
