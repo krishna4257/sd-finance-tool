@@ -318,37 +318,43 @@ def normalize_mobile_customer_payload(payload):
     if not isinstance(payload, dict):
         raise ValueError("Invalid customer payload")
 
-    normalized = dict(payload)
+    source = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+    normalized = dict(source) # type: ignore
 
-    base_amount = Decimal(str(normalized.get("base_amount") or 0))
-    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0))
-    interest_amount = Decimal(str(normalized.get("interest_amount") or 0))
-    total_amount = Decimal(str(normalized.get("total_amount") or 0))
+    normalized["ano"] = normalize_account_number(normalized.get("ano")) # type: ignore
+    normalized["vid"] = normalize_account_number(normalized.get("vid")) # type: ignore
+    normalized["eid"] = normalize_account_number(normalized.get("eid")) # type: ignore
+    normalized["pano"] = normalize_account_number(normalized.get("pano")) # type: ignore
 
-    normalized["base_amount"] = float(base_amount)
-    normalized["cutting_amount"] = float(cutting_amount)
-    normalized["interest_amount"] = float(interest_amount)
+    base_amount = Decimal(str(normalized.get("base_amount") or 0)) # type: ignore
+    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0)) # type: ignore
+    interest_amount = Decimal(str(normalized.get("interest_amount") or 0)) # type: ignore
+    total_amount = Decimal(str(normalized.get("total_amount") or 0)) # type: ignore
+
+    normalized["base_amount"] = float(base_amount) # type: ignore
+    normalized["cutting_amount"] = float(cutting_amount) # type: ignore
+    normalized["interest_amount"] = float(interest_amount) # type: ignore
 
     if total_amount > 0:
         component_sum = base_amount + cutting_amount + interest_amount
         if component_sum > 0 and component_sum != total_amount:
             logger.warning(
                 "Customer ano=%s total_amount=%s does not equal base+cutting+interest=%s",
-                normalized.get("ano"),
+                normalized.get("ano"), # type: ignore
                 total_amount,
                 component_sum,
             )
 
-    loan_type = normalized.get("type")
+    loan_type = normalized.get("type") # type: ignore
     if loan_type == "weekly":
-        normalized["type"] = "W"
+        normalized["type"] = "W" # type: ignore
     elif loan_type == "monthly":
-        normalized["type"] = "M"
+        normalized["type"] = "M" # type: ignore
 
-    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0)
-    if normalized.get("balance_amount") is None and total_amount > 0:
-        normalized["balance_amount"] = float(
-            total_amount - Decimal(str(normalized["paid_amount"]))
+    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0) # type: ignore
+    if normalized.get("balance_amount") is None and total_amount > 0: # type: ignore
+        normalized["balance_amount"] = float( # type: ignore
+            total_amount - Decimal(str(normalized["paid_amount"])) # type: ignore
         )
 
     return normalized
@@ -1938,7 +1944,7 @@ def customer_feed():
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
-        ano = customer_payload.get("ano")
+        ano = customer_payload.get("ano") # type: ignore
         payload = json.dumps(customer_payload)
 
         logger.debug(
@@ -3958,12 +3964,35 @@ def feed():
                 cf.payload,
                 cf.status,
                 cf.vid,
-                (cf.payload->>'ano')::INT AS ano,
-                cf.payload->>'name' AS name,
-                cf.payload->>'type' AS type,
-                docs.aadhaar_photo,
-                docs.house_photo
+                COALESCE(
+                    (cf.payload->'payload'->>'ano')::INT,
+                    (cf.payload->>'ano')::INT
+                ) AS ano,
+                COALESCE(
+                    cf.payload->'payload'->>'name',
+                    cf.payload->>'name'
+                ) AS name,
+                COALESCE(
+                    cf.payload->'payload'->>'type',
+                    cf.payload->>'type'
+                ) AS type,
+                COALESCE(feed_docs.aadhaar_photo, docs.aadhaar_photo) AS aadhaar_photo,
+                COALESCE(feed_docs.house_photo, docs.house_photo) AS house_photo
             FROM customer_feed cf
+            LEFT JOIN LATERAL (
+                SELECT
+                    cdf.aadhaar_photo,
+                    cdf.house_photo
+                FROM customer_docs_feed cdf
+                WHERE cdf.vid = cf.vid
+                  AND cdf.status = 'pending'
+                  AND cdf.ano = COALESCE(
+                      (cf.payload->'payload'->>'ano')::INT,
+                      (cf.payload->>'ano')::INT
+                  )
+                ORDER BY cdf.created_at DESC NULLS LAST, cdf.docs_feed_id DESC
+                LIMIT 1
+            ) AS feed_docs ON TRUE
             LEFT JOIN LATERAL (
                 SELECT
                     cd.aadhaar_photo,
@@ -4080,6 +4109,7 @@ def feed():
             ) cf ON TRUE
             WHERE cdf.vid = %s
               AND cdf.status = 'pending'
+              AND c.cid IS NOT NULL
             ORDER BY cdf.docs_feed_id DESC
         """, (vid,))
 
@@ -4140,7 +4170,7 @@ def accept_customer(feed_id):
     except ValueError as exc:
         return {"success": False, "error": str(exc)}
 
-    loan_type = data.get("type")
+    loan_type = data.get("type") # type: ignore
     if loan_type == "weekly":
         loan_type = "W"
     elif loan_type == "monthly":
@@ -4173,32 +4203,88 @@ def accept_customer(feed_id):
             status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
     """,
     (
-        data.get("ano"),
-        data.get("name"),
-        data.get("vid"),
-        data.get("start_date"),
-        data.get("end_date"),
-        data.get("total_amount"),
-        data.get("base_amount", 0),
-        data.get("cutting_amount", 0),
-        data.get("interest_amount", 0),
-        data.get("paid_amount"),
-        data.get("balance_amount"),
-        data.get("installment_amount"),
+        data.get("ano"), # type: ignore
+        data.get("name"), # type: ignore
+        data.get("vid"), # type: ignore
+        data.get("start_date"), # type: ignore
+        data.get("end_date"), # type: ignore
+        data.get("total_amount"), # type: ignore
+        data.get("base_amount", 0), # type: ignore
+        data.get("cutting_amount", 0), # type: ignore
+        data.get("interest_amount", 0), # type: ignore
+        data.get("paid_amount"), # type: ignore
+        data.get("balance_amount"), # type: ignore
+        data.get("installment_amount"), # type: ignore
         loan_type,
-        data.get("period"),
-        data.get("pano"),
-        data.get("aadhaar_number"),
-        data.get("notes"),
-        data.get("latitude"),
-        data.get("longitude"),
-        data.get("eid"),
-        data.get("phone_number")
+        data.get("period"), # type: ignore
+        data.get("pano"), # type: ignore
+        data.get("aadhaar_number"), # type: ignore
+        data.get("notes"), # type: ignore
+        data.get("latitude"), # type: ignore
+        data.get("longitude"), # type: ignore
+        data.get("eid"), # type: ignore
+        data.get("phone_number") # type: ignore
         
     ))
+
+    cur.execute("""
+        SELECT docs_feed_id, aadhaar_photo, house_photo
+        FROM customer_docs_feed
+        WHERE vid = %s AND ano = %s AND status = 'pending'
+        ORDER BY created_at DESC NULLS LAST, docs_feed_id DESC
+        LIMIT 1
+    """, (data.get("vid"), data.get("ano"))) # type: ignore
+    pending_docs_row = cur.fetchone()
+
+    if pending_docs_row:
+        docs_feed_id, aadhaar_photo, house_photo = pending_docs_row
+
+        cur.execute("""
+            SELECT aadhaar_photo, house_photo
+            FROM customer_docs
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (data.get("vid"), data.get("ano"))) # type: ignore
+        existing_docs = cur.fetchone()
+
+        existing_aadhaar = existing_docs[0] if existing_docs else None
+        existing_house = existing_docs[1] if existing_docs else None
+
+        final_aadhaar = aadhaar_photo if aadhaar_photo is not None else existing_aadhaar
+        final_house = house_photo if house_photo is not None else existing_house
+
+        if final_aadhaar is not None or final_house is not None:
+            cur.execute("""
+                INSERT INTO customer_docs (
+                    vid,
+                    ano,
+                    aadhaar_photo,
+                    house_photo,
+                    uploaded_at
+                )
+                VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                ON CONFLICT (vid, ano)
+                DO UPDATE SET
+                    aadhaar_photo = EXCLUDED.aadhaar_photo,
+                    house_photo = EXCLUDED.house_photo,
+                    uploaded_at = CURRENT_TIMESTAMP
+            """, (
+                data.get("vid"), # type: ignore
+                data.get("ano"), # type: ignore
+                final_aadhaar,
+                final_house
+            ))
+
+        cur.execute("""
+            UPDATE customer_docs_feed
+            SET status = 'accepted',
+                reviewed_by = %s,
+                reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+            WHERE docs_feed_id = %s
+        """, (logged_user, docs_feed_id))
 
     cur.execute("""
         UPDATE customer_feed
@@ -4216,9 +4302,9 @@ def accept_customer(feed_id):
         entity_type="customer_feed",
         entity_id=feed_id,
         details={
-            "ano": data.get("ano"),
-            "vid": data.get("vid"),
-            "eid": data.get("eid"),
+            "ano": data.get("ano"), # type: ignore
+            "vid": data.get("vid"), # type: ignore
+            "eid": data.get("eid"), # type: ignore
             "reviewed_by": logged_user
         }
     )
