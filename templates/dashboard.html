@@ -1101,6 +1101,15 @@
       background: rgba(239, 68, 68, 0.12);
       transform: translateY(-0.5px);
     }
+    .aux-flow-btn.warning {
+      background: rgba(245, 158, 11, 0.05);
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.2);
+    }
+    .aux-flow-btn.warning:hover {
+      background: rgba(245, 158, 11, 0.12);
+      transform: translateY(-0.5px);
+    }
     .aux-flow-btn:active {
       transform: translateY(0.5px);
     }
@@ -1956,6 +1965,32 @@
     [data-theme="dark"] .posting-anal-card { border-color: var(--border) !important; }
     [data-theme="dark"] .posting-anal-card div[style*="border-top"] { border-top-color: var(--border) !important; }
     [data-theme="dark"] #vpopPostingRiskIntelTitle { color: var(--text) !important; }
+
+    /* Dark Mode auxiliary flow buttons overrides */
+    [data-theme="dark"] .aux-flow-btn.success {
+      background: rgba(16, 185, 129, 0.1) !important;
+      color: #34d399 !important;
+      border-color: rgba(16, 185, 129, 0.35) !important;
+    }
+    [data-theme="dark"] .aux-flow-btn.success:hover {
+      background: rgba(16, 185, 129, 0.2) !important;
+    }
+    [data-theme="dark"] .aux-flow-btn.danger {
+      background: rgba(239, 68, 68, 0.1) !important;
+      color: #f87171 !important;
+      border-color: rgba(239, 68, 68, 0.35) !important;
+    }
+    [data-theme="dark"] .aux-flow-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.2) !important;
+    }
+    [data-theme="dark"] .aux-flow-btn.warning {
+      background: rgba(245, 158, 11, 0.1) !important;
+      color: #fbbf24 !important;
+      border-color: rgba(245, 158, 11, 0.35) !important;
+    }
+    [data-theme="dark"] .aux-flow-btn.warning:hover {
+      background: rgba(245, 158, 11, 0.2) !important;
+    }
   </style>
 
 {% endblock %}
