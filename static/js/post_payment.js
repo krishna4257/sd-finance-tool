@@ -55,7 +55,6 @@ const CUSTOMER_MAP = {};
             da: Number(c.installment_amount) || 0
         };
 
-        console.log("DEBUG: Loading customer into CUSTOMER_MAP:", normalized.ano, normalized.name);
 
         if (normalized.ano) {
             CUSTOMER_MAP[normalized.ano] = normalized;
@@ -100,15 +99,11 @@ async function loadPaymentDayStats() {
 
     try {
 
-        console.log("DEBUG PAYMENT STATS DATE =>", {
-            original: pdt
-        });
 
         const response = await fetch(
             `/api/payment_day_stats?date=${encodeURIComponent(pdt)}`
         );
 
-        console.log("DEBUG PAYMENT STATS STATUS =>", response.status);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -116,7 +111,6 @@ async function loadPaymentDayStats() {
 
         const data = await response.json();
 
-        console.log("DEBUG PAYMENT DAY STATS RESPONSE =>", data);
 
         if (data.error) {
             console.error("PAYMENT DAY STATS API ERROR =>", data.error);
@@ -142,10 +136,6 @@ async function loadPaymentDayStats() {
             0
         );
 
-        console.log("DEBUG FINAL COUNTS =>", {
-            expectedPayments,
-            alreadyPaidPayments
-        });
 
         updateCollectionStats();
 
@@ -309,7 +299,6 @@ function makeCellEditable(cell, index, field, currentValue) {
 }
 
 function updateTable() {
-  console.log("DEBUG: updateTable() called. TempTable length:", tempTable.length, "Contents:", tempTable);
   const tbody = document.querySelector("#tempTable tbody");
   tbody.innerHTML = "";
   const uniqueAno = new Set();
@@ -567,7 +556,6 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
   const ano = document.getElementById("ano").value.trim();
   const amt = parseFloat(document.getElementById("amt").value);
 
-  console.log("DEBUG FORM SUBMIT =>", { pdt, ano, amt });
 
   if (!pdt) {
     showError("❌ Please enter payment date.");
@@ -586,7 +574,6 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
 
   const customer = CUSTOMER_MAP[String(ano)];
 
-  console.log("DEBUG CUSTOMER LOOKUP =>", customer);
 
   if (!customer) {
     showError("❌ A.no not found in database!");
@@ -597,7 +584,6 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
     row => String(row.ano) === String(ano) && row.pdt === pdt
   );
 
-  console.log("DEBUG DUPLICATE CHECK =>", duplicate);
 
   if (duplicate) {
     showError("❌ Duplicate A.no + Date combo exists.");
@@ -610,7 +596,6 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
     amt: Number(amt)
   });
 
-  console.log("DEBUG ROW ADDED =>", tempTable[0]);
 
   saveAndUpdate();
 
@@ -629,7 +614,6 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
 
     e.preventDefault();
     const ano = this.value.trim();
-    console.log("DEBUG: Enter pressed on ANO field. ANO typed:", ano);
     const pdt = document.getElementById("pdt").value.trim();
     const errorMsg = document.getElementById("errorMsg");
     const customerInfo = document.getElementById("customerInfo");
@@ -653,14 +637,12 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
 
     // ---- INSTANT VALIDATION ----
     const customer = CUSTOMER_MAP[String(ano).trim()];
-    console.log("DEBUG: Typed ANO:", ano, "Lookup result:", customer);
     if (!customer) {
         showError("❌ A.no not found in database!");
         return;
     }
 
     // SUCCESS
-    console.log("DEBUG: Customer found, displaying info:", customer);
     document.getElementById("customerName").innerText = customer.name;
     document.getElementById("customerLoanAmount").innerText = customer.amt;
     document.getElementById("customerOutstanding").innerText = customer.bamt;
@@ -1921,12 +1903,7 @@ function parseISOorDDMMYYYY(dateStr) {
     return new Date(str);
 }
 
-function formatDateDDMMYYYY(date) {
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-}
+const formatDateDDMMYYYY = window.formatDate;
 
 // --- Shortfall / Non-paying Customers Modal ---
 window.showShortfallModal = function() {
@@ -1947,6 +1924,15 @@ window.showShortfallModal = function() {
         shortfallCustomers.forEach(c => {
             const tr = document.createElement("tr");
             tr.style.borderBottom = "1px solid var(--border)";
+            tr.style.cursor = "pointer";
+            tr.addEventListener("click", () => {
+                closeShortfallModal();
+                if (typeof window.openCustomerPopup === "function") {
+                    window.openCustomerPopup(c.ano);
+                } else {
+                    console.error("openCustomerPopup not found globally");
+                }
+            });
             
             const expectedAmt = Number(c.da) || 0;
             const balanceAmt = Number(c.bamt) || 0;
@@ -1989,4 +1975,4 @@ if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bindShortfallListeners);
 } else {
     bindShortfallListeners();
-}
+}

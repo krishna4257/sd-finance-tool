@@ -13,42 +13,91 @@
 // -------------------- Date Helpers --------------------
 
 /**
- * Parse a string in dd/mm/yyyy format into a Date object.
- * Returns null if the input cannot be parsed.
- *
- * @param {string} dateString The date string to parse.
- * @returns {Date|null} A Date instance or null on failure.
+ * Parses any date string (ISO yyyy-mm-dd or dd/mm/yyyy or dd-mm-yyyy)
+ * or Date object and returns a Date instance, or null if invalid.
  */
 function parseDDMMYYYY(dateString) {
-  if (!dateString || typeof dateString !== 'string') return null;
-  const parts = dateString.split('/');
-  if (parts.length !== 3) return null;
-  const day = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1; // JavaScript months are zero-indexed
-  const year = parseInt(parts[2], 10);
-  if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
-    return null;
+  if (!dateString) return null;
+  if (dateString instanceof Date) return isNaN(dateString.getTime()) ? null : dateString;
+  const str = String(dateString).trim();
+  if (!str) return null;
+
+  // 1. Match YYYY-MM-DD
+  const matchIso = str.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (matchIso) {
+    return new Date(parseInt(matchIso[1], 10), parseInt(matchIso[2], 10) - 1, parseInt(matchIso[3], 10));
   }
-  return new Date(year, month, day);
+
+  // 2. Match DD-MM-YYYY or DD/MM/YYYY
+  const matchDd = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  if (matchDd) {
+    return new Date(parseInt(matchDd[3], 10), parseInt(matchDd[2], 10) - 1, parseInt(matchDd[1], 10));
+  }
+
+  // 3. Fallback split
+  const parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    } else {
+      return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+    }
+  }
+
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /**
- * Format a Date object into a dd/mm/yyyy string.
- * Returns an empty string for invalid or null dates.
- *
- * @param {Date} date The date to format.
- * @returns {string} A dd/mm/yyyy representation of the date.
+ * Format any date value into the dd-mm-yyyy format.
  */
+function formatDate(value) {
+  if (value === null || value === undefined) return "";
+  
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return "";
+    const d = String(value.getDate()).padStart(2, '0');
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const y = value.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+
+  const str = String(value).trim();
+  if (!str) return "";
+
+  // 1. Match YYYY-MM-DD
+  const matchIso = str.match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:\s|T|$)/);
+  if (matchIso) {
+    const [, year, month, day] = matchIso;
+    return `${day}-${month}-${year}`;
+  }
+
+  // 2. Match DD-MM-YYYY or DD/MM/YYYY
+  const matchDdmmyyyy = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})(?:\s|T|$)/);
+  if (matchDdmmyyyy) {
+    const [, day, month, year] = matchDdmmyyyy;
+    return `${day}-${month}-${year}`;
+  }
+
+  // Fallback try to parse
+  const parsed = parseDDMMYYYY(str);
+  if (parsed) {
+    const d = String(parsed.getDate()).padStart(2, '0');
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const y = parsed.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+
+  return str;
+}
+
 function formatDateToDDMMYYYY(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  return formatDate(date);
 }
 
 // Expose helpers globally so existing inline scripts can access them
 window.parseDDMMYYYY = parseDDMMYYYY;
+window.formatDate = formatDate;
 window.formatDateToDDMMYYYY = formatDateToDDMMYYYY;
 
 // -------------------- Currency Helpers --------------------
@@ -98,7 +147,7 @@ window.applyGlobalMoneyFormatting = applyGlobalMoneyFormatting;
 if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
   $.fn.dataTable.ext.type.order['date-ddmmyyyy-pre'] = function (d) {
     if (!d || typeof d !== 'string') return 0;
-    const parts = d.split('/');
+    const parts = d.split(/[-/]/);
     if (parts.length < 3) return 0;
     return parseInt(parts[2] + parts[1] + parts[0], 10);
   };
@@ -110,6 +159,7 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
           return originalDataTable.apply(this, arguments);
       }
       options = $.extend(true, {}, options || {});
+      options.searching = true;
       const columnDefs = options.columnDefs || [];
       
       this.find("thead th").each((index, th) => {
@@ -128,11 +178,22 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
               text === "EDIT/DELETE"
           );
           
+          const isDateColumn = (
+              text.includes("DATE") || 
+              text.includes("DT") || 
+              text.includes("PDT") || 
+              text.includes("DUE")
+          );
+          
           if (isUnsortable) {
               columnDefs.push({ targets: index, orderable: false });
           } else {
               $(th).addClass("sortable-header");
-              columnDefs.push({ targets: index, orderSequence: ['asc', 'desc'] });
+              const def = { targets: index, orderSequence: ['asc', 'desc'] };
+              if (isDateColumn) {
+                  def.type = 'date-ddmmyyyy';
+              }
+              columnDefs.push(def);
           }
       });
       options.columnDefs = columnDefs;
@@ -157,11 +218,13 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
           return originaldataTable.apply(this, arguments);
       }
       options = $.extend(true, {}, options || {});
+      options.searching = true;
       const columnDefs = options.columnDefs || [];
       this.find("thead th").each((index, th) => {
           const text = $(th).text().trim().toUpperCase();
           const hasHtml = $(th).html().includes("<input") || $(th).html().includes("<button");
-          if (
+          
+          const isUnsortable = (
               text === "" || 
               hasHtml ||
               text === "EDIT" || 
@@ -171,11 +234,24 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
               text === "CUMULATIVE AMOUNT" || 
               text === "CUMULATIVE" || 
               text === "EDIT/DELETE"
-          ) {
+          );
+          
+          const isDateColumn = (
+              text.includes("DATE") || 
+              text.includes("DT") || 
+              text.includes("PDT") || 
+              text.includes("DUE")
+          );
+
+          if (isUnsortable) {
               columnDefs.push({ targets: index, orderable: false });
           } else {
               $(th).addClass("sortable-header");
-              columnDefs.push({ targets: index, orderSequence: ['asc', 'desc'] });
+              const def = { targets: index, orderSequence: ['asc', 'desc'] };
+              if (isDateColumn) {
+                  def.type = 'date-ddmmyyyy';
+              }
+              columnDefs.push(def);
           }
       });
       options.columnDefs = columnDefs;

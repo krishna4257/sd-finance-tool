@@ -81,15 +81,79 @@
     <div class="village-dashboard-container" style="display: flex; flex-direction: column; gap: 24px; margin-top: 24px;">
 
       <!-- LOADING INDICATOR -->
-      <div id="vpopLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: #f9fafb; border-radius: 18px; border: 1px dashed #e5e7eb;">
-        <div class="pop-recalc-btn spinning" style="width: 50px !important; height: 50px !important; font-size: 1.5rem;"><i class='fas fa-sync-alt'></i></div>
-        <span style="color: #6b7280; font-size: 0.95rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;">Analyzing Village Portfolio Data...</span>
+      <div id="vpopLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 400px; background: var(--surface); border-radius: 18px; border: 1px dashed var(--border); transition: background-color 0.3s ease, border-color 0.3s ease;">
+        <div class="logo-loader-svg" style="transform: scale(0.8); transform-origin: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" width="120" height="96">
+            <defs>
+              <linearGradient id="vpop-load-cyl-body" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#061014" />
+                <stop offset="50%" stop-color="#0b1e25" />
+                <stop offset="100%" stop-color="#163845" />
+              </linearGradient>
+              <linearGradient id="vpop-load-top-blue" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#6ec8d3" />
+                <stop offset="100%" stop-color="#b8f5fc" />
+              </linearGradient>
+              <linearGradient id="vpop-load-top-green" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#72cd84" />
+                <stop offset="100%" stop-color="#bef9ca" />
+              </linearGradient>
+              <linearGradient id="vpop-load-top-yellow" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#bfe600" />
+                <stop offset="100%" stop-color="#f0ff99" />
+              </linearGradient>
+              <radialGradient id="vpop-load-shadow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="rgba(0,0,0,0.2)" />
+                <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="150" cy="150" rx="120" ry="60" fill="url(#vpop-load-shadow)" opacity="0.4" />
+            
+            <g class="cyl cyl-0-0">
+              <path d="M 126 80 L 126 150 A 24 12 0 0 0 174 150 L 174 80 A 24 12 0 0 1 126 80 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="150" cy="80" rx="24" ry="12" fill="url(#vpop-load-top-blue)" />
+            </g>
+            <g class="cyl cyl-0-1">
+              <path d="M 74.04 110 L 74.04 168 A 24 12 0 0 0 122.04 168 L 122.04 110 A 24 12 0 0 1 74.04 110 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="98.04" cy="110" rx="24" ry="12" fill="url(#vpop-load-top-blue)" />
+            </g>
+            <g class="cyl cyl-1-0">
+              <path d="M 177.96 110 L 177.96 168 A 24 12 0 0 0 225.96 168 L 225.96 110 A 24 12 0 0 1 177.96 110 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="201.96" cy="110" rx="24" ry="12" fill="url(#vpop-load-top-blue)" />
+            </g>
+            <g class="cyl cyl-0-2">
+              <path d="M 22.08 140 L 22.08 186 A 24 12 0 0 0 70.08 186 L 70.08 140 A 24 12 0 0 1 22.08 140 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="46.08" cy="140" rx="24" ry="12" fill="url(#vpop-load-top-blue)" />
+            </g>
+            <g class="cyl cyl-1-1">
+              <path d="M 126 140 L 126 186 A 24 12 0 0 0 174 186 L 174 140 A 24 12 0 0 1 126 140 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="150" cy="140" rx="24" ry="12" fill="url(#vpop-load-top-green)" />
+            </g>
+            <g class="cyl cyl-2-0">
+              <path d="M 229.92 140 L 229.92 186 A 24 12 0 0 0 277.92 186 L 277.92 140 A 24 12 0 0 1 229.92 140 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="253.92" cy="140" rx="24" ry="12" fill="url(#vpop-load-top-blue)" />
+            </g>
+            <g class="cyl cyl-1-2">
+              <path d="M 74.04 170 L 74.04 204 A 24 12 0 0 0 122.04 204 L 122.04 170 A 24 12 0 0 1 74.04 170 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="98.04" cy="170" rx="24" ry="12" fill="url(#vpop-load-top-green)" />
+            </g>
+            <g class="cyl cyl-2-1">
+              <path d="M 177.96 170 L 177.96 204 A 24 12 0 0 0 225.96 204 L 225.96 170 A 24 12 0 0 1 177.96 170 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="201.96" cy="170" rx="24" ry="12" fill="url(#vpop-load-top-green)" />
+            </g>
+            <g class="cyl cyl-2-2">
+              <path d="M 126 200 L 126 222 A 24 12 0 0 0 174 222 L 174 200 A 24 12 0 0 1 126 200 Z" fill="url(#vpop-load-cyl-body)" />
+              <ellipse cx="150" cy="200" rx="24" ry="12" fill="url(#vpop-load-top-yellow)" />
+            </g>
+          </svg>
+        </div>
+        <span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-family: var(--font-headline);">Analyzing Village Portfolio Data...</span>
       </div>
 
       <!-- EMPTY STATE -->
-      <div id="vpopEmpty" style="display: none; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: #f9fafb; border-radius: 18px; border: 1px dashed #e5e7eb;">
-        <i class='fas fa-inbox' style='font-size:3rem;color:#9ca3af;'></i>
-        <span style="color: #6b7280; font-size: 1rem; font-weight: 600; text-transform: uppercase;">No active customers found in this village.</span>
+      <div id="vpopEmpty" style="display: none; flex-direction: column; align-items: center; justify-content: center; gap: 15px; min-height: 400px; background: var(--surface); border-radius: 18px; border: 1px dashed var(--border); transition: background-color 0.3s ease, border-color 0.3s ease;">
+        <i class='fas fa-inbox' style='font-size:3rem;color: var(--text-muted);'></i>
+        <span style="color: var(--text-secondary); font-size: 1rem; font-weight: 600; text-transform: uppercase; font-family: var(--font-headline);">No active customers found in this village.</span>
       </div>
 
       <!-- MAIN CONTENT -->
@@ -464,339 +528,7 @@
         </div>
       </div>
     </div>
-
-    <!-- ======================================================== -->
-    <!-- CUSTOMER DASHBOARD POPUP (GLASSMORPHISM PRESET) -->
-    <!-- ======================================================== -->
-    <div id="customerDetailPopup" class="customer-popup-backdrop">
-      <div class="customer-popup-content">
-        
-        <!-- Header -->
-        <div class="customer-popup-header">
-          <div class="header-left">
-            <span class="user-avatar-icon"><i class='fas fa-user'></i></span>
-            <h2>Customer Dashboard: <span id="popAnoTitle"></span></h2>
-            <span id="popStatusBadge" class="status-badge">Active</span>
-          </div>
-          <button class="popup-close-btn" onclick="closeCustomerPopup()">&times;</button>
-        </div>
-
-        <!-- Scrollable Grid Body -->
-        <div class="customer-popup-body popup-grid-body">
-          
-          <!-- COLUMN 1: Customer Details -->
-          <div class="popup-col card-glass" id="popColDetails">
-            <h3 class="col-title">Profile & Account</h3>
-            <div class="profile-avatar-sec">
-              <div class="avatar-circle">
-                <span id="popAvatarInitial">A</span>
-              </div>
-              <h4 id="popProfileName">Customer Name</h4>
-              <p class="profile-subtext">CID: <span id="popCid"></span></p>
-            </div>
-
-            <div class="details-form-grid">
-              <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" id="popInputName" class="glass-input" placeholder="Enter Full Name">
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Total Loan (₹)</label>
-                  <input type="text" id="popInputTotalAmount" class="glass-input" placeholder="Enter Total Amount">
-                </div>
-                <div class="form-group">
-                  <label>Installment (₹)</label>
-                  <input type="text" id="popInputInstallment" class="glass-input" placeholder="Enter Installment">
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Paid Amount</label>
-                  <span id="popPaidAmount" class="read-only-badge" data-money>0.00</span>
-                </div>
-                <div class="form-group">
-                  <label>Balance Amount</label>
-                  <span id="popBalanceAmount" class="read-only-badge highlight-balance" data-money>0.00</span>
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Type</label>
-                  <select id="popInputType" class="glass-input">
-                    <option value="W">Weekly</option>
-                    <option value="M">Monthly</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Period</label>
-                  <input type="number" id="popInputPeriod" class="glass-input" placeholder="Enter Period">
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Phone Number</label>
-                  <input type="text" id="popInputPhone" class="glass-input" placeholder="Phone Number">
-                </div>
-                <div class="form-group">
-                  <label>Parent Account</label>
-                  <input type="text" id="popInputPano" class="glass-input" placeholder="Pano">
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Start Date</label>
-                  <input type="text" id="popInputStartDate" class="glass-input" placeholder="dd/mm/yyyy">
-                </div>
-                <div class="form-group">
-                  <label>End Date</label>
-                  <input type="text" id="popInputEndDate" class="glass-input" placeholder="dd/mm/yyyy">
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Aadhaar Number</label>
-                  <input type="text" id="popInputAadhaar" class="glass-input" placeholder="Aadhaar">
-                </div>
-                <div class="form-group">
-                  <label>Collector EID</label>
-                  <input type="number" id="popInputEid" class="glass-input" placeholder="EID">
-                </div>
-              </div>
-
-              <div class="form-group-row">
-                <div class="form-group">
-                  <label>Latitude</label>
-                  <input type="text" id="popInputLatitude" class="glass-input" placeholder="Latitude">
-                </div>
-                <div class="form-group">
-                  <label>Longitude</label>
-                  <input type="text" id="popInputLongitude" class="glass-input" placeholder="Longitude">
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label>Notes</label>
-                <textarea id="popInputNotes" class="glass-input" rows="2" placeholder="Enter notes..." style="resize: vertical; font-family: inherit;"></textarea>
-              </div>
-            </div>
-
-            <div class="details-actions">
-              <button id="popCloseAccountBtn" class="neumorphic-btn small danger-btn">Close Account</button>
-              <button id="popSaveDetailsBtn" class="neumorphic-btn small primary-save-btn glow-cyan" style="display: none;">Save Details</button>
-            </div>
-          </div>
-
-          <!-- COLUMN 2: Payments History -->
-          <div class="popup-col card-glass" id="popColPayments">
-            <h3 class="col-title">Add & View Payments</h3>
-            
-            <form id="popAddPaymentForm" class="subcard-glass form-grid-compact no-loader" onsubmit="event.preventDefault();">
-              <div class="form-group">
-                <label>Payment Date</label>
-                <input type="text" id="popNewPDT" class="glass-input compact" placeholder="dd/mm/yyyy" required>
-              </div>
-              <div class="form-group">
-                <label>Amount (₹)</label>
-                <input type="number" id="popNewAMT" step="0.01" class="glass-input compact" placeholder="0.00" required>
-              </div>
-              <button type="button" id="popAddPaymentBtn" class="neumorphic-btn small flex-center" style="width: 35px; min-width: 35px; padding: 0;"><i class='fas fa-plus'></i></button>
-            </form>
-
-            <div class="table-card-container">
-              <div class="popup-table-wrapper">
-                <table id="popPaymentTable" class="popup-mini-table no-datatable">
-                  <thead>
-                    <tr>
-                      <th>A.no</th>
-                      <th>Date</th>
-                      <th>Amt</th>
-                      <th>Cumulative</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="popPaymentTableBody">
-                    <!-- Rendered dynamically -->
-                  </tbody>
-                </table>
-              </div>
-              <div class="mini-table-footer">
-                <div>Entries: <span id="popPaymentCount" class="badge-count">0</span></div>
-                <div>Total: <span id="popPaymentTotalAmt" class="badge-total" data-money>₹0.00</span></div>
-              </div>
-            </div>
-
-            <div class="col-tools">
-              <button id="popPrintBtn" class="neumorphic-btn small flex-center">Print Ledger</button>
-              <button id="popBulkDateBtn" class="neumorphic-btn small flex-center">Edit Dates</button>
-              <button id="popSavePaymentsBtn" class="neumorphic-btn small flex-center primary-save-btn glow-cyan" style="display: none; margin-left: auto;">Save Changes</button>
-            </div>
-          </div>
-
-          <!-- COLUMN 3: Analytics -->
-          <div class="popup-col card-glass" id="popColDiscipline">
-            <h3 class="col-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-              <span>Customer Analytics</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <button id="popRecalcBtn" class="pop-recalc-btn" title="Refresh Cust Analytics"><i class='fas fa-sync-alt'></i></button>
-                <span id="popEvalStatus" class="status-badge status-live">LIVE</span>
-              </div>
-            </h3>
-            
-            <div class="score-display-container pop-score-container" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 16px; background: #f9fafb; border-radius: 16px; border: 1px solid #e5e7eb;">
-              <div class="score-circle-wrapper pop-score-circle" style="position: relative; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #f5f5f0 60%, #e5e7eb 100%); box-shadow: inset 0 0 16px rgba(0,0,0,0.06), 0 0 15px rgba(26, 77, 46, 0.1); border: 1px solid #e5e7eb;">
-                <span id="popScoreValue" style="font-size: 1.9rem; font-weight: 850; color: #1a4d2e; text-shadow: none;">100</span>
-              </div>
-              <div class="risk-info" style="flex: 1; margin-left: 18px; display: flex; flex-direction: column; gap: 6px;">
-                <span style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Risk Profile</span>
-                <span id="popRiskBadge" class="risk-badge" style="display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; width: fit-content; text-transform: uppercase; border: 1px solid transparent;">EXCELLENT</span>
-              </div>
-              <button id="popWeeklyLogBtn" class="pop-recalc-btn" style="width: 32px !important; height: 32px !important; font-size: 1rem;" title="View Weekly Repayment Log" onclick="openPopWeeklyLogModal()"><i class='fas fa-clipboard-list'></i></button>
-            </div>
-
-            <div id="popFreezeDetails" class="subcard-glass" style="display: none; padding: 14px 16px; margin-bottom: 16px; font-size: 0.95rem; border-color: rgba(26, 77, 46, 0.25); border-radius: 12px; flex-direction: column; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 8px; color: #1a4d2e; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;">
-                <i class='fas fa-snowflake'></i> Frozen Account Rating
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #374151;">
-                <span>Frozen Rating:</span>
-                <span id="popFrozenRating" style="font-weight: 700; color: #1a4d2e; background: rgba(26, 77, 46, 0.1); padding: 2px 8px; border-radius: 4px;">0</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #374151;">
-                <span>Freeze Date:</span>
-                <span id="popFreezeDate" style="font-weight: 600; color: #1a1a2e;">-</span>
-              </div>
-            </div>
-
-            <!-- Behavioral Intelligence Panel -->
-            <div id="popBehavioralIntelligencePanel" class="subcard-glass" style="padding: 16px; display: none; flex-direction: column; gap: 16px; margin-top: 10px; border-color: #e5e7eb;">
-              <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 4px;">
-                <span class="pop-behavioral-title" style="font-size: 0.9rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">Behavioral Intelligence</span>
-                <span id="popBehavioralStatus" class="status-badge" style="text-transform: uppercase; font-weight: 800; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;">ON TRACK</span>
-              </div>
-
-              <!-- Stacking Next Risk & Stability vertically for a cleaner, spacious layout -->
-              <div style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Next Risk -->
-                <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
-                  <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Predicted Next Risk</span>
-                    <span id="popPredictedRisk" style="font-size: 1.1rem; font-weight: 800; text-transform: uppercase;">LOW</span>
-                  </div>
-                  <span id="popPredictedRiskIcon" style="font-size: 1.8rem; line-height: 1;"><i class='fas fa-circle' style='color:#16a34a;'></i></span>
-                </div>
-                
-                <!-- Stability -->
-                <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Repayment Stability</span>
-                    <span id="popStabilityLabel" style="font-size: 0.85rem; font-weight: 700; color: #374151;">-</span>
-                  </div>
-                  <div class="stability-bar-track" style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 10px; margin-top: 4px; overflow: hidden; border: 1px solid #e5e7eb;">
-                    <div id="popStabilityBar" style="width: 0%; height: 100%; background: #84cc16; border-radius: 10px; transition: width 0.4s ease, background-color 0.4s ease;"></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Predicted Closure Card -->
-              <div class="pop-analytics-box" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: justify-content: space-between; align-items: center; display: flex;">
-                  <span style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Projected Closure</span>
-                  <span id="popClosureDiffBadge" style="font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; border: 1px solid transparent;">On Time</span>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0 2px 0;">
-                  <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Target Date</span>
-                    <span id="popActualEndDate" style="font-size: 0.9rem; font-weight: 600; color: #374151;">-</span>
-                  </div>
-                  <div style="color: #9ca3af; font-size: 1.1rem; font-weight: bold; padding: 0 8px;">➔</div>
-                  <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
-                    <span style="font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Predicted Date</span>
-                    <span id="popPredictedEndDate" style="font-size: 0.9rem; font-weight: 700; color: #1a1a2e;">-</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Discipline Profile (2x2 Grid) -->
-              <div style="margin-top: 4px;">
-                <span class="pop-discipline-title" style="font-size: 0.725rem; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em; display: block; margin-bottom: 10px;">Discipline Profile</span>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                  <!-- On Time -->
-                  <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2));"><i class='fas fa-check-circle'></i></span>
-                      <span class="discipline-label-on-time" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">On-Time</span>
-                    </div>
-                    <span id="popCountOnTime" style="font-size: 1rem; font-weight: 800; color: #34d399;">0</span>
-                  </div>
-                  <!-- Delayed -->
-                  <div style="background: rgba(56, 189, 248, 0.04); border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.2));"><i class='fas fa-clock'></i></span>
-                      <span class="discipline-label-delayed" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Delayed</span>
-                    </div>
-                    <span id="popCountDelayed" style="font-size: 1rem; font-weight: 800; color: #38bdf8;">0</span>
-                  </div>
-                  <!-- Partial -->
-                  <div style="background: rgba(245, 158, 11, 0.04); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.2));"><i class='fas fa-adjust'></i></span>
-                      <span class="discipline-label-partial" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Partial</span>
-                    </div>
-                    <span id="popCountPartial" style="font-size: 1rem; font-weight: 800; color: #fbbf24;">0</span>
-                  </div>
-                  <!-- Missed -->
-                  <div style="background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.25s ease;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="font-size: 1rem; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.2));"><i class='fas fa-times-circle'></i></span>
-                      <span class="discipline-label-missed" style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">Missed</span>
-                    </div>
-                    <span id="popCountMissed" style="font-size: 1rem; font-weight: 800; color: #f87171;">0</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Weekly Repayment Log Modal inside Dashboard Popup -->
-    <div id="popWeeklyLogModal" class="modal pop-inner-modal">
-      <div class="modal-content card-glass" style="max-width: 650px !important; margin-top: 5vh !important; max-height: 85vh; display: flex; flex-direction: column;">
-        <span class="close-btn" onclick="closePopWeeklyLogModal()">&times;</span>
-        <h3 style="font-size: 1.1rem; font-weight: 600; color: #374151; margin-top: 0; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.03em;">
-          Weekly Repayment Log
-        </h3>
-        <div class="table-card-container" style="margin-bottom: 0; flex: 1; min-height: 450px; display: flex; flex-direction: column; overflow: hidden;">
-          <div class="scroll-table-container popup-table-wrapper" style="max-height: 65vh; flex: 1; overflow-y: auto;">
-            <table class="popup-mini-table no-datatable" style="font-size: 0.75rem;">
-              <thead>
-                <tr>
-                  <th style="padding: 6px 8px;">Wk</th>
-                  <th style="padding: 6px 8px;">Due Date</th>
-                  <th style="padding: 6px 8px;">Paid Date</th>
-                  <th style="padding: 6px 8px;">Paid</th>
-                  <th style="padding: 6px 8px;">Status</th>
-                  <th style="padding: 6px 8px;">Rating</th>
-                </tr>
-              </thead>
-              <tbody id="popWeeklyLogBody">
-                <!-- Rendered dynamically -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+    {% include 'customer_popup.html' %}
 
   {% else %}
     <!-- ======================================================== -->

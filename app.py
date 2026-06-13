@@ -1,4 +1,7 @@
 import os
+import pytz
+import calendar
+from datetime import date
 import traceback
 import logging
 import uuid
@@ -99,39 +102,6 @@ def audit_log(
             conn.close()
 
 # Helper: Log DB pool stats
-def log_db_pool_stats(context=""):
-    try:
-        stats = get_pool_stats()
-
-        logger.info(
-            "DB Pool Stats%s -> used=%s available=%s max=%s",
-            f" [{context}]" if context else "",
-            stats.get("used_connections"),
-            stats.get("available_connections"),
-            stats.get("max_connections")
-        )
-
-    except Exception as e:
-        logger.warning("Unable to fetch DB pool stats: %s", e)
-
-
-def generate_system_id():
-    """Generate stable system fingerprint."""
-    machine_id = hex(uuid.getnode())
-    os_info = platform.platform()
-    processor = platform.processor()
-    uname = platform.uname()._asdict()
-
-    combined = json.dumps({
-        "machine_id": machine_id,
-        "os_info": os_info,
-        "processor": processor,
-        "uname": uname
-    }, sort_keys=True)
-
-    hash_bytes = hashlib.sha256(combined.encode()).digest()
-    return base64.b64encode(hash_bytes).decode()
-
 def generate_mobile_token(user_id, eid):
     payload = {
         "user_id": user_id,
@@ -1190,7 +1160,7 @@ def api_create_employee():
             phone_number,
             data.get("city"),
             data.get("joining_date"),
-            data.get("level"),
+            data.get("level").strip().lower() if data.get("level") else None,
             data.get("state")
         ))
 
@@ -1262,37 +1232,6 @@ def api_check_village():
 # ----------------------------------------------------
 
 
-def get_customer_info_by_ano(ano, vid):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT
-            name,
-            total_amount,
-            paid_amount,
-            balance_amount,
-            installment_amount
-        FROM customer
-        WHERE ano = %s AND vid = %s
-    """, (ano, vid))
-
-    row = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    if not row:
-        return None
-
-    return {
-        "name": row[0],
-        "amt": float(row[1] or 0),
-        "pamt": float(row[2] or 0),
-        "bamt": float(row[3] or 0),
-        "da": float(row[4] or 0)
-    }
-
 @app.route("/check_parent_link")
 @login_required
 def check_parent_link():
@@ -1337,89 +1276,6 @@ def check_parent_link():
     finally:
         cur.close()
         conn.close()
-
-def get_all_customers_by_context(vid):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT
-  cid,
-  ano,
-  name,
-  vid,
-  start_date,
-  end_date,
-  total_amount,
-  paid_amount,
-  balance_amount,
-  installment_amount,
-  type,
-  period,
-  pano,
-  created_at,
-  aadhaar_number,
-  notes,
-  latitude,
-  longitude,
-  eid,
-  phone_number
-FROM customer
-WHERE vid = %s
-ORDER BY ano;
-    """, (vid, ))
-
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    customers = []
-    for r in rows:
-        customers.append({
-            "cid": r[0],
-            "ano": r[1],
-            "name": r[2],
-            "vid": r[3],
-            "start_date": r[4],
-            "end_date": r[5],
-            "total_amount": float(r[6] or 0),
-            "paid_amount": float(r[7] or 0),
-            "balance_amount": float(r[8] or 0),
-            "installment_amount": float(r[9] or 0),
-            "type": r[10],
-            "period": r[11],
-            "pano": r[12],
-            "created_at": r[13],
-            "aadhaar_number": r[14],
-            "notes": r[15],
-            "latitude": r[16],
-            "longitude": r[17],
-            "eid": r[18],
-            "phone_number": r[19]
-        })
-
-    return customers
-
-
-def customer_exists_by_ano(ano: int) -> bool:
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM customer WHERE ano = %s LIMIT 1", (ano,))
-    exists = cur.fetchone() is not None
-    cur.close()
-    conn.close()
-    return exists
-
-
-def get_highest_ano() -> int:
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT MAX(CAST(ano AS INTEGER)) FROM customer;")
-    result = cur.fetchone()
-    highest = result[0] if result else 0
-    cur.close()
-    conn.close()
-    return highest
 
 def get_highest_ano_by_vid(vid):
     conn = get_pg_connection()
@@ -1499,7 +1355,6 @@ def customer_exists_by_ano_and_vid(ano, vid):
     return exists
 
 def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, today=None):
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -1789,7 +1644,6 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
 
 
 def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, today=None):
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -2155,7 +2009,6 @@ def format_customer_ratings_with_trends(cur, data):
         )
         
         # Filter out future in-progress weeks for trend calculation
-        import pytz
         KOLKATA = pytz.timezone('Asia/Kolkata')
         today = datetime.now(KOLKATA).date()
 
@@ -2253,7 +2106,6 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
 
     table_name = source_table
     
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     new_freeze_date = freeze_date
@@ -2288,7 +2140,6 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
 
 
 def invalidate_village_health_cache(cur, vid, invalidation_date=None):
-    from datetime import datetime, date
     if invalidation_date:
         if isinstance(invalidation_date, datetime):
             invalidation_date = invalidation_date.date()
@@ -3841,12 +3692,19 @@ def post_payment_analytics():
             SELECT cid, amt, payment_date FROM payment WHERE vid = %s
         """, (vid,))
         payments = []
+        payments_by_cid = {}
         for r in cur.fetchall():
-            payments.append({
+            p = {
                 "cid": r[0],
                 "amt": float(r[1] or 0),
                 "payment_date": r[2]
-            })
+            }
+            payments.append(p)
+            
+            cid = p["cid"]
+            if cid not in payments_by_cid:
+                payments_by_cid[cid] = []
+            payments_by_cid[cid].append(p)
 
         # Calculate weeks: We generate 5 weeks ending at last_date
         # Week 0: [last_date - 6, last_date]
@@ -3880,8 +3738,9 @@ def post_payment_analytics():
             for c in customers:
                 # Check if customer loan started on or before the end of the week
                 if c["start_date"] and c["start_date"] <= end_dt:
+                    cust_payments = payments_by_cid.get(c["cid"], [])
                     # Calculate total paid before this week
-                    paid_before = sum(p["amt"] for p in payments if p["cid"] == c["cid"] and p["payment_date"] < start_dt)
+                    paid_before = sum(p["amt"] for p in cust_payments if p["payment_date"] < start_dt)
                     
                     # If loan balance at start of week was greater than 0, they were active
                     if c["total_amount"] - paid_before > 0.01:
@@ -3889,7 +3748,7 @@ def post_payment_analytics():
                         w["expected_collection"] += c["installment_amount"]
                         
                         # Calculate paid during this week
-                        paid_this_week = sum(p["amt"] for p in payments if p["cid"] == c["cid"] and start_dt <= p["payment_date"] <= end_dt)
+                        paid_this_week = sum(p["amt"] for p in cust_payments if start_dt <= p["payment_date"] <= end_dt)
                         
                         if paid_this_week > 0.01:
                             w["paid_customers"] += 1
@@ -4281,12 +4140,10 @@ def api_customer_save_payments():
 def api_customer_detail_with_payments(account_no):
     vid = session.get("vid")
     
-    with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
-        f.write(f"[{datetime.now()}] API call started: account_no={repr(account_no)}, session_vid={repr(vid)}\n")
+    logger.info(f"API call started: account_no={repr(account_no)}, session_vid={repr(vid)}")
         
     if not vid:
-        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
-            f.write(f"[{datetime.now()}] Error: session_vid missing\n")
+        logger.info(f"Error: session_vid missing")
         return jsonify(success=False, error="Village context missing"), 400
 
     conn = get_pg_connection()
@@ -4384,8 +4241,7 @@ def api_customer_detail_with_payments(account_no):
             """, (vid, account_no, vid, account_no, vid, account_no))
             row = cur.fetchone()
         if not row:
-            with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
-                f.write(f"[{datetime.now()}] 404 Error: Not found in DB. parsed_cid={repr(cid_val)}, search_term={repr(account_no)}, session_vid={repr(vid)}\n")
+            logger.info(f"404 Error: Not found in DB. parsed_cid={repr(cid_val)}, search_term={repr(account_no)}, session_vid={repr(vid)}")
             return jsonify(success=False, error="Customer not found"), 404
 
         loanee_headers = [
@@ -4449,8 +4305,7 @@ def api_customer_detail_with_payments(account_no):
             cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details
         )
 
-        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
-            f.write(f"[{datetime.now()}] Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}\n")
+        logger.info(f"Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}")
 
         return jsonify(
             success=True,
@@ -4461,8 +4316,7 @@ def api_customer_detail_with_payments(account_no):
         )
 
     except Exception as e:
-        with open(r"d:\Finance_online_Application\sd-finance-tool\api_calls.log", "a") as f:
-            f.write(f"[{datetime.now()}] Server Exception: {str(e)}\n")
+        logger.info(f"Server Exception: {str(e)}")
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
     finally:
@@ -5111,7 +4965,6 @@ def close_customer_account_pg():
             }
         )
         # Invalidate cache for this village
-        import pytz
         KOLKATA = pytz.timezone('Asia/Kolkata')
         today = datetime.now(KOLKATA).date()
         invalidate_village_health_cache(cur, vid, today)
@@ -5476,7 +5329,6 @@ def accept_customer(feed_id):
     """, (feed_id,))
 
     row = cur.fetchone()
-    print("ROW:", row)
 
     if not row:
         return {"success": False, "error": "Feed not found"}
@@ -5488,7 +5340,6 @@ def accept_customer(feed_id):
             data = json.loads(data)
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
-    print("PAYLOAD:", data)
 
     try:
         data = normalize_mobile_customer_payload(data)
@@ -6441,9 +6292,6 @@ def village_page():
     )
 
 def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range="weekly"):
-    from datetime import datetime, date, timedelta
-    from decimal import Decimal
-    import json
 
     # 1. Parse and clean input dates to datetime.date objects
     parsed_dates = []
@@ -6777,7 +6625,6 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
 
     # Write newly computed snapshots to db cache in a single transaction
     if insert_cache_rows:
-        from psycopg2.extras import execute_values
         execute_values(cur, """
             INSERT INTO village_health_cache (vid, view, sub_view, time_range, date_key, health_score, metrics)
             VALUES %s
@@ -6809,7 +6656,6 @@ def api_village_health_history(vid):
     if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
         return jsonify(success=False, error="Unauthorized village access"), 403
 
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     today = datetime.now(KOLKATA).date()
     
@@ -6928,12 +6774,466 @@ def api_village_health_history(vid):
 
         return jsonify(success=True, history=history_points, events=events)
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
     finally:
         cur.close()
         conn.close()
+
+
+def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, force_recalc=False):
+    # Get village details
+    cur.execute("SELECT village_name, village_code FROM village WHERE vid = %s", (vid,))
+    v_row = cur.fetchone()
+    if not v_row:
+        raise ValueError("Village not found")
+    v_name, v_code = v_row
+
+    # Shifting reference date to mitigate posting lag
+    cur.execute("""
+        SELECT MAX(payment_date) FROM (
+            SELECT payment_date FROM payment WHERE cid IN (SELECT cid FROM customer WHERE vid = %s)
+            UNION ALL
+            SELECT payment_date FROM closed_cust_payment WHERE cid IN (SELECT cid FROM closed_cust_account WHERE vid = %s)
+            UNION ALL
+            SELECT payment_date FROM historic_payment_data WHERE cid IN (SELECT cid FROM historic_customer_data WHERE vid = %s)
+        ) all_p
+    """, (vid, vid, vid))
+    latest_payment_row = cur.fetchone()
+    latest_payment_in_village = latest_payment_row[0] if latest_payment_row else None
+    
+    eval_today = today
+    if latest_payment_in_village:
+        if isinstance(latest_payment_in_village, datetime):
+            latest_payment_in_village = latest_payment_in_village.date()
+        lag_days = (today - latest_payment_in_village).days
+        if lag_days > 7:
+            shift_days = min(lag_days, 14)
+            eval_today = today - timedelta(days=shift_days)
+
+    if force_recalc:
+        cur.execute("DELETE FROM village_health_cache WHERE vid = %s AND view = %s AND sub_view = %s AND time_range = 'dashboard'", (vid, view, sub_view))
+    else:
+        cur.execute("""
+            SELECT metrics FROM village_health_cache
+            WHERE vid = %s AND view = %s AND sub_view = %s AND time_range = 'dashboard' AND date_key = %s
+        """, (vid, view, sub_view, eval_today))
+        cached_row = cur.fetchone()
+        if cached_row:
+            return cached_row[0]
+
+    # Get evaluated customers for the village
+    if view == "active":
+        if sub_view == "active_only":
+            cur.execute("""
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status
+                FROM customer
+                WHERE vid = %s
+            """, (vid,))
+        else: # active_defaulted
+            cur.execute("""
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
+                FROM (
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
+                    FROM customer
+                    UNION ALL
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                    FROM closed_cust_account
+                    WHERE balance_amount > 0
+                    UNION ALL
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                    FROM historic_customer_data
+                    WHERE balance_amount > 0
+                ) all_cust
+                WHERE vid = %s
+            """, (vid,))
+    else: # complete view
+        cur.execute("""
+            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
+            FROM (
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
+                FROM customer
+                UNION ALL
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                FROM closed_cust_account
+                UNION ALL
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                FROM historic_customer_data
+            ) all_cust
+            WHERE vid = %s
+        """, (vid,))
+
+    cust_rows = cur.fetchall()
+    if not cust_rows:
+        return {
+            "village_name": v_name,
+            "village_code": v_code,
+            "empty": True
+        }
+
+    cids = [r[0] for r in cust_rows]
+    
+    # Get all payments for these customers
+    cur.execute("""
+        SELECT cid, amt, payment_date FROM (
+            SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
+            UNION ALL
+            SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
+            UNION ALL
+            SELECT cid, amount AS amt, payment_date FROM historic_payment_data WHERE cid = ANY(%s)
+        ) all_pmts
+        ORDER BY payment_date
+    """, (cids, cids, cids))
+    pmt_rows = cur.fetchall()
+    
+    payments_by_cid = {cid: [] for cid in cids}
+    for cid, amt, p_date in pmt_rows:
+        p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
+        payments_by_cid[cid].append({"amt": Decimal(str(amt)), "payment_date": p_dt})
+
+    dates = [eval_today - timedelta(days=7 * i) for i in range(5, -1, -1)]
+    
+    historical_ratings = {i: {} for i in range(6)}
+    historical_status = {i: {} for i in range(6)}
+    historical_missed = {i: {} for i in range(6)}
+    
+    cust_details = {}
+    
+    dt4 = dates[4]
+    dt3 = dates[3]
+    
+    for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status in cust_rows:
+        start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
+        end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
+        cust_payments = payments_by_cid.get(cid, [])
+        
+        # Filter payments before or equal to eval_today
+        eval_payments = [p for p in cust_payments if p["payment_date"] <= eval_today]
+        
+        score_t, risk_t, pen_t, wk_details_t = calculate_customer_rating_details(
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, today=eval_today
+        )
+        beh_t = calculate_behavioral_analytics(
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, today=eval_today
+        )
+        
+        last_pay_date = None
+        for p in eval_payments:
+            p_dt = p["payment_date"]
+            if not last_pay_date or p_dt > last_pay_date:
+                last_pay_date = p_dt
+        last_payment_date_str = last_pay_date.strftime("%d/%m/%Y") if last_pay_date else "-"
+        
+        consec_missed_count = 0
+        for wk in reversed(wk_details_t):
+            if wk["due_date"] <= eval_today.isoformat():
+                if wk["status"] in ["MISSED", "OVERDUE"] and wk["allocated"] == 0:
+                    consec_missed_count += 1
+                else:
+                    break
+        
+        cust_details[cid] = {
+            "cid": cid,
+            "name": name,
+            "ano": ano,
+            "total_amount": float(total_amount or 0),
+            "paid_amount": float(paid_amount or 0),
+            "balance_amount": float(balance_amount or 0),
+            "rating": score_t,
+            "status": beh_t["status"],
+            "last_payment_date": last_payment_date_str,
+            "missed_cycles": consec_missed_count,
+            "predicted_next_risk": beh_t["predicted_next_risk"],
+            "stability_score": beh_t["stability"]["score"],
+            "stability_label": beh_t["stability"]["label"]
+        }
+        
+        # 1. Store index 5 (today)
+        historical_ratings[5][cid] = score_t
+        historical_status[5][cid] = beh_t["status"]
+        historical_missed[5][cid] = beh_t["discipline"]["missed"]
+        
+        # 2. Store index 4 (last week)
+        if start_dt > dt4:
+            historical_ratings[4][cid] = 100.0
+            historical_status[4][cid] = "OnTrack"
+            historical_missed[4][cid] = 0
+        else:
+            sub_payments = [p for p in eval_payments if p["payment_date"] <= dt4]
+            score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt4
+            )
+            beh_h = calculate_behavioral_analytics(
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, today=dt4
+            )
+            historical_ratings[4][cid] = score_h
+            historical_status[4][cid] = beh_h["status"]
+            historical_missed[4][cid] = beh_h["discipline"]["missed"]
+            
+        # 3. Store index 3 (2 weeks ago)
+        if start_dt > dt3:
+            historical_ratings[3][cid] = 100.0
+            historical_status[3][cid] = "OnTrack"
+            historical_missed[3][cid] = 0
+        else:
+            sub_payments = [p for p in eval_payments if p["payment_date"] <= dt3]
+            score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt3
+            )
+            historical_ratings[3][cid] = score_h
+            historical_status[3][cid] = "OnTrack"
+            historical_missed[3][cid] = 0
+
+        # 4. Fill defaults for 0, 1, 2 (never read)
+        for idx in [0, 1, 2]:
+            historical_ratings[idx][cid] = 100.0
+            historical_status[idx][cid] = "OnTrack"
+            historical_missed[idx][cid] = 0
+
+    # Run 6-week shared health history calculator
+    history_points = calculate_village_health_history(vid, cur, view, sub_view, dates)
+    
+    health_trend = []
+    for pt in history_points:
+        health_trend.append({
+            "date": pt["date_label"],
+            "health_score": pt["health_score"],
+            "avg_rating": pt["metrics"]["avg_rating"]["value"],
+            "overdue_pct": pt["metrics"]["overdue_penalty"]["value"]
+        })
+        
+    current_health_details = history_points[-1]
+    current_health = current_health_details["health_score"]
+    last_week_health = history_points[-2]["health_score"] if len(history_points) > 1 else current_health
+    trend_val = current_health - last_week_health
+    
+    if trend_val > 0:
+        trend_text = f"↑ {trend_val:.1f} points"
+    elif trend_val < 0:
+        trend_text = f"↓ {abs(trend_val):.1f} points"
+    else:
+        trend_text = "→ Stable"
+        
+    health_status = "Stable"
+    if current_health >= 80:
+        health_status = "Excellent"
+    elif current_health >= 70:
+        health_status = "Stable"
+    elif current_health >= 55:
+        health_status = "Warning"
+    else:
+        health_status = "Critical"
+        
+    predicted_risk = "Low"
+    if current_health >= 85:
+        predicted_risk = "Low"
+    elif current_health >= 70:
+        predicted_risk = "Medium"
+    elif current_health >= 55:
+        predicted_risk = "High"
+    else:
+        predicted_risk = "Critical"
+
+    risk_dist = {"Excellent": [], "Good": [], "LowRisk": [], "HighRisk": []}
+    risk_dist_last_week = {"Excellent": 0, "Good": 0, "LowRisk": 0, "HighRisk": 0}
+    
+    transitions = {
+        "Excellent_Good": [],
+        "Good_LowRisk": [],
+        "LowRisk_HighRisk": [],
+        "Newly_Overdue": [],
+        "Recovered": []
+    }
+    
+    for cid, details in cust_details.items():
+        score_now = historical_ratings[5][cid]
+        score_prev = historical_ratings[4].get(cid, score_now)
+        
+        status_now = historical_status[5][cid]
+        status_prev = historical_status[4].get(cid, status_now)
+        
+        cat_now = "Excellent" if score_now > 80 else ("Good" if score_now >= 60 else ("LowRisk" if score_now >= 40 else "HighRisk"))
+        cat_prev = "Excellent" if score_prev > 80 else ("Good" if score_prev >= 60 else ("LowRisk" if score_prev >= 40 else "HighRisk"))
+        
+        cust_payload = {
+            "ano": details["ano"],
+            "name": details["name"],
+            "total_amount": details["total_amount"],
+            "paid_amount": details["paid_amount"],
+            "balance_amount": details["balance_amount"],
+            "rating": details["rating"],
+            "last_payment_date": details["last_payment_date"],
+            "missed_cycles": details["missed_cycles"],
+            "status": details["status"]
+        }
+        
+        risk_dist[cat_now].append(cust_payload)
+        risk_dist_last_week[cat_prev] += 1
+        
+        if cat_prev == "Excellent" and cat_now == "Good":
+            transitions["Excellent_Good"].append(cust_payload)
+        elif cat_prev == "Good" and cat_now == "LowRisk":
+            transitions["Good_LowRisk"].append(cust_payload)
+        elif cat_prev == "LowRisk" and cat_now == "HighRisk":
+            transitions["LowRisk_HighRisk"].append(cust_payload)
+            
+        was_overdue = status_prev in ["Overdue", "To Be Defaulted"]
+        is_overdue = status_now in ["Overdue", "To Be Defaulted"]
+        
+        if not was_overdue and is_overdue:
+            transitions["Newly_Overdue"].append(cust_payload)
+        elif was_overdue and not is_overdue:
+            transitions["Recovered"].append(cust_payload)
+            
+    total_cust = len(cust_details)
+    risk_dist_payload = []
+    for cat in ["Excellent", "Good", "LowRisk", "HighRisk"]:
+        lst = risk_dist[cat]
+        cnt = len(lst)
+        prev_cnt = risk_dist_last_week[cat]
+        diff = cnt - prev_cnt
+        pct = (cnt / total_cust * 100.0) if total_cust else 0.0
+        
+        risk_dist_payload.append({
+            "category": cat,
+            "label": "Low Risk" if cat == "LowRisk" else ("High Risk" if cat == "HighRisk" else cat),
+            "count": cnt,
+            "percentage": round(pct, 1),
+            "change": f"+{diff}" if diff > 0 else (str(diff) if diff < 0 else "0"),
+            "list": lst
+        })
+
+    stress_alerts = []
+    weekly_payments = {1: Decimal(0), 2: Decimal(0), 3: Decimal(0)}
+    for p_list in payments_by_cid.values():
+        for p in p_list:
+            p_dt = p["payment_date"].date() if isinstance(p["payment_date"], datetime) else p["payment_date"]
+            if eval_today - timedelta(days=7) < p_dt <= eval_today:
+                weekly_payments[1] += Decimal(str(p["amt"]))
+            elif eval_today - timedelta(days=14) < p_dt <= eval_today - timedelta(days=7):
+                weekly_payments[2] += Decimal(str(p["amt"]))
+            elif eval_today - timedelta(days=21) < p_dt <= eval_today - timedelta(days=14):
+                weekly_payments[3] += Decimal(str(p["amt"]))
+                
+    if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
+        stress_alerts.append({
+            "type": "Collection Slowdown",
+            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (₹{weekly_payments[3]:,.0f} → ₹{weekly_payments[2]:,.0f} → ₹{weekly_payments[1]:,.0f}).",
+            "severity": "High"
+        })
+        
+    partial_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] == "PARTIAL")
+    partial_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid, "OnTrack") == "PARTIAL")
+    if partial_today > partial_last_week:
+        pct_inc = ((partial_today - partial_last_week) / partial_last_week * 100.0) if partial_last_week > 0 else 100.0
+        if pct_inc >= 15.0:
+            stress_alerts.append({
+                "type": "Quality Decline",
+                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
+                "severity": "Medium"
+            })
+            
+    overdue_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] in ["Overdue", "To Be Defaulted"])
+    overdue_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid) in ["Overdue", "To Be Defaulted"])
+    if overdue_today > overdue_last_week:
+        stress_alerts.append({
+            "type": "Increasing Delay",
+            "message": f"Active overdue/delayed cases increased from {overdue_last_week} to {overdue_today} this week.",
+            "severity": "High"
+        })
+        
+    avg_rating_today = health_trend[-1]["avg_rating"]
+    avg_rating_3_weeks_ago = health_trend[-4]["avg_rating"] if len(health_trend) >= 4 else avg_rating_today
+    if avg_rating_today < avg_rating_3_weeks_ago - 5.0:
+        stress_alerts.append({
+            "type": "Portfolio Stress",
+            "message": f"Deteriorating portfolio: Village average rating dropped from {avg_rating_3_weeks_ago:.1f} to {avg_rating_today:.1f} over the last 3 weeks.",
+            "severity": "Critical"
+        })
+
+    critical_attention = {
+        "Missed4Plus": [],
+        "RapidCollapse": [],
+        "SevereOverdue": [],
+        "RatingBelow40": []
+    }
+    
+    for cid, details in cust_details.items():
+        score_now = historical_ratings[5][cid]
+        score_2_w_ago = historical_ratings[3].get(cid, score_now)
+        
+        cust_payload = {
+            "ano": details["ano"],
+            "name": details["name"],
+            "rating": details["rating"],
+            "balance_amount": details["balance_amount"],
+            "missed_cycles": details["missed_cycles"],
+            "status": details["status"]
+        }
+        
+        if details["missed_cycles"] >= 4:
+            critical_attention["Missed4Plus"].append(cust_payload)
+        if score_now < score_2_w_ago - 15.0:
+            critical_attention["RapidCollapse"].append(cust_payload)
+        if details["status"] == "To Be Defaulted" or (details["status"] == "Overdue" and details["rating"] < 50):
+            critical_attention["SevereOverdue"].append(cust_payload)
+        if details["rating"] < 40:
+            critical_attention["RatingBelow40"].append(cust_payload)
+
+    payload = {
+        "village_name": v_name,
+        "village_code": v_code,
+        "empty": False,
+        "health": {
+            "score": round(current_health, 1),
+            "status": health_status,
+            "predicted_risk": predicted_risk,
+            "trend_text": trend_text,
+            "trend_val": round(trend_val, 1)
+        },
+        "metrics": current_health_details["metrics"],
+        "health_trend": health_trend,
+        "risk_distribution": risk_dist_payload,
+        "transitions": {k: v for k, v in transitions.items()},
+        "stress_alerts": stress_alerts,
+        "critical_attention": {
+            "Missed4Plus": {
+                "label": "4+ Consecutive Missed Cycles",
+                "urgency": "Critical",
+                "count": len(critical_attention["Missed4Plus"]),
+                "list": critical_attention["Missed4Plus"]
+            },
+            "RapidCollapse": {
+                "label": "Rapidly Collapsing Ratings (-15 pts)",
+                "urgency": "High",
+                "count": len(critical_attention["RapidCollapse"]),
+                "list": critical_attention["RapidCollapse"]
+            },
+            "SevereOverdue": {
+                "label": "Severe Overdue Behavior",
+                "urgency": "Critical",
+                "count": len(critical_attention["SevereOverdue"]),
+                "list": critical_attention["SevereOverdue"]
+            },
+            "RatingBelow40": {
+                "label": "Customer Ratings Below 40",
+                "urgency": "Critical",
+                "count": len(critical_attention["RatingBelow40"]),
+                "list": critical_attention["RatingBelow40"]
+            }
+        }
+    }
+    
+    # Save to dashboard cache
+    cur.execute("""
+        INSERT INTO village_health_cache (vid, view, sub_view, time_range, date_key, health_score, metrics)
+        VALUES (%s, %s, %s, 'dashboard', %s, %s, %s)
+        ON CONFLICT (vid, view, sub_view, time_range, date_key)
+        DO UPDATE SET health_score = EXCLUDED.health_score, metrics = EXCLUDED.metrics, updated_at = CURRENT_TIMESTAMP
+    """, (vid, view, sub_view, eval_today, round(current_health, 1), json.dumps(payload)))
+    cur.connection.commit()
+
+    return payload
 
 
 @app.route("/api/village/behavioral_analytics/<int:vid>")
@@ -6944,475 +7244,20 @@ def api_village_behavioral_analytics(vid):
     if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
         return jsonify(success=False, error="Unauthorized village access"), 403
 
-    import pytz
-    from decimal import Decimal
     KOLKATA = pytz.timezone('Asia/Kolkata')
     today = datetime.now(KOLKATA).date()
-    
+    view = request.args.get("view", "active")
+    sub_view = request.args.get("sub_view", "active_only")
+    force_recalc = request.args.get("force_recalc", "false").lower() == "true"
+
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
-        # Get village details
-        cur.execute("SELECT village_name, village_code FROM village WHERE vid = %s", (vid,))
-        v_row = cur.fetchone()
-        if not v_row:
-            return jsonify(success=False, error="Village not found"), 404
-        v_name, v_code = v_row
-
-        view = request.args.get("view", "active")
-        sub_view = request.args.get("sub_view", "active_only")
-
-        # Shifting reference date to mitigate posting lag
-        cur.execute("""
-            SELECT MAX(payment_date) FROM (
-                SELECT payment_date FROM payment WHERE cid IN (SELECT cid FROM customer WHERE vid = %s)
-                UNION ALL
-                SELECT payment_date FROM closed_cust_payment WHERE cid IN (SELECT cid FROM closed_cust_account WHERE vid = %s)
-                UNION ALL
-                SELECT payment_date FROM historic_payment_data WHERE cid IN (SELECT cid FROM historic_customer_data WHERE vid = %s)
-            ) all_p
-        """, (vid, vid, vid))
-        latest_payment_row = cur.fetchone()
-        latest_payment_in_village = latest_payment_row[0] if latest_payment_row else None
-        
-        eval_today = today
-        if latest_payment_in_village:
-            if isinstance(latest_payment_in_village, datetime):
-                latest_payment_in_village = latest_payment_in_village.date()
-            lag_days = (today - latest_payment_in_village).days
-            if lag_days > 7:
-                shift_days = min(lag_days, 14)
-                eval_today = today - timedelta(days=shift_days)
-
-        # Caching: Check if precomputed dashboard payload exists
-        force_recalc = request.args.get("force_recalc", "false").lower() == "true"
-        if force_recalc:
-            cur.execute("DELETE FROM village_health_cache WHERE vid = %s", (vid,))
-        else:
-            cur.execute("""
-                SELECT metrics FROM village_health_cache
-                WHERE vid = %s AND view = %s AND sub_view = %s AND time_range = 'dashboard' AND date_key = %s
-            """, (vid, view, sub_view, eval_today))
-            cached_row = cur.fetchone()
-            if cached_row:
-                cur.close()
-                conn.close()
-                return jsonify(success=True, data=cached_row[0])
-
-        # Get evaluated customers for the village
-        if view == "active":
-            if sub_view == "active_only":
-                cur.execute("""
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status
-                    FROM customer
-                    WHERE vid = %s
-                """, (vid,))
-            else: # active_defaulted
-                cur.execute("""
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
-                    FROM (
-                        SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
-                        FROM customer
-                        UNION ALL
-                        SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
-                        FROM closed_cust_account
-                        WHERE balance_amount > 0
-                        UNION ALL
-                        SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
-                        FROM historic_customer_data
-                        WHERE balance_amount > 0
-                    ) all_cust
-                    WHERE vid = %s
-                """, (vid,))
-        else: # complete view
-            cur.execute("""
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
-                FROM (
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
-                    FROM customer
-                    UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
-                    FROM closed_cust_account
-                    UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
-                    FROM historic_customer_data
-                ) all_cust
-                WHERE vid = %s
-            """, (vid,))
-
-        cust_rows = cur.fetchall()
-        if not cust_rows:
-            return jsonify(success=True, data={
-                "village_name": v_name,
-                "village_code": v_code,
-                "empty": True
-            })
-
-        cids = [r[0] for r in cust_rows]
-        
-        # Get all payments for these customers
-        cur.execute("""
-            SELECT cid, amt, payment_date FROM (
-                SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
-                UNION ALL
-                SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
-                UNION ALL
-                SELECT cid, amount AS amt, payment_date FROM historic_payment_data WHERE cid = ANY(%s)
-            ) all_pmts
-            ORDER BY payment_date
-        """, (cids, cids, cids))
-        pmt_rows = cur.fetchall()
-        
-        payments_by_cid = {cid: [] for cid in cids}
-        for cid, amt, p_date in pmt_rows:
-            p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
-            payments_by_cid[cid].append({"amt": Decimal(str(amt)), "payment_date": p_dt})
-
-        dates = [eval_today - timedelta(days=7 * i) for i in range(5, -1, -1)]
-        
-        historical_ratings = {i: {} for i in range(6)}
-        historical_status = {i: {} for i in range(6)}
-        historical_missed = {i: {} for i in range(6)}
-        
-        cust_details = {}
-        
-        dt4 = dates[4]
-        dt3 = dates[3]
-        
-        for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status in cust_rows:
-            start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
-            end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
-            cust_payments = payments_by_cid.get(cid, [])
-            
-            # Filter payments before or equal to eval_today
-            eval_payments = [p for p in cust_payments if p["payment_date"] <= eval_today]
-            
-            score_t, risk_t, pen_t, wk_details_t = calculate_customer_rating_details(
-                start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, today=eval_today
-            )
-            beh_t = calculate_behavioral_analytics(
-                start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, today=eval_today
-            )
-            
-            last_pay_date = None
-            for p in eval_payments:
-                p_dt = p["payment_date"]
-                if not last_pay_date or p_dt > last_pay_date:
-                    last_pay_date = p_dt
-            last_payment_date_str = last_pay_date.strftime("%d/%m/%Y") if last_pay_date else "-"
-            
-            consec_missed_count = 0
-            for wk in reversed(wk_details_t):
-                if wk["due_date"] <= eval_today.isoformat():
-                    if wk["status"] in ["MISSED", "OVERDUE"] and wk["allocated"] == 0:
-                        consec_missed_count += 1
-                    else:
-                        break
-            
-            cust_details[cid] = {
-                "cid": cid,
-                "name": name,
-                "ano": ano,
-                "total_amount": float(total_amount or 0),
-                "paid_amount": float(paid_amount or 0),
-                "balance_amount": float(balance_amount or 0),
-                "rating": score_t,
-                "status": beh_t["status"],
-                "last_payment_date": last_payment_date_str,
-                "missed_cycles": consec_missed_count,
-                "predicted_next_risk": beh_t["predicted_next_risk"],
-                "stability_score": beh_t["stability"]["score"],
-                "stability_label": beh_t["stability"]["label"]
-            }
-            
-            # 1. Store index 5 (today)
-            historical_ratings[5][cid] = score_t
-            historical_status[5][cid] = beh_t["status"]
-            historical_missed[5][cid] = beh_t["discipline"]["missed"]
-            
-            # 2. Store index 4 (last week)
-            if start_dt > dt4:
-                historical_ratings[4][cid] = 100.0
-                historical_status[4][cid] = "OnTrack"
-                historical_missed[4][cid] = 0
-            else:
-                sub_payments = [p for p in eval_payments if p["payment_date"] <= dt4]
-                score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                    start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt4
-                )
-                beh_h = calculate_behavioral_analytics(
-                    start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, today=dt4
-                )
-                historical_ratings[4][cid] = score_h
-                historical_status[4][cid] = beh_h["status"]
-                historical_missed[4][cid] = beh_h["discipline"]["missed"]
-                
-            # 3. Store index 3 (2 weeks ago)
-            if start_dt > dt3:
-                historical_ratings[3][cid] = 100.0
-                historical_status[3][cid] = "OnTrack"
-                historical_missed[3][cid] = 0
-            else:
-                sub_payments = [p for p in eval_payments if p["payment_date"] <= dt3]
-                score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                    start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt3
-                )
-                historical_ratings[3][cid] = score_h
-                historical_status[3][cid] = "OnTrack"
-                historical_missed[3][cid] = 0
-
-            # 4. Fill defaults for 0, 1, 2 (never read)
-            for idx in [0, 1, 2]:
-                historical_ratings[idx][cid] = 100.0
-                historical_status[idx][cid] = "OnTrack"
-                historical_missed[idx][cid] = 0
-
-        # Run 6-week shared health history calculator
-        history_points = calculate_village_health_history(vid, cur, view, sub_view, dates)
-        
-        health_trend = []
-        for pt in history_points:
-            health_trend.append({
-                "date": pt["date_label"],
-                "health_score": pt["health_score"],
-                "avg_rating": pt["metrics"]["avg_rating"]["value"],
-                "overdue_pct": pt["metrics"]["overdue_penalty"]["value"]
-            })
-            
-        current_health_details = history_points[-1]
-        current_health = current_health_details["health_score"]
-        last_week_health = history_points[-2]["health_score"] if len(history_points) > 1 else current_health
-        trend_val = current_health - last_week_health
-        
-        if trend_val > 0:
-            trend_text = f"↑ {trend_val:.1f} points"
-        elif trend_val < 0:
-            trend_text = f"↓ {abs(trend_val):.1f} points"
-        else:
-            trend_text = "→ Stable"
-            
-        health_status = "Stable"
-        if current_health >= 80:
-            health_status = "Excellent"
-        elif current_health >= 70:
-            health_status = "Stable"
-        elif current_health >= 55:
-            health_status = "Warning"
-        else:
-            health_status = "Critical"
-            
-        predicted_risk = "Low"
-        if current_health >= 85:
-            predicted_risk = "Low"
-        elif current_health >= 70:
-            predicted_risk = "Medium"
-        elif current_health >= 55:
-            predicted_risk = "High"
-        else:
-            predicted_risk = "Critical"
-
-        risk_dist = {"Excellent": [], "Good": [], "LowRisk": [], "HighRisk": []}
-        risk_dist_last_week = {"Excellent": 0, "Good": 0, "LowRisk": 0, "HighRisk": 0}
-        
-        transitions = {
-            "Excellent_Good": [],
-            "Good_LowRisk": [],
-            "LowRisk_HighRisk": [],
-            "Newly_Overdue": [],
-            "Recovered": []
-        }
-        
-        for cid, details in cust_details.items():
-            score_now = historical_ratings[5][cid]
-            score_prev = historical_ratings[4].get(cid, score_now)
-            
-            status_now = historical_status[5][cid]
-            status_prev = historical_status[4].get(cid, status_now)
-            
-            cat_now = "Excellent" if score_now > 80 else ("Good" if score_now >= 60 else ("LowRisk" if score_now >= 40 else "HighRisk"))
-            cat_prev = "Excellent" if score_prev > 80 else ("Good" if score_prev >= 60 else ("LowRisk" if score_prev >= 40 else "HighRisk"))
-            
-            cust_payload = {
-                "ano": details["ano"],
-                "name": details["name"],
-                "total_amount": details["total_amount"],
-                "paid_amount": details["paid_amount"],
-                "balance_amount": details["balance_amount"],
-                "rating": details["rating"],
-                "last_payment_date": details["last_payment_date"],
-                "missed_cycles": details["missed_cycles"],
-                "status": details["status"]
-            }
-            
-            risk_dist[cat_now].append(cust_payload)
-            risk_dist_last_week[cat_prev] += 1
-            
-            if cat_prev == "Excellent" and cat_now == "Good":
-                transitions["Excellent_Good"].append(cust_payload)
-            elif cat_prev == "Good" and cat_now == "LowRisk":
-                transitions["Good_LowRisk"].append(cust_payload)
-            elif cat_prev == "LowRisk" and cat_now == "HighRisk":
-                transitions["LowRisk_HighRisk"].append(cust_payload)
-                
-            was_overdue = status_prev in ["Overdue", "To Be Defaulted"]
-            is_overdue = status_now in ["Overdue", "To Be Defaulted"]
-            
-            if not was_overdue and is_overdue:
-                transitions["Newly_Overdue"].append(cust_payload)
-            elif was_overdue and not is_overdue:
-                transitions["Recovered"].append(cust_payload)
-                
-        total_cust = len(cust_details)
-        risk_dist_payload = []
-        for cat in ["Excellent", "Good", "LowRisk", "HighRisk"]:
-            lst = risk_dist[cat]
-            cnt = len(lst)
-            prev_cnt = risk_dist_last_week[cat]
-            diff = cnt - prev_cnt
-            pct = (cnt / total_cust * 100.0) if total_cust else 0.0
-            
-            risk_dist_payload.append({
-                "category": cat,
-                "label": "Low Risk" if cat == "LowRisk" else ("High Risk" if cat == "HighRisk" else cat),
-                "count": cnt,
-                "percentage": round(pct, 1),
-                "change": f"+{diff}" if diff > 0 else (str(diff) if diff < 0 else "0"),
-                "list": lst
-            })
-
-        stress_alerts = []
-        weekly_payments = {1: Decimal(0), 2: Decimal(0), 3: Decimal(0)}
-        for p_list in payments_by_cid.values():
-            for p in p_list:
-                p_dt = p["payment_date"].date() if isinstance(p["payment_date"], datetime) else p["payment_date"]
-                if eval_today - timedelta(days=7) < p_dt <= eval_today:
-                    weekly_payments[1] += Decimal(str(p["amt"]))
-                elif eval_today - timedelta(days=14) < p_dt <= eval_today - timedelta(days=7):
-                    weekly_payments[2] += Decimal(str(p["amt"]))
-                elif eval_today - timedelta(days=21) < p_dt <= eval_today - timedelta(days=14):
-                    weekly_payments[3] += Decimal(str(p["amt"]))
-                    
-        if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
-            stress_alerts.append({
-                "type": "Collection Slowdown",
-                "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (₹{weekly_payments[3]:,.0f} → ₹{weekly_payments[2]:,.0f} → ₹{weekly_payments[1]:,.0f}).",
-                "severity": "High"
-            })
-            
-        partial_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] == "PARTIAL")
-        partial_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid, "OnTrack") == "PARTIAL")
-        if partial_today > partial_last_week:
-            pct_inc = ((partial_today - partial_last_week) / partial_last_week * 100.0) if partial_last_week > 0 else 100.0
-            if pct_inc >= 15.0:
-                stress_alerts.append({
-                    "type": "Quality Decline",
-                    "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
-                    "severity": "Medium"
-                })
-                
-        overdue_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] in ["Overdue", "To Be Defaulted"])
-        overdue_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid) in ["Overdue", "To Be Defaulted"])
-        if overdue_today > overdue_last_week:
-            stress_alerts.append({
-                "type": "Increasing Delay",
-                "message": f"Active overdue/delayed cases increased from {overdue_last_week} to {overdue_today} this week.",
-                "severity": "High"
-            })
-            
-        avg_rating_today = health_trend[-1]["avg_rating"]
-        avg_rating_3_weeks_ago = health_trend[-4]["avg_rating"]
-        if avg_rating_today < avg_rating_3_weeks_ago - 5.0:
-            stress_alerts.append({
-                "type": "Portfolio Stress",
-                "message": f"Deteriorating portfolio: Village average rating dropped from {avg_rating_3_weeks_ago:.1f} to {avg_rating_today:.1f} over the last 3 weeks.",
-                "severity": "Critical"
-            })
-
-        critical_attention = {
-            "Missed4Plus": [],
-            "RapidCollapse": [],
-            "SevereOverdue": [],
-            "RatingBelow40": []
-        }
-        
-        for cid, details in cust_details.items():
-            score_now = historical_ratings[5][cid]
-            score_2_w_ago = historical_ratings[3].get(cid, score_now)
-            
-            cust_payload = {
-                "ano": details["ano"],
-                "name": details["name"],
-                "rating": details["rating"],
-                "balance_amount": details["balance_amount"],
-                "missed_cycles": details["missed_cycles"],
-                "status": details["status"]
-            }
-            
-            if details["missed_cycles"] >= 4:
-                critical_attention["Missed4Plus"].append(cust_payload)
-            if score_now < score_2_w_ago - 15.0:
-                critical_attention["RapidCollapse"].append(cust_payload)
-            if details["status"] == "To Be Defaulted" or (details["status"] == "Overdue" and details["rating"] < 50):
-                critical_attention["SevereOverdue"].append(cust_payload)
-            if details["rating"] < 40:
-                critical_attention["RatingBelow40"].append(cust_payload)
-
-        payload = {
-            "village_name": v_name,
-            "village_code": v_code,
-            "empty": False,
-            "health": {
-                "score": round(current_health, 1),
-                "status": health_status,
-                "predicted_risk": predicted_risk,
-                "trend_text": trend_text,
-                "trend_val": round(trend_val, 1)
-            },
-            "metrics": current_health_details["metrics"],
-            "health_trend": health_trend,
-            "risk_distribution": risk_dist_payload,
-            "transitions": {k: v for k, v in transitions.items()},
-            "stress_alerts": stress_alerts,
-            "critical_attention": {
-                "Missed4Plus": {
-                    "label": "4+ Consecutive Missed Cycles",
-                    "urgency": "Critical",
-                    "count": len(critical_attention["Missed4Plus"]),
-                    "list": critical_attention["Missed4Plus"]
-                },
-                "RapidCollapse": {
-                    "label": "Rapidly Collapsing Ratings (-15 pts)",
-                    "urgency": "High",
-                    "count": len(critical_attention["RapidCollapse"]),
-                    "list": critical_attention["RapidCollapse"]
-                },
-                "SevereOverdue": {
-                    "label": "Severe Overdue Behavior",
-                    "urgency": "Critical",
-                    "count": len(critical_attention["SevereOverdue"]),
-                    "list": critical_attention["SevereOverdue"]
-                },
-                "RatingBelow40": {
-                    "label": "Customer Ratings Below 40",
-                    "urgency": "Critical",
-                    "count": len(critical_attention["RatingBelow40"]),
-                    "list": critical_attention["RatingBelow40"]
-                }
-            }
-        }
-        
-        # Save to dashboard cache
-        cur.execute("""
-            INSERT INTO village_health_cache (vid, view, sub_view, time_range, date_key, health_score, metrics)
-            VALUES (%s, %s, %s, 'dashboard', %s, %s, %s)
-            ON CONFLICT (vid, view, sub_view, time_range, date_key)
-            DO UPDATE SET health_score = EXCLUDED.health_score, metrics = EXCLUDED.metrics, updated_at = CURRENT_TIMESTAMP
-        """, (vid, view, sub_view, eval_today, round(current_health, 1), json.dumps(payload)))
-        conn.commit()
-
+        payload = compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, force_recalc)
         return jsonify(success=True, data=payload)
+    except ValueError as e:
+        return jsonify(success=False, error=str(e)), 404
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
     finally:
@@ -7427,8 +7272,6 @@ def api_dashboard_analytics(vid):
     if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
         return jsonify(success=False, error="Unauthorized village access"), 403
 
-    from datetime import datetime, date, timedelta
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     today = datetime.now(KOLKATA).date()
     
@@ -7583,7 +7426,6 @@ def api_dashboard_analytics(vid):
 
         # B. Monthly Snapshots (Last 12 calendar months)
         dates_monthly = []
-        import calendar
         for i in range(11, -1, -1):
             y = today.year
             m = today.month - i
@@ -7648,7 +7490,6 @@ def api_dashboard_analytics(vid):
         )
 
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
     finally:
@@ -7663,8 +7504,6 @@ def api_dashboard_posting_analytics(vid):
     if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
         return jsonify(success=False, error="Unauthorized village access"), 403
 
-    from datetime import datetime, date, timedelta
-    import pytz
     KOLKATA = pytz.timezone('Asia/Kolkata')
     today = datetime.now(KOLKATA).date()
 
@@ -7957,7 +7796,6 @@ def api_dashboard_posting_analytics(vid):
         })
 
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
     finally:
@@ -8117,7 +7955,7 @@ def update_employee_in_db(data):
             phone_number,
             data.get("city"),
             data.get("joining_date"),
-            data.get("level"),
+            data.get("level").strip().lower() if data.get("level") else None,
             data.get("state"),
             eid,
         ))
@@ -8132,7 +7970,7 @@ def update_employee_in_db(data):
                 "phone_number": phone_number,
                 "city": data.get("city"),
                 "joining_date": data.get("joining_date"),
-                "level": data.get("level"),
+                "level": data.get("level").strip().lower() if data.get("level") else None,
                 "state": data.get("state")
             }
         )
@@ -8230,15 +8068,6 @@ def landing():
     session.pop("employee_name", None)
     return render_template("landing.html")
 
-def get_active_db_path():
-    path = session.get("active_path")
-    if not path:
-        raise Exception("No active database selected.")
-    return path
-
-
-
-
 # ----------------------------------------------------
 # Login / Logout
 # ----------------------------------------------------
@@ -8300,7 +8129,7 @@ def login():
         # 3️⃣ Device lock logic
         # ---------------------------
         # 🔓 Admin users are NOT device locked
-        if level != "admin":
+        if not level or level.strip().lower() != "admin":
 
             cur.execute("""
                 SELECT device_id, is_active
@@ -8352,7 +8181,7 @@ def login():
         session["user_id"] = user_id
         session["username"] = username
         session["employee_id"] = employee_id
-        session["level"] = level
+        session["level"] = level.strip().lower() if level else None
         session["villages"] = villages
 
         audit_log(
@@ -8766,7 +8595,6 @@ def dashboard():
             sum_pamt=0,
             sum_bamt=0,
         )
-    print("DEBUG DASHBOARD SESSION -> vid:", session.get("vid"))
     totals = {
         "total_customers": 0,
         "sum_amt": 0,
@@ -8797,13 +8625,6 @@ def reselect():
     session.pop("active_path", None)
     session.pop("village_name", None)
     return redirect("/dashboard")
-
-
-def safe_float(val):
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 @app.route("/update_payment_date_bulk", methods=["POST"])

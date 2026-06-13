@@ -15,11 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let rangeEnd = null;
 
   function getSeparator(input) {
-    if (!input) return '/';
-    const options = input.customCalendarOptions || {};
-    if (options.dateFormat && options.dateFormat.includes('-')) return '-';
-    if (input.placeholder && input.placeholder.includes('-')) return '-';
-    return '/';
+    return '-';
   }
 
   function formatDate(date, input) {
@@ -32,17 +28,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function parseDate(dateString, input) {
-    if (!dateString || typeof dateString !== 'string') return null;
-    const separator = getSeparator(input);
-    const parts = dateString.split(separator);
-    if (parts.length !== 3) return null;
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // JavaScript months are 0-indexed
-    const year = parseInt(parts[2], 10);
-    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
-      return null;
+    if (!dateString) return null;
+    const cleanStr = String(dateString).trim();
+    if (!cleanStr) return null;
+    
+    // 1. Match ISO yyyy-mm-dd
+    const matchIso = cleanStr.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (matchIso) {
+      return new Date(parseInt(matchIso[1], 10), parseInt(matchIso[2], 10) - 1, parseInt(matchIso[3], 10));
     }
-    return new Date(year, month, day);
+    
+    // 2. Match dd-mm-yyyy or dd/mm/yyyy
+    const matchDd = cleanStr.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (matchDd) {
+      return new Date(parseInt(matchDd[3], 10), parseInt(matchDd[2], 10) - 1, parseInt(matchDd[1], 10));
+    }
+    
+    // 3. Fallback split
+    const parts = cleanStr.split(/[-/]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else {
+        return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+      }
+    }
+    
+    const d = new Date(cleanStr);
+    return isNaN(d.getTime()) ? null : d;
   }
 
   function renderCalendar(month, year) {
@@ -247,6 +260,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  if (calendarGrid) {
+    calendarGrid.addEventListener('mouseleave', () => {
+      const options = activeInputElement ? (activeInputElement.customCalendarOptions || {}) : {};
+      if (options.mode === 'range' && rangeStart && !rangeEnd) {
+        const cells = calendarGrid.querySelectorAll('.day-cell');
+        cells.forEach(cell => {
+          cell.classList.remove('in-range');
+        });
+      }
+    });
+  }
+
   // New function to handle automatic date formatting (dd/mm/yyyy)
   function autoFormatDate(e) {
     const input = e.target;
@@ -262,19 +287,19 @@ document.addEventListener('DOMContentLoaded', () => {
         formattedValue = value.substring(0, 2);
       }
       if (value.length > 2) {
-        formattedValue += '/' + value.substring(2, 4);
+        formattedValue += separator + value.substring(2, 4);
       }
       if (value.length > 4) {
-        formattedValue += '/' + value.substring(4, 8);
+        formattedValue += separator + value.substring(4, 8);
       }
       if (value.length > 8) {
         formattedValue += ' to ' + value.substring(8, 10);
       }
       if (value.length > 10) {
-        formattedValue += '/' + value.substring(10, 12);
+        formattedValue += separator + value.substring(10, 12);
       }
       if (value.length > 12) {
-        formattedValue += '/' + value.substring(12, 16);
+        formattedValue += separator + value.substring(12, 16);
       }
     } else {
       // Single formatting
@@ -345,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // --- Automatic initialization for static fields ---
-  const dateInputs = document.querySelectorAll('input[type="text"][placeholder*="dd/mm/yyyy"]');
+  const dateInputs = document.querySelectorAll('input[type="text"][placeholder*="dd/mm/yyyy"], input[type="text"][placeholder*="dd-mm-yyyy"]');
   dateInputs.forEach(input => {
     // If it's a range filter, initialize it as range mode
     const isRange = input.id === 'filterDateRange' || input.placeholder.includes('range');

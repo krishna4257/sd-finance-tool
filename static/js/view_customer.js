@@ -2,14 +2,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const table = document.getElementById("customerTable");
   const tableBody = document.getElementById("customerTableBody");
   if (!table || !tableBody) {
-    window.formatDate = function(value) {
-      if (!value) return "";
-      const str = String(value).trim();
-      const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!match) return value;
-      const [, year, month, day] = match;
-      return `${day}/${month}/${year}`;
-    };
     return;
   }
   const rows = Array.from(tableBody.querySelectorAll("tr"));
@@ -49,14 +41,7 @@ document.addEventListener("DOMContentLoaded", function () {
     { key: "status", label: "Status", isDefault: false }
   ];
 
-  function formatDate(value) {
-    if (!value) return "";
-    const str = String(value).trim();
-    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return value;
-    const [, year, month, day] = match;
-    return `${day}/${month}/${year}`;
-  }
+  const formatDate = window.formatDate;
 
   function createSnapshotItem(row) {
     const ano = clean(row.querySelector(".col-ano")?.textContent || "").toLowerCase();
@@ -86,10 +71,23 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateSummary() {
     const searchBox = document.getElementById("searchBox");
     const isSearchActive = searchBox && searchBox.value.trim() !== "";
-    const isReportActive = snapshot.some(d => d.row.style.display === "none") && !isSearchActive;
     
-    // Check if we have any active search or filter active
-    const isFiltered = isSearchActive || isReportActive;
+    let isFiltered = isSearchActive;
+    let visible = [];
+    
+    if ($.fn.DataTable.isDataTable('#customerTable')) {
+      const dt = $('#customerTable').DataTable();
+      const hasSearch = dt.search() !== "";
+      const isFilterApplied = dt.rows({ search: 'applied' }).count() < dt.rows().count();
+      isFiltered = hasSearch || isFilterApplied || isSearchActive;
+      
+      const visibleNodes = dt.rows({ search: 'applied' }).nodes().toArray();
+      visible = snapshot.filter(d => visibleNodes.indexOf(d.row) !== -1);
+    } else {
+      const isReportActive = snapshot.some(d => d.row.style.display === "none") && !isSearchActive;
+      isFiltered = isSearchActive || isReportActive;
+      visible = snapshot.filter(d => d.row.style.display !== "none");
+    }
 
     if (!isFiltered) {
       // Restore initial server-side totals (incorporating all active & closed village data)
@@ -121,7 +119,6 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     } else {
       // Filtered/searched state: calculate from visible rows in the table
-      const visible = snapshot.filter(d => d.row.style.display !== "none");
       
       let activeCount = 0;
       let defaultedCount = 0;
@@ -189,16 +186,20 @@ document.addEventListener("DOMContentLoaded", function () {
       applyParentSearch(term);
     } else {
       const isPhoneSearch = /^\d{10}$/.test(term);
-      snapshot.forEach(d => {
-        let show = false;
-        if (isPhoneSearch) {
-          show = d.phone_number === term;
-        } else {
-          show = d.name.includes(term);
-        }
-        d.row.style.display = show ? "" : "none";
-      });
-      updateSummary();
+      if ($.fn.DataTable.isDataTable('#customerTable')) {
+        $('#customerTable').DataTable().search(term).draw();
+      } else {
+        snapshot.forEach(d => {
+          let show = false;
+          if (isPhoneSearch) {
+            show = d.phone_number === term;
+          } else {
+            show = d.name.includes(term);
+          }
+          d.row.style.display = show ? "" : "none";
+        });
+        updateSummary();
+      }
     }
   };
 
@@ -486,7 +487,7 @@ document.addEventListener("DOMContentLoaded", function () {
         destroy: true,
         paging: false,
         info: false,
-        searching: false,
+        searching: true,
         ordering: true,
         order: [[1, 'desc']],
         autoWidth: false,
@@ -605,7 +606,7 @@ document.addEventListener("DOMContentLoaded", function () {
         destroy: true,
         paging: false,
         info: false,
-        searching: false,
+        searching: true,
         ordering: true,
         order: [[1, 'desc']],
         autoWidth: false,
@@ -643,34 +644,30 @@ document.addEventListener("DOMContentLoaded", function () {
   if (searchBox) {
     // Instant local search while typing
     searchBox.addEventListener("input", function () {
-      const term = this.value.trim().toLowerCase();
-      if (!term) {
+      const term = this.value.trim();
+      if ($.fn.DataTable.isDataTable('#customerTable')) {
+        $('#customerTable').DataTable().search(term).draw();
+      } else {
+        const lowerTerm = term.toLowerCase();
+        const dateTerm = lowerTerm.replace(/\//g, "-");
         snapshot.forEach(d => {
-          d.row.style.display = "";
+          const anoText = d.ano.toLowerCase();
+          const nameText = d.name.toLowerCase();
+          
+          const startCell = d.row.querySelector(".col-start_date");
+          const endCell = d.row.querySelector(".col-end_date");
+          const startDateText = startCell ? startCell.textContent.toLowerCase() : "";
+          const endDateText = endCell ? endCell.textContent.toLowerCase() : "";
+          
+          const match = anoText.includes(lowerTerm) ||
+                        nameText.includes(lowerTerm) ||
+                        startDateText.includes(dateTerm) ||
+                        endDateText.includes(dateTerm);
+                         
+          d.row.style.display = match || !term ? "" : "none";
         });
         updateSummary();
-        return;
       }
-      
-      const dateTerm = term.replace(/\//g, "-");
-      
-      snapshot.forEach(d => {
-        const anoText = d.ano.toLowerCase();
-        const nameText = d.name.toLowerCase();
-        
-        const startCell = d.row.querySelector(".col-start_date");
-        const endCell = d.row.querySelector(".col-end_date");
-        const startDateText = startCell ? startCell.textContent.toLowerCase() : "";
-        const endDateText = endCell ? endCell.textContent.toLowerCase() : "";
-        
-        const match = anoText.includes(term) ||
-                      nameText.includes(term) ||
-                      startDateText.includes(dateTerm) ||
-                      endDateText.includes(dateTerm);
-                      
-        d.row.style.display = match ? "" : "none";
-      });
-      updateSummary();
     });
 
     // Parent family search on Enter key
@@ -724,7 +721,7 @@ document.addEventListener("DOMContentLoaded", () => {
       : $('#customerTable').DataTable({
           paging: false,
           info: false,
-          searching: false,
+          searching: true,
           ordering: true,
           order: [[1, 'desc']],
           autoWidth: false,
@@ -758,15 +755,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeCustomerAno = null;
   let localPayments = [];
   let originalPayments = [];
-
-  function formatDate(value) {
-    if (!value) return "";
-    const str = String(value).trim();
-    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return value;
-    const [, year, month, day] = match;
-    return `${day}/${month}/${year}`;
-  }
 
   // Standard Money Formatter
   function formatMoney(value) {

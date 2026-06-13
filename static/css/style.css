@@ -1062,6 +1062,38 @@ header {
   background: var(--primary-hover) !important;
 }
 
+.neumorphic-btn.primary-btn {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(26, 77, 46, 0.2) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.neumorphic-btn.primary-btn:hover {
+  background: var(--primary-hover, #123620) !important;
+  border-color: var(--primary-hover, #123620) !important;
+  box-shadow: 0 6px 16px rgba(26, 77, 46, 0.3) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .neumorphic-btn.primary-btn {
+  background: var(--primary) !important;
+  color: #0f172a !important;
+  border-color: var(--primary) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+}
+
+[data-theme="dark"] .neumorphic-btn.primary-btn:hover {
+  background: var(--primary-hover, #059669) !important;
+  border-color: var(--primary-hover, #059669) !important;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
+  color: #0f172a !important;
+}
+
 .btn-outline {
   background: transparent;
   color: var(--text);
@@ -3567,12 +3599,14 @@ table.dataTable thead th.sorting_disabled {
   color: #ffffff !important;
 }
 
-.sliding-toggle-container.mode-closed .sliding-toggle-pill {
+.sliding-toggle-container.mode-closed .sliding-toggle-pill,
+.sliding-toggle-container.mode-complete .sliding-toggle-pill {
   left: 50%;
   width: calc(50% - 4px);
 }
 
-.sliding-toggle-container.mode-closed .closed-label {
+.sliding-toggle-container.mode-closed .closed-label,
+.sliding-toggle-container.mode-complete .complete-label {
   color: #ffffff !important;
 }
 
@@ -5266,4 +5300,137 @@ textarea {
   background-color: var(--surface) !important;
   color: var(--text) !important;
   border-color: var(--border) !important;
+}
+
+/* ── Global Sticky Frozen Table Headers ── */
+.app-table-wrapper,
+.scroll-table-container,
+.customer-table-wrapper,
+.table-card-container,
+.popup-table-wrapper {
+  max-height: 60vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.customer-table thead th,
+.dataTable thead th,
+table.popup-mini-table thead th,
+table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--surface, #ffffff) !important;
+  box-shadow: inset 0 -1px 0 var(--border, #e5e7eb);
+}
+
+[data-theme="dark"] .customer-table thead th,
+[data-theme="dark"] .dataTable thead th,
+[data-theme="dark"] table.popup-mini-table thead th,
+[data-theme="dark"] table thead th {
+  background-color: var(--surface-elevated, #1a1d27) !important;
+  box-shadow: inset 0 -1px 0 var(--border, #334155);
+}
+
+/* ── Global Bold Balance Columns ── */
+.col-balance_amount,
+.col-balance,
+[data-field="balance_amount"],
+[data-field="Balance Amount"],
+.amount-paid.highlight-balance,
+#popBalanceAmount {
+  font-weight: 800 !important;
+}
+
+/* ── Custom sorting arrows & hide defaults ── */
+table thead th.sorting::before,
+table thead th.sorting_asc::before,
+table thead th.sorting_desc::before,
+table thead th.sorting::after,
+table thead th.sorting_asc::after,
+table thead th.sorting_desc::after,
+table.dataTable thead th.sorting::before,
+table.dataTable thead th.sorting_asc::before,
+table.dataTable thead th.sorting_desc::before,
+table.dataTable thead th.sorting::after,
+table.dataTable thead th.sorting_asc::after,
+table.dataTable thead th.sorting_desc::after {
+  display: none !important;
+  content: "" !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+table thead th.sorting,
+table thead th.sorting_asc,
+table thead th.sorting_desc,
+table thead th.sorting_disabled,
+table.dataTable thead th.sorting,
+table.dataTable thead th.sorting_asc,
+table.dataTable thead th.sorting_desc,
+table.dataTable thead th.sorting_disabled {
+  background-image: none !important;
+  padding-right: 20px !important;
+}
+
+/* Custom indicator arrows */
+table thead th.sorting_asc::after,
+table.dataTable thead th.sorting_asc::after {
+  content: " ▲" !important;
+  display: inline-block !important;
+  font-size: 0.7rem !important;
+  color: var(--primary, #1a4d2e) !important;
+  margin-left: 4px !important;
+  vertical-align: middle;
+}
+
+table thead th.sorting_desc::after,
+table.dataTable thead th.sorting_desc::after {
+  content: " ▼" !important;
+  display: inline-block !important;
+  font-size: 0.7rem !important;
+  color: var(--primary, #1a4d2e) !important;
+  margin-left: 4px !important;
+  vertical-align: middle;
+}
+
+table thead th.sorting:not(.sorting_asc):not(.sorting_desc):hover::after,
+table.dataTable thead th.sorting:not(.sorting_asc):not(.sorting_desc):hover::after {
+  content: " ↕" !important;
+  display: inline-block !important;
+  font-size: 0.7rem !important;
+  color: var(--text-muted, #94a3b8) !important;
+  margin-left: 4px !important;
+  opacity: 0.6;
+  vertical-align: middle;
+}
+
+[data-theme="dark"] table thead th.sorting_asc::after,
+[data-theme="dark"] table.dataTable thead th.sorting_asc::after,
+[data-theme="dark"] table thead th.sorting_desc::after,
+[data-theme="dark"] table.dataTable thead th.sorting_desc::after {
+  color: var(--primary, #10b981) !important;
+}
+
+/* ── Unified Table Row Hover ── */
+table tbody tr {
+  transition: background-color var(--transition);
+}
+
+table tbody tr:hover td,
+table.customer-table tbody tr:hover td,
+table.popup-mini-table tbody tr:hover td {
+  background-color: rgba(26, 77, 46, 0.04) !important;
+}
+
+[data-theme="dark"] table tbody tr:hover td,
+[data-theme="dark"] table.customer-table tbody tr:hover td,
+[data-theme="dark"] table.popup-mini-table tbody tr:hover td {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Hide default DataTables search box globally */
+.dataTables_filter {
+  display: none !important;
 }

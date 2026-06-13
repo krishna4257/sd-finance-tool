@@ -502,6 +502,10 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(data => {
       if (!data.success) return alert(data.error);
       closeAddEmployeeModal();
+      if (window.location.pathname.includes("/employee")) {
+        window.location.reload();
+        return;
+      }
       loadEmployeesForVillageModal();
 
       const target =

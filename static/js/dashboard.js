@@ -734,6 +734,7 @@ function bindTileDoubleClickListeners() {
   const tileCustomers = document.getElementById("tileCustomers");
   const tileLoanAmount = document.getElementById("tileLoanAmount");
   const tileBalance = document.getElementById("tileBalance");
+  const villageHealthCard = document.getElementById("villageHealthCard");
 
   if (tileCustomers) {
     tileCustomers.addEventListener("dblclick", () => openHistoryModal("customers"));
@@ -743,6 +744,16 @@ function bindTileDoubleClickListeners() {
   }
   if (tileBalance) {
     tileBalance.addEventListener("dblclick", () => openHistoryModal("balance"));
+  }
+  if (villageHealthCard) {
+    villageHealthCard.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button") || e.target.closest(".health-sub-toggle-container")) {
+        return;
+      }
+      if (typeof window.openHealthModal === "function") {
+        window.openHealthModal("overall");
+      }
+    });
   }
   
   const modal = document.getElementById("historyModal");

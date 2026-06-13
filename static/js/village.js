@@ -92,10 +92,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Update real-time search row counts
   function updateSummary() {
-    const visible = snapshot.filter(d => d.row.style.display !== "none");
+    let visibleCount = 0;
+    if ($.fn.DataTable.isDataTable('#villageTable')) {
+      visibleCount = $('#villageTable').DataTable().rows({ search: 'applied' }).count();
+    } else {
+      visibleCount = snapshot.filter(d => d.row.style.display !== "none").length;
+    }
     const headerCount = document.getElementById("headerTotalVillages");
     if (headerCount) {
-      headerCount.textContent = visible.length;
+      headerCount.textContent = visibleCount;
     }
   }
 
@@ -103,10 +108,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     const term = document.getElementById("searchBox").value.toLowerCase();
 
     // Filter table rows
-    snapshot.forEach(d => {
-      d.row.style.display = term === "" || d.text.includes(term) ? "" : "none";
-    });
-    updateSummary();
+    if ($.fn.DataTable.isDataTable('#villageTable')) {
+      $('#villageTable').DataTable().search(term).draw();
+    } else {
+      snapshot.forEach(d => {
+        d.row.style.display = term === "" || d.text.includes(term) ? "" : "none";
+      });
+      updateSummary();
+    }
 
     // Filter employee tiles
     document.querySelectorAll(".employee-tile").forEach(tile => {
@@ -1142,8 +1151,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   function updateSegmentedHighlight() {
-    const pill = document.getElementById("viewTabPill");
-    const activeBtn = document.querySelector(".segmented-btn.active");
+    const container = document.getElementById("viewToggleContainer");
+    if (!container) return;
+    const pill = container.querySelector("#viewTabPill");
+    const activeBtn = container.querySelector(".segmented-btn.active");
     if (pill && activeBtn) {
       pill.style.width = activeBtn.offsetWidth + "px";
       pill.style.left = activeBtn.offsetLeft + "px";
@@ -1553,7 +1564,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     : $('#villageTable').DataTable({
         paging: false,
         info: false,
-        searching: false,
+        searching: true,
         ordering: true
       });
 
