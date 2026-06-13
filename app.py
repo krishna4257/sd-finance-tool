@@ -8,6 +8,7 @@ import uuid
 import platform
 import base64
 import hashlib
+import hmac
 import json
 from functools import wraps
 from decimal import Decimal
@@ -172,6 +173,141 @@ def verify_mobile_token(token):
         return None
     
 
+def _canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def verify_queue_integrity(data, token_data):
+    if not isinstance(data, dict):
+        return False, "invalid envelope"
+
+    required_fields = [
+        "type",
+        "eid",
+        "vid",
+        "nonce",
+        "timestamp",
+        "idempotency_key",
+        "payload",
+        "signature",
+    ]
+    missing = [field for field in required_fields if data.get(field) in (None, "")]
+    if missing:
+        return False, f"missing integrity fields: {', '.join(missing)}"
+
+    try:
+        eid_val = data.get("eid")
+        vid_val = data.get("vid")
+        token_eid_val = token_data.get("eid")
+        
+        if eid_val is None or vid_val is None or token_eid_val is None:
+            return False, "invalid identity fields"
+        
+        envelope_eid = int(eid_val)
+        envelope_vid = int(vid_val)
+        token_eid = int(token_eid_val)
+    except Exception:
+        return False, "invalid identity fields"
+
+    if envelope_eid != token_eid:
+        return False, "eid mismatch"
+
+    ts = parse_mobile_timestamp(data.get("timestamp"))
+    if ts is None:
+        return False, "invalid timestamp"
+
+    age_seconds = abs((datetime.now(timezone.utc) - ts).total_seconds())
+    if age_seconds > 900:
+        return False, "stale timestamp"
+
+    signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+
+    signed_payload = {
+        "type": data.get("type"),
+        "eid": envelope_eid,
+        "vid": envelope_vid,
+        "nonce": data.get("nonce"),
+        "timestamp": data.get("timestamp"),
+        "idempotency_key": data.get("idempotency_key"),
+        "payload": data.get("payload"),
+    }
+
+    expected_signature = hmac.new(
+    signing_secret.encode("utf-8"),
+    _canonical_json(signed_payload).encode("utf-8"),
+    hashlib.sha256).hexdigest()
+
+
+    provided_signature = str(data.get("signature") or "")
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        return False, "invalid signature"
+
+    return True, None
+
+
+def register_mobile_request_integrity(
+    cur,
+    *,
+    endpoint,
+    eid,
+    vid,
+    local_uuid,
+    idempotency_key,
+    nonce,
+    request_signature,
+    request_timestamp,
+):
+    cur.execute("""
+        INSERT INTO mobile_request_integrity
+        (
+            endpoint,
+            eid,
+            vid,
+            local_uuid,
+            idempotency_key,
+            nonce,
+            request_signature,
+            request_timestamp
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (endpoint, idempotency_key) DO NOTHING
+        RETURNING id
+    """, (
+        endpoint,
+        eid,
+        vid,
+        local_uuid,
+        idempotency_key,
+        nonce,
+        request_signature,
+        request_timestamp,
+    ))
+
+    row = cur.fetchone()
+    if row:
+        return True, "accepted"
+
+    cur.execute("""
+        SELECT idempotency_key, nonce
+        FROM mobile_request_integrity
+        WHERE endpoint = %s
+          AND (idempotency_key = %s OR nonce = %s)
+        LIMIT 1
+    """, (endpoint, idempotency_key, nonce))
+
+    existing = cur.fetchone()
+    if not existing:
+        return False, "duplicate request"
+
+    existing_idempotency_key, existing_nonce = existing
+    if existing_nonce == nonce:
+        return False, "duplicate nonce"
+    if existing_idempotency_key == idempotency_key:
+        return False, "duplicate idempotency key"
+
+    return False, "duplicate request"
+
+
 def parse_mobile_timestamp(ts):
     if not ts:
         return None
@@ -205,37 +341,43 @@ def normalize_mobile_customer_payload(payload):
     if not isinstance(payload, dict):
         raise ValueError("Invalid customer payload")
 
-    normalized = dict(payload)
+    source = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+    normalized = dict(source) # type: ignore
 
-    base_amount = Decimal(str(normalized.get("base_amount") or 0))
-    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0))
-    interest_amount = Decimal(str(normalized.get("interest_amount") or 0))
-    total_amount = Decimal(str(normalized.get("total_amount") or 0))
+    normalized["ano"] = normalize_account_number(normalized.get("ano")) # type: ignore
+    normalized["vid"] = normalize_account_number(normalized.get("vid")) # type: ignore
+    normalized["eid"] = normalize_account_number(normalized.get("eid")) # type: ignore
+    normalized["pano"] = normalize_account_number(normalized.get("pano")) # type: ignore
 
-    normalized["base_amount"] = float(base_amount)
-    normalized["cutting_amount"] = float(cutting_amount)
-    normalized["interest_amount"] = float(interest_amount)
+    base_amount = Decimal(str(normalized.get("base_amount") or 0)) # type: ignore
+    cutting_amount = Decimal(str(normalized.get("cutting_amount") or 0)) # type: ignore
+    interest_amount = Decimal(str(normalized.get("interest_amount") or 0)) # type: ignore
+    total_amount = Decimal(str(normalized.get("total_amount") or 0)) # type: ignore
+
+    normalized["base_amount"] = float(base_amount) # type: ignore
+    normalized["cutting_amount"] = float(cutting_amount) # type: ignore
+    normalized["interest_amount"] = float(interest_amount) # type: ignore
 
     if total_amount > 0:
         component_sum = base_amount + cutting_amount + interest_amount
         if component_sum > 0 and component_sum != total_amount:
             logger.warning(
                 "Customer ano=%s total_amount=%s does not equal base+cutting+interest=%s",
-                normalized.get("ano"),
+                normalized.get("ano"), # type: ignore
                 total_amount,
                 component_sum,
             )
 
-    loan_type = normalized.get("type")
+    loan_type = normalized.get("type") # type: ignore
     if loan_type == "weekly":
-        normalized["type"] = "W"
+        normalized["type"] = "W" # type: ignore
     elif loan_type == "monthly":
-        normalized["type"] = "M"
+        normalized["type"] = "M" # type: ignore
 
-    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0)
-    if normalized.get("balance_amount") is None and total_amount > 0:
-        normalized["balance_amount"] = float(
-            total_amount - Decimal(str(normalized["paid_amount"]))
+    normalized["paid_amount"] = float(normalized.get("paid_amount") or 0) # type: ignore
+    if normalized.get("balance_amount") is None and total_amount > 0: # type: ignore
+        normalized["balance_amount"] = float( # type: ignore
+            total_amount - Decimal(str(normalized["paid_amount"])) # type: ignore
         )
 
     return normalized
@@ -515,6 +657,43 @@ limiter = Limiter(
     key_func=mobile_rate_limit_key,
     app=app
 )
+
+
+def ensure_customer_docs_feed_table():
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS customer_docs_feed (
+                docs_feed_id BIGSERIAL PRIMARY KEY,
+                local_uuid TEXT UNIQUE,
+                device_id TEXT,
+                eid INTEGER,
+                vid INTEGER NOT NULL,
+                ano INTEGER NOT NULL,
+                cid INTEGER,
+                aadhaar_photo BYTEA,
+                house_photo BYTEA,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reviewed_by INTEGER,
+                reviewed_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_customer_docs_feed_vid_status
+            ON customer_docs_feed (vid, status)
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+try:
+    ensure_customer_docs_feed_table()
+except Exception as exc:
+    logger.warning("Could not ensure customer_docs_feed table: %s", exc)
 
 
 @app.before_request
@@ -2477,25 +2656,143 @@ def customer_feed():
             return {"error": "invalid token"}, 401
 
         payload_json = request.form.get("payload")
-        data = json.loads(payload_json) # type: ignore
+        if not payload_json:
+            return jsonify({"error": "missing payload"}), 400
+
+        try:
+            data = json.loads(payload_json)  # queue envelope from mobile
+        except Exception:
+            return jsonify({"error": "invalid payload json"}), 400
+
+        if not isinstance(data, dict):
+            return jsonify({"error": "invalid envelope"}), 400
+
+        required_fields = [
+            "type",
+            "eid",
+            "vid",
+            "nonce",
+            "timestamp",
+            "idempotency_key",
+            "payload",
+            "signature",
+        ]
+        missing = [field for field in required_fields if data.get(field) in (None, "")]
+        if missing:
+            return jsonify({
+                "error": f"missing integrity fields: {', '.join(missing)}"
+            }), 400
+
+        def _canonical_json(value):
+            return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+        try:
+            # use defaults to satisfy type checkers; presence/emptiness validated above
+            envelope_eid = int(data.get("eid", 0))
+            envelope_vid = int(data.get("vid", 0))
+            token_eid = int(data_token.get("eid", 0))
+        except Exception:
+            return jsonify({"error": "invalid identity fields"}), 400
+
+        if envelope_eid != token_eid:
+            return jsonify({"error": "eid mismatch"}), 403
+
+        parsed_ts = parse_mobile_timestamp(data.get("timestamp"))
+        if parsed_ts is None:
+            return jsonify({"error": "invalid timestamp"}), 400
+
+        age_seconds = abs((datetime.now(timezone.utc) - parsed_ts).total_seconds())
+        if age_seconds > 900:
+            return jsonify({"error": "stale timestamp"}), 400
+
+        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+
+        signed_payload = {
+            "type": data.get("type"),
+            "eid": envelope_eid,
+            "vid": envelope_vid,
+            "nonce": data.get("nonce"),
+            "timestamp": data.get("timestamp"),
+            "idempotency_key": data.get("idempotency_key"),
+            "payload": data.get("payload"),
+        }
+
+        expected_signature = hmac.new(
+            signing_secret.encode("utf-8"),
+            _canonical_json(signed_payload).encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        provided_signature = str(data.get("signature") or "")
+        if not hmac.compare_digest(provided_signature, expected_signature):
+            audit_log(
+                action="mobile_customer_upload_rejected",
+                entity_type="customer_feed",
+                entity_id=data.get("local_uuid"),
+                details={
+                    "reason": "invalid signature",
+                    "eid": data.get("eid"),
+                    "vid": data.get("vid"),
+                    "nonce": data.get("nonce"),
+                    "idempotency_key": data.get("idempotency_key"),
+                },
+                status="failed"
+            )
+            return jsonify({"error": "invalid signature"}), 400
 
         conn = get_pg_connection()
         cur = conn.cursor()
         cur.execute("SET TIME ZONE 'UTC'")
 
+        # Optional replay protection if you create a dedicated table:
+        # cur.execute(
+        #     "SELECT 1 FROM mobile_request_integrity WHERE idempotency_key = %s OR nonce = %s LIMIT 1",
+        #     (data.get("idempotency_key"), data.get("nonce"))
+        # )
+        # if cur.fetchone():
+        #     return jsonify({"error": "duplicate request"}), 409
+
         local_uuid = data.get("local_uuid")
         device_id = data.get("device_id", "mobile")
-        eid = data.get("eid")
-        vid = data.get("vid")
+        eid = envelope_eid
+        vid = envelope_vid
         status = data.get("status", "pending")
         latitude = data.get("latitude")
         longitude = data.get("longitude")
         gps_accuracy = data.get("gps_accuracy")
-        
+
+        ok, reason = register_mobile_request_integrity(
+            cur,
+            endpoint="/api/mobile/customer_feed",
+            eid=eid,
+            vid=vid,
+            local_uuid=local_uuid,
+            idempotency_key=data.get("idempotency_key"),
+            nonce=data.get("nonce"),
+            request_signature=provided_signature,
+            request_timestamp=parsed_ts,
+        )
+        if not ok:
+            conn.rollback()
+            audit_log(
+                action="mobile_customer_upload_rejected",
+                entity_type="customer_feed",
+                entity_id=local_uuid,
+                details={
+                    "reason": reason,
+                    "eid": eid,
+                    "vid": vid,
+                    "nonce": data.get("nonce"),
+                    "idempotency_key": data.get("idempotency_key"),
+                },
+                status="failed"
+            )
+            return jsonify({"error": reason}), 409
+
         customer_payload = data.get("payload")
 
         if isinstance(customer_payload, str):
-           customer_payload = json.loads(customer_payload)
+            customer_payload = json.loads(customer_payload)
 
         if not isinstance(customer_payload, dict):
             return jsonify({"error": "invalid customer payload"}), 400
@@ -2505,13 +2802,30 @@ def customer_feed():
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
-        ano = customer_payload.get("ano")
+        ano = customer_payload.get("ano") # type: ignore
         payload = json.dumps(customer_payload)
-        logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
-        # 1ï¸âƒ£ Insert into customer_feed
+
+        logger.debug(
+            "Customer feed received for vid=%s ano=%s nonce=%s idempotency_key=%s",
+            vid,
+            ano,
+            data.get("nonce"),
+            data.get("idempotency_key"),
+        )
+
         cur.execute("""
             INSERT INTO customer_feed
-            (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
+            (
+                local_uuid,
+                device_id,
+                eid,
+                vid,
+                status,
+                payload,
+                latitude,
+                longitude,
+                gps_accuracy
+            )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (local_uuid) DO NOTHING
         """, (
@@ -2526,14 +2840,14 @@ def customer_feed():
             gps_accuracy
         ))
 
-        # 2ï¸âƒ£ Read images
+        # 2️⃣ Read images
         aadhaar_file = request.files.get("aadhaar_photo")
         house_file = request.files.get("house_photo")
 
         aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
         house_bytes = house_file.read() if house_file else None
 
-        # 3ï¸âƒ£ Insert into customer_docs
+        # 3️⃣ Insert into customer_docs
         if aadhaar_bytes or house_bytes:
             cur.execute("""
                 INSERT INTO customer_docs (vid, ano, aadhaar_photo, house_photo)
@@ -2549,6 +2863,20 @@ def customer_feed():
                 house_bytes
             ))
 
+        # Optional replay ledger insert if you create the table:
+        # cur.execute("""
+        #     INSERT INTO mobile_request_integrity
+        #     (idempotency_key, nonce, eid, vid, endpoint, local_uuid, created_at)
+        #     VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        # """, (
+        #     data.get("idempotency_key"),
+        #     data.get("nonce"),
+        #     eid,
+        #     vid,
+        #     "/api/mobile/customer_feed",
+        #     local_uuid,
+        # ))
+
         conn.commit()
         audit_log(
             action="mobile_customer_upload",
@@ -2559,7 +2887,9 @@ def customer_feed():
                 "vid": vid,
                 "ano": ano,
                 "device_id": device_id,
-                "status": status
+                "status": status,
+                "nonce": data.get("nonce"),
+                "idempotency_key": data.get("idempotency_key"),
             }
         )
 
@@ -2578,6 +2908,221 @@ def customer_feed():
 
         if conn:
             conn.close()
+
+
+# ----------------------------------------------------
+# /api/mobile/customer_docs_update
+# ----------------------------------------------------
+@csrf.exempt
+@limiter.limit("300 per minute")
+@app.route("/api/mobile/customer_docs_update", methods=["POST"])
+def customer_docs_update():
+    conn = None
+    cur = None
+    try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return {"error": "missing token"}, 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return {"error": "invalid token"}, 401
+
+        local_uuid = (request.form.get("local_uuid") or "").strip()
+        device_id = (request.form.get("device_id") or "mobile").strip()
+
+        cid = normalize_account_number(request.form.get("cid"))
+        ano = normalize_account_number(request.form.get("ano"))
+        vid = normalize_account_number(request.form.get("vid"))
+        eid = normalize_account_number(request.form.get("eid"))
+
+        if not ano or not vid or not eid:
+            return jsonify({"error": "ano, vid and eid are required"}), 400
+
+        aadhaar_file = request.files.get("aadhaar_photo")
+        house_file = request.files.get("house_photo")
+        logger.info(
+            "customer_docs_update request: local_uuid=%s vid=%s ano=%s eid=%s has_aadhaar=%s has_house=%s",
+            local_uuid,
+            vid,
+            ano,
+            eid,
+            bool(aadhaar_file),
+            bool(house_file),
+        )
+
+        aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
+        house_bytes = house_file.read() if house_file else None
+
+        if not aadhaar_bytes and not house_bytes:
+            logger.warning(
+                "customer_docs_update no documents provided: local_uuid=%s vid=%s ano=%s",
+                local_uuid,
+                vid,
+                ano,
+            )
+            return jsonify({"error": "no documents provided"}), 400
+
+        if not local_uuid:
+            local_uuid = str(uuid.uuid4())
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT cid
+            FROM customer
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (vid, ano))
+        customer_row = cur.fetchone()
+
+        resolved_cid = None
+        if customer_row:
+            logger.info(
+                "customer_docs_update matched existing customer: local_uuid=%s vid=%s ano=%s cid=%s",
+                local_uuid,
+                vid,
+                ano,
+                customer_row[0],
+            )
+            resolved_cid = cid or customer_row[0]
+        else:
+            # Allow docs while collecting payment for customers still pending
+            # in customer_feed (added on mobile, not yet accepted), or when a
+            # matching payment is already in the payment feed queue.
+            cur.execute("""
+                SELECT feed_id
+                FROM customer_feed
+                WHERE vid = %s
+                  AND status = 'pending'
+                  AND COALESCE(
+                      (payload->'payload'->>'ano')::bigint,
+                      (payload->>'ano')::bigint
+                  ) = %s
+                ORDER BY feed_id DESC
+                LIMIT 1
+            """, (vid, ano))
+            feed_row = cur.fetchone()
+
+            if feed_row:
+                logger.info(
+                    "customer_docs_update matched pending customer_feed: local_uuid=%s vid=%s ano=%s feed_id=%s",
+                    local_uuid,
+                    vid,
+                    ano,
+                    feed_row[0],
+                )
+            else:
+                logger.warning(
+                    "customer_docs_update no customer/customer_feed match yet: local_uuid=%s vid=%s ano=%s",
+                    local_uuid,
+                    vid,
+                    ano,
+                )
+                cur.execute("""
+                    SELECT 1
+                    FROM payment_feed_items
+                    WHERE status = 'pending'
+                      AND (payload->>'ano')::bigint = %s
+                      AND (payload->>'vid')::bigint = %s
+                    LIMIT 1
+                """, (ano, vid))
+                payment_row = cur.fetchone()
+                if payment_row:
+                    logger.info(
+                        "customer_docs_update matched pending payment_feed_items: local_uuid=%s vid=%s ano=%s",
+                        local_uuid,
+                        vid,
+                        ano,
+                    )
+                else:
+                    logger.warning(
+                        "customer_docs_update customer not found: local_uuid=%s vid=%s ano=%s",
+                        local_uuid,
+                        vid,
+                        ano,
+                    )
+                    return jsonify({"error": "customer not found"}), 404
+
+            resolved_cid = cid or None
+
+        cur.execute("""
+            INSERT INTO customer_docs_feed (
+                local_uuid,
+                device_id,
+                eid,
+                vid,
+                ano,
+                cid,
+                aadhaar_photo,
+                house_photo,
+                status
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'pending')
+            ON CONFLICT (local_uuid) DO UPDATE SET
+                device_id = EXCLUDED.device_id,
+                eid = EXCLUDED.eid,
+                vid = EXCLUDED.vid,
+                ano = EXCLUDED.ano,
+                cid = EXCLUDED.cid,
+                aadhaar_photo = COALESCE(EXCLUDED.aadhaar_photo, customer_docs_feed.aadhaar_photo),
+                house_photo = COALESCE(EXCLUDED.house_photo, customer_docs_feed.house_photo),
+                status = 'pending',
+                reviewed_by = NULL,
+                reviewed_at = NULL
+            WHERE customer_docs_feed.status = 'pending'
+        """, (
+            local_uuid,
+            device_id,
+            eid,
+            vid,
+            ano,
+            resolved_cid,
+            aadhaar_bytes,
+            house_bytes
+        ))
+
+        conn.commit()
+
+        audit_log(
+            action="mobile_customer_docs_update",
+            entity_type="customer_docs_feed",
+            entity_id=resolved_cid,
+            details={
+                "cid": resolved_cid,
+                "ano": ano,
+                "eid": eid,
+                "vid": vid,
+                "device_id": device_id,
+                "local_uuid": local_uuid,
+                "aadhaar_uploaded": aadhaar_bytes is not None,
+                "house_uploaded": house_bytes is not None
+            }
+        )
+
+        return jsonify({
+            "status": "ok",
+            "cid": resolved_cid,
+            "ano": ano,
+            "vid": vid,
+            "local_uuid": local_uuid
+        })
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.exception("Existing customer docs update failed")
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+
+        if conn:
+            conn.close()
+
 
 # ----------------------------------------------------
 # /api/mobile/payment_feed_batch
@@ -2724,6 +3269,7 @@ def reset_database():
                 customer,
                 closed_cust_account,
                 customer_docs,
+                customer_docs_feed,
                 customer_feed,
                 payment_feed_items,
                 user_devices,
@@ -5227,15 +5773,48 @@ def feed():
                 cf.payload,
                 cf.status,
                 cf.vid,
-                (cf.payload->>'ano')::INT AS ano,
-                cf.payload->>'name' AS name,
-                cf.payload->>'type' AS type,
-                cd.aadhaar_photo,
-                cd.house_photo
+                COALESCE(
+                    (cf.payload->'payload'->>'ano')::INT,
+                    (cf.payload->>'ano')::INT
+                ) AS ano,
+                COALESCE(
+                    cf.payload->'payload'->>'name',
+                    cf.payload->>'name'
+                ) AS name,
+                COALESCE(
+                    cf.payload->'payload'->>'type',
+                    cf.payload->>'type'
+                ) AS type,
+                COALESCE(feed_docs.aadhaar_photo, docs.aadhaar_photo) AS aadhaar_photo,
+                COALESCE(feed_docs.house_photo, docs.house_photo) AS house_photo
             FROM customer_feed cf
-            LEFT JOIN customer_docs cd
-              ON cd.vid = cf.vid
-             AND cd.ano = (cf.payload->>'ano')::INT
+            LEFT JOIN LATERAL (
+                SELECT
+                    cdf.aadhaar_photo,
+                    cdf.house_photo
+                FROM customer_docs_feed cdf
+                WHERE cdf.vid = cf.vid
+                  AND cdf.status = 'pending'
+                  AND cdf.ano = COALESCE(
+                      (cf.payload->'payload'->>'ano')::INT,
+                      (cf.payload->>'ano')::INT
+                  )
+                ORDER BY cdf.created_at DESC NULLS LAST, cdf.docs_feed_id DESC
+                LIMIT 1
+            ) AS feed_docs ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT
+                    cd.aadhaar_photo,
+                    cd.house_photo
+                FROM customer_docs cd
+                WHERE cd.vid = cf.vid
+                  AND cd.ano = COALESCE(
+                      (cf.payload->'payload'->>'ano')::INT,
+                      (cf.payload->>'ano')::INT
+                  )
+                ORDER BY cd.uploaded_at DESC NULLS LAST, cd.doc_id DESC
+                LIMIT 1
+            ) AS docs ON TRUE
             WHERE cf.vid = %s AND cf.status='pending'
             ORDER BY cf.feed_id DESC
         """, (vid,))
@@ -5258,28 +5837,30 @@ def feed():
             elif payload is None:
                 payload = {}
 
-            # âœ… Flatten payload into row_dict (VERY IMPORTANT)
+            customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+            # ✅ Flatten payload into row_dict (VERY IMPORTANT)
             row_dict.update({
-                "ano": payload.get("ano"),
-                "name": payload.get("name"),
-                "pano": payload.get("pano"),
-                "phone_number": payload.get("phone_number"),
-                "type": payload.get("type"),
-                "period": payload.get("period"),
-                "start_date": payload.get("start_date"),
-                "end_date": payload.get("end_date"),
-                "total_amount": payload.get("total_amount"),
-                "installment_amount": payload.get("installment_amount"),
-                "aadhaar_number": payload.get("aadhaar_number"),
-                "notes": payload.get("notes"),
-                "latitude": payload.get("latitude"),
-                "longitude": payload.get("longitude"),
-                "eid": payload.get("eid"),
-                "vid": payload.get("vid"),
+                "ano": customer_payload.get("ano"), # type: ignore
+                "name": customer_payload.get("name"), # type: ignore
+                "pano": customer_payload.get("pano"), # type: ignore
+                "phone_number": customer_payload.get("phone_number"), # type: ignore
+                "type": customer_payload.get("type"), # type: ignore
+                "period": customer_payload.get("period"), # type: ignore
+                "start_date": customer_payload.get("start_date"), # type: ignore
+                "end_date": customer_payload.get("end_date"), # type: ignore
+                "total_amount": customer_payload.get("total_amount"), # type: ignore
+                "installment_amount": customer_payload.get("installment_amount"), # type: ignore
+                "aadhaar_number": customer_payload.get("aadhaar_number"), # type: ignore
+                "notes": customer_payload.get("notes"), # type: ignore
+                "latitude": customer_payload.get("latitude"), # type: ignore
+                "longitude": customer_payload.get("longitude"), # type: ignore
+                "eid": customer_payload.get("eid"), # type: ignore
+                "vid": customer_payload.get("vid"), # type: ignore
             })
 
             # keep payload also (optional)
-            row_dict["payload"] = payload
+            row_dict["payload"] = customer_payload
+            row_dict["raw_payload"] = payload
 
             # format dates if present
             if row_dict.get("start_date"):
@@ -5314,10 +5895,51 @@ def feed():
             if p.get("pdt"):
                 p["pdt"] = format_date_display(p["pdt"])
 
+        cur.execute("""
+            SELECT
+                cdf.docs_feed_id,
+                cdf.local_uuid,
+                cdf.vid,
+                cdf.ano,
+                cdf.eid,
+                cdf.cid,
+                cdf.aadhaar_photo,
+                cdf.house_photo,
+                cdf.status,
+                cdf.created_at,
+                COALESCE(
+                    c.name,
+                    cf.payload->>'name',
+                    'Customer ' || cdf.ano::text
+                ) AS name
+            FROM customer_docs_feed cdf
+            LEFT JOIN customer c
+              ON c.vid = cdf.vid
+             AND c.ano = cdf.ano
+            LEFT JOIN LATERAL (
+                SELECT payload
+                FROM customer_feed cf_inner
+                WHERE cf_inner.vid = cdf.vid
+                  AND cf_inner.status = 'pending'
+                  AND (cf_inner.payload->>'ano')::bigint = cdf.ano
+                ORDER BY cf_inner.feed_id DESC
+                LIMIT 1
+            ) cf ON TRUE
+            WHERE cdf.vid = %s
+              AND cdf.status = 'pending'
+              AND c.cid IS NOT NULL
+            ORDER BY cdf.docs_feed_id DESC
+        """, (vid,))
+
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] # type: ignore
+        existing_customer_docs = [dict(zip(columns, r)) for r in rows]
+
         return render_template(
             "feed.html",
             customers=customers,
-            payments=payments
+            payments=payments,
+            existing_customer_docs=existing_customer_docs
         )
 
     finally:
@@ -5364,7 +5986,7 @@ def accept_customer(feed_id):
     except ValueError as exc:
         return {"success": False, "error": str(exc)}
 
-    loan_type = data.get("type")
+    loan_type = data.get("type") # type: ignore
     if loan_type == "weekly":
         loan_type = "W"
     elif loan_type == "monthly":
@@ -5397,35 +6019,91 @@ def accept_customer(feed_id):
             status
         )
         VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
         RETURNING cid
     """,
     (
-        data.get("ano"),
-        data.get("name"),
-        data.get("vid"),
-        data.get("start_date"),
-        data.get("end_date"),
-        data.get("total_amount"),
-        data.get("base_amount", 0),
-        data.get("cutting_amount", 0),
-        data.get("interest_amount", 0),
-        data.get("paid_amount"),
-        data.get("balance_amount"),
-        data.get("installment_amount"),
+        data.get("ano"), # type: ignore
+        data.get("name"), # type: ignore
+        data.get("vid"), # type: ignore
+        data.get("start_date"), # type: ignore
+        data.get("end_date"), # type: ignore
+        data.get("total_amount"), # type: ignore
+        data.get("base_amount", 0), # type: ignore
+        data.get("cutting_amount", 0), # type: ignore
+        data.get("interest_amount", 0), # type: ignore
+        data.get("paid_amount"), # type: ignore
+        data.get("balance_amount"), # type: ignore
+        data.get("installment_amount"), # type: ignore
         loan_type,
-        data.get("period"),
-        data.get("pano"),
-        data.get("aadhaar_number"),
-        data.get("notes"),
-        data.get("latitude"),
-        data.get("longitude"),
-        data.get("eid"),
-        data.get("phone_number")
+        data.get("period"), # type: ignore
+        data.get("pano"), # type: ignore
+        data.get("aadhaar_number"), # type: ignore
+        data.get("notes"), # type: ignore
+        data.get("latitude"), # type: ignore
+        data.get("longitude"), # type: ignore
+        data.get("eid"), # type: ignore
+        data.get("phone_number") # type: ignore
         
     ))
     cid = cur.fetchone()[0]
     recalc_customer_repayment_score(cur, cid, force_recalc=True)
+
+    cur.execute("""
+        SELECT docs_feed_id, aadhaar_photo, house_photo
+        FROM customer_docs_feed
+        WHERE vid = %s AND ano = %s AND status = 'pending'
+        ORDER BY created_at DESC NULLS LAST, docs_feed_id DESC
+        LIMIT 1
+    """, (data.get("vid"), data.get("ano"))) # type: ignore
+    pending_docs_row = cur.fetchone()
+
+    if pending_docs_row:
+        docs_feed_id, aadhaar_photo, house_photo = pending_docs_row
+
+        cur.execute("""
+            SELECT aadhaar_photo, house_photo
+            FROM customer_docs
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (data.get("vid"), data.get("ano"))) # type: ignore
+        existing_docs = cur.fetchone()
+
+        existing_aadhaar = existing_docs[0] if existing_docs else None
+        existing_house = existing_docs[1] if existing_docs else None
+
+        final_aadhaar = aadhaar_photo if aadhaar_photo is not None else existing_aadhaar
+        final_house = house_photo if house_photo is not None else existing_house
+
+        if final_aadhaar is not None or final_house is not None:
+            cur.execute("""
+                INSERT INTO customer_docs (
+                    vid,
+                    ano,
+                    aadhaar_photo,
+                    house_photo,
+                    uploaded_at
+                )
+                VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                ON CONFLICT (vid, ano)
+                DO UPDATE SET
+                    aadhaar_photo = EXCLUDED.aadhaar_photo,
+                    house_photo = EXCLUDED.house_photo,
+                    uploaded_at = CURRENT_TIMESTAMP
+            """, (
+                data.get("vid"), # type: ignore
+                data.get("ano"), # type: ignore
+                final_aadhaar,
+                final_house
+            ))
+
+        cur.execute("""
+            UPDATE customer_docs_feed
+            SET status = 'accepted',
+                reviewed_by = %s,
+                reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+            WHERE docs_feed_id = %s
+        """, (logged_user, docs_feed_id))
 
     cur.execute("""
         UPDATE customer_feed
@@ -5443,9 +6121,9 @@ def accept_customer(feed_id):
         entity_type="customer_feed",
         entity_id=feed_id,
         details={
-            "ano": data.get("ano"),
-            "vid": data.get("vid"),
-            "eid": data.get("eid"),
+            "ano": data.get("ano"), # type: ignore
+            "vid": data.get("vid"), # type: ignore
+            "eid": data.get("eid"), # type: ignore
             "reviewed_by": logged_user
         }
     )
@@ -5453,6 +6131,206 @@ def accept_customer(feed_id):
     conn.close()
 
     return {"success":True}
+
+
+@app.post("/feed/docs/accept/<feed_id>")
+@login_required
+def accept_customer_feed_docs(feed_id):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    logged_user = session.get("employee_id") or session.get("eid")
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
+
+    cur.execute("""
+        SELECT vid, payload
+        FROM customer_feed
+        WHERE feed_id = %s
+    """, (feed_id,))
+
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Feed not found"}
+
+    vid, payload = row
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "Invalid payload format"}
+
+    customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+    ano = normalize_account_number(customer_payload.get("ano"))
+    vid = payload.get("vid") or customer_payload.get("vid") or vid
+    if ano is None or vid is None:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Missing ano or vid in customer feed"}
+
+    cur.execute("""
+        SELECT aadhaar_photo, house_photo
+        FROM customer_docs
+        WHERE vid = %s AND ano = %s
+        LIMIT 1
+    """, (vid, ano))
+    docs = cur.fetchone()
+
+    if not docs or (not docs[0] and not docs[1]):
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "No customer documents found for this feed item"}
+
+    audit_log(
+        action="accept_customer_feed_docs",
+        entity_type="customer_feed",
+        entity_id=feed_id,
+        details={
+            "ano": ano,
+            "vid": vid,
+            "reviewed_by": logged_user
+        }
+    )
+
+    cur.close()
+    conn.close()
+    return {"success": True}
+
+
+@app.post("/feed/existing-docs/accept/<docs_feed_id>")
+@login_required
+def accept_existing_customer_docs(docs_feed_id):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    logged_user = session.get("employee_id") or session.get("eid")
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
+
+    cur.execute("""
+        SELECT vid, ano, aadhaar_photo, house_photo, status
+        FROM customer_docs_feed
+        WHERE docs_feed_id = %s
+    """, (docs_feed_id,))
+
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Docs feed item not found"}
+
+    vid, ano, aadhaar_photo, house_photo, status = row
+    if status != "pending":
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Docs feed item is not pending"}
+
+    if not aadhaar_photo and not house_photo:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "No documents attached"}
+
+    cur.execute("""
+        SELECT aadhaar_photo, house_photo
+        FROM customer_docs
+        WHERE vid = %s AND ano = %s
+        LIMIT 1
+    """, (vid, ano))
+    existing_docs = cur.fetchone()
+
+    existing_aadhaar = existing_docs[0] if existing_docs else None
+    existing_house = existing_docs[1] if existing_docs else None
+
+    final_aadhaar = aadhaar_photo if aadhaar_photo is not None else existing_aadhaar
+    final_house = house_photo if house_photo is not None else existing_house
+
+    cur.execute("""
+        INSERT INTO customer_docs (
+            vid,
+            ano,
+            aadhaar_photo,
+            house_photo,
+            uploaded_at
+        )
+        VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP)
+        ON CONFLICT (vid, ano)
+        DO UPDATE SET
+            aadhaar_photo = EXCLUDED.aadhaar_photo,
+            house_photo = EXCLUDED.house_photo,
+            uploaded_at = CURRENT_TIMESTAMP
+    """, (
+        vid,
+        ano,
+        final_aadhaar,
+        final_house
+    ))
+
+    cur.execute("""
+        UPDATE customer_docs_feed
+        SET status = 'accepted',
+            reviewed_by = %s,
+            reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+        WHERE docs_feed_id = %s
+    """, (logged_user, docs_feed_id))
+
+    conn.commit()
+    audit_log(
+        action="accept_existing_customer_docs",
+        entity_type="customer_docs_feed",
+        entity_id=docs_feed_id,
+        details={
+            "ano": ano,
+            "vid": vid,
+            "reviewed_by": logged_user
+        }
+    )
+
+    cur.close()
+    conn.close()
+    return {"success": True}
+
+
+@app.post("/feed/existing-docs/reject/<docs_feed_id>")
+@login_required
+def reject_existing_customer_docs(docs_feed_id):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    logged_user = session.get("employee_id") or session.get("eid")
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}
+
+    cur.execute("""
+        UPDATE customer_docs_feed
+        SET status = 'rejected',
+            reviewed_by = %s,
+            reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+        WHERE docs_feed_id = %s
+          AND status = 'pending'
+        RETURNING docs_feed_id
+    """, (logged_user, docs_feed_id))
+
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Pending docs feed item not found"}
+
+    conn.commit()
+    audit_log(
+        action="reject_existing_customer_docs",
+        entity_type="customer_docs_feed",
+        entity_id=docs_feed_id,
+        details={"reviewed_by": logged_user}
+    )
+
+    cur.close()
+    conn.close()
+    return {"success": True}
 
 
 @app.post("/feed/payment/accept/<feed_payment_id>")
