@@ -1225,7 +1225,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (actionsCell) {
       actionsCell.innerHTML = `
         <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
-          <button class="neumorphic-btn ultrasmall" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35);" onclick="event.stopPropagation(); saveRowInline(this)">
+          <button class="neumorphic-btn ultrasmall primary-save-btn glow-cyan" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35); display:none;" onclick="event.stopPropagation(); saveRowInline(this)">
             Save
           </button>
           <button class="neumorphic-btn ultrasmall" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelRowInline(this)">
@@ -1234,6 +1234,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         </div>
       `;
     }
+
+    // Real-time input detection: show save button on first keystroke
+    const saveBtn = actionsCell?.querySelector('.primary-save-btn');
+    const inputs = row.querySelectorAll('.inline-edit-input, .inline-edit-select');
+    inputs.forEach(input => {
+      const eventType = input.tagName === 'SELECT' ? 'change' : 'input';
+      input.addEventListener(eventType, () => {
+        if (saveBtn && saveBtn.style.display === 'none') {
+          saveBtn.style.display = '';
+          saveBtn.classList.add('glow-cyan');
+        }
+      });
+    });
   }
 
   window.saveRowInline = async function (btn) {
@@ -1314,13 +1327,22 @@ document.addEventListener("DOMContentLoaded", async function () {
       row.querySelector('[data-field="emp1_name"]').innerText = emp1Name;
       row.querySelector('[data-field="emp2_name"]').innerText = emp2Name;
 
-      // Restore action buttons
+      // Restore action buttons (with Location button)
       const status = record ? record.status : 'active';
+      const hasCoords = record && record.latitude != null && record.longitude != null && record.latitude !== '' && record.longitude !== '';
       const actionHtml = `
         <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
           <button class="neumorphic-btn ultrasmall" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.35);"
                   onclick="event.stopPropagation(); openVillageDashboard('${vid}')">
             Dashboard
+          </button>
+          <button class="neumorphic-btn ultrasmall location-btn"
+                  style="color: ${hasCoords ? '#16a34a' : '#dc2626'}; border-color: ${hasCoords ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)'};"
+                  data-vid="${vid}"
+                  data-has-coords="${hasCoords}"
+                  onclick="event.stopPropagation();"
+                  ondblclick="event.stopPropagation(); window.geocodeVillage('${vid}', this)">
+            <i class="fas fa-map-marker-alt"></i> Location
           </button>
           <button class="neumorphic-btn ultrasmall ${status === 'active' ? 'danger-btn' : ''}"
                   onclick="event.stopPropagation(); toggleVillageStatus('${vid}', this)">
@@ -1390,14 +1412,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       leafletMap.removeLayer(mapTileLayer);
     }
     
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const tileUrl = isDark 
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    // Pure Google Satellite Hybrid view (satellite + labels/roads)
+    const tileUrl = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
       
     mapTileLayer = L.tileLayer(tileUrl, {
-      attribution: '© OpenStreetMap contributors, © CARTO',
-      maxZoom: 19
+      attribution: '© Google Maps',
+      maxZoom: 20
     }).addTo(leafletMap);
   }
 
@@ -1437,9 +1457,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       centerLng = lngSum / validCoordsCount;
     }
 
-    // Initialize Leaflet map
+    // Initialize Leaflet map with smooth fractional zoom
     leafletMap = L.map('indiaVillageMap', {
-      doubleClickZoom: false // disable default double-click zoom so dblclick event handler works cleanly
+      doubleClickZoom: false, // disable default double-click zoom so dblclick event handler works cleanly
+      zoomSnap: 0.1,         // enable fractional zoom levels for smooth zooming
+      zoomDelta: 0.2,        // smaller steps for zoom buttons/keys
+      wheelPxPerZoomLevel: 150 // slow down scroll-wheel zoom for premium smooth feel
     }).setView([centerLat, centerLng], validCoordsCount > 0 ? 8 : 7);
 
     // Load initial tile layer based on current theme
@@ -1463,18 +1486,30 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Clamped radius: 25 meters per customer, min 400m, max 10000m
       const radius = Math.max(400, Math.min(10000, customerCount * 25));
 
-      // Theme-aware color choices for glass circles
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      // High contrast green circle on satellite imagery
       const circleOptions = {
-        color: isDark ? 'rgba(16, 185, 129, 0.45)' : 'rgba(26, 77, 46, 0.45)',
-        fillColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(26, 77, 46, 0.08)',
-        fillOpacity: 0.2,
-        weight: 1,
+        color: '#10b981',
+        fillColor: '#10b981',
+        fillOpacity: 0.12,
+        weight: 1.5,
         radius: radius
       };
 
+      // Create a small new age green divIcon marker
+      const greenIcon = L.divIcon({
+        className: 'new-age-green-marker',
+        html: `
+          <div class="marker-pulse-wrapper">
+            <div class="marker-pulse-ring"></div>
+            <div class="marker-dot"></div>
+          </div>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
       // Create marker and glass circle
-      const marker = L.marker([lat, lng]).addTo(leafletMap);
+      const marker = L.marker([lat, lng], { icon: greenIcon }).addTo(leafletMap);
       const circle = L.circle([lat, lng], circleOptions).addTo(leafletMap);
 
       // Custom tooltips (show on hover)
@@ -1583,6 +1618,205 @@ document.addEventListener("DOMContentLoaded", async function () {
   dt.on('draw', () => {
     updateSummary();
   });
+
+  /* ===== CREATE VILLAGE MODAL LOGIC ===== */
+  const createVillageBtn = document.getElementById('createVillageBtn');
+  const createVillageOverlay = document.getElementById('createVillageOverlay');
+  const createVillageFormList = document.getElementById('createVillageFormList');
+  const addAnotherVillageBtn = document.getElementById('addAnotherVillageBtn');
+  const createVillageCancelBtn = document.getElementById('createVillageCancelBtn');
+  const createVillageSubmitBtn = document.getElementById('createVillageSubmitBtn');
+
+  let villageFormCounter = 0;
+
+  function buildEmployeeOptions(selectedEid, allowEmpty) {
+    let html = allowEmpty ? '<option value="">-- None --</option>' : '<option value="">-- Select Employee --</option>';
+    allEmployees.forEach(emp => {
+      html += `<option value="${emp.eid}" ${String(emp.eid) === String(selectedEid) ? 'selected' : ''}>${emp.eid} - ${emp.name}</option>`;
+    });
+    return html;
+  }
+
+  function buildStateOptions() {
+    const states = window.stateList || [];
+    let html = '<option value="">-- Select State --</option>';
+    states.forEach(s => {
+      html += `<option value="${s}">${s}</option>`;
+    });
+    return html;
+  }
+
+  function addVillageFormCard(preEmp1, preEmp2) {
+    villageFormCounter++;
+    const idx = villageFormCounter;
+    const card = document.createElement('div');
+    card.className = 'create-village-card';
+    card.dataset.idx = idx;
+    card.style.cssText = 'background:var(--input-bg,#f9fafb); border:1px solid var(--border-light,#f3f4f6); border-radius:10px; padding:16px; margin-bottom:12px; position:relative;';
+
+    const normalizedEmp2 = (!preEmp2 || preEmp2 === 'None') ? '' : preEmp2;
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-weight:600; font-size:0.85rem; color:var(--text-secondary);">
+          <i class="fas fa-home"></i> Village #${idx}
+        </span>
+        <button type="button" class="remove-village-card" style="background:none; border:none; cursor:pointer; color:var(--danger,#dc2626); font-size:1rem; padding:2px 6px;" title="Remove">
+          <i class="fas fa-times-circle"></i>
+        </button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Employee 1 *</label>
+          <select name="cv_emp1" class="inline-edit-select" required>${buildEmployeeOptions(preEmp1, false)}</select>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Employee 2</label>
+          <select name="cv_emp2" class="inline-edit-select">${buildEmployeeOptions(normalizedEmp2, true)}</select>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Village Name *</label>
+          <input type="text" name="cv_village_name" class="inline-edit-input" placeholder="e.g. SRISAILAM" required>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Village Code *</label>
+          <input type="text" name="cv_village_code" class="inline-edit-input" placeholder="e.g. SRI01" required>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">District</label>
+          <input type="text" name="cv_district" class="inline-edit-input" placeholder="e.g. KURNOOL">
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Pincode</label>
+          <input type="text" name="cv_pincode" class="inline-edit-input" placeholder="e.g. 518102">
+        </div>
+        <div style="grid-column: span 2;">
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">State *</label>
+          <select name="cv_state" class="inline-edit-select" required>${buildStateOptions()}</select>
+        </div>
+      </div>
+    `;
+
+    card.querySelector('.remove-village-card').addEventListener('click', () => {
+      card.remove();
+      renumberVillageCards();
+    });
+
+    createVillageFormList.appendChild(card);
+  }
+
+  function renumberVillageCards() {
+    const cards = createVillageFormList.querySelectorAll('.create-village-card');
+    cards.forEach((card, i) => {
+      const label = card.querySelector('span');
+      if (label) label.innerHTML = `<i class="fas fa-home"></i> Village #${i + 1}`;
+    });
+  }
+
+  window.openCreateVillageModal = function(emp1, emp2) {
+    villageFormCounter = 0;
+    createVillageFormList.innerHTML = '';
+    addVillageFormCard(emp1, emp2);
+    createVillageOverlay.style.display = 'flex';
+  };
+
+  if (createVillageBtn) {
+    createVillageBtn.addEventListener('click', () => {
+      window.openCreateVillageModal('', '');
+    });
+  }
+
+  if (addAnotherVillageBtn) {
+    addAnotherVillageBtn.addEventListener('click', () => {
+      // Copy emp1/emp2 from the last card for convenience
+      const cards = createVillageFormList.querySelectorAll('.create-village-card');
+      let lastEmp1 = '', lastEmp2 = '';
+      if (cards.length > 0) {
+        const last = cards[cards.length - 1];
+        lastEmp1 = last.querySelector('[name="cv_emp1"]')?.value || '';
+        lastEmp2 = last.querySelector('[name="cv_emp2"]')?.value || '';
+      }
+      addVillageFormCard(lastEmp1, lastEmp2);
+    });
+  }
+
+  if (createVillageCancelBtn) {
+    createVillageCancelBtn.addEventListener('click', () => {
+      createVillageOverlay.style.display = 'none';
+    });
+  }
+
+  if (createVillageSubmitBtn) {
+    createVillageSubmitBtn.addEventListener('click', async () => {
+      const cards = createVillageFormList.querySelectorAll('.create-village-card');
+      if (cards.length === 0) {
+        alert('Please add at least one village.');
+        return;
+      }
+
+      const villages = [];
+      let hasError = false;
+
+      cards.forEach((card, i) => {
+        const emp1 = card.querySelector('[name="cv_emp1"]').value;
+        const emp2 = card.querySelector('[name="cv_emp2"]').value || null;
+        const village_name = card.querySelector('[name="cv_village_name"]').value.trim().toUpperCase();
+        const village_code = card.querySelector('[name="cv_village_code"]').value.trim().toUpperCase();
+        const district = card.querySelector('[name="cv_district"]').value.trim().toUpperCase();
+        const pincode = card.querySelector('[name="cv_pincode"]').value.trim();
+        const state = card.querySelector('[name="cv_state"]').value;
+
+        if (!emp1 || !village_name || !village_code || !state) {
+          alert(`Village #${i + 1}: Employee 1, Village Name, Village Code, and State are required.`);
+          hasError = true;
+          return;
+        }
+
+        villages.push({ emp1_eid: emp1, emp2_eid: emp2, village_name, village_code, district, pincode, state });
+      });
+
+      if (hasError) return;
+
+      createVillageSubmitBtn.disabled = true;
+      createVillageSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+      let successCount = 0;
+      let errors = [];
+
+      for (const v of villages) {
+        try {
+          const res = await csrfFetch('/api/create_village', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(v)
+          });
+          const result = await res.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(`${v.village_name}: ${result.error}`);
+          }
+        } catch (err) {
+          errors.push(`${v.village_name}: ${err.message}`);
+        }
+      }
+
+      createVillageSubmitBtn.disabled = false;
+      createVillageSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Submit All';
+
+      if (errors.length > 0) {
+        alert(`Created ${successCount} village(s).\nErrors:\n${errors.join('\n')}`);
+      }
+
+      if (successCount > 0) {
+        createVillageOverlay.style.display = 'none';
+        playSuccessSound();
+        // Reload page to get fresh data including new VIDs
+        window.location.reload();
+      }
+    });
+  }
 });
 
 /* ===== TOGGLE VILLAGE STATUS ===== */
@@ -1698,4 +1932,62 @@ window.openVillageDashboard = function (vid) {
   .catch(err => {
     alert("Connection error: " + err.message);
   });
+};
+
+/* ===== GEOCODE VILLAGE (Location Button) ===== */
+window.geocodeVillage = async function(vid, btn) {
+  if (!confirm('Recalculate coordinates for this village via geocoding?')) return;
+
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+  try {
+    const res = await csrfFetch('/api/village/geocode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vid })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // Update local cache
+      const record = window.villageData.find(x => String(x.vid) === String(vid));
+      if (record) {
+        record.latitude = data.latitude;
+        record.longitude = data.longitude;
+      }
+
+      // Update button to green
+      btn.style.color = '#16a34a';
+      btn.style.borderColor = 'rgba(22,163,74,0.35)';
+      btn.dataset.hasCoords = 'true';
+      btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Location';
+      btn.disabled = false;
+
+      // Show success message on the row
+      const row = btn.closest('tr');
+      if (row) {
+        row.classList.add('row-updated-glow');
+        setTimeout(() => row.classList.remove('row-updated-glow'), 2500);
+      }
+
+      if (typeof playSuccessSound === 'function') playSuccessSound();
+
+      // Show coordinates in a brief tooltip
+      const msg = document.createElement('span');
+      msg.textContent = ` ✓ ${data.latitude?.toFixed(4)}, ${data.longitude?.toFixed(4)}`;
+      msg.style.cssText = 'font-size:0.7rem; color:#16a34a; font-weight:600; margin-left:4px;';
+      btn.parentElement.appendChild(msg);
+      setTimeout(() => msg.remove(), 4000);
+    } else {
+      alert('Geocode failed: ' + (data.error || 'Unknown error'));
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  } catch (err) {
+    alert('Geocode request failed: ' + err.message);
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
 };

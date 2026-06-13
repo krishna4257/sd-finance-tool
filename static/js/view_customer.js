@@ -1124,11 +1124,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Render status badges and Close/Retrieve button layout
       const statusBadge = document.getElementById("popStatusBadge");
-      statusBadge.className = `status-badge status-${cust.status.toLowerCase().replace(/\s+/g, "-")}`;
-      statusBadge.textContent = cust.status;
+      const custStatus = (cust.status || "unknown").trim();
+      statusBadge.className = `status-badge status-${custStatus.toLowerCase().replace(/\s+/g, "-")}`;
+      statusBadge.textContent = custStatus;
 
       const closeBtn = document.getElementById("popCloseAccountBtn");
-      if (["closed", "defaulted", "written_off", "written off"].includes(cust.status.toLowerCase())) {
+      if (["closed", "defaulted", "written_off", "written off"].includes(custStatus.toLowerCase())) {
         closeBtn.textContent = "Retrieve Account";
         closeBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
       } else {
@@ -1273,6 +1274,15 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       e.target.blur();
     }
+  });
+
+  // Real-time input detection for payment cells — show save button on first keystroke
+  document.getElementById("popPaymentTable").addEventListener("input", function(e) {
+    const td = e.target.closest("td[contenteditable='true']");
+    if (!td) return;
+    // Show save button immediately on any typing
+    const saveBtn = document.getElementById("popSavePaymentsBtn");
+    if (saveBtn) saveBtn.style.display = "inline-block";
   });
 
   // Track edits in payment table and trigger live calculations

@@ -4862,6 +4862,42 @@ textarea {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* ── Village Items Specific (landing page) ── */
+[data-theme="dark"] .landing-item.village-item {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item .landing-item-label {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item .landing-item-icon {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item .landing-item-arrow {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item:hover {
+  border-color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item:hover .landing-item-arrow {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .landing-item.village-item.landing-item--active {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+}
+[data-theme="dark"] .landing-item.village-item.landing-item--active .landing-item-label {
+  color: #10b981 !important;
+}
+[data-theme="dark"] .landing-item.village-item.landing-item--active .landing-item-icon {
+  background: #10b981 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .landing-item.village-item.landing-item--active .landing-item-arrow {
+  color: #10b981 !important;
+}
+
 /* ── Calculator (Dark) ── */
 [data-theme="dark"] .calculator-wrapper {
   background: #1a1d27;

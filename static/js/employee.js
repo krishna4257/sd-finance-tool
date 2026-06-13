@@ -261,7 +261,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (actionsCell) {
       actionsCell.innerHTML = `
         <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
-          <button class="neumorphic-btn ultrasmall" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35);" onclick="event.stopPropagation(); saveRowInline(this)">
+          <button class="neumorphic-btn ultrasmall primary-save-btn glow-cyan" style="display: none;" id="empRowSaveBtn" onclick="event.stopPropagation(); saveRowInline(this)">
             Save
           </button>
           <button class="neumorphic-btn ultrasmall" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelRowInline(this)">
@@ -270,6 +270,15 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       `;
     }
+
+    // Real-time input detection: show save button on first keystroke
+    row.querySelectorAll("input.inline-edit-input, select.inline-edit-select").forEach(inp => {
+      const eventName = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(eventName, () => {
+        const saveBtn = row.querySelector("#empRowSaveBtn");
+        if (saveBtn) saveBtn.style.display = "inline-block";
+      });
+    });
   }
 
   window.saveRowInline = async function (btn) {
@@ -479,7 +488,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (footer) {
       footer.innerHTML = `
         <div style="width: 100%; display: flex; justify-content: flex-end; gap: 8px; align-items: center;">
-          <button class="neumorphic-btn ultrasmall" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35);" onclick="event.stopPropagation(); saveCardInline(this)">
+          <button class="neumorphic-btn ultrasmall primary-save-btn glow-cyan" style="display: none;" id="empCardSaveBtn" onclick="event.stopPropagation(); saveCardInline(this)">
             Save
           </button>
           <button class="neumorphic-btn ultrasmall" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelCardInline(this)">
@@ -488,6 +497,15 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       `;
     }
+
+    // Real-time input detection for card: show save button on first keystroke
+    card.querySelectorAll("input.inline-edit-input, select.inline-edit-select").forEach(inp => {
+      const eventName = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(eventName, () => {
+        const saveBtn = card.querySelector("#empCardSaveBtn");
+        if (saveBtn) saveBtn.style.display = "inline-block";
+      });
+    });
   }
 
   window.cancelCardInline = function (btnOrCard) {

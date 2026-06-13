@@ -583,7 +583,7 @@ function inspectCohortFlow(key) {
     const row = document.createElement("tr");
     row.className = "clickable-row";
     row.setAttribute("onclick", `window.openCustomerPopup('${c.ano}')`);
-    const lastPmtDate = c.last_payment_date || "N/A";
+    const lastPmtDate = c.last_payment_date ? formatDate(c.last_payment_date) : "N/A";
     const missedCycles = c.missed_cycles !== undefined ? c.missed_cycles : "-";
     row.innerHTML = `
       <td style="font-weight: 700; color: #1a4d2e;">${c.ano}</td>
@@ -1516,16 +1516,44 @@ function renderPostingTrendChart(trendData) {
   const themeColors = getChartThemeColors();
 
   postingTrendChartInstance = new Chart(ctx, {
+    plugins: [{
+      id: "postingTrendDatalabels",
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        chart.data.datasets.forEach((dataset, datasetIndex) => {
+          if (dataset.label === "Collection Rate (%)") {
+            const meta = chart.getDatasetMeta(datasetIndex);
+            meta.data.forEach((bar, index) => {
+              const value = dataset.data[index];
+              if (value === null || value === undefined) return;
+              const valString = Math.round(value) + "%";
+              ctx.fillStyle = themeColors.tickColor;
+              ctx.font = "bold 9px 'Inter', sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "bottom";
+              const x = bar.x;
+              const y = bar.y - 4;
+              ctx.fillText(valString, x, y);
+            });
+          }
+        });
+        ctx.restore();
+      }
+    }],
     data: {
       labels: labels,
       datasets: [
         {
-          type: "bar",
+          type: "line",
           label: "Collected Amount",
           data: collectedAmounts,
-          backgroundColor: "rgba(56, 189, 248, 0.35)",
+          backgroundColor: "rgba(56, 189, 248, 0.05)",
           borderColor: "#38bdf8",
-          borderWidth: 1.5,
+          borderWidth: 2.5,
+          tension: 0.15,
+          pointRadius: 3,
+          pointBackgroundColor: "#38bdf8",
           yAxisID: "yAmount",
           order: 2
         },
@@ -1543,15 +1571,12 @@ function renderPostingTrendChart(trendData) {
           order: 3
         },
         {
-          type: "line",
+          type: "bar",
           label: "Collection Rate (%)",
           data: coveragePcts,
-          backgroundColor: "rgba(16, 185, 129, 0.05)",
+          backgroundColor: "rgba(16, 185, 129, 0.25)",
           borderColor: "#10b981",
-          borderWidth: 3,
-          tension: 0.3,
-          pointRadius: 3,
-          pointBackgroundColor: "#10b981",
+          borderWidth: 1.5,
           yAxisID: "yRate",
           order: 1
         }
@@ -1607,19 +1632,9 @@ function renderPostingTrendChart(trendData) {
           type: "linear",
           position: "right",
           min: 0,
-          max: 100,
-          grid: { drawOnChartArea: false },
-          ticks: {
-            color: themeColors.tickColor,
-            font: { size: 8 },
-            callback: function(value) { return value + "%"; }
-          },
-          title: {
-            display: true,
-            text: "Collection Rate (%)",
-            color: themeColors.tickColor,
-            font: { size: 9, weight: "bold" }
-          }
+          max: 110,
+          display: false,
+          grid: { drawOnChartArea: false }
         }
       }
     }

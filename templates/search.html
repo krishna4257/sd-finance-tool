@@ -81,7 +81,7 @@
 
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <label><input type="text" id="newPDT" placeholder="Date dd/mm/yyyy" required></label>
+      <label><input type="text" id="newPDT" placeholder="Date dd-mm-yyyy" required></label>
       <label><input type="number" id="newAMT" step="0.01" placeholder="Amount" required></label>
 
       <button class="neumorphic-btn small" type="button" onclick="return addPaymentFromForm(this.closest('form'))">Add Payment</button>
@@ -132,7 +132,7 @@
   <form id="postingSearchForm" method="POST" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label><input type="text" id="searchPostingAno" placeholder="Search by A.no"></label>
-    <label><input type="text" id="searchPostingDate" placeholder="Exact Date: dd/mm/yyyy"></label>
+    <label><input type="text" id="searchPostingDate" placeholder="Exact Date: dd-mm-yyyy"></label>
 
     <button type="submit" class="neumorphic-btn small">Find</button>
     <button type="button"
@@ -174,8 +174,8 @@
   <div class="modal-content">
     <span class="close-btn" onclick="document.getElementById('dateReplaceModal').style.display='none'">×</span>
     <h3>Replace Dates</h3>
-    <input type="text" id="findDateInput" placeholder="Find Date: dd/mm/yyyy">
-    <input type="text" id="replaceDateInput" placeholder="Replace With Date: dd/mm/yyyy">
+    <input type="text" id="findDateInput" placeholder="Find Date: dd-mm-yyyy">
+    <input type="text" id="replaceDateInput" placeholder="Replace With Date: dd-mm-yyyy">
     <button class="neumorphic-btn small" onclick="submitDateReplace()">Change</button>
   </div>
 </div>

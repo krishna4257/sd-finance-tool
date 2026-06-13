@@ -102,6 +102,59 @@ def audit_log(
             conn.close()
 
 # Helper: Log DB pool stats
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# CENTRALIZED DATE UTILITIES
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def parse_date_input(value):
+    """Parse a date from any common format into a Python date object.
+    Accepts: 'yyyy-mm-dd' (ISO), 'dd-mm-yyyy', 'dd/mm/yyyy', date, datetime.
+    Returns: datetime.date or None if parsing fails.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    # Try ISO first (yyyy-mm-dd)
+    try:
+        return datetime.fromisoformat(value).date()
+    except (ValueError, TypeError):
+        pass
+    # Try dd-mm-yyyy (hyphens)
+    try:
+        return datetime.strptime(value, "%d-%m-%Y").date()
+    except ValueError:
+        pass
+    # Try dd/mm/yyyy (slashes)
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").date()
+    except ValueError:
+        pass
+    return None
+
+
+def format_date_display(value):
+    """Format a date for frontend display as dd-mm-yyyy.
+    Accepts: date, datetime, or ISO string.
+    Returns: 'dd-mm-yyyy' string or '' if None/invalid.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        value = parse_date_input(value)
+        if value is None:
+            return ""
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return value.strftime("%d-%m-%Y")
+    return ""
+
+
 def generate_mobile_token(user_id, eid):
     payload = {
         "user_id": user_id,
@@ -123,10 +176,10 @@ def parse_mobile_timestamp(ts):
     if not ts:
         return None
     try:
-        # Mobile sends IST but without timezone → force IST
+        # Mobile sends IST but without timezone â†’ force IST
         dt = datetime.fromisoformat(ts)
 
-        # If no timezone → assume IST
+        # If no timezone â†’ assume IST
         if dt.tzinfo is None:
             ist_offset = timedelta(hours=5, minutes=30)
             dt = dt.replace(tzinfo=timezone(ist_offset))
@@ -588,7 +641,7 @@ def api_employees():
     allowed_villages = session.get("villages", [])
 
     try:
-        # Admin & mgmt → full access
+        # Admin & mgmt â†’ full access
         if user_level in ["admin", "mgmt"]:
             cur.execute("""
                 SELECT eid, name
@@ -597,7 +650,7 @@ def api_employees():
                 ORDER BY name
             """)
 
-        # s / m / j → only employees linked to their villages
+        # s / m / j â†’ only employees linked to their villages
         else:
             if not allowed_villages:
                 return jsonify([])
@@ -700,7 +753,7 @@ def api_villages():
     cur = conn.cursor()
 
     try:
-        # Admin & mgmt → full access
+        # Admin & mgmt â†’ full access
         if user_level in ["admin", "mgmt"]:
             if eid:
                 cur.execute("""
@@ -717,7 +770,7 @@ def api_villages():
                     ORDER BY village_name
                 """)
 
-        # s / m / j → only assigned villages
+        # s / m / j â†’ only assigned villages
         else:
             if not user_villages:
                 return jsonify([])
@@ -1092,7 +1145,7 @@ def api_create_employee():
     cur = conn.cursor()
 
     try:
-        # 1️⃣ Get next EID
+        # 1ï¸âƒ£ Get next EID
         cur.execute("SELECT COALESCE(MAX(eid), 0) + 1 FROM employee")
         result = cur.fetchone()
         if not result:
@@ -1101,7 +1154,7 @@ def api_create_employee():
 
         phone_number = (data.get("phone_number") or "").strip()
 
-        # 🔒 Prevent duplicate employee name + phone combinations
+        # ðŸ”’ Prevent duplicate employee name + phone combinations
         cur.execute(
             """
             SELECT name, phone_number
@@ -1360,29 +1413,9 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     if not today:
         today = datetime.now(KOLKATA).date()
         
-    if isinstance(start_date, str):
-        try:
-            start_date = datetime.fromisoformat(start_date).date()
-        except ValueError:
-            start_date = datetime.strptime(start_date, "%d/%m/%Y").date()
-    elif isinstance(start_date, datetime):
-        start_date = start_date.date()
-
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.fromisoformat(end_date).date()
-        except ValueError:
-            end_date = datetime.strptime(end_date, "%d/%m/%Y").date()
-    elif isinstance(end_date, datetime):
-        end_date = end_date.date()
-
-    if isinstance(today, str):
-        try:
-            today = datetime.fromisoformat(today).date()
-        except ValueError:
-            today = datetime.strptime(today, "%d/%m/%Y").date()
-    elif isinstance(today, datetime):
-        today = today.date()
+    start_date = parse_date_input(start_date)
+    end_date = parse_date_input(end_date)
+    today = parse_date_input(today)
 
     if not start_date or not end_date or not installment_amount or not period or installment_amount <= 0 or period <= 0:
         return 100.0, "Excellent", 0.0, []
@@ -1393,13 +1426,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         p_date = p.get("payment_date")
         if not p_date:
             continue
-        if isinstance(p_date, str):
-            try:
-                p_date = datetime.fromisoformat(p_date).date()
-            except ValueError:
-                p_date = datetime.strptime(p_date, "%d/%m/%Y").date()
-        elif isinstance(p_date, datetime):
-            p_date = p_date.date()
+        p_date = parse_date_input(p_date)
         
         if p_date <= today:
             valid_payments.append({
@@ -1649,29 +1676,9 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     if not today:
         today = datetime.now(KOLKATA).date()
         
-    if isinstance(start_date, str):
-        try:
-            start_date = datetime.fromisoformat(start_date).date()
-        except ValueError:
-            start_date = datetime.strptime(start_date, "%d/%m/%Y").date()
-    elif isinstance(start_date, datetime):
-        start_date = start_date.date()
-
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.fromisoformat(end_date).date()
-        except ValueError:
-            end_date = datetime.strptime(end_date, "%d/%m/%Y").date()
-    elif isinstance(end_date, datetime):
-        end_date = end_date.date()
-
-    if isinstance(today, str):
-        try:
-            today = datetime.fromisoformat(today).date()
-        except ValueError:
-            today = datetime.strptime(today, "%d/%m/%Y").date()
-    elif isinstance(today, datetime):
-        today = today.date()
+    start_date = parse_date_input(start_date)
+    end_date = parse_date_input(end_date)
+    today = parse_date_input(today)
 
     if not start_date or not end_date or not installment_amount or not period or installment_amount <= 0 or period <= 0:
         actual_end = end_date or start_date or today
@@ -1704,13 +1711,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         p_date = p.get("payment_date")
         if not p_date:
             continue
-        if isinstance(p_date, str):
-            try:
-                p_date = datetime.fromisoformat(p_date).date()
-            except ValueError:
-                p_date = datetime.strptime(p_date, "%d/%m/%Y").date()
-        elif isinstance(p_date, datetime):
-            p_date = p_date.date()
+        p_date = parse_date_input(p_date)
         
         if p_date <= today:
             valid_payments.append({
@@ -2016,10 +2017,7 @@ def format_customer_ratings_with_trends(cur, data):
         for w in week_details:
             w_due_str = w["due_date"]
             if isinstance(w_due_str, str):
-                try:
-                    w_due = datetime.fromisoformat(w_due_str).date()
-                except ValueError:
-                    w_due = datetime.strptime(w_due_str, "%Y-%m-%d").date()
+                w_due = parse_date_input(w_due_str)
             else:
                 w_due = w_due_str
                 
@@ -2041,9 +2039,9 @@ def format_customer_ratings_with_trends(cur, data):
             try:
                 rating_val = int(round(float(rating)))
                 if trend == "up":
-                    c["customer_rating"] = f"{rating_val} ▲"
+                    c["customer_rating"] = f"{rating_val} â–²"
                 elif trend == "down":
-                    c["customer_rating"] = f"{rating_val} ▼"
+                    c["customer_rating"] = f"{rating_val} â–¼"
                 else:
                     c["customer_rating"] = f"{rating_val}"
             except (ValueError, TypeError):
@@ -2273,7 +2271,7 @@ def mobile_villages():
         emp_row = cur.fetchone()
         employee_name = emp_row[0] if emp_row else ""
 
-        # 🔹 Fetch villages from user_village_access
+        # ðŸ”¹ Fetch villages from user_village_access
         cur.execute("""
             SELECT v.vid, v.village_name, v.district
             FROM user_village_access uva
@@ -2510,7 +2508,7 @@ def customer_feed():
         ano = customer_payload.get("ano")
         payload = json.dumps(customer_payload)
         logger.debug("Customer feed received for vid=%s ano=%s", vid, ano)
-        # 1️⃣ Insert into customer_feed
+        # 1ï¸âƒ£ Insert into customer_feed
         cur.execute("""
             INSERT INTO customer_feed
             (local_uuid, device_id, eid, vid, status, payload, latitude, longitude, gps_accuracy)
@@ -2528,14 +2526,14 @@ def customer_feed():
             gps_accuracy
         ))
 
-        # 2️⃣ Read images
+        # 2ï¸âƒ£ Read images
         aadhaar_file = request.files.get("aadhaar_photo")
         house_file = request.files.get("house_photo")
 
         aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
         house_bytes = house_file.read() if house_file else None
 
-        # 3️⃣ Insert into customer_docs
+        # 3ï¸âƒ£ Insert into customer_docs
         if aadhaar_bytes or house_bytes:
             cur.execute("""
                 INSERT INTO customer_docs (vid, ano, aadhaar_photo, house_photo)
@@ -2695,7 +2693,7 @@ def reset_database():
 
         user_id = data.get("user_id")
 
-        # 🔐 Validate user + employee mapping and active status
+        # ðŸ” Validate user + employee mapping and active status
         conn = get_pg_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -2718,7 +2716,7 @@ def reset_database():
         if level not in ["admin", "mgmt"]:
             return {"error": "unauthorized"}, 403
 
-        # 🚨 DELETE ALL DATA (SAFE ORDER USING TRUNCATE CASCADE)
+        # ðŸš¨ DELETE ALL DATA (SAFE ORDER USING TRUNCATE CASCADE)
         cur.execute("""
             TRUNCATE TABLE
                 payment,
@@ -2831,14 +2829,14 @@ def get_customer_analytics(vid):
         if row:
             t_count, t_sum, w_count, w_sum, m_count, m_sum = row
             return {
-                "today": f"{t_count} - ₹{int(round(t_sum)):,}",
-                "week": f"{w_count} - ₹{int(round(w_sum)):,}",
-                "month": f"{m_count} - ₹{int(round(m_sum)):,}"
+                "today": f"{t_count} - â‚¹{int(round(t_sum)):,}",
+                "week": f"{w_count} - â‚¹{int(round(w_sum)):,}",
+                "month": f"{m_count} - â‚¹{int(round(m_sum)):,}"
             }
-        return {"today": "0 - ₹0", "week": "0 - ₹0", "month": "0 - ₹0"}
+        return {"today": "0 - â‚¹0", "week": "0 - â‚¹0", "month": "0 - â‚¹0"}
     except Exception as e:
         logger.error(f"Error fetching customer analytics: {e}")
-        return {"today": "0 - ₹0", "week": "0 - ₹0", "month": "0 - ₹0"}
+        return {"today": "0 - â‚¹0", "week": "0 - â‚¹0", "month": "0 - â‚¹0"}
     finally:
         cur.close()
         conn.close()
@@ -2859,7 +2857,7 @@ def add_customer():
         if ano_exists(ano, vid):
             return jsonify(error="Account number already exists"), 400
 
-        fdt = datetime.strptime(data["start_date"], "%d/%m/%Y").date()
+        fdt = parse_date_input(data["start_date"])
         period = int(data["period"])
         loan_type = data["type"]
 
@@ -2931,18 +2929,18 @@ def add_customer():
 def view_customers():
     vid = session.get("vid")
 
-    # ❗ Enforce context
+    # â— Enforce context
     if not vid:
         flash("Please select Village from Dashboard first", "warning")
         return redirect(url_for("dashboard"))
 
-    # 🔹 NEW: mode toggle (active / closed)
+    # ðŸ”¹ NEW: mode toggle (active / closed)
     mode = request.args.get("mode", "active")  # default = active
 
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # 📊 Overhauled Analytics Calculations
+    # ðŸ“Š Overhauled Analytics Calculations
     # Active Stats (from customer table)
     cur.execute("""
         SELECT 
@@ -3174,6 +3172,12 @@ def view_customers():
 
     data = [dict(zip(headers, r)) for r in rows]
     data = format_customer_ratings_with_trends(cur, data)
+
+    # Format dates to dd-mm-yyyy for frontend display
+    for d in data:
+        for key in ['start_date', 'end_date', 'created_at', 'freeze_date', 'updated_at']:
+            if key in d and d[key]:
+                d[key] = format_date_display(d[key])
 
     cur.close()
     conn.close()
@@ -3542,7 +3546,9 @@ def payment_day_stats():
         return jsonify({"error": "Missing date"}), 400
 
     try:
-        payment_date = datetime.strptime(date_str, "%d/%m/%Y").date()
+        payment_date = parse_date_input(date_str)
+        if not payment_date:
+            raise ValueError("bad date")
     except Exception:
         return jsonify({"error": "Invalid date"}), 400
 
@@ -3664,11 +3670,10 @@ def post_payment_analytics():
 
         if not last_date:
             last_date = datetime.today().date()
-            days_ago = 0
-            last_date_str = last_date.strftime("%d/%m/%Y") + " (No postings yet)"
+            last_date_str = format_date_display(last_date) + " (No postings yet)"
         else:
-            days_ago = (datetime.today().date() - last_date).days
-            last_date_str = last_date.strftime("%d/%m/%Y") + f" ({days_ago} days ago)"
+            days_ago = (datetime.now(KOLKATA).date() - last_date).days
+            last_date_str = format_date_display(last_date) + f" ({days_ago} days ago)"
 
         # 2. Get all active or historically active customers for this village from the customer table, ignoring closed ones
         cur.execute("""
@@ -3762,8 +3767,8 @@ def post_payment_analytics():
             w["expected_collection"] = round(w["expected_collection"], 2)
             w["actual_collection"] = round(w["actual_collection"], 2)
             w["failed_to_collect"] = round(w["failed_to_collect"], 2)
-            w["start"] = w["start"].strftime("%d/%m/%Y")
-            w["end"] = w["end"].strftime("%d/%m/%Y")
+            w["start"] = format_date_display(w["start"])
+            w["end"] = format_date_display(w["end"])
 
         return jsonify(
             last_posting_date=last_date_str,
@@ -3802,9 +3807,9 @@ def submit_post_payment():
         for row in rows:
             ano = normalize_account_number(row.get("ano"))
             amt = Decimal(str(row["amt"]))
-            payment_date = datetime.strptime(row["pdt"], "%d/%m/%Y").date()
+            payment_date = parse_date_input(row["pdt"])
 
-            # 🔹 Fetch customer
+            # ðŸ”¹ Fetch customer
             cur.execute("""
                 SELECT cid, total_amount, paid_amount
                 FROM customer
@@ -3821,13 +3826,13 @@ def submit_post_payment():
             total_amt = Decimal(total_amt)
             paid_amt = Decimal(paid_amt or 0)
 
-            # 🔹 Insert payment (pid auto-generated)
+            # ðŸ”¹ Insert payment (pid auto-generated)
             cur.execute("""
                 INSERT INTO payment (cid, vid, eid, ano, amt, payment_date)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (cid, vid, eid, ano, amt, payment_date))
 
-            # 🔹 Recalculate balances (centralized logic)
+            # ðŸ”¹ Recalculate balances (centralized logic)
             recalc_customer_balance(cur, cid)
 
             submitted += 1
@@ -3836,7 +3841,7 @@ def submit_post_payment():
         min_pdt = None
         for r in rows:
             try:
-                pdt = datetime.strptime(r["pdt"], "%d/%m/%Y").date()
+                pdt = parse_date_input(r["pdt"])
                 if not min_pdt or pdt < min_pdt:
                     min_pdt = pdt
             except Exception:
@@ -3899,7 +3904,7 @@ def search_customer():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # 🔍 Search by A.no OR Name (within context), across both active, closed, and historic accounts
+        # ðŸ” Search by A.no OR Name (within context), across both active, closed, and historic accounts
         cur.execute("""
             (
                 SELECT
@@ -4004,9 +4009,13 @@ def search_customer():
 
         if row:
             cust = dict(zip(loanee_headers, row))
+            # Format dates to dd-mm-yyyy for frontend display
+            for key in ["start_date", "end_date", "created_at", "freeze_date", "updated_at"]:
+                if key in cust and cust[key]:
+                    cust[key] = format_date_display(cust[key])
             customers = [cust]
 
-            # 🔹 Fetch payments for this customer (from both payment and closed_cust_payment)
+            # 🔸 Fetch payments for this customer (from both payment and closed_cust_payment)
             cur.execute("""
                 SELECT ano, payment_date, amt, pid
                 FROM payment
@@ -4021,7 +4030,10 @@ def search_customer():
                 ORDER BY payment_date, pid
             """, (cust["cid"], cust["cid"]))
 
-            pamt1_records[cust["ano"]] = cur.fetchall()
+            payments = []
+            for r in cur.fetchall():
+                payments.append((r[0], format_date_display(r[1]), float(r[2]) if r[2] is not None else 0.0, r[3]))
+            pamt1_records[cust["ano"]] = payments
 
         cur.close()
         conn.close()
@@ -4076,10 +4088,7 @@ def api_customer_save_payments():
             pid = p.get("pid")
             amt = Decimal(str(p.get("amt", 0)))
             pdt_str = p.get("payment_date")
-            try:
-                pdt = datetime.fromisoformat(pdt_str).date()
-            except ValueError:
-                pdt = datetime.strptime(pdt_str, "%d/%m/%Y").date()
+            pdt = parse_date_input(pdt_str)
 
             if pid and pid in existing_pids:
                 # UPDATE
@@ -4728,7 +4737,7 @@ def print_customer(ano):
         cur.execute("""
             SELECT
                 ano,
-                TO_CHAR(payment_date, 'DD/MM/YYYY') AS pdt,
+                TO_CHAR(payment_date, 'DD-MM-YYYY') AS pdt,
                 amt,
                 pid
             FROM (
@@ -4751,8 +4760,8 @@ def print_customer(ano):
             "ano": customer[1],
             "name": customer[2],
             "pano": customer[3],
-            "start_date": customer[4],
-            "end_date": customer[5],
+            "start_date": format_date_display(customer[4]),
+            "end_date": format_date_display(customer[5]),
             "total_amount": float(customer[6] or 0),
             "paid_amount": float(customer[7] or 0),
             "balance_amount": float(customer[8] or 0),
@@ -4814,7 +4823,7 @@ def search_postings():
         query = """
             SELECT
                 ano AS \"ANO\",
-                TO_CHAR(payment_date, 'DD/MM/YYYY') AS \"PDT\",
+                TO_CHAR(payment_date, 'DD-MM-YYYY') AS \"PDT\",
                 amt AS \"AMT\"
             FROM payment
             WHERE vid = %s
@@ -4827,7 +4836,7 @@ def search_postings():
             params.append(ano)
 
         if date:
-            query += " AND TO_CHAR(payment_date, 'DD/MM/YYYY') = %s"
+            query += " AND TO_CHAR(payment_date, 'DD-MM-YYYY') = %s"
             params.append(date)
 
         query += " ORDER BY payment_date, pid"
@@ -4866,7 +4875,7 @@ def close_customer_account_pg():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # 🔒 Lock row (prevents race conditions)
+        # ðŸ”’ Lock row (prevents race conditions)
         cur.execute("""
             SELECT total_amount, paid_amount, balance_amount, status, vid
             FROM customer
@@ -4882,7 +4891,7 @@ def close_customer_account_pg():
         total_amount, paid_amount, balance_amount, current_status, vid = row
 
         # -------------------------------
-        # 🧠 STATUS DECISION LOGIC
+        # ðŸ§  STATUS DECISION LOGIC
         # -------------------------------
         if balance_amount == 0:
             final_status = "closed"
@@ -4906,13 +4915,13 @@ def close_customer_account_pg():
             final_status = "written_off"
 
         # -------------------------------
-        # 📦 MOVE DATA (NOT COPY)
+        # ðŸ“¦ MOVE DATA (NOT COPY)
         # -------------------------------
 
-        # 0️⃣ Recalculate and freeze rating in customer table before moving
+        # 0ï¸âƒ£ Recalculate and freeze rating in customer table before moving
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
-        # 1️⃣ Move customer (explicit columns to avoid mismatch)
+        # 1ï¸âƒ£ Move customer (explicit columns to avoid mismatch)
         cur.execute("""
             INSERT INTO closed_cust_account (
                 cid, ano, name, vid,
@@ -4930,14 +4939,14 @@ def close_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, phone_number, %s,
+                latitude, longitude, eid, %s, phone_number,
                 %s, NOW() AT TIME ZONE 'Asia/Kolkata',
                 customer_rating, final_frozen_rating, final_risk_level, freeze_date
             FROM customer
             WHERE cid = %s
         """, (final_status, session.get("employee_id") or session.get("eid"), cid))
 
-        # 2️⃣ Move payments (explicit columns)
+        # 2ï¸âƒ£ Move payments (explicit columns)
         cur.execute("""
             INSERT INTO closed_cust_payment (
                 pid, ano, payment_date, amt,
@@ -4950,7 +4959,7 @@ def close_customer_account_pg():
             WHERE cid = %s
         """, (cid,))
 
-        # 4️⃣ Delete from active tables (this makes it MOVE)
+        # 4ï¸âƒ£ Delete from active tables (this makes it MOVE)
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
 
@@ -5002,7 +5011,7 @@ def retrieve_customer_account_pg():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # 1️⃣ Move customer BACK to customer table
+        # 1ï¸âƒ£ Move customer BACK to customer table
         cur.execute("""
             INSERT INTO customer (
                 cid, ano, name, vid,
@@ -5023,7 +5032,7 @@ def retrieve_customer_account_pg():
             WHERE cid = %s
         """, (cid,))
 
-        # 2️⃣ Move payments BACK
+        # 2ï¸âƒ£ Move payments BACK
         cur.execute("""
             INSERT INTO payment (
                 pid, ano, payment_date, amt,
@@ -5036,11 +5045,11 @@ def retrieve_customer_account_pg():
             WHERE cid = %s
         """, (cid,))
 
-        # 3️⃣ Delete from closed tables
+        # 3ï¸âƒ£ Delete from closed tables
         cur.execute("DELETE FROM closed_cust_payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM closed_cust_account WHERE cid = %s", (cid,))
 
-        # 4️⃣ Unfreeze rating columns in customer table
+        # 4ï¸âƒ£ Unfreeze rating columns in customer table
         cur.execute("""
             UPDATE customer
             SET final_frozen_rating = NULL,
@@ -5049,7 +5058,7 @@ def retrieve_customer_account_pg():
             WHERE cid = %s
         """, (cid,))
 
-        # 5️⃣ Recalculate rating for reactivated loan
+        # 5ï¸âƒ£ Recalculate rating for reactivated loan
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
         # Invalidate cache for this village
@@ -5095,7 +5104,7 @@ def update_village():
     village_code = (data.get("village_code") or "").strip().upper()
     village_name = (data.get("village_name") or "").strip().upper()
 
-        # 🔒 Prevent duplicate village code / village name
+        # ðŸ”’ Prevent duplicate village code / village name
     cur.execute("""
             SELECT vid, village_code, village_name
             FROM village
@@ -5240,7 +5249,7 @@ def feed():
 
             payload = row_dict.get("payload")
 
-            # ✅ Normalize payload
+            # âœ… Normalize payload
             if isinstance(payload, str):
                 try:
                     payload = json.loads(payload)
@@ -5249,7 +5258,7 @@ def feed():
             elif payload is None:
                 payload = {}
 
-            # ✅ Flatten payload into row_dict (VERY IMPORTANT)
+            # âœ… Flatten payload into row_dict (VERY IMPORTANT)
             row_dict.update({
                 "ano": payload.get("ano"),
                 "name": payload.get("name"),
@@ -5271,6 +5280,12 @@ def feed():
 
             # keep payload also (optional)
             row_dict["payload"] = payload
+
+            # format dates if present
+            if row_dict.get("start_date"):
+                row_dict["start_date"] = format_date_display(row_dict["start_date"])
+            if row_dict.get("end_date"):
+                row_dict["end_date"] = format_date_display(row_dict["end_date"])
 
             customers.append(row_dict)
         # PAYMENT FEED
@@ -5295,6 +5310,9 @@ def feed():
         columns = [desc[0] for desc in cur.description] # type: ignore
 
         payments = [dict(zip(columns, r)) for r in rows]
+        for p in payments:
+            if p.get("pdt"):
+                p["pdt"] = format_date_display(p["pdt"])
 
         return render_template(
             "feed.html",
@@ -5450,7 +5468,7 @@ def accept_payment(feed_payment_id):
     if not logged_user:
         return {"success": False, "error": "User not logged properly"}
 
-    # 1️⃣ Get payload
+    # 1ï¸âƒ£ Get payload
     cur.execute("""
         SELECT payload
         FROM payment_feed_items
@@ -5488,7 +5506,7 @@ def accept_payment(feed_payment_id):
     cash_amount = Decimal(str(data.get("cash_amount", 0)))
     upi_amount = Decimal(str(data.get("upi_amount", 0)))
 
-    # 2️⃣ Get customer
+    # 2ï¸âƒ£ Get customer
     cur.execute("""
         SELECT cid, total_amount
         FROM customer
@@ -5502,7 +5520,7 @@ def accept_payment(feed_payment_id):
 
     cid, total_amt = cust
 
-    # 3️⃣ Insert payment
+    # 3ï¸âƒ£ Insert payment
     cur.execute("""
         INSERT INTO payment
         (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
@@ -5519,10 +5537,10 @@ def accept_payment(feed_payment_id):
         upi_amount
     ))
 
-    # 4️⃣ Recalculate balance
+    # 4ï¸âƒ£ Recalculate balance
     recalc_customer_balance(cur, cid)
 
-    # 5️⃣ Mark feed accepted
+    # 5ï¸âƒ£ Mark feed accepted
     cur.execute("""
         UPDATE payment_feed_items
         SET status='accepted',
@@ -5559,7 +5577,7 @@ def accept_payment_batch():
 
     data = request.get_json()
     ids = data.get("ids", [])
-    # ✅ Ensure IDs are integers (fix bigint = text error)
+    # âœ… Ensure IDs are integers (fix bigint = text error)
     try:
         ids = [int(i) for i in ids]
     except Exception:
@@ -5578,7 +5596,7 @@ def accept_payment_batch():
         return {"success": False, "error": "User not logged properly"}
 
     try:
-        # 1️⃣ Fetch all selected payloads
+        # 1ï¸âƒ£ Fetch all selected payloads
         cur.execute("""
             SELECT payload
             FROM payment_feed_items
@@ -5637,7 +5655,7 @@ def accept_payment_batch():
 
         insert_values = []
 
-        # 2️⃣ Prepare bulk insert
+        # 2ï¸âƒ£ Prepare bulk insert
         for r in rows:
             p = r[0]
             if isinstance(p, str):
@@ -5689,7 +5707,7 @@ def accept_payment_batch():
         if not insert_values:
             return {"success": False, "error": "No valid payments to insert"}
 
-        # 3️⃣ BULK INSERT (safe + parameterized)
+        # 3ï¸âƒ£ BULK INSERT (safe + parameterized)
         execute_values(
             cur,
             """
@@ -5710,11 +5728,11 @@ def accept_payment_batch():
             template="(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
 
-        # 4️⃣ Update customers (optimized)
+        # 4ï¸âƒ£ Update customers (optimized)
         for customer in customer_map.values():
             recalc_customer_balance(cur, customer["cid"])
 
-        # 5️⃣ Mark all as accepted
+        # 5ï¸âƒ£ Mark all as accepted
         cur.execute("""
             UPDATE payment_feed_items
             SET status = 'accepted',
@@ -5777,7 +5795,7 @@ def update_customer_pg():
 
     try:
 
-        # 🔹 Detect table based on status
+        # ðŸ”¹ Detect table based on status
         status = (data.get("status") or "active").strip().lower()
 
         if status == "active":
@@ -5785,7 +5803,7 @@ def update_customer_pg():
         else:
             table_name = "closed_cust_account"
 
-        # 🔹 Fetch existing paid amount
+        # ðŸ”¹ Fetch existing paid amount
         cur.execute(f"""
             SELECT paid_amount
             FROM {table_name}
@@ -5800,7 +5818,7 @@ def update_customer_pg():
 
         paid_amount = float(existing[0] or 0)
 
-        # 🔹 Read editable fields
+        # ðŸ”¹ Read editable fields
         name = (data.get("name") or "").strip()
         start_date_raw = (data.get("start_date") or "").strip()
         loan_type = (data.get("type") or "").strip().upper()
@@ -5821,7 +5839,7 @@ def update_customer_pg():
         except Exception:
             return jsonify(success=False, error="Invalid period"), 400 
 
-        # 🔹 Validation
+        # ðŸ”¹ Validation
         if not name:
             return jsonify(success=False, error="Name is required"), 400
 
@@ -5838,16 +5856,15 @@ def update_customer_pg():
             if not phone_number.isdigit() or len(phone_number) != 10:
                 return jsonify(success=False, error="Phone number must be 10 digits"), 400
 
-        # 🔹 Parse frontend date safely
+        # ðŸ”¹ Parse frontend date safely
         try:
-            if "/" in start_date_raw:
-                start_date = datetime.strptime(start_date_raw, "%d/%m/%Y").date()
-            else:
-                start_date = datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+            start_date = parse_date_input(start_date_raw)
+            if not start_date:
+                raise ValueError("bad date")
         except Exception:
             return jsonify(success=False, error="Invalid start date format"), 400
 
-        # 🔹 Recalculate derived fields
+        # ðŸ”¹ Recalculate derived fields
         if loan_type == "M":
             end_date = start_date + relativedelta(months=period)
         else:
@@ -5856,7 +5873,7 @@ def update_customer_pg():
         installment_amount = round(total_amount / period, 2)
         balance_amount = round(total_amount - paid_amount, 2)
 
-        # 🔹 Update customer
+        # ðŸ”¹ Update customer
         cur.execute(f"""
             UPDATE {table_name}
             SET
@@ -6011,12 +6028,11 @@ def update_payment_record_pg():
     # Parse payment date
     pdt_str = data.get("payment_date")
     try:
-        pdt = datetime.fromisoformat(pdt_str).date()
-    except ValueError:
-        try:
-            pdt = datetime.strptime(pdt_str, "%d/%m/%Y").date()
-        except ValueError:
-            return jsonify(success=False, error="Invalid date format. Use DD/MM/YYYY or YYYY-MM-DD."), 400
+        pdt = parse_date_input(pdt_str)
+        if not pdt:
+            raise ValueError("bad date")
+    except (ValueError, TypeError):
+        return jsonify(success=False, error="Invalid date format. Use DD-MM-YYYY or YYYY-MM-DD."), 400
 
     if not pid or not ano or amt is None:
         return jsonify(success=False, error="Missing required fields"), 400
@@ -6097,7 +6113,7 @@ def add_payment():
     data = request.get_json()
     ano = int(data["ano"])
     amt = Decimal(str(data["amt"]))
-    pdt = datetime.strptime(data["pdt"], "%d/%m/%Y").date()
+    pdt = parse_date_input(data["pdt"])
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -6143,7 +6159,7 @@ def delete_payment():
     if not ano or not pdt_raw or not vid:
         return jsonify(success=False, error="Missing required fields"), 400
 
-    # ✅ ACCEPT ISO DATE (YYYY-MM-DD)
+    # âœ… ACCEPT ISO DATE (YYYY-MM-DD)
     try:
         pdt = datetime.fromisoformat(pdt_raw).date()
     except ValueError:
@@ -6153,7 +6169,7 @@ def delete_payment():
     cur = conn.cursor()
 
     try:
-        # 🔹 Delete payment
+        # ðŸ”¹ Delete payment
         cur.execute("""
             DELETE FROM payment
             WHERE vid = %s
@@ -6165,7 +6181,7 @@ def delete_payment():
             conn.rollback()
             return jsonify(success=False, error="Payment not found"), 404
 
-        # 🔹 Recalculate balances
+        # ðŸ”¹ Recalculate balances
         cur.execute("""
             SELECT cid, total_amount
             FROM customer
@@ -6296,15 +6312,9 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     # 1. Parse and clean input dates to datetime.date objects
     parsed_dates = []
     for d in dates:
-        if isinstance(d, str):
-            try:
-                parsed_dates.append(datetime.fromisoformat(d).date())
-            except ValueError:
-                parsed_dates.append(datetime.strptime(d, "%d/%m/%Y").date())
-        elif isinstance(d, datetime):
-            parsed_dates.append(d.date())
-        else:
-            parsed_dates.append(d)
+        pd = parse_date_input(d)
+        if pd:
+            parsed_dates.append(pd)
     
     # Sort and remove duplicates to find unique dates needed
     unique_dates = sorted(list(set(parsed_dates)))
@@ -6335,7 +6345,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         for d in parsed_dates:
             cached = cache_by_date[d]
             history_payload.append({
-                "date_label": d.strftime("%d/%m"),
+                "date_label": d.strftime("%d-%m"),
                 "full_date": d.isoformat(),
                 "health_score": cached["health_score"],
                 "base_score": cached["metrics"].get("base_score", cached["health_score"]),
@@ -6638,7 +6648,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     for d in parsed_dates:
         cached = cache_by_date[d]
         history_payload.append({
-            "date_label": d.strftime("%d/%m"),
+            "date_label": d.strftime("%d-%m"),
             "full_date": d.isoformat(),
             "health_score": cached["health_score"],
             "base_score": cached["metrics"].get("base_score", cached["health_score"]),
@@ -6766,8 +6776,8 @@ def api_village_health_history(vid):
                 "action": r[0],
                 "username": r[1],
                 "details": r[2],
-                "created_at": evt_created.strftime("%d/%m/%Y %I:%M %p") if evt_created else "-",
-                "date_key": evt_created.strftime("%d/%m") if evt_created else "",
+                "created_at": evt_created.strftime("%d-%m-%Y %I:%M %p") if evt_created else "-",
+                "date_key": evt_created.strftime("%d-%m") if evt_created else "",
                 "entity_type": r[4],
                 "entity_id": r[5]
             })
@@ -6922,7 +6932,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
             p_dt = p["payment_date"]
             if not last_pay_date or p_dt > last_pay_date:
                 last_pay_date = p_dt
-        last_payment_date_str = last_pay_date.strftime("%d/%m/%Y") if last_pay_date else "-"
+        last_payment_date_str = format_date_display(last_pay_date) if last_pay_date else "-"
         
         consec_missed_count = 0
         for wk in reversed(wk_details_t):
@@ -7008,11 +7018,11 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     trend_val = current_health - last_week_health
     
     if trend_val > 0:
-        trend_text = f"↑ {trend_val:.1f} points"
+        trend_text = f"â†‘ {trend_val:.1f} points"
     elif trend_val < 0:
-        trend_text = f"↓ {abs(trend_val):.1f} points"
+        trend_text = f"â†“ {abs(trend_val):.1f} points"
     else:
-        trend_text = "→ Stable"
+        trend_text = "â†’ Stable"
         
     health_status = "Stable"
     if current_health >= 80:
@@ -7118,7 +7128,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
         stress_alerts.append({
             "type": "Collection Slowdown",
-            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (₹{weekly_payments[3]:,.0f} → ₹{weekly_payments[2]:,.0f} → ₹{weekly_payments[1]:,.0f}).",
+            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (â‚¹{weekly_payments[3]:,.0f} â†’ â‚¹{weekly_payments[2]:,.0f} â†’ â‚¹{weekly_payments[1]:,.0f}).",
             "severity": "High"
         })
         
@@ -7129,7 +7139,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         if pct_inc >= 15.0:
             stress_alerts.append({
                 "type": "Quality Decline",
-                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
+                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} â†’ {partial_today}).",
                 "severity": "Medium"
             })
             
@@ -7422,7 +7432,7 @@ def api_dashboard_analytics(vid):
 
         # A. Weekly Snapshots (Last 12 weeks)
         dates_weekly = [today - timedelta(days=7 * (11 - i)) for i in range(12)]
-        history_weekly = compute_history_for_dates(dates_weekly, "%d/%m")
+        history_weekly = compute_history_for_dates(dates_weekly, "%d-%m")
 
         # B. Monthly Snapshots (Last 12 calendar months)
         dates_monthly = []
@@ -7751,7 +7761,7 @@ def api_dashboard_posting_analytics(vid):
         historical_trend = []
         for s in reversed(all_stats[:10]):
             historical_trend.append({
-                "date": s["date"].strftime("%d/%m"),
+                "date": s["date"].strftime("%d-%m"),
                 "collected_amount": s["actual_amt"],
                 "expected_amount": s["expected_amt"],
                 "coverage_pct": s["coverage_pct"],
@@ -7762,7 +7772,7 @@ def api_dashboard_posting_analytics(vid):
         return jsonify(success=True, data={
             "empty": False,
             "recent_posting": {
-                "last_date": t0.strftime("%d/%m/%Y"),
+                "last_date": format_date_display(t0),
                 "elapsed_days": elapsed_days,
                 "status": lag_status,
                 "avg_entry_lag_days": avg_entry_lag_days
@@ -7815,7 +7825,7 @@ def toggle_village_status():
     cur = conn.cursor()
 
     try:
-        # Toggle active ↔ inactive
+        # Toggle active â†” inactive
         cur.execute("""
             UPDATE village
             SET status = CASE
@@ -7835,6 +7845,107 @@ def toggle_village_status():
     except Exception as e:
         conn.rollback()
         return jsonify(success=False, error=str(e))
+
+    finally:
+        cur.close()
+        conn.close()
+
+# ----------------------------------------------------
+# GEOCODE VILLAGE API
+# ----------------------------------------------------
+@app.route("/api/village/geocode", methods=["POST"])
+@login_required
+def api_village_geocode():
+    """Geocode a single village using Nominatim (same logic as geocode_villages.py)."""
+    import re as _re
+    import requests as _requests
+
+    data = request.get_json()
+    vid = data.get("vid")
+    if not vid:
+        return jsonify(success=False, error="Missing vid"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT village_name, district, state, pincode
+            FROM village WHERE vid = %s
+        """, (vid,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify(success=False, error="Village not found"), 404
+
+        village_name, district, state, pincode = row
+
+        # Clean village name: remove all digits (e.g. HUBBILLI2 -> HUBBILLI) and trim dashes/spaces
+        clean_name = ""
+        if village_name:
+            clean_name = _re.sub(r'\d+', '', village_name)
+            clean_name = _re.sub(r'[-\s]+$', '', clean_name)
+            clean_name = _re.sub(r'^[-\s]+', '', clean_name).strip()
+
+        geocode_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        def _geocode_query(q):
+            url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
+            try:
+                resp = _requests.get(url, headers=geocode_headers, timeout=10)
+                if resp.status_code == 200:
+                    results = resp.json()
+                    if results:
+                        return float(results[0]["lat"]), float(results[0]["lon"])
+            except Exception:
+                pass
+            return None
+
+        coords = None
+
+        # Step 1: name + pincode + district + state
+        if clean_name and pincode and district and state:
+            q = f"{clean_name}, {pincode}, {district}, {state}, India"
+            coords = _geocode_query(q)
+
+        # Step 2: name + pincode
+        if not coords and clean_name and pincode:
+            q = f"{clean_name}, {pincode}, India"
+            coords = _geocode_query(q)
+
+        # Step 3: name + district + state
+        if not coords and clean_name and district and state:
+            q = f"{clean_name}, {district}, {state}, India"
+            coords = _geocode_query(q)
+
+        # Step 4: name + state
+        if not coords and clean_name and state:
+            q = f"{clean_name}, {state}, India"
+            coords = _geocode_query(q)
+
+        # Step 5: pincode
+        if not coords and pincode:
+            q = f"{pincode}, India"
+            coords = _geocode_query(q)
+
+        if not coords:
+            return jsonify(success=False, error="Could not geocode this village. Try updating the village name, district, or pincode and retry.")
+
+        res_lat, res_lon = coords
+
+        cur.execute("""
+            UPDATE village
+            SET latitude = %s, longitude = %s
+            WHERE vid = %s
+        """, (res_lat, res_lon, vid))
+        conn.commit()
+
+        return jsonify(success=True, latitude=res_lat, longitude=res_lon)
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify(success=False, error=str(e)), 500
 
     finally:
         cur.close()
@@ -7880,14 +7991,14 @@ def update_employee_in_db(data):
         name = (data.get("name") or "").strip()
         phone_number = (data.get("phone_number") or "").strip()
 
-        # 🔒 Required validation
+        # ðŸ”’ Required validation
         if not name:
             return {
                 "success": False,
                 "error": "Employee name is required"
             }
 
-        # 🔒 Prevent duplicate employee name / phone while editing
+        # ðŸ”’ Prevent duplicate employee name / phone while editing
         cur.execute(
             """
             SELECT eid, name, phone_number
@@ -7939,7 +8050,7 @@ def update_employee_in_db(data):
                     "error": f"Mobile number '{phone_number}' is already assigned to another employee"
                 }
 
-        # ✅ Update employee
+        # âœ… Update employee
         cur.execute("""
             UPDATE employee
             SET
@@ -8092,7 +8203,7 @@ def login():
 
     try:
         # ---------------------------
-        # 1️⃣ Fetch user
+        # 1ï¸âƒ£ Fetch user
         # ---------------------------
         cur.execute("""
             SELECT u.id,
@@ -8119,16 +8230,16 @@ def login():
         )
 
         # ---------------------------
-        # 2️⃣ Check password
+        # 2ï¸âƒ£ Check password
         # ---------------------------
         if not check_password_hash(password_hash, password):
             flash("Incorrect password. Please contact admin to reset credentials")
             return redirect("/login")
 
         # ---------------------------
-        # 3️⃣ Device lock logic
+        # 3ï¸âƒ£ Device lock logic
         # ---------------------------
-        # 🔓 Admin users are NOT device locked
+        # ðŸ”“ Admin users are NOT device locked
         if not level or level.strip().lower() != "admin":
 
             cur.execute("""
@@ -8139,7 +8250,7 @@ def login():
             device = cur.fetchone()
 
             if not device:
-                # First login or after reset → clear old devices and register new
+                # First login or after reset â†’ clear old devices and register new
                 cur.execute("""
                     DELETE FROM user_devices
                     WHERE user_id = %s
@@ -8164,7 +8275,7 @@ def login():
                     return redirect("/login")
 
         # ---------------------------
-        # 4️⃣ Load village access
+        # 4ï¸âƒ£ Load village access
         # ---------------------------
         cur.execute("""
             SELECT vid
@@ -8175,7 +8286,7 @@ def login():
         villages = [row[0] for row in cur.fetchall()]
 
         # ---------------------------
-        # 5️⃣ Save session
+        # 5ï¸âƒ£ Save session
         # ---------------------------
         session.clear()
         session["user_id"] = user_id
@@ -8348,7 +8459,7 @@ def add_user():
         
         new_user_id = result[0]
 
-        # 🔹 Assign villages to user in user_village_access
+        # ðŸ”¹ Assign villages to user in user_village_access
         cur.execute("""
             SELECT vid
             FROM village
@@ -8548,13 +8659,13 @@ def update_user_villages():
     cur = conn.cursor()
 
     try:
-        # 🔹 Remove existing mappings
+        # ðŸ”¹ Remove existing mappings
         cur.execute("""
             DELETE FROM user_village_access
             WHERE user_id = %s
         """, (user_id,))
 
-        # 🔹 Insert new mappings
+        # ðŸ”¹ Insert new mappings
         for vid in village_ids:
             cur.execute("""
                 INSERT INTO user_village_access (user_id, village_id)
@@ -8578,7 +8689,7 @@ def update_user_villages():
 @login_required
 def dashboard():
     vid = session.get("vid")
-    # ✅ NO CONTEXT → SHOW ZERO DASHBOARD
+    # âœ… NO CONTEXT â†’ SHOW ZERO DASHBOARD
     if not vid:
         if request.args.get("partial"):
             return render_template(
@@ -8638,11 +8749,13 @@ def update_payment_date_bulk():
     if not old_date or not new_date or not vid:
         return jsonify(success=False, error="Missing data"), 400
 
-    # Convert dd/mm/yyyy → yyyy-mm-dd
+    # Convert any date format â†’ date object
     try:
-        old_iso = datetime.strptime(old_date, "%d/%m/%Y").date()
-        new_iso = datetime.strptime(new_date, "%d/%m/%Y").date()
-    except ValueError:
+        old_iso = parse_date_input(old_date)
+        new_iso = parse_date_input(new_date)
+        if not old_iso or not new_iso:
+            raise ValueError("bad date")
+    except (ValueError, TypeError):
         return jsonify(success=False, error="Invalid date format"), 400
 
     conn = get_pg_connection()

@@ -172,6 +172,7 @@ function updateCollectionStats() {
 }
 
 let isEditingCell = false; // Prevent multiple cell editing sessions simultaneously
+const pendingReportChanges = new Map(); // key=pid, value={field: newValue, ...}
 
 function makeCellEditable(cell, index, field, currentValue) {
     if (isEditingCell) return;
@@ -1737,6 +1738,11 @@ function makeReportCellEditable(cell, pid, field, currentValue) {
     cell.appendChild(input);
     input.focus();
 
+    // Show save button immediately on any keystroke (input event)
+    input.addEventListener("input", function() {
+        toggleSaveReportButton(true);
+    });
+
     let isFinished = false;
 
     function finishEdit(save) {
@@ -1784,7 +1790,20 @@ function makeReportCellEditable(cell, pid, field, currentValue) {
             }
         }
 
-        updateReportRecord(pid, field, parsedValue);
+        // Store pending change instead of saving immediately
+        const existing = pendingReportChanges.get(pid) || {};
+        existing[field] = parsedValue;
+        pendingReportChanges.set(pid, existing);
+        toggleSaveReportButton(true);
+
+        // Mark cell as changed visually
+        cell.textContent = field === 'amt' ? Number(parsedValue).toFixed(2) : parsedValue;
+        cell.style.outline = '2px solid var(--accent-cyan, #22d3ee)';
+        cell.style.borderRadius = '4px';
+        cell.style.background = 'rgba(34, 211, 238, 0.06)';
+
+        // Re-attach double-click so user can re-edit the cell
+        cell.ondblclick = () => makeReportCellEditable(cell, pid, field, parsedValue);
     }
 
     input.addEventListener("keydown", function(e) {
@@ -1866,6 +1885,93 @@ function updateReportRecord(pid, field, value) {
         alert("❌ Error updating payment: " + err.message);
         renderReport();
     });
+}
+
+// --- Pending Report Changes: Save Button Logic ---
+function toggleSaveReportButton(show) {
+    const btn = document.getElementById('btnSaveReportChanges');
+    if (!btn) return;
+    if (show && pendingReportChanges.size > 0) {
+        btn.style.display = '';
+    } else if (show) {
+        // Show even before finishEdit stores the change (input event triggered)
+        btn.style.display = '';
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function saveAllReportChanges() {
+    if (pendingReportChanges.size === 0) return;
+
+    const btn = document.getElementById('btnSaveReportChanges');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
+
+    const promises = [];
+
+    pendingReportChanges.forEach((fields, pid) => {
+        const currentPayment = originalReportData.find(p => p.pid === pid);
+        if (!currentPayment) return;
+
+        const updatedPayment = { ...currentPayment };
+        Object.keys(fields).forEach(field => {
+            if (field === 'payment_date') {
+                updatedPayment.payment_date = ddmmyyyyToIso(fields[field]);
+            } else {
+                updatedPayment[field] = fields[field];
+            }
+        });
+
+        const promise = csrfFetch("/api/payment/update_record_pg", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                data: {
+                    pid: updatedPayment.pid,
+                    ano: updatedPayment.ano,
+                    amt: updatedPayment.amt,
+                    payment_date: updatedPayment.payment_date
+                }
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || "Unknown error for PID " + pid);
+            }
+            return pid;
+        });
+
+        promises.push(promise);
+    });
+
+    Promise.all(promises)
+        .then(savedPids => {
+            pendingReportChanges.clear();
+            toggleSaveReportButton(false);
+
+            const reportDisplayBox = document.getElementById("reportDisplayBox");
+            triggerSuccessFeedback({
+                sectionElement: reportDisplayBox,
+                message: savedPids.length + " record" + (savedPids.length !== 1 ? "s" : "") + " saved successfully",
+                highlightDuration: 5000
+            });
+
+            fetchReportDataSilently();
+        })
+        .catch(err => {
+            alert("❌ Error saving changes: " + err.message);
+            // Don't clear pending changes on error so user can retry
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+        });
 }
 
 function highlightReportRecord(pid) {

@@ -26,7 +26,7 @@
 
             <label>
               Payment Date
-              <input type="text" id="pdt" placeholder="dd/mm/yyyy" required>
+              <input type="text" id="pdt" placeholder="dd-mm-yyyy" required>
             </label>
 
             <label>
@@ -122,17 +122,19 @@
           <button class="neumorphic-btn small warning-btn" id="btnToggleBulkDate" onclick="toggleBulkDatePanel()"
             style="margin-left: auto; color: #b45309; margin-bottom: 2px;"><i class="fas fa-calendar-alt"></i> Date
             Change</button>
+          <button class="neumorphic-btn small primary-save-btn glow-cyan" id="btnSaveReportChanges"
+            style="display: none; margin-bottom: 2px;" onclick="saveAllReportChanges()"><i class="fas fa-save"></i> Save Changes</button>
         </div>
 
         <!-- Bulk Date Change Tool Panel (Initially Hidden) -->
         <div class="bulk-date-panel" id="bulkDatePanel" style="display: none;">
           <label>
             Find Date
-            <input type="text" id="bulkFindDate" placeholder="dd/mm/yyyy">
+            <input type="text" id="bulkFindDate" placeholder="dd-mm-yyyy">
           </label>
           <label>
             Replace Date
-            <input type="text" id="bulkReplaceDate" placeholder="dd/mm/yyyy">
+            <input type="text" id="bulkReplaceDate" placeholder="dd-mm-yyyy">
           </label>
           <button class="neumorphic-btn small warning-btn" onclick="submitBulkDateReplace()"
             style="color: #b45309; margin-bottom: 2px;">Submit</button>

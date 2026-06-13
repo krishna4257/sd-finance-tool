@@ -14,8 +14,10 @@ HEADERS = {
 def clean_village_name(name):
     if not name:
         return ""
-    # Strip trailing digits (e.g., SRISAILAM2 -> SRISAILAM)
-    name = re.sub(r'\d+$', '', name)
+    # Remove all digits and trim dashes/spaces
+    name = re.sub(r'\d+', '', name)
+    name = re.sub(r'[-\s]+$', '', name)
+    name = re.sub(r'^[-\s]+', '', name)
     return name.strip()
 
 def geocode_query(q):
@@ -64,24 +66,38 @@ def main():
         
         coords = None
         
-        # Step 1: Try full name + district + state
-        if clean_name and district and state:
-            q = f"{clean_name}, {district}, {state}, India"
-            print(f"  Attempt 1: '{q}'")
+        # Step 1: name + pincode + district + state
+        if clean_name and pincode and district and state:
+            q = f"{clean_name}, {pincode}, {district}, {state}, India"
+            print(f"  Attempt 1 (name+pincode+district+state): '{q}'")
             coords = geocode_query(q)
             time.sleep(1.2)
             
-        # Step 2: Try name + state
+        # Step 2: name + pincode
+        if not coords and clean_name and pincode:
+            q = f"{clean_name}, {pincode}, India"
+            print(f"  Attempt 2 (name+pincode): '{q}'")
+            coords = geocode_query(q)
+            time.sleep(1.2)
+            
+        # Step 3: name + district + state
+        if not coords and clean_name and district and state:
+            q = f"{clean_name}, {district}, {state}, India"
+            print(f"  Attempt 3 (name+district+state): '{q}'")
+            coords = geocode_query(q)
+            time.sleep(1.2)
+            
+        # Step 4: name + state
         if not coords and clean_name and state:
             q = f"{clean_name}, {state}, India"
-            print(f"  Attempt 2: '{q}'")
+            print(f"  Attempt 4 (name+state): '{q}'")
             coords = geocode_query(q)
             time.sleep(1.2)
             
-        # Step 3: Try Pincode
+        # Step 5: Pincode
         if not coords and pincode:
             q = f"{pincode}, India"
-            print(f"  Attempt 3: '{q}'")
+            print(f"  Attempt 5 (pincode): '{q}'")
             coords = geocode_query(q)
             time.sleep(1.2)
 
