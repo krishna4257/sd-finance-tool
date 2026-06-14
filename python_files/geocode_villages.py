@@ -2,10 +2,12 @@ import os
 import re
 import time
 import requests
+from urllib.parse import quote_plus
 import psycopg2
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv(dotenv_path="d:\\Finance_online_Application\\sd-finance-tool\\.env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -21,17 +23,45 @@ def clean_village_name(name):
     return name.strip()
 
 def geocode_query(q):
-    url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
+    url = f"https://nominatim.openstreetmap.org/search?q={quote_plus(str(q))}&format=jsonv2&limit=1&countrycodes=in"
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=15)
+
         if response.status_code == 200:
             data = response.json()
             if data:
-                return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
+                return (
+                    float(data[0]["lat"]),
+                    float(data[0]["lon"]),
+                    data[0].get("display_name", "")
+                )
+
         elif response.status_code == 403:
             print("Received HTTP 403 Forbidden. Check User-Agent or IP block.")
+
     except Exception as e:
         print(f"Network error geocoding query '{q}': {e}")
+
+    return None
+
+
+def geocode_pincode(pincode):
+    url = f"https://nominatim.openstreetmap.org/search?postalcode={quote_plus(str(pincode))}&country=India&format=jsonv2&limit=1"
+
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=15)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                return (
+                    float(data[0]["lat"]),
+                    float(data[0]["lon"]),
+                    data[0].get("display_name", "")
+                )
+    except Exception as e:
+        print(f"Pincode lookup failed for {pincode}: {e}")
+
     return None
 
 def main():
@@ -40,7 +70,7 @@ def main():
         database=os.environ["DB_NAME"].strip(),
         user=os.environ["DB_USER"].strip(),
         password=os.environ["DB_PASSWORD"].strip(),
-        port=os.environ.get("DB_PORT", "5432").strip(),
+        port=os.environ.get("DB_PORT", "6432").strip(),
     )
     cur = conn.cursor()
 
@@ -94,11 +124,10 @@ def main():
             coords = geocode_query(q)
             time.sleep(1.2)
             
-        # Step 5: Pincode
+        # Step 5: Direct pincode lookup
         if not coords and pincode:
-            q = f"{pincode}, India"
-            print(f"  Attempt 5 (pincode): '{q}'")
-            coords = geocode_query(q)
+            print(f"  Attempt 5 (direct pincode lookup): '{pincode}'")
+            coords = geocode_pincode(pincode)
             time.sleep(1.2)
 
         if coords:
