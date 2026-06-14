@@ -505,7 +505,12 @@
                 <span class="status-badge status-{{ row[col]|lower }}">{{ row[col] }}</span>
               </td>
             {% else %}
-              <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
+              <td class="table-cell" data-field="{{ col }}"
+                {% if col in ['customer_count', 'latitude', 'longitude', 'pincode', 'vid'] %}
+                  data-order="{{ row[col] if row[col] is not none else 0 }}"
+                {% endif %}>
+                {{ row[col] if row[col] is not none else '' }}
+              </td>
             {% endif %}
           {% endfor %}
  

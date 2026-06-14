@@ -108,17 +108,26 @@
       <div class="card-stats">
         <div class="stat-item align-center">
           <span class="label">Active</span>
-          <span class="value" id="activeAvgScore">{{ "%.1f"|format(active_avg_score) }}</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="activeAvgScore">{{ "%.1f"|format(active_avg_score) }}</span>
+            <span class="trend-arrow" id="activeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Defaulted</span>
-          <span class="value" id="defaultedAvgScore">{{ "%.1f"|format(defaulted_avg_score) }}</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="defaultedAvgScore">{{ "%.1f"|format(defaulted_avg_score) }}</span>
+            <span class="trend-arrow" id="defaultedAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Complete</span>
-          <span class="value" id="completeAvgScore">{{ "%.1f"|format(complete_avg_score) }}</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="completeAvgScore">{{ "%.1f"|format(complete_avg_score) }}</span>
+            <span class="trend-arrow" id="completeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -165,30 +174,38 @@
         {% for row in data %}
         <tr class="table-row" data-ano="{{ row['ano'] }}" data-cid="{{ row['cid'] }}" data-source="{{ 'active' if mode == 'active' else 'closed' if mode == 'closed' else 'historic' if mode == 'historic' else 'active' }}">
           <td class="checkbox-column" style="text-align: center;"><input type="checkbox" /></td>
-          <td class="col-ano">{{ row['ano'] }}</td>
+          <td class="col-ano" data-order="{{ row['ano'] }}">{{ row['ano'] }}</td>
           <td class="col-name">{{ row['name'] }}</td>
-          <td class="col-start_date">{{ row['start_date'] }}</td>
-          <td class="col-end_date">{{ row['end_date'] }}</td>
-          <td class="col-total_amount" data-money>{{ row['total_amount'] }}</td>
-          <td class="col-paid_amount" data-money>{{ row['paid_amount'] }}</td>
-          <td class="col-balance_amount amount-paid" data-money>{{ row['balance_amount'] }}</td>
-          <td class="col-installment_amount" data-money>{{ row['installment_amount'] }}</td>
+          <td class="col-start_date" data-order="{{ row['start_date_raw'] }}">{{ row['start_date'] }}</td>
+          <td class="col-end_date" data-order="{{ row['end_date_raw'] }}">{{ row['end_date'] }}</td>
+          <td class="col-total_amount" data-order="{{ row['total_amount'] }}" data-money>{{ row['total_amount'] }}</td>
+          <td class="col-paid_amount" data-order="{{ row['paid_amount'] }}" data-money>{{ row['paid_amount'] }}</td>
+          <td class="col-balance_amount amount-paid" data-order="{{ row['balance_amount'] }}" data-money>{{ row['balance_amount'] }}</td>
+          <td class="col-installment_amount" data-order="{{ row['installment_amount'] }}" data-money>{{ row['installment_amount'] }}</td>
           <td class="col-type">{{ row['type'] }}</td>
-          <td class="col-period">{{ row['period'] }}</td>
-          <td class="col-pano">{{ row['pano'] }}</td>
+          <td class="col-period" data-order="{{ row['period'] }}">{{ row['period'] }}</td>
+          <td class="col-pano" data-order="{{ row['pano'] }}">{{ row['pano'] }}</td>
           <td class="col-notes">{{ row['notes'] }}</td>
           
           <!-- Default hidden -->
           <td class="col-phone_number">{{ row['phone_number'] }}</td>
           <td class="col-aadhaar_number">{{ row['aadhaar_number'] }}</td>
-          <td class="col-customer_rating">{{ row['customer_rating'] }}</td>
-          <td class="col-final_frozen_rating">{{ row['final_frozen_rating'] }}</td>
+          <td class="col-customer_rating" data-order="{{ row['customer_rating_raw'] if row['customer_rating_raw'] is not none else '' }}">
+            {% if '↑' in row['customer_rating'] %}
+              <span style="color: #10b981; font-weight: bold;">{{ row['customer_rating'] }}</span>
+            {% elif '↓' in row['customer_rating'] %}
+              <span style="color: #ef4444; font-weight: bold;">{{ row['customer_rating'] }}</span>
+            {% else %}
+              <span style="color: #64748b; font-weight: bold;">{{ row['customer_rating'] }}</span>
+            {% endif %}
+          </td>
+          <td class="col-final_frozen_rating" data-order="{{ row['final_frozen_rating'] }}">{{ row['final_frozen_rating'] }}</td>
           <td class="col-final_risk_level">{{ row['final_risk_level'] }}</td>
-          <td class="col-freeze_date">{{ row['freeze_date'] }}</td>
-          <td class="col-latitude">{{ row['latitude'] }}</td>
-          <td class="col-longitude">{{ row['longitude'] }}</td>
+          <td class="col-freeze_date" data-order="{{ row['freeze_date_raw'] }}">{{ row['freeze_date'] }}</td>
+          <td class="col-latitude" data-order="{{ row['latitude'] }}">{{ row['latitude'] }}</td>
+          <td class="col-longitude" data-order="{{ row['longitude'] }}">{{ row['longitude'] }}</td>
           <td class="col-eid">{{ row['eid'] }}</td>
-          <td class="col-created_at">{{ row['created_at'] }}</td>
+          <td class="col-created_at" data-order="{{ row['created_at_raw'] }}">{{ row['created_at'] }}</td>
           <td class="col-status">
             <span class="status-badge status-{{ row['status']|lower|replace(' ', '-') }}">{{ row['status'] }}</span>
           </td>
@@ -207,6 +224,7 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
 <script>
+window.ALL_CUSTOMERS_STATS = {{ all_customers_stats_json|safe }};
 document.addEventListener("DOMContentLoaded", function () {
   const toggleContainer = document.getElementById("customerModeToggle");
   if (toggleContainer) {

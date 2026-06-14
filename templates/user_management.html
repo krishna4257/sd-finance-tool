@@ -311,6 +311,10 @@
     };
 
     async function loadUsers() {
+        if ($.fn.DataTable.isDataTable('#userTable')) {
+            $('#userTable').DataTable().destroy();
+        }
+
         const res = await fetch('/api/users/list');
         const users = await res.json();
         window.cachedUsers = users;
@@ -355,9 +359,25 @@
             tbody.appendChild(tr);
         });
 
+        const dt = $('#userTable').DataTable({
+            paging: false,
+            info: false,
+            searching: true,
+            ordering: true,
+            autoWidth: false,
+            columnDefs: [
+                { targets: 6, orderable: false }
+            ]
+        });
+
+        const searchBox = document.getElementById("searchBox");
+        if (searchBox) {
+            dt.search(searchBox.value.trim()).draw();
+        }
+
         const headerCount = document.getElementById("headerTotalUsers");
         if (headerCount) {
-            headerCount.textContent = users.length;
+            headerCount.textContent = dt.rows({ filter: 'applied' }).count();
         }
     }
 
@@ -581,16 +601,15 @@
 
     /* ===== REAL-TIME AUTO SEARCH ===== */
     document.getElementById("searchBox").addEventListener("input", function () {
-        const term = this.value.toLowerCase().trim();
-        const rows = document.querySelectorAll("#userTable tbody tr");
-        rows.forEach(row => {
-            const txt = row.innerText.toLowerCase();
-            row.style.display = term === "" || txt.includes(term) ? "" : "none";
-        });
-        const visibleCount = Array.from(rows).filter(r => r.style.display !== "none").length;
-        const headerCount = document.getElementById("headerTotalUsers");
-        if (headerCount) {
-            headerCount.textContent = visibleCount;
+        const term = this.value.trim();
+        if ($.fn.DataTable.isDataTable('#userTable')) {
+            const dt = $('#userTable').DataTable();
+            dt.search(term).draw();
+            const visibleCount = dt.rows({ filter: 'applied' }).count();
+            const headerCount = document.getElementById("headerTotalUsers");
+            if (headerCount) {
+                headerCount.textContent = visibleCount;
+            }
         }
     });
 

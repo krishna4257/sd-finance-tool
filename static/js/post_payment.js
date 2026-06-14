@@ -1497,10 +1497,12 @@ function renderReportTable() {
 
         const pidCell = document.createElement("td");
         pidCell.textContent = p.pid;
+        pidCell.setAttribute("data-order", Number(p.pid) || 0);
         tr.appendChild(pidCell);
 
         const anoCell = document.createElement("td");
         anoCell.textContent = p.ano;
+        anoCell.setAttribute("data-order", Number(p.ano) || 0);
         anoCell.style.cursor = "pointer";
         anoCell.title = "Double-click to edit";
         anoCell.addEventListener("dblclick", (e) => {
@@ -1517,6 +1519,7 @@ function renderReportTable() {
         const dateObj = parseISOorDDMMYYYY(p.payment_date);
         const displayDate = dateObj ? formatDateDDMMYYYY(dateObj) : p.payment_date;
         dateCell.textContent = displayDate;
+        dateCell.setAttribute("data-order", dateObj ? dateObj.getTime() : 0);
         dateCell.style.cursor = "pointer";
         dateCell.title = "Double-click to edit";
         dateCell.addEventListener("dblclick", (e) => {
@@ -1527,6 +1530,7 @@ function renderReportTable() {
 
         const amtCell = document.createElement("td");
         amtCell.classList.add("amount-paid");
+        amtCell.setAttribute("data-order", Number(p.amt) || 0);
         amtCell.style.cursor = "pointer";
         amtCell.title = "Double-click to edit";
         
@@ -1543,6 +1547,7 @@ function renderReportTable() {
 
         const statusCell = document.createElement("td");
         statusCell.textContent = p.payment_status || "active";
+        statusCell.setAttribute("data-order", p.payment_status || "active");
         tr.appendChild(statusCell);
 
         tbody.appendChild(tr);

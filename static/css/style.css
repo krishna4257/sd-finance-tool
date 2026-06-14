@@ -5200,7 +5200,7 @@ textarea {
 .dropdown-theme-row {
   display: flex !important;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 500;

@@ -358,7 +358,7 @@
   </div>
 
   <div class="customer-table-wrapper">
-    <table class="customer-table payment-feed-table">
+    <table id="feedPaymentTable" class="customer-table payment-feed-table">
       <thead>
         <tr>
           <th style="width:40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
@@ -372,11 +372,13 @@
       </thead>
       <tbody>
         {% for row in payments %}
+        {% set date_parts = row.pdt.split('-') %}
+        {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
         <tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
           <td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
-          <td>{{ row.ano }}</td>
-          <td>{{ row.pdt }}</td>
-          <td data-money="{{ row.amt }}">₹{{ row.amt }}</td>
+          <td data-order="{{ row.ano }}">{{ row.ano }}</td>
+          <td data-order="{{ iso_date }}">{{ row.pdt }}</td>
+          <td data-money="{{ row.amt }}" data-order="{{ row.amt }}">₹{{ row.amt }}</td>
           <td>{{ row.status }}</td>
           <td>{{ row.ano }}</td>
           <td>
