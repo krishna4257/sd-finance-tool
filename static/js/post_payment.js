@@ -52,7 +52,8 @@ const CUSTOMER_MAP = {};
             amt: Number(c.total_amount) || 0,
             pamt: Number(c.paid_amount) || 0,
             bamt: Number(c.balance_amount) || 0,
-            da: Number(c.installment_amount) || 0
+            da: Number(c.installment_amount) || 0,
+            start_date: c.start_date || ""
         };
 
 
@@ -577,11 +578,27 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
     return;
   }
 
+  if (amt <= 0) {
+    showError("❌ Enter amount > 0.");
+    document.getElementById("amt").focus();
+    return;
+  }
+
   const customer = CUSTOMER_MAP[String(ano)];
 
 
   if (!customer) {
     showError("❌ A.no not found in database!");
+    return;
+  }
+
+  const postingDateIso = ddmmyyyyToIso(pdt);
+  const customerStartDateIso = ddmmyyyyToIso(customer.start_date);
+  const customerStartDateDisplay = formatDateDDMMYYYY(customer.start_date);
+
+  if (postingDateIso && customerStartDateIso && postingDateIso < customerStartDateIso) {
+    showError(`❌ Customer ANO - ${ano} start_date is ${customerStartDateDisplay}. Posting date must be on or after start_date.`);
+    document.getElementById("pdt").focus();
     return;
   }
 
@@ -613,6 +630,14 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
 });
 
 document.getElementById("amt").disabled = true;
+document.getElementById("amt").addEventListener("input", function () {
+    const rawValue = this.value;
+    const numericValue = parseFloat(rawValue);
+
+    if (rawValue.trim() !== "" && !isNaN(numericValue) && numericValue <= 0) {
+        showError("❌ Enter amount > 0.");
+    }
+});
 
 document.getElementById("ano").addEventListener("keydown", function (e) {
     if (e.key !== "Enter") return;
@@ -1450,6 +1475,53 @@ function renderReport() {
     }
 }
 
+function createReportDeleteButton(payment) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "delete-row-btn report-delete-btn";
+    btn.title = `Delete payment for ANO ${payment.ano}`;
+    btn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+
+    btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const parsedDate = parseISOorDDMMYYYY(payment.payment_date);
+        const displayDate = parsedDate ? formatDateDDMMYYYY(parsedDate) : payment.payment_date;
+        const isoDate = parsedDate ? formatDateToYYYYMMDD(parsedDate) : String(payment.payment_date || "").trim();
+
+        const confirmed = confirm(`Delete payment for ANO ${payment.ano} on ${displayDate}?`);
+        if (!confirmed) return;
+
+        btn.disabled = true;
+
+        try {
+            const response = await csrfFetch("/delete_payment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ano: payment.ano,
+                    pdt: isoDate
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "Failed to delete payment");
+            }
+
+            highlightedPids.delete(Number(payment.pid));
+            fetchReportDataSilently(payment.pid);
+        } catch (err) {
+            console.error("Delete payment failed:", err);
+            alert(err.message || "Unable to delete payment");
+            btn.disabled = false;
+        }
+    });
+
+    return btn;
+}
+
 function renderReportTable() {
     const table = document.getElementById("reportTable");
     if (!table) return;
@@ -1481,6 +1553,7 @@ function renderReportTable() {
             <th>Payment Date</th>
             <th class="amount-paid">Amount</th>
             <th>Status</th>
+            <th>Action</th>
         </tr>
     `;
 
@@ -1545,6 +1618,11 @@ function renderReportTable() {
         statusCell.textContent = p.payment_status || "active";
         tr.appendChild(statusCell);
 
+        const actionCell = document.createElement("td");
+        actionCell.style.textAlign = "center";
+        actionCell.appendChild(createReportDeleteButton(p));
+        tr.appendChild(actionCell);
+
         tbody.appendChild(tr);
 
         totalUniqueAnos.add(p.ano);
@@ -1553,7 +1631,7 @@ function renderReportTable() {
 
     tfoot.innerHTML = `
         <tr>
-            <td colspan="6">
+            <td colspan="7">
                 <div class="summary-row" style="display: flex; gap: 40px; font-weight: bold; padding: 10px 0;">
                     <div>Total Unique ANOs: <span id="reportTotalAno">${totalUniqueAnos.size}</span></div>
                     <div>Total Amount: <span id="reportTotalAmt" data-money>${totalAmount.toFixed(2)}</span></div>
@@ -1709,6 +1787,7 @@ function renderTileDropdownTable(dateStr, dropdownDiv, groupPayments) {
             <th class="sortable-header" onclick="event.stopPropagation(); sortTileTable('${dateStr}', 'payment_date')">Payment Date${getSortIcon(dateStr, 'payment_date')}</th>
             <th class="sortable-header" onclick="event.stopPropagation(); sortTileTable('${dateStr}', 'amt')">Amount${getSortIcon(dateStr, 'amt')}</th>
             <th>Cumulative Amount</th>
+            <th>Action</th>
         </tr>
     `;
     table.appendChild(thead);
@@ -1762,6 +1841,11 @@ function renderTileDropdownTable(dateStr, dropdownDiv, groupPayments) {
         const cumCell = document.createElement("td");
         cumCell.innerHTML = `<span data-money>${cumulativeAmount.toFixed(2)}</span>`;
         tr.appendChild(cumCell);
+
+        const actionCell = document.createElement("td");
+        actionCell.style.textAlign = "center";
+        actionCell.appendChild(createReportDeleteButton(p));
+        tr.appendChild(actionCell);
 
         tbody.appendChild(tr);
     });
