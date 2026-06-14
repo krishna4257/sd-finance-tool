@@ -94,6 +94,9 @@ def get_pg_connection():
                     pg_pool.putconn(conn, close=True)
                 except Exception:
                     pass
+                last_error = RuntimeError(
+                    "Connection validation failed"
+                )
 
         except PoolError as e:
             raise DatabasePoolExhausted(
@@ -110,7 +113,12 @@ def get_pg_connection():
                 except Exception:
                     pass
 
-    raise last_error # type: ignore
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError(
+        "Failed to obtain PostgreSQL connection after 5 attempts"
+    )
 
 
 
