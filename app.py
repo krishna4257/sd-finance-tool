@@ -4195,6 +4195,7 @@ def posting_page():
             cid,
             ano,
             name,
+            start_date,
             total_amount,
             paid_amount,
             balance_amount,
@@ -4208,10 +4209,11 @@ def posting_page():
             cid=r[0],
             ano=r[1],
             name=r[2],
-            total_amount=r[3],
-            paid_amount=r[4],
-            balance_amount=r[5],
-            installment_amount=r[6],
+            start_date=r[3],
+            total_amount=r[4],
+            paid_amount=r[5],
+            balance_amount=r[6],
+            installment_amount=r[7],
         )
         for r in cur.fetchall()
     ]
@@ -7191,7 +7193,7 @@ def delete_payment():
     if not ano or not pdt_raw or not vid:
         return jsonify(success=False, error="Missing required fields"), 400
 
-    # âœ… ACCEPT ISO DATE (YYYY-MM-DD)
+    # ACCEPT ISO DATE (YYYY-MM-DD)
     try:
         pdt = datetime.fromisoformat(pdt_raw).date()
     except ValueError:
@@ -7201,7 +7203,7 @@ def delete_payment():
     cur = conn.cursor()
 
     try:
-        # ðŸ”¹ Delete payment
+        # Delete payment
         cur.execute("""
             DELETE FROM payment
             WHERE vid = %s
@@ -7213,7 +7215,7 @@ def delete_payment():
             conn.rollback()
             return jsonify(success=False, error="Payment not found"), 404
 
-        # ðŸ”¹ Recalculate balances
+        # Recalculate balances
         cur.execute("""
             SELECT cid, total_amount
             FROM customer
@@ -10266,4 +10268,4 @@ def b64encode_filter(data):
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
