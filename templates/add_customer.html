@@ -64,6 +64,19 @@
           <label for="total_amount">Total Amount</label>
           <input id="total_amount" name="total_amount" type="number" required placeholder="Given Loan Amount" data-tab-order="7">
 
+          <div id="splitFieldsContainer" style="display: none; border: 1px dashed rgba(26,77,46,0.2); padding: 12px; border-radius: 8px; margin-top: 10px; margin-bottom: 10px; background: rgba(26,77,46,0.02);">
+            <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;">LOAN AMOUNT BREAKDOWN</div>
+            
+            <label for="interest_amount">Interest Amount</label>
+            <input id="interest_amount" name="interest_amount" type="number" step="0.01" placeholder="Interest Amount">
+
+            <label for="cutting_amount">Cutting Amount</label>
+            <input id="cutting_amount" name="cutting_amount" type="number" step="0.01" placeholder="Cutting Amount">
+
+            <label for="base_amount">Base Amount (Total - Interest - Cutting)</label>
+            <input id="base_amount" name="base_amount" type="number" step="0.01" readonly placeholder="Base Amount" style="background: var(--border-light, #f3f4f6); cursor: not-allowed;">
+          </div>
+
           <label for="installment_amount">Installment Amount</label>
           <input id="installment_amount" name="installment_amount" type="number" step="0.01" readonly placeholder="Calculated automatically">
 
@@ -119,5 +132,9 @@
 
 </div>
 
+<script>
+  window.VILLAGE_INTEREST_RATE = {{ interest_rate | tojson | safe }};
+  window.VILLAGE_CUTTING_RATE = {{ cutting_rate | tojson | safe }};
+</script>
 <script src="{{ url_for('static', filename='js/add_customer.js') }}"></script>
 {% endblock %}

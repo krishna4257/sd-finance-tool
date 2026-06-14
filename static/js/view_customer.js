@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const COLUMN_KEYS = [
     "ano", "name", "start_date", "end_date", "total_amount", "paid_amount", 
     "balance_amount", "installment_amount", "type", "period", "pano", "notes",
+    "base_amount", "cutting_amount", "interest_amount",
     "phone_number", "aadhaar_number", "customer_rating", "final_frozen_rating",
     "final_risk_level", "freeze_date", "latitude", "longitude", "eid", "created_at", "status"
   ];
@@ -28,6 +29,9 @@ document.addEventListener("DOMContentLoaded", function () {
     { key: "period", label: "PRD", isDefault: true },
     { key: "pano", label: "P.NO", isDefault: true },
     { key: "notes", label: "Notes", isDefault: true },
+    { key: "base_amount", label: "Base", isDefault: false },
+    { key: "cutting_amount", label: "Cutting", isDefault: false },
+    { key: "interest_amount", label: "Interest", isDefault: false },
     { key: "phone_number", label: "Phone", isDefault: false },
     { key: "aadhaar_number", label: "Aadhaar", isDefault: false },
     { key: "customer_rating", label: "Rating", isDefault: true },
@@ -941,6 +945,15 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputLongitude").value = cust.longitude || "";
       document.getElementById("popInputNotes").value = cust.notes || "";
 
+      // Amount Splits
+      const baseAmtVal = cust.base_amount !== null && cust.base_amount !== undefined ? cust.base_amount : 0.0;
+      const cuttingAmtVal = cust.cutting_amount !== null && cust.cutting_amount !== undefined ? cust.cutting_amount : 0.0;
+      const interestAmtVal = cust.interest_amount !== null && cust.interest_amount !== undefined ? cust.interest_amount : 0.0;
+
+      document.getElementById("popInputBaseAmount").value = baseAmtVal.toFixed(2);
+      document.getElementById("popInputCuttingAmount").value = cuttingAmtVal.toFixed(2);
+      document.getElementById("popInputInterestAmount").value = interestAmtVal.toFixed(2);
+
       // Save dataset original snapshots for delta checks
       document.getElementById("popInputName").dataset.original = cust.name || "";
       document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
@@ -956,6 +969,9 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputLatitude").dataset.original = cust.latitude || "";
       document.getElementById("popInputLongitude").dataset.original = cust.longitude || "";
       document.getElementById("popInputNotes").dataset.original = cust.notes || "";
+      document.getElementById("popInputBaseAmount").dataset.original = baseAmtVal.toFixed(2);
+      document.getElementById("popInputCuttingAmount").dataset.original = cuttingAmtVal.toFixed(2);
+      document.getElementById("popInputInterestAmount").dataset.original = interestAmtVal.toFixed(2);
 
       document.getElementById("popSaveDetailsBtn").style.display = "none";
 
@@ -1417,7 +1433,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
     "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
     "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
-    "popInputLongitude", "popInputNotes"
+    "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount"
   ];
 
   function calculateInstallment() {
@@ -1457,7 +1473,10 @@ document.addEventListener("DOMContentLoaded", () => {
         eid: document.getElementById("popInputEid").value ? parseInt(document.getElementById("popInputEid").value) : null,
         latitude: document.getElementById("popInputLatitude").value ? parseFloat(document.getElementById("popInputLatitude").value) : null,
         longitude: document.getElementById("popInputLongitude").value ? parseFloat(document.getElementById("popInputLongitude").value) : null,
-        notes: document.getElementById("popInputNotes").value.trim()
+        notes: document.getElementById("popInputNotes").value.trim(),
+        base_amount: parseFloat(document.getElementById("popInputBaseAmount").value) || 0,
+        cutting_amount: parseFloat(document.getElementById("popInputCuttingAmount").value) || 0,
+        interest_amount: parseFloat(document.getElementById("popInputInterestAmount").value) || 0
       }
     };
 
@@ -1497,11 +1516,29 @@ document.addEventListener("DOMContentLoaded", () => {
           const total = parseFloat(this.value) || 0;
           const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
           document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid);
+
+          // Auto-calculate splits
+          const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
+          const cuttingRate = parseFloat(window.VILLAGE_CUTTING_RATE) || 0.0;
+          const interestAmt = total * interestRate / 100.0;
+          const cuttingAmt = total * cuttingRate / 100.0;
+          const baseAmt = total - interestAmt - cuttingAmt;
+          document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(2);
+          document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(2);
+          document.getElementById("popInputBaseAmount").value = baseAmt.toFixed(2);
         }
       } else if (id === "popInputPeriod" || id === "popInputEid") {
         this.value = this.value.replace(/[^0-9]/g, "");
       } else if (id === "popInputLatitude" || id === "popInputLongitude") {
         this.value = this.value.replace(/[^0-9.-]/g, "");
+      } else if (id === "popInputInterestAmount" || id === "popInputCuttingAmount" || id === "popInputBaseAmount") {
+        this.value = this.value.replace(/[^0-9.]/g, "");
+        if (id === "popInputInterestAmount" || id === "popInputCuttingAmount") {
+          const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
+          const interestAmt = parseFloat(document.getElementById("popInputInterestAmount").value) || 0;
+          const cuttingAmt = parseFloat(document.getElementById("popInputCuttingAmount").value) || 0;
+          document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(2);
+        }
       }
 
       if (id === "popInputTotalAmount" || id === "popInputPeriod") {
@@ -1519,7 +1556,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
         "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
         "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
-        "popInputLongitude", "popInputNotes"
+        "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount"
       ];
       
       let changedElements = [];
@@ -1829,6 +1866,56 @@ document.addEventListener("DOMContentLoaded", () => {
       } finally {
         recalcBtn.disabled = false;
         recalcBtn.classList.remove("spinning");
+      }
+    });
+  }
+
+  // Recalculate Split Button click/double-click logic
+  let recalClickCount = 0;
+  let recalClickTimeout = null;
+  const recalBtn = document.getElementById("recalBtn");
+  if (recalBtn) {
+    recalBtn.addEventListener("click", async function () {
+      recalClickCount++;
+      if (recalClickCount === 1) {
+        recalBtn.innerText = "Confirm Recal?";
+        recalBtn.style.borderColor = "var(--danger)";
+        recalClickTimeout = setTimeout(() => {
+          recalClickCount = 0;
+          recalBtn.innerText = "Recal";
+          recalBtn.style.borderColor = "rgba(220, 38, 38, 0.35)";
+        }, 3000); // Reset after 3 seconds
+      } else if (recalClickCount === 2) {
+        clearTimeout(recalClickTimeout);
+        recalClickCount = 0;
+        recalBtn.innerText = "Recal";
+        recalBtn.style.borderColor = "rgba(220, 38, 38, 0.35)";
+
+        if (!confirm("Are you sure you want to recalculate the split of total amounts (Base, Interest, Cutting) for all active and defaulted customers of this village?")) {
+          return;
+        }
+
+        recalBtn.disabled = true;
+        recalBtn.innerText = "Recalculating...";
+
+        try {
+          const response = await csrfFetch("/api/customers/recalculate_split", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
+          const result = await response.json();
+          if (result.success) {
+            alert("Recalculation completed successfully!");
+            window.location.reload();
+          } else {
+            alert("Error: " + (result.error || "Unknown error occurred"));
+          }
+        } catch (err) {
+          alert("A network error occurred: " + err.message);
+        } finally {
+          recalBtn.disabled = false;
+          recalBtn.innerText = "Recal";
+        }
       }
     });
   }

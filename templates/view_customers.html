@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+.customer-table-wrapper.hide-col-base_amount .col-base_amount,
+#customerTable.hide-col-base_amount .col-base_amount,
+.customer-table-wrapper.hide-col-cutting_amount .col-cutting_amount,
+#customerTable.hide-col-cutting_amount .col-cutting_amount,
+.customer-table-wrapper.hide-col-interest_amount .col-interest_amount,
+#customerTable.hide-col-interest_amount .col-interest_amount {
+  display: none !important;
+}
+</style>
 <h2 class="page-title">Customers Table</h2>
 <div class="raised-box">
   <div class="control-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
@@ -23,6 +33,9 @@
           </div>
         </div>
       </div>
+      <button id="recalBtn" class="neumorphic-btn" style="margin: 0; color: var(--danger); border-color: rgba(220, 38, 38, 0.35); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        Recal
+      </button>
     </div>
 
     <!-- Premium Sliding Toggle Switch -->
@@ -138,8 +151,8 @@
 </div>
 
 <div class="raised-box">
-  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status">
-    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status">
+  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
+    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
       <thead>
         <tr>
           <th class="checkbox-column" style="width: 40px; text-align: center;"><input type="checkbox" onclick="toggleAll(this)" /></th>
@@ -157,6 +170,9 @@
           <th class="col-notes">Notes</th>
           
           <!-- Default hidden -->
+          <th class="col-base_amount">Base</th>
+          <th class="col-cutting_amount">Cutting</th>
+          <th class="col-interest_amount">Interest</th>
           <th class="col-phone_number">Phone</th>
           <th class="col-aadhaar_number">Aadhaar</th>
           <th class="col-customer_rating">Rating</th>
@@ -188,6 +204,9 @@
           <td class="col-notes">{{ row['notes'] }}</td>
           
           <!-- Default hidden -->
+          <td class="col-base_amount" data-order="{{ row['base_amount'] }}" data-money>{{ row['base_amount'] }}</td>
+          <td class="col-cutting_amount" data-order="{{ row['cutting_amount'] }}" data-money>{{ row['cutting_amount'] }}</td>
+          <td class="col-interest_amount" data-order="{{ row['interest_amount'] }}" data-money>{{ row['interest_amount'] }}</td>
           <td class="col-phone_number">{{ row['phone_number'] }}</td>
           <td class="col-aadhaar_number">{{ row['aadhaar_number'] }}</td>
           <td class="col-customer_rating" data-order="{{ row['customer_rating_raw'] if row['customer_rating_raw'] is not none else '' }}">
@@ -222,6 +241,10 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+window.VILLAGE_INTEREST_RATE = {{ interest_rate }};
+window.VILLAGE_CUTTING_RATE = {{ cutting_rate }};
+</script>
 <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
 <script>
 window.ALL_CUSTOMERS_STATS = {{ all_customers_stats_json|safe }};

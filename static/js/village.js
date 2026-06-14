@@ -357,7 +357,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 data-village-name="${v.village_name}"
                 data-emp1="${group.emp1}"
                 data-emp2="${group.emp2}">
-                <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code})
+                <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code}) <span style="font-size:0.75rem; opacity:0.85; margin-left: 5px;">I:${v.interest_rate || 0}% C:${v.cutting_rate || 0}%</span>
               </span>
             `;
           }).join("")}
@@ -1219,6 +1219,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (field === "village_code" || field === "village_name" || field === "district" || field === "pincode" || field === "state") {
         cell.innerHTML = `<input type="text" class="inline-edit-input" name="${field}" value="${currentText.replace(/"/g, '&quot;')}">`;
+      } else if (field === "interest_rate" || field === "cutting_rate") {
+        cell.innerHTML = `<input type="number" step="0.01" class="inline-edit-input" name="${field}" value="${currentText.replace(/"/g, '&quot;')}">`;
       } else if (field === "emp1_name") {
         let options = allEmployees.map(emp => `
           <option value="${emp.eid}" ${String(emp.eid) === String(emp1Val) ? 'selected' : ''}>
@@ -1276,6 +1278,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     const state_input = row.querySelector('[name="state"]');
     const emp1_select = row.querySelector('[name="emp1"]');
     const emp2_select = row.querySelector('[name="emp2"]');
+    const interest_rate_input = row.querySelector('[name="interest_rate"]');
+    const cutting_rate_input = row.querySelector('[name="cutting_rate"]');
 
     if (!village_code_input || !village_name_input) return;
 
@@ -1286,6 +1290,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     const state = state_input ? state_input.value.trim().toUpperCase() : "";
     const emp1 = emp1_select ? emp1_select.value : "";
     const emp2 = emp2_select ? (emp2_select.value || null) : null;
+    const interest_rate = interest_rate_input ? parseFloat(interest_rate_input.value) || 0.0 : 0.0;
+    const cutting_rate = cutting_rate_input ? parseFloat(cutting_rate_input.value) || 0.0 : 0.0;
 
     if (!village_code || !village_name) {
       alert("Village code and name are required.");
@@ -1304,7 +1310,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           pincode,
           state,
           emp1,
-          emp2
+          emp2,
+          interest_rate,
+          cutting_rate
         })
       });
 
@@ -1324,6 +1332,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         record.state = state;
         record.emp1 = emp1;
         record.emp2 = emp2;
+        record.interest_rate = interest_rate;
+        record.cutting_rate = cutting_rate;
         record.emp1_name = allEmployees.find(e => String(e.eid) === String(emp1))?.name || `Employee ${emp1}`;
         record.emp2_name = emp2 ? (allEmployees.find(e => String(e.eid) === String(emp2))?.name || `Employee ${emp2}`) : 'Unassigned';
       }
@@ -1336,6 +1346,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       row.querySelector('[data-field="state"]').innerText = state;
       row.querySelector('[data-field="emp1"]').innerText = emp1;
       row.querySelector('[data-field="emp2"]').innerText = emp2 || 'None';
+      
+      const cellInterest = row.querySelector('[data-field="interest_rate"]');
+      if (cellInterest) cellInterest.innerText = interest_rate;
+      const cellCutting = row.querySelector('[data-field="cutting_rate"]');
+      if (cellCutting) cellCutting.innerText = cutting_rate;
 
       const emp1Name = allEmployees.find(e => String(e.eid) === String(emp1))?.name || `Employee ${emp1}`;
       const emp2Name = emp2 ? (allEmployees.find(e => String(e.eid) === String(emp2))?.name || `Employee ${emp2}`) : 'Unassigned';
@@ -1706,9 +1721,30 @@ document.addEventListener("DOMContentLoaded", async function () {
           <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Pincode</label>
           <input type="text" name="cv_pincode" class="inline-edit-input" placeholder="e.g. 518102">
         </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Interest Rate (%) *</label>
+          <input type="number" step="0.01" name="cv_interest_rate" class="inline-edit-input" placeholder="e.g. 12.00" required>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Cutting Rate (%) *</label>
+          <input type="number" step="0.01" name="cv_cutting_rate" class="inline-edit-input" placeholder="e.g. 1.50" required>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Latitude *</label>
+          <input type="number" step="any" name="cv_latitude" class="inline-edit-input" placeholder="Latitude" required>
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">Longitude *</label>
+          <input type="number" step="any" name="cv_longitude" class="inline-edit-input" placeholder="Longitude" required>
+        </div>
         <div style="grid-column: span 2;">
           <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; display:block;">State *</label>
           <select name="cv_state" class="inline-edit-select" required>${buildStateOptions()}</select>
+        </div>
+        <div style="grid-column: span 2; display: flex; justify-content: flex-end; margin-top: 5px;">
+          <button type="button" class="neumorphic-btn small pull-coords-btn" style="margin: 0; padding: 6px 12px; font-size: 0.75rem; color: var(--primary);">
+            <i class="fas fa-map-marker-alt"></i> Pull Coordinates
+          </button>
         </div>
       </div>
     `;
@@ -1716,6 +1752,43 @@ document.addEventListener("DOMContentLoaded", async function () {
     card.querySelector('.remove-village-card').addEventListener('click', () => {
       card.remove();
       renumberVillageCards();
+    });
+
+    card.querySelector('.pull-coords-btn').addEventListener('click', async () => {
+      const vname = card.querySelector('[name="cv_village_name"]').value.trim();
+      const dist = card.querySelector('[name="cv_district"]').value.trim();
+      const st = card.querySelector('[name="cv_state"]').value;
+      const pin = card.querySelector('[name="cv_pincode"]').value.trim();
+
+      if (!vname || !st) {
+        alert('Please fill out Village Name and State before pulling coordinates.');
+        return;
+      }
+
+      const btn = card.querySelector('.pull-coords-btn');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pulling...';
+
+      try {
+        const res = await csrfFetch('/api/geocode_coordinates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ village_name: vname, district: dist, state: st, pincode: pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+          card.querySelector('[name="cv_latitude"]').value = data.latitude;
+          card.querySelector('[name="cv_longitude"]').value = data.longitude;
+        } else {
+          alert(data.error || 'Failed to pull coordinates.');
+        }
+      } catch (err) {
+        alert('Error pulling coordinates: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
     });
 
     createVillageFormList.appendChild(card);
@@ -1781,14 +1854,38 @@ document.addEventListener("DOMContentLoaded", async function () {
         const district = card.querySelector('[name="cv_district"]').value.trim().toUpperCase();
         const pincode = card.querySelector('[name="cv_pincode"]').value.trim();
         const state = card.querySelector('[name="cv_state"]').value;
+        const interest_rate = parseFloat(card.querySelector('[name="cv_interest_rate"]').value);
+        const cutting_rate = parseFloat(card.querySelector('[name="cv_cutting_rate"]').value);
+        const latitude_str = card.querySelector('[name="cv_latitude"]').value.trim();
+        const longitude_str = card.querySelector('[name="cv_longitude"]').value.trim();
 
-        if (!emp1 || !village_name || !village_code || !state) {
-          alert(`Village #${i + 1}: Employee 1, Village Name, Village Code, and State are required.`);
+        if (!emp1 || !village_name || !village_code || !state || isNaN(interest_rate) || isNaN(cutting_rate) || !latitude_str || !longitude_str) {
+          alert(`Village #${i + 1}: Employee 1, Village Name, Village Code, State, Interest Rate, Cutting Rate, and Latitude/Longitude are required.`);
           hasError = true;
           return;
         }
 
-        villages.push({ emp1_eid: emp1, emp2_eid: emp2, village_name, village_code, district, pincode, state });
+        const latitude = parseFloat(latitude_str);
+        const longitude = parseFloat(longitude_str);
+        if (isNaN(latitude) || isNaN(longitude)) {
+          alert(`Village #${i + 1}: Latitude and Longitude must be valid numbers.`);
+          hasError = true;
+          return;
+        }
+
+        villages.push({ 
+          emp1_eid: emp1, 
+          emp2_eid: emp2, 
+          village_name, 
+          village_code, 
+          district, 
+          pincode, 
+          state,
+          interest_rate,
+          cutting_rate,
+          latitude,
+          longitude
+        });
       });
 
       if (hasError) return;

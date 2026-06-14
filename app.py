@@ -1204,9 +1204,11 @@ def api_create_village():
             vid, village_code, village_name,
             district, pincode, state,
             emp1, emp2,
+            interest_rate, cutting_rate,
+            latitude, longitude,
             created_at, source_file, status
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,'active')
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,'active')
     """, (
         vid,
         data["village_code"],
@@ -1215,7 +1217,11 @@ def api_create_village():
         data["pincode"],
         state,
         data["emp1_eid"],
-        data.get("emp2_eid")
+        data.get("emp2_eid"),
+        float(data.get("interest_rate") or 0.0),
+        float(data.get("cutting_rate") or 0.0),
+        float(data["latitude"]) if data.get("latitude") is not None and str(data.get("latitude")).strip() != "" else None,
+        float(data["longitude"]) if data.get("longitude") is not None and str(data.get("longitude")).strip() != "" else None
     ))
 
     conn.commit()
@@ -1465,7 +1471,8 @@ def insert_customer(data):
                 INSERT INTO customer (
                     ano, name, pano, vid, eid,
                     start_date, end_date,
-                    total_amount, paid_amount, balance_amount, installment_amount,
+                    total_amount, base_amount, cutting_amount, interest_amount,
+                    paid_amount, balance_amount, installment_amount,
                     type, period,
                     aadhaar_number, notes,
                     latitude, longitude,phone_number,
@@ -1474,7 +1481,8 @@ def insert_customer(data):
                 VALUES (
                     %(ano)s, %(name)s, %(pano)s, %(vid)s, %(eid)s,
                     %(start_date)s, %(end_date)s,
-                    %(total_amount)s, %(paid_amount)s, %(balance_amount)s, %(installment_amount)s,
+                    %(total_amount)s, %(base_amount)s, %(cutting_amount)s, %(interest_amount)s,
+                    %(paid_amount)s, %(balance_amount)s, %(installment_amount)s,
                     %(type)s, %(period)s,
                     %(aadhaar_number)s, %(notes)s,
                     %(latitude)s, %(longitude)s, %(phone_number)s,
@@ -3386,6 +3394,9 @@ def add_customer():
             "start_date": fdt,
             "end_date": tdt,
             "total_amount": total_amount,
+            "base_amount": float(data.get("base_amount") or 0.0),
+            "cutting_amount": float(data.get("cutting_amount") or 0.0),
+            "interest_amount": float(data.get("interest_amount") or 0.0),
             "paid_amount": paid_amount,     
             "balance_amount": balance_amount,
             "installment_amount": installment_amount,
@@ -3422,12 +3433,30 @@ def add_customer():
     highest_ano = get_highest_ano_by_vid(vid)
     analytics = get_customer_analytics(vid)
 
+    # Fetch interest_rate and cutting_rate for the current village
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        row = cur.fetchone()
+        interest_rate = float(row[0]) if row and row[0] is not None else 0.0
+        cutting_rate = float(row[1]) if row and row[1] is not None else 0.0
+    except Exception as e:
+        logger.error(f"Error fetching village rates in add_customer: {e}")
+        interest_rate = 0.0
+        cutting_rate = 0.0
+    finally:
+        cur.close()
+        conn.close()
+
     return render_template(
         "add_customer.html",
         highest_ano=highest_ano,
         village_name=session.get("village_name"),
         employee_name=session.get("employee_name"),
-        analytics=analytics
+        analytics=analytics,
+        interest_rate=interest_rate,
+        cutting_rate=cutting_rate
     )
 
 @app.route("/view_customers")
@@ -3445,6 +3474,12 @@ def view_customers():
 
     conn = get_pg_connection()
     cur = conn.cursor()
+
+    cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+    rates_row = cur.fetchone()
+    interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
+    cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
+
 
     # 📊 Overhauled Analytics Calculations
     # Active Stats (from customer table)
@@ -3529,7 +3564,10 @@ def view_customers():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount
             FROM closed_cust_account
             WHERE vid = %s
             ORDER BY ano DESC
@@ -3561,7 +3599,10 @@ def view_customers():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount
             FROM historic_customer_data
             WHERE vid = %s
             
@@ -3591,7 +3632,10 @@ def view_customers():
             longitude,
             eid,
             phone_number,
-            'active' AS status
+            'active' AS status,
+            base_amount,
+            cutting_amount,
+            interest_amount
         FROM customer
         WHERE vid = %s
 
@@ -3618,7 +3662,10 @@ def view_customers():
             longitude,
             eid,
             phone_number,
-            status
+            status,
+            base_amount,
+            cutting_amount,
+            interest_amount
         FROM closed_cust_account
         WHERE vid = %s
         AND LOWER(TRIM(status)) != 'written_off'
@@ -3647,7 +3694,10 @@ def view_customers():
             longitude,
             eid,
             phone_number,
-            status
+            status,
+            base_amount,
+            cutting_amount,
+            interest_amount
         FROM historic_customer_data
         WHERE vid = %s
         AND LOWER(TRIM(status)) != 'written_off'
@@ -3684,7 +3734,10 @@ def view_customers():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount
             FROM customer
             WHERE vid = %s
             ORDER BY ano DESC
@@ -3775,7 +3828,9 @@ def view_customers():
         defaulted_avg_score=defaulted_avg_score,
         complete_avg_score=complete_avg_score,
         all_customers_stats_json=all_customers_stats_json,
-        mode=mode
+        mode=mode,
+        interest_rate=interest_rate,
+        cutting_rate=cutting_rate
     )
 
 @app.route("/api/balance_report")
@@ -4832,13 +4887,15 @@ def api_customer_detail_with_payments(account_no):
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                    base_amount, cutting_amount, interest_amount
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM customer
                     WHERE vid = %s AND cid = %s
                     
@@ -4848,7 +4905,8 @@ def api_customer_detail_with_payments(account_no):
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM closed_cust_account
                     WHERE vid = %s AND cid = %s
                     
@@ -4858,7 +4916,8 @@ def api_customer_detail_with_payments(account_no):
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM historic_customer_data
                     WHERE vid = %s AND cid = %s
                 ) all_cust
@@ -4873,13 +4932,15 @@ def api_customer_detail_with_payments(account_no):
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                    base_amount, cutting_amount, interest_amount
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM customer
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -4889,7 +4950,8 @@ def api_customer_detail_with_payments(account_no):
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM closed_cust_account
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -4899,7 +4961,8 @@ def api_customer_detail_with_payments(account_no):
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                        customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                        base_amount, cutting_amount, interest_amount
                     FROM historic_customer_data
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                 ) all_cust
@@ -4915,13 +4978,14 @@ def api_customer_detail_with_payments(account_no):
             "cid", "ano", "name", "vid", "start_date", "end_date", "total_amount", "paid_amount", 
             "balance_amount", "installment_amount", "type", "period", "pano", "created_at", 
             "aadhaar_number", "notes", "latitude", "longitude", "eid", "phone_number", "status",
-            "customer_rating", "final_frozen_rating", "final_risk_level", "freeze_date"
+            "customer_rating", "final_frozen_rating", "final_risk_level", "freeze_date",
+            "base_amount", "cutting_amount", "interest_amount"
         ]
 
         cust = dict(zip(loanee_headers, row))
 
         # Format decimal values and dates
-        for key in ["total_amount", "paid_amount", "balance_amount", "installment_amount", "customer_rating", "final_frozen_rating"]:
+        for key in ["total_amount", "paid_amount", "balance_amount", "installment_amount", "customer_rating", "final_frozen_rating", "base_amount", "cutting_amount", "interest_amount"]:
             if cust.get(key) is not None:
                 cust[key] = float(cust[key])
             else:
@@ -5777,7 +5841,9 @@ def update_village():
               pincode = %s,
               state = %s,
               emp1 = %s,
-              emp2 = %s
+              emp2 = %s,
+              interest_rate = %s,
+              cutting_rate = %s
             WHERE vid = %s
         """, (
             village_code,
@@ -5787,6 +5853,8 @@ def update_village():
             state,
             data.get("emp1"),
             data.get("emp2"),
+            float(data.get("interest_rate") or 0.0),
+            float(data.get("cutting_rate") or 0.0),
             vid
         ))
 
@@ -5811,6 +5879,85 @@ def update_village():
         conn.rollback()
         return jsonify(success=False, error=str(e))
 
+    finally:
+        cur.close()
+        conn.close()
+
+# ----------------------------------------------------
+@app.route("/api/customers/recalculate_split", methods=["POST"])
+@login_required
+def api_recalculate_split():
+    """Recalculate customer base_amount, interest_amount, cutting_amount split from total_amount using village rates."""
+    vid = session.get("vid")
+    if not vid:
+        return jsonify(success=False, error="No village selected"), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Fetch rates from village table
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify(success=False, error="Village not found"), 404
+
+        interest_rate = float(row[0]) if row[0] is not None else 0.0
+        cutting_rate = float(row[1]) if row[1] is not None else 0.0
+
+        # Update customer table (active customers)
+        cur.execute("""
+            SELECT cid, total_amount FROM customer WHERE vid = %s
+        """, (vid,))
+        customers = cur.fetchall()
+        for cid, total_amount in customers:
+            total = float(total_amount or 0)
+            interest = round(total * (interest_rate / 100.0), 2)
+            cutting = round(total * (cutting_rate / 100.0), 2)
+            base = round(total - interest - cutting, 2)
+            cur.execute("""
+                UPDATE customer
+                SET interest_amount = %s, cutting_amount = %s, base_amount = %s
+                WHERE cid = %s
+            """, (interest, cutting, base, cid))
+
+        # Update closed_cust_account table (all closed customers)
+        cur.execute("""
+            SELECT cid, total_amount FROM closed_cust_account WHERE vid = %s
+        """, (vid,))
+        closed_customers = cur.fetchall()
+        for cid, total_amount in closed_customers:
+            total = float(total_amount or 0)
+            interest = round(total * (interest_rate / 100.0), 2)
+            cutting = round(total * (cutting_rate / 100.0), 2)
+            base = round(total - interest - cutting, 2)
+            cur.execute("""
+                UPDATE closed_cust_account
+                SET interest_amount = %s, cutting_amount = %s, base_amount = %s
+                WHERE cid = %s
+            """, (interest, cutting, base, cid))
+
+        # Update historic_customer_data table (historic customers)
+        cur.execute("""
+            SELECT cid, total_amount FROM historic_customer_data WHERE vid = %s
+        """, (vid,))
+        historic_customers = cur.fetchall()
+        for cid, total_amount in historic_customers:
+            total = float(total_amount or 0)
+            interest = round(total * (interest_rate / 100.0), 2)
+            cutting = round(total * (cutting_rate / 100.0), 2)
+            base = round(total - interest - cutting, 2)
+            cur.execute("""
+                UPDATE historic_customer_data
+                SET interest_amount = %s, cutting_amount = %s, base_amount = %s
+                WHERE cid = %s
+            """, (interest, cutting, base, cid))
+
+        conn.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error recalculating split amounts: {e}")
+        return jsonify(success=False, error=str(e)), 500
     finally:
         cur.close()
         conn.close()
@@ -6756,11 +6903,25 @@ def update_customer_pg():
 
         paid_amount = float(existing[0] or 0)
 
-        # ðŸ”¹ Read editable fields
+        # 🔸 Read editable fields
         name = (data.get("name") or "").strip()
         start_date_raw = (data.get("start_date") or "").strip()
         loan_type = (data.get("type") or "").strip().upper()
         pano = (data.get("pano") or "").strip() or None
+
+        try:
+            base_amount = float(data.get("base_amount") or 0.0)
+        except Exception:
+            base_amount = 0.0
+        try:
+            cutting_amount = float(data.get("cutting_amount") or 0.0)
+        except Exception:
+            cutting_amount = 0.0
+        try:
+            interest_amount = float(data.get("interest_amount") or 0.0)
+        except Exception:
+            interest_amount = 0.0
+
         notes = (data.get("notes") or "").strip() or None
         phone_number = (data.get("phone_number") or "").strip()
         if phone_number.lower() == "none":
@@ -6811,39 +6972,61 @@ def update_customer_pg():
         installment_amount = round(total_amount / period, 2)
         balance_amount = round(total_amount - paid_amount, 2)
 
-        # ðŸ”¹ Update customer
-        cur.execute(f"""
-            UPDATE {table_name}
-            SET
-                name = %s,
-                start_date = %s,
-                end_date = %s,
-                total_amount = %s,
-                balance_amount = %s,
-                installment_amount = %s,
-                type = %s,
-                period = %s,
-                pano = %s,
-                notes = %s,
-                phone_number = %s,
-                updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-            WHERE cid = %s
-              AND vid = %s
-        """, (
-            name,
-            start_date,
-            end_date,
-            total_amount,
-            balance_amount,
-            installment_amount,
-            loan_type,
-            period,
-            pano,
-            notes,
-            phone_number,
-            cid,
-            vid
-        ))
+        # 🔸 Update customer
+        if table_name == "customer":
+            cur.execute("""
+                UPDATE customer
+                SET
+                    name = %s,
+                    start_date = %s,
+                    end_date = %s,
+                    total_amount = %s,
+                    balance_amount = %s,
+                    installment_amount = %s,
+                    type = %s,
+                    period = %s,
+                    pano = %s,
+                    notes = %s,
+                    phone_number = %s,
+                    base_amount = %s,
+                    cutting_amount = %s,
+                    interest_amount = %s,
+                    updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+                WHERE cid = %s
+                  AND vid = %s
+            """, (
+                name, start_date, end_date, total_amount, balance_amount, installment_amount,
+                loan_type, period, pano, notes, phone_number,
+                base_amount, cutting_amount, interest_amount,
+                cid, vid
+            ))
+        else:
+            cur.execute(f"""
+                UPDATE {table_name}
+                SET
+                    name = %s,
+                    start_date = %s,
+                    end_date = %s,
+                    total_amount = %s,
+                    balance_amount = %s,
+                    installment_amount = %s,
+                    type = %s,
+                    period = %s,
+                    pano = %s,
+                    notes = %s,
+                    phone_number = %s,
+                    base_amount = %s,
+                    cutting_amount = %s,
+                    interest_amount = %s
+                WHERE cid = %s
+                  AND vid = %s
+            """, (
+                name, start_date, end_date, total_amount, balance_amount, installment_amount,
+                loan_type, period, pano, notes, phone_number,
+                base_amount, cutting_amount, interest_amount,
+                cid, vid
+            ))
+
 
         # Force recalculation of repayment score and streaks
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
@@ -7202,6 +7385,8 @@ def village_page():
             e1.name AS emp1_name,
             v.emp2,
             e2.name AS emp2_name,
+            v.interest_rate,
+            v.cutting_rate,
             v.created_at,
             v.status,
             v.latitude,
@@ -7237,6 +7422,8 @@ def village_page():
             e1.name AS emp1_name,
             v.emp2,
             e2.name AS emp2_name,
+            v.interest_rate,
+            v.cutting_rate,
             v.created_at,
             v.status,
             v.latitude,
@@ -8990,6 +9177,82 @@ def api_village_geocode():
     finally:
         cur.close()
         conn.close()
+
+# ----------------------------------------------------
+@app.route("/api/geocode_coordinates", methods=["POST"])
+@login_required
+def api_geocode_coordinates():
+    """Geocode arbitrary address for Create Village form coordinates."""
+    import re as _re
+    import requests as _requests
+
+    data = request.get_json()
+    if not data:
+        return jsonify(success=False, error="Invalid request"), 400
+
+    village_name = data.get("village_name", "").strip()
+    district = data.get("district", "").strip()
+    state = data.get("state", "").strip()
+    pincode = data.get("pincode", "").strip()
+
+    if not village_name or not state:
+        return jsonify(success=False, error="Village name and State are required for geocoding"), 400
+
+    # Clean village name: remove all digits and trim dashes/spaces
+    clean_name = ""
+    if village_name:
+        clean_name = _re.sub(r'\d+', '', village_name)
+        clean_name = _re.sub(r'[-\s]+$', '', clean_name)
+        clean_name = _re.sub(r'^[-\s]+', '', clean_name).strip()
+
+    geocode_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    def _geocode_query(q):
+        url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
+        try:
+            resp = _requests.get(url, headers=geocode_headers, timeout=10)
+            if resp.status_code == 200:
+                results = resp.json()
+                if results:
+                    return float(results[0]["lat"]), float(results[0]["lon"])
+        except Exception:
+            pass
+        return None
+
+    coords = None
+
+    # Step 1: name + pincode + district + state
+    if clean_name and pincode and district and state:
+        q = f"{clean_name}, {pincode}, {district}, {state}, India"
+        coords = _geocode_query(q)
+
+    # Step 2: name + pincode
+    if not coords and clean_name and pincode:
+        q = f"{clean_name}, {pincode}, India"
+        coords = _geocode_query(q)
+
+    # Step 3: name + district + state
+    if not coords and clean_name and district and state:
+        q = f"{clean_name}, {district}, {state}, India"
+        coords = _geocode_query(q)
+
+    # Step 4: name + state
+    if not coords and clean_name and state:
+        q = f"{clean_name}, {state}, India"
+        coords = _geocode_query(q)
+
+    # Step 5: pincode
+    if not coords and pincode:
+        q = f"{pincode}, India"
+        coords = _geocode_query(q)
+
+    if not coords:
+        return jsonify(success=False, error="Could not geocode this location. Try entering coordinates manually.")
+
+    res_lat, res_lon = coords
+    return jsonify(success=True, latitude=res_lat, longitude=res_lon)
 
 # ----------------------------------------------------
 # EMPLOYEE DB HELPERS (Postgres)
