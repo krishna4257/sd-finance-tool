@@ -12,7 +12,10 @@
       const redirectedToLogin = response.redirected &&
         response.url.includes("/login");
 
-      const unauthorized = response.status === 401;
+      const unauthorized =
+    response.status === 401 &&
+    responseData &&
+    responseData.session_expired === true;
       let responseData = null;
 
       if (contentType.includes("application/json")) {
@@ -32,7 +35,6 @@
 
       if (
         redirectedToLogin ||
-        unauthorized ||
         htmlLoginPage ||
         sessionExpired
       ) {
