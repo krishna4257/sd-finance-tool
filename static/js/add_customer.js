@@ -162,7 +162,7 @@ anoInput.addEventListener("change", checkAno);
     });
 
     // --- Loan Field Calculation ---
-    function calculateLoanFields() {
+    function calculateLoanFields(e) {
         const period = parseInt(periodInput.value);
         const amount = parseFloat(totalAmountInput.value);
         const start = startDateInput.value;
@@ -188,10 +188,64 @@ anoInput.addEventListener("change", checkAno);
         } else {
             installmentAmountInput.value = '';
         }
+
+        // Automatic split calculation
+        const interestInput = document.getElementById('interest_amount');
+        const cuttingInput = document.getElementById('cutting_amount');
+        const baseInput = document.getElementById('base_amount');
+        const splitFieldsContainer = document.getElementById('splitFieldsContainer');
+
+        if (!isNaN(amount) && amount > 0) {
+            if (splitFieldsContainer) splitFieldsContainer.style.display = 'block';
+            
+            // Only auto-calculate interest and cutting if this was triggered by total_amount change
+            // or if the fields are empty
+            const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
+            const cuttingRate = parseFloat(window.VILLAGE_CUTTING_RATE) || 0.0;
+
+            if (e && e.target === totalAmountInput) {
+                if (interestInput) interestInput.value = (amount * interestRate / 100.0).toFixed(2);
+                if (cuttingInput) cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(2);
+            } else {
+                if (interestInput && interestInput.value === '') {
+                    interestInput.value = (amount * interestRate / 100.0).toFixed(2);
+                }
+                if (cuttingInput && cuttingInput.value === '') {
+                    cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(2);
+                }
+            }
+
+            const interestVal = parseFloat(interestInput?.value) || 0.0;
+            const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
+            if (baseInput) {
+                baseInput.value = (amount - interestVal - cuttingVal).toFixed(2);
+            }
+        } else {
+            if (splitFieldsContainer) splitFieldsContainer.style.display = 'none';
+            if (interestInput) interestInput.value = '';
+            if (cuttingInput) cuttingInput.value = '';
+            if (baseInput) baseInput.value = '';
+        }
     }
     
     [typeInput, periodInput, startDateInput, totalAmountInput]
   .forEach(el => el.addEventListener('input', calculateLoanFields));
+
+    const interestInput = document.getElementById('interest_amount');
+    const cuttingInput = document.getElementById('cutting_amount');
+    
+    function updateBaseAmount() {
+        const amount = parseFloat(totalAmountInput.value);
+        const interestVal = parseFloat(interestInput?.value) || 0.0;
+        const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
+        const baseInput = document.getElementById('base_amount');
+        if (baseInput && !isNaN(amount)) {
+            baseInput.value = (amount - interestVal - cuttingVal).toFixed(2);
+        }
+    }
+
+    if (interestInput) interestInput.addEventListener('input', updateBaseAmount);
+    if (cuttingInput) cuttingInput.addEventListener('input', updateBaseAmount);
 
     // --- Parent Link Check ---
     if (panoInput && parentInfoTooltip && parentInfoText) {

@@ -490,7 +490,19 @@
       <thead>
         <tr>
           {% for header in headers %}
-          <th class="table-header" onclick="sortTableColumn('{{ header }}')">{{ header }}</th>
+          <th class="table-header" onclick="sortTableColumn('{{ header }}')">
+            {% if header == 'emp1' %}
+              Employee 1
+            {% elif header == 'emp2' %}
+              Employee 2
+            {% elif header == 'emp1_name' %}
+              Employee 1 Name
+            {% elif header == 'emp2_name' %}
+              Employee 2 Name
+            {% else %}
+              {{ header.replace('_', ' ').title() }}
+            {% endif %}
+          </th>
           {% endfor %}
           <th>Actions</th>
         </tr>
