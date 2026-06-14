@@ -62,31 +62,58 @@ async function loadDashboardData(vid, forceRecalc = false) {
 
   try {
     const forceStr = forceRecalc ? "&force_recalc=true" : "";
-    const [behavioralRes, dashboardRes, postingRes] = await Promise.all([
-      fetch(`/api/village/behavioral_analytics/${vid}?view=${currentView}&sub_view=${localSubView}${forceStr}`),
-      fetch(`/api/dashboard/analytics/${vid}?view=${currentView}`),
-      fetch(`/api/dashboard/posting_analytics/${vid}`)
-    ]);
-    const behavioralResult = await behavioralRes.json();
-    const dashboardResult = await dashboardRes.json();
-    const postingResult = await postingRes.json();
+    loadingEl.style.display = "none";
+    contentEl.style.display = "flex";
+
+    const dashboardPromise = fetch(
+      `/api/dashboard/analytics/${vid}?view=${currentView}`
+    ).then(r => r.json());
+
+    const postingPromise = fetch(
+      `/api/dashboard/posting_analytics/${vid}`
+    ).then(r => r.json());
+
+    const behavioralPromise = fetch(
+      `/api/village/behavioral_analytics/${vid}?view=${currentView}&sub_view=${localSubView}${forceStr}`
+    ).then(r => r.json());
+
+    const dashboardResult = await dashboardPromise;
+
+    if (dashboardResult.success) {
+      const dbData = dashboardResult.data;
+
+      populateDashboardTiles(dbData);
+      cachedDashboardHistory = dbData.history;
+      bindTileDoubleClickListeners();
+    }
 
     if (refreshBtn) refreshBtn.classList.remove("spinning");
 
+    postingPromise.then((postingResult) => {
+        if (!postingResult.success) {
+          console.warn(
+            "Posting analytics unavailable:",
+            postingResult.error || "Unknown error"
+          );
+
+          const section = document.getElementById("vpopPostingAnalyticsSection");
+          if (section) section.style.display = "none";
+          return;
+        }
+
+        if (postingResult.data) {
+          populatePostingAnalytics(postingResult.data);
+        }
+      })
+      .catch((err) => {
+        console.error("Posting analytics failed:", err);
+      });
+
+    const behavioralResult = await behavioralPromise;
     if (!behavioralResult.success) {
       alert("Failed to load village behavioral analytics: " + (behavioralResult.error || "Unknown error"));
       return;
     }
-    if (!dashboardResult.success) {
-      alert("Failed to load dashboard analytics: " + (dashboardResult.error || "Unknown error"));
-      return;
-    }
-    if (!postingResult.success) {
-      console.warn("Posting analytics unavailable:", postingResult.error || "Unknown error");
-      const section = document.getElementById("vpopPostingAnalyticsSection");
-      if (section) section.style.display = "none";
-    }
-
     const data = behavioralResult.data;
     if (data.empty) {
       loadingEl.style.display = "none";
@@ -94,16 +121,6 @@ async function loadDashboardData(vid, forceRecalc = false) {
       return;
     }
 
-    // Populate dashboard tiles and cache history
-    const dbData = dashboardResult.data;
-    populateDashboardTiles(dbData);
-    cachedDashboardHistory = dbData.history;
-    bindTileDoubleClickListeners();
-
-    // Populate posting analytics (only if data is available)
-    if (postingResult.data) {
-      populatePostingAnalytics(postingResult.data);
-    }
 
 
     // Populate Headers
@@ -304,8 +321,7 @@ async function loadDashboardData(vid, forceRecalc = false) {
     });
 
     // Show content
-    loadingEl.style.display = "none";
-    contentEl.style.display = "flex";
+   
 
   } catch (err) {
     console.error("Dashboard render failed:", err);

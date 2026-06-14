@@ -75,8 +75,13 @@ def get_pg_connection():
     last_error = None
 
     for _ in range(5):
+        conn = None
         try:
             conn = pg_pool.getconn()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
             try:
                 with conn.cursor() as cur:
@@ -90,9 +95,20 @@ def get_pg_connection():
                 except Exception:
                     pass
 
+        except PoolError as e:
+            raise DatabasePoolExhausted(
+                "PostgreSQL connection pool exhausted"
+            ) from e
+
         except Exception as e:
             last_error = e
             print(f"[DB] Dead connection detected: {e}")
+
+            if conn is not None:
+                try:
+                    pg_pool.putconn(conn, close=True)
+                except Exception:
+                    pass
 
     raise last_error # type: ignore
 
