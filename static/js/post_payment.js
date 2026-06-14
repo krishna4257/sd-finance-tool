@@ -81,15 +81,86 @@ function showError(message) {
 }
 
 
-function ddmmyyyyToIso(dateStr) {
+function normalizeDateForComparison(dateStr) {
   if (!dateStr) return "";
-  const parts = dateStr.split(/[-/]/);
-  if (parts.length < 3) return dateStr;
-  const dd = parts[0].padStart(2, '0');
-  const mm = parts[1].padStart(2, '0');
-  const yyyy = parts[2];
-  return `${yyyy}-${mm}-${dd}`;
+
+  const parsed = parseISOorDDMMYYYY(dateStr);
+  if (!parsed || isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return formatDateToYYYYMMDD(parsed);
 }
+
+function isPostingDateValidForCustomer(ano, postingDate) {
+  const customer = CUSTOMER_MAP[String(ano).trim()];
+  if (!customer) {
+    return { valid: false, error: "❌ A.no not found in database!" };
+  }
+
+  const postingIso = normalizeDateForComparison(postingDate);
+  const startIso = normalizeDateForComparison(customer.start_date);
+  const startDisplay = formatDateDDMMYYYY(customer.start_date);
+
+  if (!postingIso) {
+    return {
+      valid: false,
+      customer,
+      error: "❌ Invalid posting date."
+    };
+  }
+
+  if (!startIso) {
+    console.error(
+      "Unable to validate customer start_date:",
+      ano,
+      customer.start_date
+    );
+
+    return {
+      valid: false,
+      customer,
+      error: `❌ Customer ANO - ${ano} has an invalid start date. Contact administrator.`
+    };
+  }
+
+  if (postingIso <= startIso) {
+    return {
+      valid: false,
+      customer,
+      error: `❌ Customer ANO - ${ano} start_date is ${startDisplay}. Posting date must be after start_date.`
+    };
+  }
+
+  return { valid: true, customer };
+}
+
+function sanitizeTempPayments(rows) {
+  const cleaned = [];
+  const rejected = [];
+
+  (rows || []).forEach((row, index) => {
+    const ano = String(row?.ano ?? "").trim();
+    const pdt = String(row?.pdt ?? "").trim();
+    const amt = Number(row?.amt);
+
+    if (!ano || !pdt || !Number.isFinite(amt) || amt <= 0) {
+      rejected.push({ index, reason: "invalid_basic_fields", row });
+      return;
+    }
+
+    const validation = isPostingDateValidForCustomer(ano, pdt);
+    if (!validation.valid) {
+      rejected.push({ index, reason: validation.error, row });
+      return;
+    }
+
+    cleaned.push({ ano, pdt, amt });
+  });
+
+  return { cleaned, rejected };
+}
+
 
 async function loadPaymentDayStats() {
 
@@ -457,8 +528,19 @@ function sortTemp(column) {
 }
 
 function saveAndUpdate() {
+  const sanitized = sanitizeTempPayments(tempTable);
+  tempTable = sanitized.cleaned;
   persistTempPayments();
   updateTable();
+
+  if (sanitized.rejected.length > 0) {
+    const firstError = sanitized.rejected[0]?.reason;
+    if (typeof firstError === 'string' && firstError.startsWith('❌')) {
+      showError(firstError);
+    } else {
+      showError("❌ Invalid rows were removed from the temporary table.");
+    }
+  }
 }
 
 function resetTempTable() {
@@ -592,12 +674,12 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
     return;
   }
 
-  const postingDateIso = ddmmyyyyToIso(pdt);
-  const customerStartDateIso = ddmmyyyyToIso(customer.start_date);
+  const postingDateIso = normalizeDateForComparison(pdt);
+  const customerStartDateIso = normalizeDateForComparison(customer.start_date);
   const customerStartDateDisplay = formatDateDDMMYYYY(customer.start_date);
 
-  if (postingDateIso && customerStartDateIso && postingDateIso < customerStartDateIso) {
-    showError(`❌ Customer ANO - ${ano} start_date is ${customerStartDateDisplay}. Posting date must be on or after start_date.`);
+  if (postingDateIso && customerStartDateIso && postingDateIso <= customerStartDateIso) {
+    showError(`❌ Customer ANO - ${ano} start_date is ${customerStartDateDisplay}. Posting date must be after start_date.`);
     document.getElementById("pdt").focus();
     return;
   }
@@ -669,6 +751,12 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
     const customer = CUSTOMER_MAP[String(ano).trim()];
     if (!customer) {
         showError("❌ A.no not found in database!");
+        return;
+    }
+
+    const startDateValidation = isPostingDateValidForCustomer(ano, pdt);
+    if (!startDateValidation.valid) {
+        showError(startDateValidation.error);
         return;
     }
 
@@ -2024,7 +2112,7 @@ function updateReportRecord(pid, field, value) {
 
     const updatedPayment = { ...currentPayment };
     if (field === 'payment_date') {
-        updatedPayment.payment_date = ddmmyyyyToIso(value);
+        updatedPayment.payment_date = normalizeDateForComparison(value);
     } else {
         updatedPayment[field] = value;
     }
@@ -2096,7 +2184,7 @@ function saveAllReportChanges() {
         const updatedPayment = { ...currentPayment };
         Object.keys(fields).forEach(field => {
             if (field === 'payment_date') {
-                updatedPayment.payment_date = ddmmyyyyToIso(fields[field]);
+                updatedPayment.payment_date = normalizeDateForComparison(fields[field]);
             } else {
                 updatedPayment[field] = fields[field];
             }
