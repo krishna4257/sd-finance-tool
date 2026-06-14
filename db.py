@@ -72,11 +72,10 @@ class PooledConnection:
 
 
 def get_pg_connection():
-    try:
-        last_exception = None
+    last_error = None
 
-        # Try up to 3 connections from the pool
-        for _ in range(3):
+    for _ in range(5):
+        try:
             conn = pg_pool.getconn()
 
             try:
@@ -85,22 +84,18 @@ def get_pg_connection():
 
                 return PooledConnection(conn, pg_pool)
 
-            except Exception as e:
-                last_exception = e
-
+            except Exception:
                 try:
-                    # Remove bad connection from pool
                     pg_pool.putconn(conn, close=True)
                 except Exception:
                     pass
 
-        # All retries failed
-        raise last_exception # type: ignore
+        except Exception as e:
+            last_error = e
+            print(f"[DB] Dead connection detected: {e}")
 
-    except PoolError as e:
-        raise DatabasePoolExhausted(
-            "PostgreSQL connection pool exhausted"
-        ) from e
+    raise last_error # type: ignore
+
 
 
 def get_pool_stats():
