@@ -3,6 +3,7 @@ import os
 import sys
 import argparse
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import pytz
 
@@ -25,6 +26,41 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
 
+
+def process_village_worker(vid, vname, force_recalc=False):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        start = time.time()
+
+        prefill_village_cache(
+            vid,
+            vname,
+            cur,
+            force_recalc=force_recalc
+        )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "vid": vid,
+            "vname": vname,
+            "duration": round(time.time() - start, 2)
+        }
+    except Exception as ex:
+        conn.rollback()
+        return {
+            "success": False,
+            "vid": vid,
+            "vname": vname,
+            "error": str(ex)
+        }
+    finally:
+        cur.close()
+        conn.close()
+        
 def prefill_village_cache(vid, vname, cur, force_recalc=False):
     KOLKATA = pytz.timezone('Asia/Kolkata')
     today = datetime.now(KOLKATA).date()
@@ -116,6 +152,12 @@ def main():
     parser = argparse.ArgumentParser(description="Prefill/Pre-calculate Village Health and Behavioral Analytics Caches.")
     parser.add_argument("--vid", type=int, help="Limit cache building to a single village ID.")
     parser.add_argument("--force", action="store_true", help="Force recalculate and overwrite existing cache records.")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=6,
+        help="Number of parallel worker processes (default: 6)."
+    )
     args = parser.parse_args()
     
     print(f"{Colors.HEADER}=== Village Health Cache Prefill Tool ==={Colors.ENDC}\n")
@@ -147,19 +189,43 @@ def main():
     success_count = 0
     fail_count = 0
     
-    # 2. Iterate and pre-populate
-    for idx, (vid, vname) in enumerate(villages, 1):
-        v_start = time.time()
-        print(f"[{idx}/{len(villages)}] Processing {Colors.BOLD}{vname}{Colors.ENDC} (ID: {vid})...", end="", flush=True)
-        try:
-            prefill_village_cache(vid, vname, cur, force_recalc=args.force)
-            conn.commit()  # Progressive commits per village
-            success_count += 1
-            print(f" {Colors.OKGREEN}Done in {time.time() - v_start:.2f}s{Colors.ENDC}")
-        except Exception as ex:
-            conn.rollback()
-            fail_count += 1
-            print(f" {Colors.FAIL}FAILED: {ex}{Colors.ENDC}")
+    print(f"Using {args.workers} worker processes")
+
+    futures = {}
+
+    with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        for vid, vname in villages:
+            future = executor.submit(
+                process_village_worker,
+                vid,
+                vname,
+                args.force
+            )
+            futures[future] = (vid, vname)
+
+        completed = 0
+
+        for future in as_completed(futures):
+            completed += 1
+
+            result = future.result()
+
+            if result["success"]:
+                success_count += 1
+                print(
+                    f"[{completed}/{len(villages)}] "
+                    f"{Colors.OKGREEN}{result['vname']}"
+                    f" ({result['vid']}) completed in "
+                    f"{result['duration']:.2f}s{Colors.ENDC}"
+                )
+            else:
+                fail_count += 1
+                print(
+                    f"[{completed}/{len(villages)}] "
+                    f"{Colors.FAIL}{result['vname']}"
+                    f" ({result['vid']}) FAILED: "
+                    f"{result['error']}{Colors.ENDC}"
+                )
             
     print(f"\n{Colors.HEADER}=== Prefill Execution Summary ==={Colors.ENDC}")
     print(f"  Processed Villages: {len(villages)}")

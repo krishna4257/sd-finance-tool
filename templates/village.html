@@ -517,8 +517,7 @@
               </button>
  
               {% set has_coords = row.latitude is not none and row.longitude is not none and row.latitude != '' and row.longitude != '' %}
-              <button class="neumorphic-btn ultrasmall location-btn"
-                      style="color: {{ '#16a34a' if has_coords else '#dc2626' }}; border-color: {{ 'rgba(22,163,74,0.35)' if has_coords else 'rgba(220,38,38,0.35)' }};"
+                    <button class="neumorphic-btn ultrasmall location-btn {{ 'coords-true' if has_coords else 'coords-false' }}"
                       data-vid="{{ row.vid }}"
                       data-has-coords="{{ 'true' if has_coords else 'false' }}"
                       onclick="event.stopPropagation();"
@@ -600,9 +599,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{{ url_for('static', filename='js/village.js') }}"></script>
 <script>
-  window.villageData = {{ data|tojson }};
+  const villageDataJson = '{{ data | tojson | safe }}';
+window.villageData = JSON.parse(villageDataJson);
   window.selectedVid = "{{ selected_vid if selected_vid else '' }}";
   window.userLevel = "{{ session.get('level', '') }}";
-  window.stateList = {{ ['ANDHRA PRADESH','TELANGANA','KARNATAKA','MAHARASHTRA','ODISHA','GUJARAT']|tojson }};
+  const stateListJson = '{{ ["ANDHRA PRADESH","TELANGANA","KARNATAKA","MAHARASHTRA","ODISHA","GUJARAT"] | tojson | safe }}';
+  window.stateList = JSON.parse(stateListJson);
 </script>
 {% endblock %}

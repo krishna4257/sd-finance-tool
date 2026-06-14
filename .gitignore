@@ -222,4 +222,4 @@ testing/*
 
 
 # own python files folder
-Python Files/*
+python_files/*

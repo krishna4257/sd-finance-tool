@@ -342,7 +342,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 data-village-name="${v.village_name}"
                 data-emp1="${group.emp1}"
                 data-emp2="${group.emp2}">
-                <i class="fas fa-map-pin"></i> ${v.village_name}
+                <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code})
               </span>
             `;
           }).join("")}

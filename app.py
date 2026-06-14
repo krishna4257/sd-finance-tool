@@ -1,6 +1,9 @@
 import os
 import pytz
+from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import]
+import time as pytime
 import calendar
+from bisect import bisect_right
 from datetime import date
 import traceback
 import logging
@@ -522,9 +525,6 @@ def run_db_migrations():
         conn.close()
 
 run_db_migrations()
-
-from apscheduler.schedulers.background import BackgroundScheduler
-import pytz
 
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
@@ -1607,7 +1607,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
             continue
         p_date = parse_date_input(p_date)
         
-        if p_date <= today:
+        if p_date <= today: # type: ignore
             valid_payments.append({
                 "amt": Decimal(str(p.get("amt", 0))),
                 "payment_date": p_date
@@ -1621,7 +1621,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         
     # Generate rolling sequential due windows, expanding beyond period if customer is overdue
     max_eval_date = end_date
-    if today > max_eval_date:
+    if today > max_eval_date: # type: ignore
         max_eval_date = today
     for p in valid_payments:
         if p["payment_date"] > max_eval_date:
@@ -1634,7 +1634,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap:
+            if due >= max_eval_date or w >= total_weeks_cap: # type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -1643,7 +1643,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     num_weeks_to_evaluate = 0
     for w in range(1, total_weeks + 1):
         window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
-        if window_start <= today:
+        if window_start <= today: # type: ignore
             num_weeks_to_evaluate = w
         else:
             break
@@ -1830,8 +1830,8 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     # Overdue end date penalties are already applied week-by-week inside the loop above.
     # Calculate overdue_penalty for return value only (informational), do NOT subtract again.
     overdue_penalty = 0.0
-    if rem_balance > 0 and today > end_date:
-        days_overdue = (today - end_date).days
+    if rem_balance > 0 and today > end_date: # type: ignore
+        days_overdue = (today - end_date).days # type: ignore
         if days_overdue >= 21:
             overdue_weeks = ((days_overdue - 21) // 7) + 1
             overdue_penalty = overdue_weeks * 5.0
@@ -1864,8 +1864,8 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         predicted_end = actual_end
         return {
             "status": "OnTrack",
-            "predicted_end_date": predicted_end.isoformat() if hasattr(predicted_end, "isoformat") else str(predicted_end),
-            "actual_end_date": actual_end.isoformat() if hasattr(actual_end, "isoformat") else str(actual_end),
+            "predicted_end_date": predicted_end.isoformat() if hasattr(predicted_end, "isoformat") else str(predicted_end), # type: ignore
+            "actual_end_date": actual_end.isoformat() if hasattr(actual_end, "isoformat") else str(actual_end), # type: ignore
             "diff_badge": "On Time",
             "net_weeks": 0,
             "discipline": {
@@ -1892,7 +1892,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
             continue
         p_date = parse_date_input(p_date)
         
-        if p_date <= today:
+        if p_date <= today: # type: ignore
             valid_payments.append({
                 "amt": Decimal(str(p.get("amt", 0))),
                 "payment_date": p_date
@@ -1907,7 +1907,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     w = 1
     total_weeks_cap = int(period) + 156
     max_eval_date = end_date
-    if today > max_eval_date:
+    if today > max_eval_date:# type: ignore
         max_eval_date = today
     for p in valid_payments:
         if p["payment_date"] > max_eval_date:
@@ -1917,7 +1917,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap:
+            if due >= max_eval_date or w >= total_weeks_cap:# type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -1925,7 +1925,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     num_weeks_to_evaluate = 0
     for w in range(1, total_weeks + 1):
         window_start = start_date if w == 1 else due_dates[w-2] + timedelta(days=1)
-        if window_start <= today:
+        if window_start <= today:# type: ignore
             num_weeks_to_evaluate = w
         else:
             break
@@ -2000,8 +2000,8 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     if bal_amt <= 0:
         status = "Settled"
     else:
-        if today > end_date:
-            days_overdue = (today - end_date).days
+        if today > end_date:# type: ignore
+            days_overdue = (today - end_date).days# type: ignore
             if days_overdue >= 42:
                 status = "To Be Defaulted"
             else:
@@ -2024,12 +2024,12 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         net_weeks = 0
     else:
         unpaid_equivalents = float(bal_amt / inst_amt) if inst_amt > 0 else 0.0
-        if today < end_date:
-            scheduled_remaining_weeks = (end_date - today).days / 7.0
+        if today < end_date:# type: ignore
+            scheduled_remaining_weeks = (end_date - today).days / 7.0# type: ignore
             delay_weeks = max(0.0, unpaid_equivalents - scheduled_remaining_weeks)
             predicted_end = end_date + timedelta(days=int(round(delay_weeks * 7.0)))
         else:
-            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * 7.0)))
+            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * 7.0)))# type: ignore
         
         net_weeks = int(round((predicted_end - end_date).days / 7.0))
 
@@ -2168,6 +2168,7 @@ def format_customer_ratings_with_trends(cur, data):
     prows = cur.fetchall()
     
     payments_by_cid = {}
+
     for prow in prows:
         cid = prow[0]
         if cid not in payments_by_cid:
@@ -2200,7 +2201,7 @@ def format_customer_ratings_with_trends(cur, data):
             else:
                 w_due = w_due_str
                 
-            if w_due > today:
+            if w_due > today:# type: ignore
                 continue
             completed_weeks.append(w)
 
@@ -2218,9 +2219,9 @@ def format_customer_ratings_with_trends(cur, data):
             try:
                 rating_val = int(round(float(rating)))
                 if trend == "up":
-                    c["customer_rating"] = f"{rating_val} â–²"
+                    c["customer_rating"] = f"{rating_val}"
                 elif trend == "down":
-                    c["customer_rating"] = f"{rating_val} â–¼"
+                    c["customer_rating"] = f"{rating_val}"
                 else:
                     c["customer_rating"] = f"{rating_val}"
             except (ValueError, TypeError):
@@ -3392,14 +3393,14 @@ def get_customer_analytics(vid):
         if row:
             t_count, t_sum, w_count, w_sum, m_count, m_sum = row
             return {
-                "today": f"{t_count} - â‚¹{int(round(t_sum)):,}",
-                "week": f"{w_count} - â‚¹{int(round(w_sum)):,}",
-                "month": f"{m_count} - â‚¹{int(round(m_sum)):,}"
+                "today": f"{t_count} - {int(round(t_sum)):,}",
+                "week": f"{w_count} - {int(round(w_sum)):,}",
+                "month": f"{m_count} - {int(round(m_sum)):,}"
             }
-        return {"today": "0 - â‚¹0", "week": "0 - â‚¹0", "month": "0 - â‚¹0"}
+        return {"today": "0 - 0", "week": "0 - 0", "month": "0 - 0"}
     except Exception as e:
         logger.error(f"Error fetching customer analytics: {e}")
-        return {"today": "0 - â‚¹0", "week": "0 - â‚¹0", "month": "0 - â‚¹0"}
+        return {"today": "0 - 0", "week": "0 - 0", "month": "0 - 0"}
     finally:
         cur.close()
         conn.close()
@@ -3425,9 +3426,9 @@ def add_customer():
         loan_type = data["type"]
 
         if loan_type == "M":
-            tdt = fdt + relativedelta(months=period)
+            tdt = fdt + relativedelta(months=period)# type: ignore
         else:
-            tdt = fdt + timedelta(weeks=period)
+            tdt = fdt + timedelta(weeks=period)# type: ignore
 
         total_amount = float(data["total_amount"])
         installment_amount = round(total_amount / period, 2)
@@ -4497,7 +4498,7 @@ def submit_post_payment():
         for r in rows:
             try:
                 pdt = parse_date_input(r["pdt"])
-                if not min_pdt or pdt < min_pdt:
+                if not min_pdt or pdt < min_pdt:# type: ignore
                     min_pdt = pdt
             except Exception:
                 pass
@@ -7345,10 +7346,27 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     pmt_rows = cur.fetchall()
     
     # Pre-parse payment dates and convert amounts to Decimal to avoid conversion overhead in loops
+    # Pre-parse payment dates and build cumulative payment structure
     payments_by_cid = {cid: [] for cid in cids}
+    cumulative_payments_by_cid = {cid: [] for cid in cids}
+
+    running_totals = {cid: Decimal("0") for cid in cids}
+
     for cid, amt, p_date in pmt_rows:
         p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
-        payments_by_cid[cid].append({"amt": Decimal(str(amt)), "payment_date": p_dt})
+        amt_dec = Decimal(str(amt))
+
+        payments_by_cid[cid].append({
+            "amt": amt_dec,
+            "payment_date": p_dt
+        })
+
+        running_totals[cid] += amt_dec
+
+        cumulative_payments_by_cid[cid].append({
+            "payment_date": p_dt,
+            "cumulative_paid": running_totals[cid]
+        })
 
     # Helper function to check 6 weeks overdue
     def check_is_overdue_6_weeks(wk_details, ref_date, end_dt, balance, inst_amt, period):
@@ -7377,6 +7395,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     ratings_by_date = {d: {} for d in calc_dates_needed}
     statuses_by_date = {d: {} for d in calc_dates_needed}
     overdue_6_w_by_date = {d: {} for d in calc_dates_needed}
+    balance_by_date = {d: {} for d in calc_dates_needed}
     
     # Precompute customer-specific parameters with pre-parsed start_dt/end_dt/installment/period
     cust_list = []
@@ -7384,11 +7403,42 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_list.append({
-            "cid": cid, "name": name, "ano": ano, "start_dt": start_dt, "end_dt": end_dt,
-            "total_amount": float(total_amount or 0.0), "balance_amount": float(balance_amount or 0.0),
-            "installment_amount": float(installment_amount or 0.0), "period": period,
-            "origin": origin, "payments": payments_by_cid.get(cid, []), "status_orig": status
-        })
+    "cid": cid,
+    "name": name,
+    "ano": ano,
+    "start_dt": start_dt,
+    "end_dt": end_dt,
+    "total_amount": float(total_amount or 0.0),
+    "balance_amount": float(balance_amount or 0.0),
+    "installment_amount": float(installment_amount or 0.0),
+    "period": period,
+    "origin": origin,
+    "payments": payments_by_cid.get(cid, []),
+    "payment_dates": [p["payment_date"]
+        for p in payments_by_cid.get(cid, [])
+    ],
+    "cumulative_payments": cumulative_payments_by_cid.get(cid, []),
+    "status_orig": status
+})
+        
+    def get_total_paid_until(cumulative_list, eval_date):
+        if not cumulative_list:
+            return 0.0
+        idx = bisect_right(
+            [x["payment_date"] for x in cumulative_list],
+            eval_date
+        ) - 1
+        if idx < 0:
+            return 0.0
+        return float(cumulative_list[idx]["cumulative_paid"])
+    
+    def get_payments_until(customer, eval_date):
+        idx = bisect_right(
+            customer["payment_dates"],
+            eval_date
+        )
+
+        return customer["payments"][:idx]
 
     # For each date in calc_dates_needed, calculate ratings for all active/defaulted customers
     for d in calc_dates_needed:
@@ -7397,10 +7447,10 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
                 continue
             
             # Filter payments before or equal to d
-            sub_payments = [p for p in c["payments"] if p["payment_date"] <= d]
-            total_paid_at_d = sum(float(p["amt"]) for p in sub_payments)
-            bal_at_d = max(0.0, c["total_amount"] - total_paid_at_d)
-            
+            sub_payments = get_payments_until(c, d)
+            total_paid_at_d = get_total_paid_until(c["cumulative_payments"],d)
+            bal_at_d = max(0.0,c["total_amount"] - total_paid_at_d)
+            balance_by_date[d][c["cid"]] = bal_at_d
             # Run rating details
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
                 c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, today=d
@@ -7412,6 +7462,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             ratings_by_date[d][c["cid"]] = score_h
             statuses_by_date[d][c["cid"]] = beh_h["status"]
             overdue_6_w_by_date[d][c["cid"]] = check_is_overdue_6_weeks(wk_details_h, d, c["end_dt"], bal_at_d, c["installment_amount"], c["period"])
+            
 
     # Now calculate and cache the metrics for the uncached dates
     insert_cache_rows = []
@@ -7424,8 +7475,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             if c["start_dt"] > d:
                 continue
             
-            sub_payments = [p for p in c["payments"] if p["payment_date"] <= d]
-            total_paid_at_d = sum(float(p["amt"]) for p in sub_payments)
+            total_paid_at_d = get_total_paid_until(c["cumulative_payments"],d)
             bal_at_d = max(0.0, c["total_amount"] - total_paid_at_d)
             
             # View-specific inclusion
@@ -7480,9 +7530,7 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         all_time_count = len(all_time_customers)
         for c in all_time_customers:
             if c["origin"] != "customer":
-                sub_pmts = [p for p in c["payments"] if p["payment_date"] <= d]
-                paid_at_d = sum(float(p["amt"]) for p in sub_pmts)
-                bal_at_d = max(0.0, c["total_amount"] - paid_at_d)
+                bal_at_d = balance_by_date[d][c["cid"]]
                 if bal_at_d > 0:
                     defaulted_customers_count += 1
         default_rate = (defaulted_customers_count / all_time_count) if all_time_count > 0 else 0.0
@@ -7597,7 +7645,6 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             ON CONFLICT (vid, view, sub_view, time_range, date_key)
             DO UPDATE SET health_score = EXCLUDED.health_score, metrics = EXCLUDED.metrics, updated_at = CURRENT_TIMESTAMP
         """, insert_cache_rows)
-        cur.connection.commit()
 
     # 4. Construct chronological history_payload to return
     history_payload = []
@@ -7704,7 +7751,14 @@ def api_village_health_history(vid):
             else:
                 dates = [eval_today - timedelta(days=30 * i) for i in range(5, -1, -1)]
 
+        t0 = pytime.perf_counter()
+
         history_points = calculate_village_health_history(vid, cur, view, sub_view, dates, time_range=time_range)
+
+        print(
+           f"Health history took "
+           f"{pytime.perf_counter() - t0:.2f}s"
+        )
 
         if event_days > 0:
             event_start = today - timedelta(days=event_days)
@@ -7956,8 +8010,13 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
             historical_status[idx][cid] = "OnTrack"
             historical_missed[idx][cid] = 0
 
+    t0 = pytime.perf_counter()
     # Run 6-week shared health history calculator
     history_points = calculate_village_health_history(vid, cur, view, sub_view, dates)
+    print(
+           f"Health history took "
+           f"{pytime.perf_counter() - t0:.2f}s"
+        )
     
     health_trend = []
     for pt in history_points:
@@ -8084,7 +8143,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
         stress_alerts.append({
             "type": "Collection Slowdown",
-            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks (â‚¹{weekly_payments[3]:,.0f} â†’ â‚¹{weekly_payments[2]:,.0f} â†’ â‚¹{weekly_payments[1]:,.0f}).",
+            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks ({weekly_payments[3]:,.0f} â†’ {weekly_payments[2]:,.0f}’ {weekly_payments[1]:,.0f}).",
             "severity": "High"
         })
         
@@ -8197,7 +8256,6 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         ON CONFLICT (vid, view, sub_view, time_range, date_key)
         DO UPDATE SET health_score = EXCLUDED.health_score, metrics = EXCLUDED.metrics, updated_at = CURRENT_TIMESTAMP
     """, (vid, view, sub_view, eval_today, round(current_health, 1), json.dumps(payload)))
-    cur.connection.commit()
 
     return payload
 
@@ -8219,7 +8277,12 @@ def api_village_behavioral_analytics(vid):
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
+        t0 = pytime.perf_counter()
         payload = compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, force_recalc)
+        print(
+            f"Health history took "
+            f"{pytime.perf_counter() - t0:.2f}s"
+        )
         return jsonify(success=True, data=payload)
     except ValueError as e:
         return jsonify(success=False, error=str(e)), 404
