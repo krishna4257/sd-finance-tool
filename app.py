@@ -315,10 +315,10 @@ def parse_mobile_timestamp(ts):
     if not ts:
         return None
     try:
-        # Mobile sends IST but without timezone â†’ force IST
+        # Mobile sends IST but without timezone → force IST
         dt = datetime.fromisoformat(ts)
 
-        # If no timezone â†’ assume IST
+        # If no timezone → assume IST
         if dt.tzinfo is None:
             ist_offset = timedelta(hours=5, minutes=30)
             dt = dt.replace(tzinfo=timezone(ist_offset))
@@ -820,7 +820,7 @@ def api_employees():
     allowed_villages = session.get("villages", [])
 
     try:
-        # Admin & mgmt â†’ full access
+        # Admin & mgmt → full access
         if user_level in ["admin", "mgmt"]:
             cur.execute("""
                 SELECT eid, name
@@ -829,7 +829,7 @@ def api_employees():
                 ORDER BY name
             """)
 
-        # s / m / j â†’ only employees linked to their villages
+        # s / m / j → only employees linked to their villages
         else:
             if not allowed_villages:
                 return jsonify([])
@@ -932,7 +932,7 @@ def api_villages():
     cur = conn.cursor()
 
     try:
-        # Admin & mgmt â†’ full access
+        # Admin & mgmt → full access
         if user_level in ["admin", "mgmt"]:
             if eid:
                 cur.execute("""
@@ -949,7 +949,7 @@ def api_villages():
                     ORDER BY village_name
                 """)
 
-        # s / m / j â†’ only assigned villages
+        # s / m / j → only assigned villages
         else:
             if not user_villages:
                 return jsonify([])
@@ -2218,16 +2218,33 @@ def format_customer_ratings_with_trends(cur, data):
         if rating is not None:
             try:
                 rating_val = int(round(float(rating)))
+                c["customer_rating_raw"] = rating_val
+                c["trend"] = trend
+                
+                prev_rating_val = 100
+                if len(completed_weeks) >= 2:
+                    try:
+                        prev_rating_val = int(round(float(completed_weeks[-2]["score_after"])))
+                    except (ValueError, TypeError):
+                        prev_rating_val = 100
+                c["customer_rating_prev_raw"] = prev_rating_val
+
                 if trend == "up":
-                    c["customer_rating"] = f"{rating_val}"
+                    c["customer_rating"] = f"{rating_val} ↑"
                 elif trend == "down":
-                    c["customer_rating"] = f"{rating_val}"
+                    c["customer_rating"] = f"{rating_val} ↓"
                 else:
-                    c["customer_rating"] = f"{rating_val}"
+                    c["customer_rating"] = f"{rating_val} →"
             except (ValueError, TypeError):
+                c["customer_rating_raw"] = None
+                c["customer_rating_prev_raw"] = 100
                 c["customer_rating"] = str(rating)
+                c["trend"] = "flat"
         else:
+            c["customer_rating_raw"] = None
+            c["customer_rating_prev_raw"] = 100
             c["customer_rating"] = ""
+            c["trend"] = "flat"
             
     return data
 
@@ -3546,11 +3563,11 @@ def view_customers():
     """, (vid, vid))
     defaulted_avg_score = float(cur.fetchone()[0])
 
-    # 3. Complete average score: (closed_cust_account balance > 0) + (customer) + (historic_customer_data)
+    # 3. Complete average score: (all closed_cust_account) + (customer) + (historic_customer_data)
     cur.execute("""
         SELECT COALESCE(AVG(customer_rating), 100.0)
         FROM (
-            SELECT customer_rating FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
+            SELECT customer_rating FROM closed_cust_account WHERE vid = %s
             UNION ALL
             SELECT customer_rating FROM customer WHERE vid = %s
             UNION ALL
@@ -3758,7 +3775,64 @@ def view_customers():
     for d in data:
         for key in ['start_date', 'end_date', 'created_at', 'freeze_date', 'updated_at']:
             if key in d and d[key]:
+                val = d[key]
+                if isinstance(val, (date, datetime)):
+                    d[f"{key}_raw"] = val.strftime("%Y-%m-%d")
+                elif isinstance(val, str):
+                    parsed = parse_date_input(val)
+                    d[f"{key}_raw"] = parsed.strftime("%Y-%m-%d") if parsed else val
+                else:
+                    d[f"{key}_raw"] = str(val)
                 d[key] = format_date_display(d[key])
+            else:
+                d[f"{key}_raw"] = ""
+
+    # Fetch all customers in this village across active, closed, and historic tables for global stats
+    cur.execute("""
+        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source
+        FROM customer
+        WHERE vid = %s
+    """, (vid,))
+    active_all = cur.fetchall()
+    
+    cur.execute("""
+        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source
+        FROM closed_cust_account
+        WHERE vid = %s
+    """, (vid,))
+    closed_all = cur.fetchall()
+    
+    cur.execute("""
+        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source
+        FROM historic_customer_data
+        WHERE vid = %s
+    """, (vid,))
+    historic_all = cur.fetchall()
+
+    all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source']
+    
+    active_dicts = [dict(zip(all_cols, r)) for r in active_all]
+    closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
+    historic_dicts = [dict(zip(all_cols, r)) for r in historic_all]
+
+    active_dicts = format_customer_ratings_with_trends(cur, active_dicts)
+    closed_dicts = format_customer_ratings_with_trends(cur, closed_dicts)
+    historic_dicts = format_customer_ratings_with_trends(cur, historic_dicts)
+
+    all_stats_list = active_dicts + closed_dicts + historic_dicts
+
+    def make_serializable(val):
+        if isinstance(val, Decimal):
+            return float(val)
+        if isinstance(val, (datetime, date)):
+            return val.isoformat()
+        if isinstance(val, dict):
+            return {k: make_serializable(v) for k, v in val.items()}
+        if isinstance(val, list):
+            return [make_serializable(v) for v in val]
+        return val
+
+    all_customers_stats_json = json.dumps(make_serializable(all_stats_list))
 
     cur.close()
     conn.close()
@@ -3775,6 +3849,7 @@ def view_customers():
         active_avg_score=active_avg_score,
         defaulted_avg_score=defaulted_avg_score,
         complete_avg_score=complete_avg_score,
+        all_customers_stats_json=all_customers_stats_json,
         mode=mode
     )
 
@@ -7848,22 +7923,22 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     if view == "active":
         if sub_view == "active_only":
             cur.execute("""
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, customer_rating
                 FROM customer
                 WHERE vid = %s
             """, (vid,))
         else: # active_defaulted
             cur.execute("""
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, customer_rating
                 FROM (
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid, customer_rating
                     FROM customer
                     UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
                     FROM closed_cust_account
                     WHERE balance_amount > 0
                     UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
                     FROM historic_customer_data
                     WHERE balance_amount > 0
                 ) all_cust
@@ -7871,15 +7946,15 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
             """, (vid,))
     else: # complete view
         cur.execute("""
-            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status
+            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, customer_rating
             FROM (
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid, customer_rating
                 FROM customer
                 UNION ALL
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
                 FROM closed_cust_account
                 UNION ALL
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
                 FROM historic_customer_data
             ) all_cust
             WHERE vid = %s
@@ -7924,7 +7999,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     dt4 = dates[4]
     dt3 = dates[3]
     
-    for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status in cust_rows:
+    for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status, db_rating in cust_rows:
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_payments = payments_by_cid.get(cid, [])
@@ -7961,7 +8036,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
             "total_amount": float(total_amount or 0),
             "paid_amount": float(paid_amount or 0),
             "balance_amount": float(balance_amount or 0),
-            "rating": score_t,
+            "rating": int(round(float(db_rating))) if db_rating is not None else (int(round(float(score_t))) if score_t is not None else 100),
             "status": beh_t["status"],
             "last_payment_date": last_payment_date_str,
             "missed_cycles": consec_missed_count,
@@ -8035,11 +8110,11 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     trend_val = current_health - last_week_health
     
     if trend_val > 0:
-        trend_text = f"â†‘ {trend_val:.1f} points"
+        trend_text = f"↑ {trend_val:.1f} points"
     elif trend_val < 0:
-        trend_text = f"â†“ {abs(trend_val):.1f} points"
+        trend_text = f"↓ {abs(trend_val):.1f} points"
     else:
-        trend_text = "â†’ Stable"
+        trend_text = "→ Stable"
         
     health_status = "Stable"
     if current_health >= 80:
@@ -8145,7 +8220,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
         stress_alerts.append({
             "type": "Collection Slowdown",
-            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks ({weekly_payments[3]:,.0f} â†’ {weekly_payments[2]:,.0f}’ {weekly_payments[1]:,.0f}).",
+            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks ({weekly_payments[3]:,.0f} → {weekly_payments[2]:,.0f} → {weekly_payments[1]:,.0f}).",
             "severity": "High"
         })
         
@@ -8156,7 +8231,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         if pct_inc >= 15.0:
             stress_alerts.append({
                 "type": "Quality Decline",
-                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} â†’ {partial_today}).",
+                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
                 "severity": "Medium"
             })
             
@@ -8566,7 +8641,10 @@ def api_dashboard_posting_analytics(vid):
                 SELECT cid, amt, payment_date, created_at, eid FROM closed_cust_payment WHERE vid = %s
             ) all_pmts;
         """, (vid, vid))
-        payments = cur.fetchall()
+        raw_payments = cur.fetchall()
+
+        # Do not globally filter payments by year so the history chart remains intact
+        payments = raw_payments
 
         # Group payments by payment_date
         payments_by_date = {}
@@ -8776,7 +8854,23 @@ def api_dashboard_posting_analytics(vid):
             })
         employee_breakdown.sort(key=lambda x: x["total_collected"], reverse=True)
 
-        avg_entry_lag_days = (overall_total_lag / overall_payment_count) if overall_payment_count > 0 else 0.0
+        # Calculate avg_entry_lag_days as the average of the weekly averages
+        weekly_lags = {}
+        for p_cid, p_amt, p_date, p_created_at, p_eid in payments:
+            p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
+            c_dt = p_created_at.date() if isinstance(p_created_at, datetime) else p_created_at
+            if p_dt and p_dt.year >= 2025:
+                lag = max(0, (c_dt - p_dt).days)
+                if p_dt not in weekly_lags:
+                    weekly_lags[p_dt] = []
+                weekly_lags[p_dt].append(lag)
+
+        weekly_avg_lags = []
+        for p_dt, lags in weekly_lags.items():
+            if lags:
+                weekly_avg_lags.append(sum(lags) / len(lags))
+        
+        avg_entry_lag_days = sum(weekly_avg_lags) / len(weekly_avg_lags) if weekly_avg_lags else 0.0
 
         # Historical weekly trend for chart (last 10 posting dates in chronological order)
         historical_trend = []
@@ -8846,7 +8940,7 @@ def toggle_village_status():
     cur = conn.cursor()
 
     try:
-        # Toggle active â†” inactive
+        # Toggle active ↔ inactive
         cur.execute("""
             UPDATE village
             SET status = CASE
@@ -9271,7 +9365,7 @@ def login():
             device = cur.fetchone()
 
             if not device:
-                # First login or after reset â†’ clear old devices and register new
+                # First login or after reset → clear old devices and register new
                 cur.execute("""
                     DELETE FROM user_devices
                     WHERE user_id = %s
@@ -9710,7 +9804,7 @@ def update_user_villages():
 @login_required
 def dashboard():
     vid = session.get("vid")
-    # âœ… NO CONTEXT â†’ SHOW ZERO DASHBOARD
+    # ✅ NO CONTEXT → SHOW ZERO DASHBOARD
     if not vid:
         if request.args.get("partial"):
             return render_template(

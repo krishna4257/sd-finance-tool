@@ -599,8 +599,8 @@ function recalculateCustomerLoanFields(row) {
                           : "";
                       tr.innerHTML = `
                           <td>${row.ANO}</td>
-                          <td data-field="PDT" contenteditable="false">${formattedPdt}</td>
-                          <td data-field="AMT" contenteditable="false" data-money>${row.AMT}</td>
+                          <td data-field="PDT" contenteditable="false" data-order="${row.PDT}">${formattedPdt}</td>
+                          <td data-field="AMT" contenteditable="false" data-money data-order="${row.AMT}">${row.AMT}</td>
                           <td class="cumulative-amt"></td>  <!-- New Cumulative Amount Column -->
                           <td>
                               <button class="neumorphic-btn ultrasmall posting-edit-btn">✏️ Edit</button>
@@ -619,8 +619,7 @@ function recalculateCustomerLoanFields(row) {
                   info: false,
                   columnDefs: [
                       { targets: "nosort", orderable: false },
-                      { type: "num", targets: [0, 2] },
-                      { type: "date-ddmmyyyy", targets: 1 },
+                      { type: "num", targets: [0, 2] }
                   ],
               });
 
@@ -798,8 +797,8 @@ async function addPaymentFromForm(form) {
         const newRowHtml = `
 <tr data-ano="${ano}" data-pdt="${pdt}">
     <td data-field="ANO" contenteditable="false">${ano}</td>
-    <td data-field="PDT" contenteditable="false">${formatDateToDDMMYYYY(pdt)}</td>
-    <td data-field="AMT" data-money="${amt}" contenteditable="false">${amt}</td>
+    <td data-field="PDT" contenteditable="false" data-order="${formatDateToISO(pdt)}">${formatDateToDDMMYYYY(pdt)}</td>
+    <td data-field="AMT" data-money="${amt}" data-order="${amt}" contenteditable="false">${amt}</td>
     <td class="cumulative-amt" data-money="0"></td>
     <td>
         <span class="delete-btn" onclick="deletePaymentFromElement(this)">🗑️</span>
@@ -1074,20 +1073,19 @@ function updateCustomerSummary() {
   
   updateTotalsAndLoanee();
 
-  const $paymentTable = $('#paymentTable');
-  if ($paymentTable.length && !$.fn.DataTable.isDataTable($paymentTable)) {
-    $paymentTable.DataTable({
-      paging: false,
-      searching: false,
-      ordering: true,
-      info: false,
-      columnDefs: [
-        { targets: 'nosort', orderable: false },
-        { type: 'num', targets: [0, 2] },
-        { type: 'date-ddmmyyyy', targets: 1 }
-      ]
-    });
-  }
+   const $paymentTable = $('#paymentTable');
+   if ($paymentTable.length && !$.fn.DataTable.isDataTable($paymentTable)) {
+     $paymentTable.DataTable({
+       paging: false,
+       searching: false,
+       ordering: true,
+       info: false,
+       columnDefs: [
+         { targets: 'nosort', orderable: false },
+         { type: 'num', targets: [0, 2] }
+       ]
+     });
+   }
 
 
 function updateCumulativeSum(tableId) {

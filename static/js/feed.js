@@ -192,6 +192,19 @@ function acceptSelected() {
 document.addEventListener("DOMContentLoaded", function () {
   updateTotalPayment();
 
+  if (document.getElementById("feedPaymentTable")) {
+    $('#feedPaymentTable').DataTable({
+      paging: false,
+      info: false,
+      searching: true,
+      ordering: true,
+      autoWidth: false,
+      columnDefs: [
+        { targets: [0, 6], orderable: false }
+      ]
+    });
+  }
+
   const groupByEl = document.getElementById("groupBy");
   const groupInput = document.getElementById("groupInput");
   if (!groupByEl || !groupInput) return;

@@ -95,10 +95,25 @@ function formatDateToDDMMYYYY(date) {
   return formatDate(date);
 }
 
+function formatDateToISO(str) {
+  if (!str) return "";
+  const parts = String(str).trim().split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+  return str;
+}
+
 // Expose helpers globally so existing inline scripts can access them
 window.parseDDMMYYYY = parseDDMMYYYY;
 window.formatDate = formatDate;
 window.formatDateToDDMMYYYY = formatDateToDDMMYYYY;
+window.formatDateToISO = formatDateToISO;
 
 // -------------------- Currency Helpers --------------------
 
@@ -281,36 +296,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // -------------------- Modernized Success Animations & Sounds --------------------
 
+let sharedAudioCtx = null;
+
+function getSharedAudioContext() {
+  if (!sharedAudioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      sharedAudioCtx = new AudioContext();
+    }
+  }
+  return sharedAudioCtx;
+}
+
+// Automatically unlock the AudioContext on any early user gesture
+function unlockAudio() {
+  const ctx = getSharedAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().then(() => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    });
+  }
+}
+window.addEventListener('click', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
 /**
  * Synthesizes a bright, high-quality double-tone chime sound (payment success style)
  * using Web Audio API. Requires no external audio file assets.
  */
 function playSuccessSound() {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     
     // Tone 1: E5 (659.25 Hz)
     const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
+    const osc1Gain = ctx.createGain();
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(659.25, ctx.currentTime);
-    gain1.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
+    osc1Gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    osc1Gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc1.connect(osc1Gain);
+    osc1Gain.connect(ctx.destination);
     
     // Tone 2: B5 (987.77 Hz) - delayed slightly for chime effect
     const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
+    const osc2Gain = ctx.createGain();
     osc2.type = 'sine';
     osc2.frequency.setValueAtTime(987.77, ctx.currentTime + 0.08);
-    gain2.gain.setValueAtTime(0, ctx.currentTime);
-    gain2.gain.setValueAtTime(0.12, ctx.currentTime + 0.08);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
+    osc2Gain.gain.setValueAtTime(0, ctx.currentTime);
+    osc2Gain.gain.setValueAtTime(0.12, ctx.currentTime + 0.08);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(ctx.destination);
     
     osc1.start(ctx.currentTime);
     osc1.stop(ctx.currentTime + 0.4);
@@ -376,6 +419,10 @@ function triggerSuccessFeedback({
 
   overlay.querySelector(".success-message").textContent = message;
   
+  // Center overlay dynamically relative to the visible scrolled viewport
+  overlay.style.top = (sectionElement.scrollTop || 0) + "px";
+  overlay.style.height = (sectionElement.clientHeight || sectionElement.offsetHeight || 0) + "px";
+
   // Activate overlay
   overlay.classList.add("active");
 
@@ -400,5 +447,6 @@ function triggerSuccessFeedback({
 }
 
 // Expose animation helpers globally
+window.getSharedAudioContext = getSharedAudioContext;
 window.playSuccessSound = playSuccessSound;
 window.triggerSuccessFeedback = triggerSuccessFeedback;

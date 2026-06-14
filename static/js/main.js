@@ -60,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // SAFE TABLE INIT (does NOT touch business features)
   // ===================================================
   document.querySelectorAll("table").forEach(t => {
-    if (t.id === "popPaymentTable" || t.classList.contains("no-datatable") || t.classList.contains("popup-mini-table")) return;
+    if (t.id === "popPaymentTable" || t.id === "feedPaymentTable" || t.classList.contains("no-datatable") || t.classList.contains("popup-mini-table")) return;
     if (!t.querySelector("thead")) return;
     if ($.fn.DataTable.isDataTable(t)) return;
 

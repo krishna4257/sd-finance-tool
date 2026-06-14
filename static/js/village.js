@@ -149,6 +149,21 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   };
 
+  window.sortTableColumn = function(headerName) {
+    if (!$.fn.DataTable.isDataTable('#villageTable')) return;
+    const table = $('#villageTable').DataTable();
+    const headers = table.columns().header().toArray().map(h => h.textContent.trim());
+    const idx = headers.indexOf(headerName);
+    if (idx !== -1) {
+      const currentOrder = table.order();
+      let dir = 'asc';
+      if (currentOrder.length > 0 && currentOrder[0][0] === idx) {
+        dir = currentOrder[0][1] === 'asc' ? 'desc' : 'asc';
+      }
+      table.order([idx, dir]).draw();
+    }
+  };
+
   window.printSelected = function () {
     window.print();
   };

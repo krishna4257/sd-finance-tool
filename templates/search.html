@@ -106,8 +106,8 @@
             {% for row in pamt1_records[ano] %}
               <tr data-ano="{{ row[0] }}" data-pdt="{{ row[1] }}" data-pid="{{ row[3] }}">
                 <td>{{ row[0] }}</td>
-                <td data-field="PDT" contenteditable="false">{{ row[1] }}</td>
-                <td data-field="AMT" contenteditable="false" data-money="{{ row[2] }}">{{ row[2] }}</td>
+                <td data-field="PDT" contenteditable="false" data-order="{{ row[4] }}">{{ row[1] }}</td>
+                <td data-field="AMT" contenteditable="false" data-money="{{ row[2] }}" data-order="{{ row[2] }}">{{ row[2] }}</td>
                 <td class="cumulative-amt"></td>
                 <td><i class="fas fa-trash-alt delete-btn" onclick="deletePaymentFromElement(this)" style="color:var(--danger); cursor:pointer;"></i></td>
               </tr>

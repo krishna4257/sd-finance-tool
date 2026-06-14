@@ -373,13 +373,18 @@
         <tr class="table-row {% if not row['is_active'] %}inactive-row{% endif %}" data-eid="{{ row.eid }}">
           {% for col in headers %}
           {% if col == 'is_active' %}
-          <td class="table-cell status-cell" data-field="{{ col }}">
+          <td class="table-cell status-cell" data-field="{{ col }}" data-order="{{ 1 if row[col] else 0 }}">
             <span class="status-badge status-{{ 'active' if row[col] else 'inactive' }}">
               {{ 'Active' if row[col] else 'Inactive' }}
             </span>
           </td>
           {% else %}
-          <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
+          <td class="table-cell" data-field="{{ col }}"
+            {% if col in ['eid'] %}
+              data-order="{{ row[col] if row[col] is not none else 0 }}"
+            {% endif %}>
+            {{ row[col] if row[col] is not none else '' }}
+          </td>
           {% endif %}
           {% endfor %}
 

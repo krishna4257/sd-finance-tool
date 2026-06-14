@@ -743,9 +743,20 @@ document.addEventListener("DOMContentLoaded", function () {
         ordering: true
       });
 
-  dt.on('draw', () => {
-    updateSummary();
-  });
+  window.sortTableColumn = function(headerName) {
+    if (!$.fn.DataTable.isDataTable('#employeeTable')) return;
+    const table = $('#employeeTable').DataTable();
+    const headers = table.columns().header().toArray().map(h => h.textContent.trim());
+    const idx = headers.indexOf(headerName);
+    if (idx !== -1) {
+      const currentOrder = table.order();
+      let dir = 'asc';
+      if (currentOrder.length > 0 && currentOrder[0][0] === idx) {
+        dir = currentOrder[0][1] === 'asc' ? 'desc' : 'asc';
+      }
+      table.order([idx, dir]).draw();
+    }
+  };
 });
 
 function refreshEmployeeDropdown() {

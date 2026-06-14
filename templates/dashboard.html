@@ -516,14 +516,14 @@
     <!-- TREND CHART POPUP MODAL -->
     <!-- ======================================================== -->
     <div id="postingChartModal" class="customer-popup-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 21000;">
-      <div class="card-glass" style="width: 90%; max-width: 800px; padding: 24px; position: relative; display: flex; flex-direction: column; gap: 16px; border-color: #e5e7eb;">
+      <div class="card-glass" style="width: 95%; max-width: 1000px; padding: 24px; position: relative; display: flex; flex-direction: column; gap: 16px; border-color: #e5e7eb;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(226, 232, 240, 0.8); padding-bottom: 12px;">
           <span class="posting-chart-title" style="font-size: 0.95rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px;">
             <i class="fas fa-chart-line"></i> Collection Trend & Coverage (Last 10 Weeks)
           </span>
           <button class="popup-close-btn" onclick="closePostingChartModal()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-muted);">&times;</button>
         </div>
-        <div style="position: relative; height: 400px; width: 100%;">
+        <div style="position: relative; height: 500px; width: 100%;">
           <canvas id="vpopPostingTrendChart"></canvas>
         </div>
       </div>
@@ -544,7 +544,7 @@
 
   <!-- Historical Trends popup modal -->
   <div id="historyModal" class="dashboard-modal-overlay">
-    <div class="dashboard-modal-content">
+    <div class="dashboard-modal-content" style="max-width: 1000px; width: 95%;">
       <div class="dashboard-modal-header">
         <h3 id="modalChartTitle">Historical Trends</h3>
         <div class="modal-time-toggle">
@@ -555,7 +555,7 @@
         <button class="modal-close-btn" onclick="closeHistoryModal()">&times;</button>
       </div>
       <div class="dashboard-modal-body">
-        <div class="chart-container-wrapper">
+        <div class="chart-container-wrapper" style="height: 500px;">
           <canvas id="historyChart"></canvas>
         </div>
       </div>
@@ -564,7 +564,7 @@
 
   <!-- Village Health History Popup Modal -->
   <div id="villageHealthModal" class="dashboard-modal-overlay">
-    <div class="dashboard-modal-content" style="max-width: 900px; width: 95%;">
+    <div class="dashboard-modal-content" style="max-width: 1000px; width: 95%;">
       <div class="dashboard-modal-header" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
         <div>
           <h3 id="vHealthModalTitle" style="font-size: 1.1rem; font-weight: 800; color: #1a4d2e; margin: 0;">Village Health & Metrics History</h3>
@@ -581,18 +581,8 @@
       
       <div class="dashboard-modal-body" style="display: flex; flex-direction: column; gap: 20px; padding: 20px 0 0 0;">
         <!-- Chart Section -->
-        <div class="chart-container-wrapper" style="position: relative; height: 320px; width: 100%;">
+        <div class="chart-container-wrapper" style="position: relative; height: 500px; width: 100%;">
           <canvas id="vHealthHistoryChart"></canvas>
-        </div>
-        
-        <!-- Events Section -->
-        <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
-          <h4 style="font-size: 0.85rem; font-weight: 700; color: #374151; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
-            <span>📅</span> Village System Events Timeline
-          </h4>
-          <div id="vHealthEventsTimeline" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 8px;">
-            <!-- Events will be populated here -->
-          </div>
         </div>
       </div>
     </div>
@@ -742,6 +732,7 @@
       letter-spacing: 0.06em;
       background: linear-gradient(135deg, #1b4d2e, #475569);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       margin: 0;
     }
@@ -1780,6 +1771,7 @@
     [data-theme="dark"] .risk-flow-title {
       background: linear-gradient(135deg, #10b981, #9ca3af);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
     [data-theme="dark"] .premium-cohort-card {

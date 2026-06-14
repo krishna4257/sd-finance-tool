@@ -74,138 +74,163 @@ document.addEventListener("DOMContentLoaded", function () {
   let snapshot = rows.map(row => createSnapshotItem(row));
 
   function updateSummary() {
+    if (!window.ALL_CUSTOMERS_STATS) {
+      return;
+    }
+
     const searchBox = document.getElementById("searchBox");
-    const isSearchActive = searchBox && searchBox.value.trim() !== "";
-    
-    let isFiltered = isSearchActive;
-    let visible = [];
-    
+    let query = "";
     if ($.fn.DataTable.isDataTable('#customerTable')) {
       const dt = $('#customerTable').DataTable();
-      const hasSearch = dt.search() !== "";
-      const isFilterApplied = dt.rows({ search: 'applied' }).count() < dt.rows().count();
-      isFiltered = hasSearch || isFilterApplied || isSearchActive;
-      
-      const visibleNodes = dt.rows({ search: 'applied' }).nodes().toArray();
-      visible = snapshot.filter(d => visibleNodes.indexOf(d.row) !== -1);
-    } else {
-      const isReportActive = snapshot.some(d => d.row.style.display === "none") && !isSearchActive;
-      isFiltered = isSearchActive || isReportActive;
-      visible = snapshot.filter(d => d.row.style.display !== "none");
+      query = (dt.search() || "").toLowerCase().trim();
+    }
+    if (!query && searchBox) {
+      query = searchBox.value.toLowerCase().trim();
     }
 
-    if (!isFiltered) {
-      // Restore initial server-side totals (incorporating Active, Defaulted, Closed and Average Scores)
-      const grid = document.querySelector(".customer-analytics-grid");
-      if (grid) {
-        const activeCount = grid.dataset.initActiveCount || "0";
-        const defaultedCount = grid.dataset.initDefaultedCount || "0";
-        const closedCount = grid.dataset.initClosedCount || "0";
-        const activeBal = parseFloat(grid.dataset.initActiveBal || "0") || 0;
-        const defaultedBal = parseFloat(grid.dataset.initDefaultedBal || "0") || 0;
-        const activeScore = parseFloat(grid.dataset.initActiveScore || "100") || 100;
-        const defaultedScore = parseFloat(grid.dataset.initDefaultedScore || "100") || 100;
-        const completeScore = parseFloat(grid.dataset.initCompleteScore || "100") || 100;
-
-        const activeCountEl = document.getElementById("activeCustomersCount");
-        const defaultedCountEl = document.getElementById("defaultedCustomersCount");
-        const closedCountEl = document.getElementById("closedCustomersCount");
-        const activeBalAmtEl = document.getElementById("activeBalAmt");
-        const defaultedBalAmtEl = document.getElementById("defaultedBalAmt");
-        const activeAvgScoreEl = document.getElementById("activeAvgScore");
-        const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
-        const completeAvgScoreEl = document.getElementById("completeAvgScore");
-
-        if (activeCountEl) activeCountEl.textContent = activeCount;
-        if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
-        if (closedCountEl) closedCountEl.textContent = closedCount;
-        if (activeBalAmtEl) activeBalAmtEl.textContent = activeBal.toFixed(2);
-        if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBal.toFixed(2);
-        if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeScore.toFixed(1);
-        if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedScore.toFixed(1);
-        if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeScore.toFixed(1);
-      }
-    } else {
-      // Filtered/searched state: calculate from visible rows in the table
-      
-      let activeCount = 0;
-      let defaultedCount = 0;
-      let closedCount = 0;
-      
-      let activeBalSum = 0;
-      let defaultedBalSum = 0;
-      
-      let activeScoreSum = 0;
-      let activeScoreCount = 0;
-      
-      let defaultedScoreSum = 0;
-      let defaultedScoreCount = 0;
-      
-      let completeScoreSum = 0;
-      let completeScoreCount = 0;
-      
-      visible.forEach(d => {
-        if (d.source === 'active') {
-          activeCount++;
-          activeBalSum += d.balance_amount;
-          
-          activeScoreSum += d.customer_rating;
-          activeScoreCount++;
-          
-          defaultedScoreSum += d.customer_rating;
-          defaultedScoreCount++;
-          
-          completeScoreSum += d.customer_rating;
-          completeScoreCount++;
-        } else if (d.source === 'closed') {
-          if (d.balance_amount > 0) {
-            defaultedCount++;
-            defaultedBalSum += d.balance_amount;
-            
-            defaultedScoreSum += d.customer_rating;
-            defaultedScoreCount++;
-            
-            completeScoreSum += d.customer_rating;
-            completeScoreCount++;
-          } else {
-            closedCount++;
-          }
-        } else if (d.source === 'historic') {
-          completeScoreSum += d.customer_rating;
-          completeScoreCount++;
-        }
+    // Filter ALL_CUSTOMERS_STATS dynamically based on query
+    let stats = window.ALL_CUSTOMERS_STATS;
+    if (query) {
+      stats = stats.filter(c => {
+        const name = (c.name || "").toLowerCase();
+        const ano = (c.ano || "").toString().toLowerCase();
+        const pano = (c.pano || "").toString().toLowerCase();
+        const phone = (c.phone_number || "").toLowerCase();
+        return name.includes(query) || ano.includes(query) || pano.includes(query) || phone.includes(query);
       });
-
-      const activeAvgScoreVal = activeScoreCount > 0 ? (activeScoreSum / activeScoreCount) : 100.0;
-      const defaultedAvgScoreVal = defaultedScoreCount > 0 ? (defaultedScoreSum / defaultedScoreCount) : 100.0;
-      const completeAvgScoreVal = completeScoreCount > 0 ? (completeScoreSum / completeScoreCount) : 100.0;
-
-      const activeCountEl = document.getElementById("activeCustomersCount");
-      const defaultedCountEl = document.getElementById("defaultedCustomersCount");
-      const closedCountEl = document.getElementById("closedCustomersCount");
-      const activeBalAmtEl = document.getElementById("activeBalAmt");
-      const defaultedBalAmtEl = document.getElementById("defaultedBalAmt");
-      const activeAvgScoreEl = document.getElementById("activeAvgScore");
-      const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
-      const completeAvgScoreEl = document.getElementById("completeAvgScore");
-
-      if (activeCountEl) activeCountEl.textContent = activeCount;
-      if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
-      if (closedCountEl) closedCountEl.textContent = closedCount;
-      if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(2);
-      if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(2);
-      if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
-      if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
-      if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
     }
 
-    // Apply ₹ formatting after updating values
+    // Calculations:
+    let activeCount = 0;
+    let defaultedCount = 0;
+    let closedCount = 0;
+
+    let activeBalSum = 0;
+    let defaultedBalSum = 0;
+
+    let activeScoreSum = 0;
+    let activeScoreCount = 0;
+    let activeScorePrevSum = 0;
+
+    let defaultedScoreSum = 0;
+    let defaultedScoreCount = 0;
+    let defaultedScorePrevSum = 0;
+
+    let completeScoreSum = 0;
+    let completeScoreCount = 0;
+    let completeScorePrevSum = 0;
+
+    stats.forEach(c => {
+      const rating = parseFloat(c.customer_rating_raw);
+      const prevRating = parseFloat(c.customer_rating_prev_raw);
+      const bal = parseFloat(c.balance_amount) || 0;
+
+      if (c.source === 'active') {
+        activeCount++;
+        activeBalSum += bal;
+
+        if (!isNaN(rating)) {
+          activeScoreSum += rating;
+          activeScoreCount++;
+          activeScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+          
+          defaultedScoreSum += rating;
+          defaultedScoreCount++;
+          defaultedScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+
+          completeScoreSum += rating;
+          completeScoreCount++;
+          completeScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+        }
+      } else if (c.source === 'closed') {
+        if (bal > 0) {
+          defaultedCount++;
+          defaultedBalSum += bal;
+
+          if (!isNaN(rating)) {
+            defaultedScoreSum += rating;
+            defaultedScoreCount++;
+            defaultedScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+          }
+        } else {
+          closedCount++;
+        }
+
+        if (!isNaN(rating)) {
+          completeScoreSum += rating;
+          completeScoreCount++;
+          completeScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+        }
+      } else if (c.source === 'historic') {
+        if (!isNaN(rating)) {
+          completeScoreSum += rating;
+          completeScoreCount++;
+          completeScorePrevSum += isNaN(prevRating) ? 100 : prevRating;
+        }
+      }
+    });
+
+    const activeAvgScoreVal = activeScoreCount > 0 ? (activeScoreSum / activeScoreCount) : 100.0;
+    const activeAvgScorePrevVal = activeScoreCount > 0 ? (activeScorePrevSum / activeScoreCount) : 100.0;
+
+    const defaultedAvgScoreVal = defaultedScoreCount > 0 ? (defaultedScoreSum / defaultedScoreCount) : 100.0;
+    const defaultedAvgScorePrevVal = defaultedScoreCount > 0 ? (defaultedScorePrevSum / defaultedScoreCount) : 100.0;
+
+    const completeAvgScoreVal = completeScoreCount > 0 ? (completeScoreSum / completeScoreCount) : 100.0;
+    const completeAvgScorePrevVal = completeScoreCount > 0 ? (completeScorePrevSum / completeScoreCount) : 100.0;
+
+    // Elements
+    const activeCountEl = document.getElementById("activeCustomersCount");
+    const defaultedCountEl = document.getElementById("defaultedCustomersCount");
+    const closedCountEl = document.getElementById("closedCustomersCount");
+    const activeBalAmtEl = document.getElementById("activeBalAmt");
+    const defaultedBalAmtEl = document.getElementById("defaultedBalAmt");
+    
+    const activeAvgScoreEl = document.getElementById("activeAvgScore");
+    const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
+    const completeAvgScoreEl = document.getElementById("completeAvgScore");
+
+    const activeAvgScoreTrendEl = document.getElementById("activeAvgScoreTrend");
+    const defaultedAvgScoreTrendEl = document.getElementById("defaultedAvgScoreTrend");
+    const completeAvgScoreTrendEl = document.getElementById("completeAvgScoreTrend");
+
+    if (activeCountEl) activeCountEl.textContent = activeCount;
+    if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
+    if (closedCountEl) closedCountEl.textContent = closedCount;
+    if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(2);
+    if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(2);
+    
+    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
+    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
+    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
+
+    function setTrendArrow(el, current, prev) {
+      if (!el) return;
+      if (current > prev) {
+        el.textContent = "↑";
+        el.style.color = "#10b981";
+      } else if (current < prev) {
+        el.textContent = "↓";
+        el.style.color = "#ef4444";
+      } else {
+        el.textContent = "→";
+        el.style.color = "#64748b";
+      }
+    }
+
+    setTrendArrow(activeAvgScoreTrendEl, activeAvgScoreVal, activeAvgScorePrevVal);
+    setTrendArrow(defaultedAvgScoreTrendEl, defaultedAvgScoreVal, defaultedAvgScorePrevVal);
+    setTrendArrow(completeAvgScoreTrendEl, completeAvgScoreVal, completeAvgScorePrevVal);
+
     if (typeof applyGlobalMoneyFormatting === "function") {
       applyGlobalMoneyFormatting();
     }
-    requestAnimationFrame(() => {
-       table.style.width = "100%";  
-    });
+    const table = document.getElementById("customerTable");
+    if (table) {
+      requestAnimationFrame(() => {
+        table.style.width = "100%";
+      });
+    }
   }
 
   window.applySearch = function () {
@@ -422,6 +447,57 @@ document.addEventListener("DOMContentLoaded", function () {
     checkboxes.forEach(cb => cb.checked = false);
   };
 
+  function appendCustomerCells(tr, customer, currentMode) {
+    // Checkbox column
+    const checkboxTd = document.createElement("td");
+    checkboxTd.className = "checkbox-column";
+    checkboxTd.style.textAlign = "center";
+    checkboxTd.innerHTML = `<input type="checkbox" />`;
+    tr.appendChild(checkboxTd);
+
+    // Values columns
+    COLUMN_KEYS.forEach(key => {
+      const td = document.createElement("td");
+      td.className = `col-${key}`;
+      
+      let value = customer[key];
+      if (value === null || value === undefined) {
+        value = "";
+      }
+      
+      if (["total_amount", "paid_amount", "balance_amount", "installment_amount"].includes(key)) {
+        td.setAttribute("data-money", "");
+        td.setAttribute("data-order", value);
+        td.textContent = value;
+        if (key === "balance_amount") {
+          td.classList.add("amount-paid");
+        }
+      } else if (key === "customer_rating") {
+        td.setAttribute("data-order", customer.customer_rating_raw !== undefined ? customer.customer_rating_raw : "");
+        const ratingStr = String(value);
+        if (ratingStr.includes("↑")) {
+          td.innerHTML = `<span style="color: #10b981; font-weight: bold;">${ratingStr}</span>`;
+        } else if (ratingStr.includes("↓")) {
+          td.innerHTML = `<span style="color: #ef4444; font-weight: bold;">${ratingStr}</span>`;
+        } else {
+          td.innerHTML = `<span style="color: #64748b; font-weight: bold;">${ratingStr}</span>`;
+        }
+      } else if (key === "status") {
+        td.innerHTML = `<span class="status-badge status-${String(value).toLowerCase().replace(/\s+/g, '-')}">${value}</span>`;
+      } else if (["start_date", "end_date", "freeze_date", "created_at"].includes(key)) {
+        td.setAttribute("data-order", formatDateToISO(value));
+        td.textContent = formatDate(value);
+      } else if (["ano", "pano", "period"].includes(key)) {
+        td.setAttribute("data-order", value);
+        td.textContent = value;
+      } else {
+        td.textContent = value;
+      }
+      
+      tr.appendChild(td);
+    });
+  }
+
   window.applyParentSearch = async function (searchBoxValue) {
     const rawTerm = searchBoxValue || document.getElementById("searchBox").value.trim();
     const term = rawTerm.toLowerCase();
@@ -466,39 +542,7 @@ document.addEventListener("DOMContentLoaded", function () {
         tr.setAttribute("data-cid", customer.cid);
         tr.setAttribute("data-source", currentMode);
 
-        // Checkbox column
-        const checkboxTd = document.createElement("td");
-        checkboxTd.className = "checkbox-column";
-        checkboxTd.style.textAlign = "center";
-        checkboxTd.innerHTML = `<input type="checkbox" />`;
-        tr.appendChild(checkboxTd);
-
-        // Values columns
-        COLUMN_KEYS.forEach(key => {
-          const td = document.createElement("td");
-          td.className = `col-${key}`;
-          
-          let value = customer[key];
-          if (value === null || value === undefined) {
-            value = "";
-          }
-          
-          if (["total_amount", "paid_amount", "balance_amount", "installment_amount"].includes(key)) {
-            td.setAttribute("data-money", "");
-            td.textContent = value;
-            if (key === "balance_amount") {
-              td.classList.add("amount-paid");
-            }
-          } else if (key === "status") {
-            td.innerHTML = `<span class="status-badge status-${String(value).toLowerCase().replace(/\s+/g, '-')}">${value}</span>`;
-          } else if (key === "start_date" || key === "end_date") {
-            td.textContent = formatDate(value);
-          } else {
-            td.textContent = value;
-          }
-          
-          tr.appendChild(td);
-        });
+        appendCustomerCells(tr, customer, currentMode);
 
         tableBody.appendChild(tr);
       });
@@ -599,39 +643,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         tr.setAttribute("data-source", source);
 
-        // Checkbox column
-        const checkboxTd = document.createElement("td");
-        checkboxTd.className = "checkbox-column";
-        checkboxTd.style.textAlign = "center";
-        checkboxTd.innerHTML = `<input type="checkbox" />`;
-        tr.appendChild(checkboxTd);
-
-        // Values columns
-        COLUMN_KEYS.forEach(key => {
-          const td = document.createElement("td");
-          td.className = `col-${key}`;
-          
-          let value = customer[key];
-          if (value === null || value === undefined) {
-            value = "";
-          }
-          
-          if (["total_amount", "paid_amount", "balance_amount", "installment_amount"].includes(key)) {
-            td.setAttribute("data-money", "");
-            td.textContent = value;
-            if (key === "balance_amount") {
-              td.classList.add("amount-paid");
-            }
-          } else if (key === "status") {
-            td.innerHTML = `<span class="status-badge status-${String(value).toLowerCase().replace(/\s+/g, '-')}">${value}</span>`;
-          } else if (key === "start_date" || key === "end_date") {
-            td.textContent = formatDate(value);
-          } else {
-            td.textContent = value;
-          }
-          
-          tr.appendChild(td);
-        });
+        appendCustomerCells(tr, customer, source);
 
         tableBody.appendChild(tr);
       });
@@ -931,8 +943,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Save dataset original snapshots for delta checks
       document.getElementById("popInputName").dataset.original = cust.name || "";
-      document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount || 0;
-      document.getElementById("popInputInstallment").dataset.original = cust.installment_amount || 0;
+      document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
+      document.getElementById("popInputInstallment").dataset.original = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
       document.getElementById("popInputType").dataset.original = cust.type === "M" ? "M" : "W";
       document.getElementById("popInputPeriod").dataset.original = cust.period || "";
       document.getElementById("popInputPhone").dataset.original = cust.phone_number || "";
@@ -1111,6 +1123,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Format Due Date (Normal text color)
             const tdDate = document.createElement("td");
             tdDate.textContent = formatDate(wk.due_date);
+            tdDate.setAttribute("data-order", wk.due_date);
             tr.appendChild(tdDate);
             
             // Format Paid Date
@@ -1118,14 +1131,17 @@ document.addEventListener("DOMContentLoaded", () => {
             if (wk.paid_date) {
               const dates = wk.paid_date.split(", ").map(d => formatDate(d));
               tdPaidDate.textContent = dates.join(", ");
+              tdPaidDate.setAttribute("data-order", wk.paid_date.split(", ")[0]);
             } else {
               tdPaidDate.textContent = "-";
+              tdPaidDate.setAttribute("data-order", "");
             }
             tr.appendChild(tdPaidDate);
             
             // Format Allocated Paid Amt (Normal text color)
             const tdPaid = document.createElement("td");
             tdPaid.textContent = "₹" + (wk.allocated || 0).toFixed(2);
+            tdPaid.setAttribute("data-order", wk.allocated || 0);
             tr.appendChild(tdPaid);
             
             // Format Status Badge
@@ -1145,6 +1161,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const tdScore = document.createElement("td");
             tdScore.textContent = Math.round(wk.score_after);
             tdScore.style.fontWeight = "bold";
+            tdScore.setAttribute("data-order", wk.score_after);
             tr.appendChild(tdScore);
             
             weeklyLogBody.appendChild(tr);
@@ -1208,6 +1225,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof closePopDateModal === "function") {
       closePopDateModal();
     }
+    if (window.popupChangesMade) {
+      window.popupChangesMade = false; // reset
+      if (document.getElementById("customerTable")) {
+        window.location.reload();
+      } else if (typeof loadDashboardData === "function" && window.activeVillageId) {
+        loadDashboardData(window.activeVillageId);
+      } else {
+        window.location.reload();
+      }
+    }
   };
 
   // Close when clicking modal backdrop
@@ -1246,9 +1273,9 @@ document.addEventListener("DOMContentLoaded", () => {
       
       tr.innerHTML = `
         <td>${p.ano}</td>
-        <td data-field="payment_date" contenteditable="true">${formatDate(p.payment_date)}</td>
-        <td data-field="amt" contenteditable="true" data-money="${p.amt}">${p.amt.toFixed(2)}</td>
-        <td class="cumulative-amt" data-money="${cumulative}">${formatMoney(cumulative)}</td>
+        <td data-field="payment_date" contenteditable="true" data-order="${p.payment_date}">${formatDate(p.payment_date)}</td>
+        <td data-field="amt" contenteditable="true" data-money="${p.amt}" data-order="${p.amt}">${p.amt.toFixed(2)}</td>
+        <td class="cumulative-amt" data-money="${cumulative}" data-order="${cumulative}">${formatMoney(cumulative)}</td>
         <td style="text-align:center;">
           <span class="delete-btn" style="cursor:pointer; font-weight:bold; font-size:1.15rem; color:#ef4444; padding: 2px 8px;" onclick="deletePopupPaymentLocal(${idx})">×</span>
         </td>
@@ -1385,44 +1412,32 @@ document.addEventListener("DOMContentLoaded", () => {
     saveBtn.style.display = changed ? "inline-block" : "none";
   }
 
-  // Bind change monitoring to all details inputs
-  [
+  // Bind change monitoring and auto-calculation to all details inputs
+  const inputIds = [
     "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
     "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
     "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
     "popInputLongitude", "popInputNotes"
-  ].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const eventName = el.tagName === "SELECT" ? "change" : "input";
-    el.addEventListener(eventName, function() {
-      // Input sanitization
-      if (id === "popInputName") {
-        this.value = this.value.replace(/[^a-zA-Z\s]/g, "").replace(/\s{2,}/g, " ").replace(/^\s+/g, "");
-      } else if (id === "popInputTotalAmount" || id === "popInputInstallment") {
-        this.value = this.value.replace(/[^0-9.]/g, "");
-        if (id === "popInputTotalAmount") {
-          const total = parseFloat(this.value) || 0;
-          const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
-          document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid);
-        }
-      } else if (id === "popInputPeriod" || id === "popInputEid") {
-        this.value = this.value.replace(/[^0-9]/g, "");
-      } else if (id === "popInputLatitude" || id === "popInputLongitude") {
-        this.value = this.value.replace(/[^0-9.-]/g, "");
-      }
-      checkInputsChanged();
-    });
-  });
+  ];
 
-  // Save details action
-  document.getElementById("popSaveDetailsBtn").addEventListener("click", async function() {
+  function calculateInstallment() {
+    const totalAmount = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
+    const period = parseInt(document.getElementById("popInputPeriod").value) || 0;
+    if (period > 0) {
+      const installment = totalAmount / period;
+      const roundedInstallment = Math.round(installment * 100) / 100;
+      const instEl = document.getElementById("popInputInstallment");
+      instEl.value = roundedInstallment.toFixed(2);
+    }
+  }
+
+  async function autoSaveCustomerDetails() {
     const name = document.getElementById("popInputName").value.trim();
     const lettersOnly = name.replace(/\s/g, "");
 
     if (!name || lettersOnly.length < 3) {
-      alert("Customer name must contain at least 3 letters and no numbers or symbols.");
-      return;
+      alert("Name must be at least 3 letters long.");
+      return false;
     }
 
     const payload = {
@@ -1455,52 +1470,96 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
       if (!data.success) throw new Error(data.error || "Save failed");
 
-      // Identify modified fields before resetting originals
-      const inputIds = [
+      document.getElementById("popProfileName").textContent = name;
+      document.getElementById("popAvatarInitial").textContent = name.trim().charAt(0).toUpperCase();
+
+      window.popupChangesMade = true;
+      return true;
+
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Failed to save details: " + err.message);
+      return false;
+    }
+  }
+
+  // Bind keyup/input listeners for live calculations and sanitization
+  inputIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const eventName = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(eventName, function() {
+      if (id === "popInputName") {
+        this.value = this.value.replace(/[^a-zA-Z\s]/g, "").replace(/\s{2,}/g, " ").replace(/^\s+/g, "");
+      } else if (id === "popInputTotalAmount" || id === "popInputInstallment") {
+        this.value = this.value.replace(/[^0-9.]/g, "");
+        if (id === "popInputTotalAmount") {
+          const total = parseFloat(this.value) || 0;
+          const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
+          document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid);
+        }
+      } else if (id === "popInputPeriod" || id === "popInputEid") {
+        this.value = this.value.replace(/[^0-9]/g, "");
+      } else if (id === "popInputLatitude" || id === "popInputLongitude") {
+        this.value = this.value.replace(/[^0-9.-]/g, "");
+      }
+
+      if (id === "popInputTotalAmount" || id === "popInputPeriod") {
+        calculateInstallment();
+      }
+      checkInputsChanged();
+    });
+  });
+
+  const saveDetailsBtn = document.getElementById("popSaveDetailsBtn");
+  if (saveDetailsBtn) {
+    saveDetailsBtn.style.display = "none";
+    saveDetailsBtn.addEventListener("click", async function() {
+      const fields = [
         "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
         "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
         "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
         "popInputLongitude", "popInputNotes"
       ];
-      const changedElements = [];
-      inputIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-          const original = (el.dataset.original || "").trim();
-          const current = el.value.trim();
-          if (original !== current) {
-            changedElements.push(el);
-          }
+      
+      let changedElements = [];
+      fields.forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el && el.value.trim() !== (el.dataset.original || "").trim()) {
+          changedElements.push(el);
         }
       });
-      
-      // Reset originals
-      inputIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.dataset.original = el.value.trim();
-      });
 
-      document.getElementById("popProfileName").textContent = name;
-      document.getElementById("popAvatarInitial").textContent = name.trim().charAt(0).toUpperCase();
-      this.style.display = "none";
+      if (changedElements.length === 0) {
+        saveDetailsBtn.style.display = "none";
+        return;
+      }
 
-      // Trigger PhonePe-style feedback and highlight changed fields
-      triggerSuccessFeedback({
-        sectionElement: document.getElementById("popColDetails"),
-        highlightElements: changedElements.length > 0 ? changedElements : [document.getElementById("popInputName")],
-        message: "Details updated successfully",
-        highlightDuration: 5000
-      });
+      // Synchronously warm up the shared AudioContext within the user gesture event handler
+      const audioCtx = window.getSharedAudioContext ? window.getSharedAudioContext() : null;
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(err => console.warn("AudioContext warm up failed:", err));
+      }
 
-      // Refresh parent window row state after 5 seconds
-      setTimeout(() => {
-        window.location.reload();
-      }, 5000);
+      const success = await autoSaveCustomerDetails();
+      if (success) {
+        changedElements.forEach(el => {
+          el.dataset.original = el.value.trim();
+        });
 
-    } catch (err) {
-      alert("Failed to save customer: " + err.message);
-    }
-  });
+        if (typeof triggerSuccessFeedback === "function") {
+          triggerSuccessFeedback({
+            sectionElement: document.getElementById("popColDetails"),
+            highlightElements: changedElements,
+            message: "Details saved successfully",
+            highlightDuration: 5000
+          });
+        }
+
+        saveDetailsBtn.style.display = "none";
+      }
+    });
+  }
 
   // Close or Retrieve account logic
   document.getElementById("popCloseAccountBtn").addEventListener("click", async function() {

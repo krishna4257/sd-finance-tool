@@ -217,7 +217,7 @@ async function loadDashboardData(vid, forceRecalc = false) {
         
         const card = document.createElement("div");
         card.className = "metric-list-item";
-        card.setAttribute("ondblclick", `openHealthModal('${m.key}')`);
+        card.setAttribute("ondblclick", "event.stopPropagation(); openHealthModal('" + m.key + "')");
         card.setAttribute("title", "Double-click to view history");
         
         card.innerHTML = `
@@ -276,8 +276,15 @@ async function loadDashboardData(vid, forceRecalc = false) {
       }
     });
 
-    // Reset/Close cohort inspector on load
-    closeCohortInspector();
+    // Reset/Close cohort inspector on load, preserving active view if set
+    if (window.activeCohortKey) {
+      const savedKey = window.activeCohortKey;
+      window.activeCohortKey = null;
+      closeCohortInspector();
+      inspectCohortFlow(savedKey);
+    } else {
+      closeCohortInspector();
+    }
 
     // 5. Populate Attention Cards
     cachedAttention = data.critical_attention;
@@ -465,12 +472,15 @@ function closeCohortInspector() {
   document.querySelectorAll(".premium-flow-connector").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".aux-flow-btn").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".attention-capsule").forEach(el => el.classList.remove("active"));
+  window.activeCohortKey = null;
 }
 window.closeCohortInspector = closeCohortInspector;
 
 function inspectCohortFlow(key) {
   const inspector = document.getElementById("vpopCohortInspector");
   if (!inspector) return;
+  
+  window.activeCohortKey = key;
 
   let clickedElement = null;
   if (["Excellent", "Good", "LowRisk", "HighRisk"].includes(key)) {
@@ -747,7 +757,7 @@ function bindTileDoubleClickListeners() {
   }
   if (villageHealthCard) {
     villageHealthCard.addEventListener("dblclick", (e) => {
-      if (e.target.closest("button") || e.target.closest(".health-sub-toggle-container")) {
+      if (e.target.closest("button") || e.target.closest(".health-sub-toggle-container") || e.target.closest(".metric-list-item")) {
         return;
       }
       if (typeof window.openHealthModal === "function") {
@@ -1260,8 +1270,7 @@ function renderHealthHistoryChart(history) {
           borderWidth: 1.5,
           tension: 0.3,
           pointRadius: 2,
-          fill: false,
-          hidden: k !== "avg_rating" && k !== "stability" && k !== "default_rate"
+          fill: false
         });
       }
     });
