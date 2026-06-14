@@ -216,5 +216,10 @@ account.json
 procedures.txt
 data_processing
 data_processing/*
+.env
 testing
 testing/*
+
+
+# own python files folder
+Python Files/*

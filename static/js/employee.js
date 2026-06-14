@@ -2,125 +2,192 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const table = document.getElementById("employeeTable");
   const body = document.getElementById("employeeTableBody");
-  const rows = Array.from(body.querySelectorAll("tr"));
+  let rows = Array.from(body.querySelectorAll("tr"));
 
-  const snapshot = rows.map(row => ({
+  let snapshot = rows.map(row => ({
     row,
     text: row.innerText.toLowerCase()
   }));
 
-  function formatDate(value) {
-    if (!value) return "";
+  const formatDate = window.formatDate;
 
-    const str = String(value).trim();
-
-    // Match YYYY-MM-DD only
-    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-    if (!match) {
-      return value;
+  function ddmmyyyyToIso(dateStr) {
+    if (!dateStr) return "";
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [dd, mm, yyyy] = parts;
+      return `${yyyy}-${mm}-${dd}`;
     }
-
-    const [, year, month, day] = match;
-    return `${day}-${month}-${year}`;
+    return dateStr;
   }
 
   function updateSummary() {
-    const visible = snapshot.filter(d => d.row.style.display !== "none");
-    document.getElementById("totalCount").textContent = visible.length;
+    let visibleCount = 0;
+    if ($.fn.DataTable.isDataTable('#employeeTable')) {
+      visibleCount = $('#employeeTable').DataTable().rows({ search: 'applied' }).count();
+    } else {
+      visibleCount = snapshot.filter(d => d.row.style.display !== "none").length;
+    }
+    const headerCount = document.getElementById("headerTotalEmployees");
+    if (headerCount) {
+      headerCount.textContent = visibleCount;
+    }
   }
 
+  /* ===== VIEW TOGGLER ===== */
+  function switchEmployeeView(view) {
+    const tileBtn = document.getElementById("tileViewBtn");
+    const tableBtn = document.getElementById("tableViewBtn");
+    const tileContainer = document.getElementById("tileViewContainer");
+    const tableContainer = document.getElementById("tableViewContainer");
+
+    if (view === "tile") {
+      tileBtn.classList.add("active");
+      tableBtn.classList.remove("active");
+      if (tileContainer) tileContainer.style.display = "";
+      if (tableContainer) tableContainer.style.display = "none";
+    } else {
+      tableBtn.classList.add("active");
+      tileBtn.classList.remove("active");
+      if (tableContainer) tableContainer.style.display = "";
+      if (tileContainer) tileContainer.style.display = "none";
+    }
+    updateSegmentedHighlight();
+  }
+
+  function updateSegmentedHighlight() {
+    const container = document.getElementById("viewToggleContainer");
+    if (!container) return;
+    const pill = container.querySelector("#viewTabPill");
+    const activeBtn = container.querySelector(".segmented-btn.active");
+    if (pill && activeBtn) {
+      pill.style.width = activeBtn.offsetWidth + "px";
+      pill.style.left = activeBtn.offsetLeft + "px";
+    }
+  }
+
+  const tileBtn = document.getElementById("tileViewBtn");
+  const tableBtn = document.getElementById("tableViewBtn");
+  if (tileBtn) tileBtn.addEventListener("click", () => switchEmployeeView("tile"));
+  if (tableBtn) tableBtn.addEventListener("click", () => switchEmployeeView("table"));
+
+  window.addEventListener("resize", updateSegmentedHighlight);
+  // Initial position calculation after rendering settles
+  setTimeout(updateSegmentedHighlight, 100);
+
+  /* ===== SEARCH FILTERING ===== */
   window.applySearch = function () {
     const rawTerm = document.getElementById("searchBox").value.trim();
     const term = rawTerm.toLowerCase();
 
-    snapshot.forEach(d => {
-      const row = d.row;
+    if ($.fn.DataTable.isDataTable('#employeeTable')) {
+      const dtInstance = $('#employeeTable').DataTable();
+      dtInstance.search(term).draw();
 
-      const eidCell = row.querySelector('td[data-field="eid"]');
-      const nameCell = row.querySelector('td[data-field="name"]');
-      const phoneCell = row.querySelector('td[data-field="phone_number"]');
+      // Synchronize card visibility based on Datatable active rows
+      const visibleEids = new Set();
+      dtInstance.rows({ search: 'applied' }).every(function() {
+        const rowNode = this.node();
+        const eid = rowNode.dataset.eid;
+        if (eid) {
+          visibleEids.add(eid);
+        }
+      });
 
-      const eid = eidCell ? eidCell.innerText.trim() : "";
-      const name = nameCell ? nameCell.innerText.toLowerCase().trim() : "";
-      const phone = phoneCell ? phoneCell.innerText.trim() : "";
+      document.querySelectorAll(".employee-card").forEach(card => {
+        const eid = card.dataset.eid;
+        if (visibleEids.has(eid)) {
+          card.style.display = "";
+        } else {
+          card.style.display = "none";
+        }
+      });
+    } else {
+      snapshot.forEach(d => {
+        const row = d.row;
+        const eidCell = row.querySelector('td[data-field="eid"]');
+        const nameCell = row.querySelector('td[data-field="name"]');
+        const phoneCell = row.querySelector('td[data-field="phone_number"]');
 
-      let match = false;
+        const eid = eidCell ? eidCell.innerText.trim() : "";
+        const name = nameCell ? nameCell.innerText.toLowerCase().trim() : "";
+        const phone = phoneCell ? phoneCell.innerText.trim() : "";
 
-      // Empty search → show all
-      if (term === "") {
-        match = true;
-      }
-      // 10 digit number → search only phone number
-      else if (/^\d{10}$/.test(term)) {
-        match = phone.includes(term);
-      }
-      // 1 to 3 digit number → search only employee ID
-      else if (/^\d{1,3}$/.test(term)) {
-        match = eid === term;
-      }
-      // Text search → search only employee name
-      else {
-        match = name.includes(term);
-      }
+        let match = false;
 
-      row.style.display = match ? "" : "none";
-    });
+        if (term === "") {
+          match = true;
+        } else if (/^\d{10}$/.test(term)) {
+          match = phone.includes(term);
+        } else if (/^\d{1,3}$/.test(term)) {
+          match = eid === term;
+        } else {
+          match = name.includes(term);
+        }
 
+        row.style.display = match ? "" : "none";
+
+        const card = document.querySelector(`.employee-card[data-eid="${eid}"]`);
+        if (card) {
+          card.style.display = match ? "" : "none";
+        }
+      });
+    }
     updateSummary();
   };
 
-  window.resetSearch = function () {
-    document.getElementById("searchBox").value = "";
-    snapshot.forEach(d => d.row.style.display = "");
-    updateSummary();
-  };
-
-  window.toggleAll = function (source) {
-    body.querySelectorAll("input[type='checkbox']")
-        .forEach(cb => cb.checked = source.checked);
-  };
+  const searchBox = document.getElementById("searchBox");
+  if (searchBox) {
+    searchBox.addEventListener("input", window.applySearch);
+  }
 
   window.printSelected = function () {
     window.print();
   };
 
-  /* COLUMN SELECTOR */
-
+  /* ===== COLUMN SELECTOR ===== */
   const modal = document.getElementById("columnModal");
   const list = document.getElementById("columnCheckboxList");
-  const openBtn = document.getElementById("tableViewBtn");
+  const openBtn = document.getElementById("columnSelectorBtn");
   const closeBtn = document.getElementById("closeColumnModal");
 
-  openBtn.addEventListener("click", () => {
+  if (openBtn) {
+    openBtn.addEventListener("click", () => {
+      list.innerHTML = "";
 
-    list.innerHTML = "";
+      table.querySelectorAll("thead th").forEach((th, index) => {
+        if (th.innerText.trim().toLowerCase() === "actions") return;
 
-    table.querySelectorAll("thead th").forEach((th, index) => {
-      if (index === 0) return;
+        const wrapper = document.createElement("label");
+        wrapper.className = "column-item";
 
-      const wrapper = document.createElement("label");
-      wrapper.className = "column-item";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        const columnName = th.innerText
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_");
 
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = true;
+        checkbox.checked = !DEFAULT_HIDDEN_COLUMNS.includes(columnName);
 
-      checkbox.addEventListener("change", () => {
-        toggleColumn(index, checkbox.checked);
+        checkbox.addEventListener("change", () => {
+          toggleColumn(index, checkbox.checked);
+        });
+
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(document.createTextNode(th.innerText));
+        list.appendChild(wrapper);
       });
 
-      wrapper.appendChild(checkbox);
-      wrapper.appendChild(document.createTextNode(th.innerText));
-      list.appendChild(wrapper);
+      modal.classList.remove("hidden");
     });
+  }
 
-    modal.classList.remove("hidden");
-  });
-
-  closeBtn.addEventListener("click", () => {
-    modal.classList.add("hidden");
-  });
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      modal.classList.add("hidden");
+    });
+  }
 
   function toggleColumn(index, show) {
     table.querySelectorAll("tr").forEach(row => {
@@ -129,172 +196,566 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Format joining dates on initial page load
-  body.querySelectorAll('td[data-field="joining_date"]').forEach(td => {
-    td.textContent = formatDate(td.textContent);
+  const DEFAULT_HIDDEN_COLUMNS = [];
+
+  // Format joining dates on initial page load (both table and card)
+  document.querySelectorAll('[data-field="joining_date"]').forEach(el => {
+    el.textContent = formatDate(el.textContent);
   });
 
-  updateSummary();
+  /* ===== DOUBLE-CLICK INLINE EDITING FOR ROWS ===== */
+  let currentlyEditingRow = null;
 
-});
+  body.addEventListener("dblclick", function(e) {
+    const row = e.target.closest("tr");
+    if (!row) return;
 
-/* ===== EDIT + SAVE ===== */
+    if (row.classList.contains("row-editing")) return;
+    if (e.target.closest("[data-field='actions']")) return;
 
-function enableEdit(btn) {
-  const row = btn.closest("tr");
+    makeRowEditable(row);
+  });
 
-  if (btn.innerText === "Edit") {
+  function makeRowEditable(row) {
+    if (currentlyEditingRow) {
+      cancelRowInline(currentlyEditingRow);
+    }
+    if (currentlyEditingCard) {
+      cancelCardInline(currentlyEditingCard);
+    }
 
-    // Store original values before editing
-    row.querySelectorAll("td[data-field]").forEach(td => {
-      td.dataset.originalValue = td.innerText.trim();
-    });
+    currentlyEditingRow = row;
+    row.dataset.originalHtml = row.innerHTML;
+    row.classList.add("row-editing");
 
-    row.querySelectorAll("td[data-field]").forEach(td => {
-      if (td.dataset.field !== "eid") {
-        td.contentEditable = true;
-        td.classList.add("highlighted");
+    const cells = row.querySelectorAll("td[data-field]");
+
+    cells.forEach(cell => {
+      const field = cell.dataset.field;
+      const currentText = cell.innerText.trim();
+
+      if (field === "eid" || field === "is_active") {
+        return;
+      }
+
+      cell.innerHTML = `<input type="text" class="inline-edit-input" name="${field}" value="${currentText.replace(/"/g, '&quot;')}">`;
+
+      if (field === "joining_date") {
+        const inputEl = cell.querySelector('input');
+        if (typeof window.initCustomCalendar === "function") {
+          window.initCustomCalendar(inputEl, {
+            dateFormat: 'd-m-Y',
+            clickOpens: true,
+            noWrapper: true
+          });
+          setTimeout(() => {
+            if (document.activeElement === inputEl) {
+              inputEl.click();
+            }
+          }, 50);
+        }
       }
     });
 
-    btn.innerText = "Save";
+    const actionsCell = row.querySelector("td[data-field='actions']") || row.querySelector("td:last-child");
+    if (actionsCell) {
+      actionsCell.innerHTML = `
+        <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
+          <button class="neumorphic-btn ultrasmall primary-save-btn glow-cyan" style="display: none;" id="empRowSaveBtn" onclick="event.stopPropagation(); saveRowInline(this)">
+            Save
+          </button>
+          <button class="neumorphic-btn ultrasmall" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelRowInline(this)">
+            Cancel
+          </button>
+        </div>
+      `;
+    }
 
-  } else {
+    // Real-time input detection: show save button on first keystroke
+    row.querySelectorAll("input.inline-edit-input, select.inline-edit-select").forEach(inp => {
+      const eventName = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(eventName, () => {
+        const saveBtn = row.querySelector("#empRowSaveBtn");
+        if (saveBtn) saveBtn.style.display = "inline-block";
+      });
+    });
+  }
 
-    const updatedData = {};
+  window.saveRowInline = async function (btn) {
+    const row = btn.closest("tr");
+    if (!row) return;
 
-    row.querySelectorAll("td[data-field]").forEach(td => {
-      updatedData[td.dataset.field] = td.innerText.trim();
+    const eid = row.dataset.eid;
+    const name_input = row.querySelector('[name="name"]');
+    const phone_input = row.querySelector('[name="phone_number"]');
+    const city_input = row.querySelector('[name="city"]');
+    const date_input = row.querySelector('[name="joining_date"]');
+    const level_input = row.querySelector('[name="level"]');
+    const state_input = row.querySelector('[name="state"]');
+
+    if (!name_input) return;
+
+    const name = name_input.value.trim();
+    const phone_number = phone_input ? phone_input.value.trim() : "";
+    const city = city_input ? city_input.value.trim() : "";
+    const display_date = date_input ? date_input.value.trim() : "";
+    const level = level_input ? level_input.value.trim() : "";
+    const state = state_input ? state_input.value.trim() : "";
+
+    const joining_date = ddmmyyyyToIso(display_date);
+
+    if (!name) {
+      alert("Employee name is required.");
+      return;
+    }
+
+    try {
+      const response = await csrfFetch("/api/update_employee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eid,
+          name,
+          phone_number,
+          city,
+          joining_date,
+          level,
+          state
+        })
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || "Failed to update employee");
+        return;
+      }
+
+      // Update table cells in DOM
+      row.querySelector('[data-field="name"]').innerText = name;
+      if (row.querySelector('[data-field="phone_number"]')) row.querySelector('[data-field="phone_number"]').innerText = phone_number;
+      if (row.querySelector('[data-field="city"]')) row.querySelector('[data-field="city"]').innerText = city;
+      if (row.querySelector('[data-field="joining_date"]')) row.querySelector('[data-field="joining_date"]').innerText = display_date;
+      if (row.querySelector('[data-field="level"]')) row.querySelector('[data-field="level"]').innerText = level;
+      if (row.querySelector('[data-field="state"]')) row.querySelector('[data-field="state"]').innerText = state;
+
+      // Restore Actions
+      const statusCell = row.querySelector('[data-field="is_active"]');
+      const is_active = statusCell ? statusCell.innerText.trim().toLowerCase() === "active" : true;
+      const actionHtml = `
+        <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
+          <button class="neumorphic-btn ultrasmall ${is_active ? 'danger-btn' : ''}"
+                  onclick="event.stopPropagation(); toggleEmployeeStatus('${eid}', this)">
+            ${is_active ? 'Deactivate' : 'Activate'}
+          </button>
+        </div>
+      `;
+      const actionsCell = row.querySelector("td[data-field='actions']") || row.querySelector("td:last-child");
+      if (actionsCell) {
+        actionsCell.innerHTML = actionHtml;
+      }
+
+      row.classList.remove("row-editing");
+      delete row.dataset.originalHtml;
+      currentlyEditingRow = null;
+
+      // Sync Card View
+      const card = document.querySelector(`.employee-card[data-eid="${eid}"]`);
+      if (card) {
+        const avatarEl = card.querySelector(".employee-avatar");
+        const nameEl = card.querySelector(".employee-name");
+        const levelEl = card.querySelector(".employee-level");
+
+        if (avatarEl) avatarEl.innerText = name.charAt(0).toUpperCase();
+        if (nameEl) nameEl.innerText = name;
+        if (levelEl) levelEl.innerText = level;
+
+        const cardPhone = card.querySelector('[data-field="phone_number"]');
+        const cardCity = card.querySelector('[data-field="city"]');
+        const cardState = card.querySelector('[data-field="state"]');
+        const cardJoining = card.querySelector('[data-field="joining_date"]');
+
+        if (cardPhone) cardPhone.innerText = phone_number;
+        if (cardCity) cardCity.innerText = city;
+        if (cardState) cardState.innerText = state;
+        if (cardJoining) cardJoining.innerText = display_date;
+      }
+
+      // Update Datatable
+      if (dt) {
+        dt.row(row).invalidate().draw(false);
+      }
+
+      // Success chime and overlay
+      if (typeof triggerSuccessFeedback === "function") {
+        triggerSuccessFeedback({
+          sectionElement: document.getElementById("tableViewContainer"),
+          highlightElements: [row],
+          message: "Employee Saved Successfully",
+          highlightDuration: 3000
+        });
+      } else {
+        row.classList.add("row-updated-glow");
+        setTimeout(() => row.classList.remove("row-updated-glow"), 3000);
+      }
+
+      // Update search snapshot index
+      const snapRow = snapshot.find(s => s.row === row);
+      if (snapRow) {
+        snapRow.text = row.innerText.toLowerCase();
+      }
+
+    } catch (err) {
+      alert("Error saving: " + err.message);
+    }
+  };
+
+  window.cancelRowInline = function (btn) {
+    const row = btn.closest("tr");
+    if (!row) return;
+
+    row.innerHTML = row.dataset.originalHtml;
+    row.classList.remove("row-editing");
+    delete row.dataset.originalHtml;
+    currentlyEditingRow = null;
+  };
+
+  /* ===== DOUBLE-CLICK INLINE EDITING FOR CARDS ===== */
+  let currentlyEditingCard = null;
+
+  const cardGrid = document.getElementById("employeeCardsGrid");
+  if (cardGrid) {
+    cardGrid.addEventListener("dblclick", function(e) {
+      const card = e.target.closest(".employee-card");
+      if (!card) return;
+
+      if (card.classList.contains("card-editing")) return;
+      if (e.target.closest(".employee-card-footer") || e.target.closest("button")) return;
+
+      makeCardEditable(card);
+    });
+  }
+
+  function makeCardEditable(card) {
+    if (currentlyEditingCard) {
+      cancelCardInline(currentlyEditingCard);
+    }
+    if (currentlyEditingRow) {
+      cancelRowInline(currentlyEditingRow);
+    }
+
+    currentlyEditingCard = card;
+    card.dataset.originalHtml = card.innerHTML;
+    card.classList.add("card-editing");
+
+    const nameEl = card.querySelector(".employee-name");
+    const levelEl = card.querySelector(".employee-level");
+
+    if (nameEl) {
+      const currentName = nameEl.innerText.trim();
+      nameEl.innerHTML = `<input type="text" class="inline-edit-input" name="name" value="${currentName.replace(/"/g, '&quot;')}">`;
+    }
+    if (levelEl) {
+      const currentLevel = levelEl.innerText.trim();
+      levelEl.innerHTML = `<input type="text" class="inline-edit-input" name="level" value="${currentLevel.replace(/"/g, '&quot;')}">`;
+    }
+
+    const fields = ['phone_number', 'city', 'state', 'joining_date'];
+    fields.forEach(field => {
+      const cell = card.querySelector(`[data-field="${field}"]`);
+      if (cell) {
+        const currentText = cell.innerText.trim();
+        cell.innerHTML = `<input type="text" class="inline-edit-input" name="${field}" value="${currentText.replace(/"/g, '&quot;')}">`;
+
+        if (field === "joining_date") {
+          const inputEl = cell.querySelector('input');
+          if (typeof window.initCustomCalendar === "function") {
+            window.initCustomCalendar(inputEl, {
+              dateFormat: 'd-m-Y',
+              clickOpens: true,
+              noWrapper: true
+            });
+            setTimeout(() => {
+              if (document.activeElement === inputEl) {
+                inputEl.click();
+              }
+            }, 50);
+          }
+        }
+      }
     });
 
-    csrfFetch("/api/update_employee", {
+    const footer = card.querySelector(".employee-card-footer");
+    if (footer) {
+      footer.innerHTML = `
+        <div style="width: 100%; display: flex; justify-content: flex-end; gap: 8px; align-items: center;">
+          <button class="neumorphic-btn ultrasmall primary-save-btn glow-cyan" style="display: none;" id="empCardSaveBtn" onclick="event.stopPropagation(); saveCardInline(this)">
+            Save
+          </button>
+          <button class="neumorphic-btn ultrasmall" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelCardInline(this)">
+            Cancel
+          </button>
+        </div>
+      `;
+    }
+
+    // Real-time input detection for card: show save button on first keystroke
+    card.querySelectorAll("input.inline-edit-input, select.inline-edit-select").forEach(inp => {
+      const eventName = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(eventName, () => {
+        const saveBtn = card.querySelector("#empCardSaveBtn");
+        if (saveBtn) saveBtn.style.display = "inline-block";
+      });
+    });
+  }
+
+  window.cancelCardInline = function (btnOrCard) {
+    const card = btnOrCard.classList.contains("employee-card") ? btnOrCard : btnOrCard.closest(".employee-card");
+    if (!card) return;
+
+    card.innerHTML = card.dataset.originalHtml;
+    card.classList.remove("card-editing");
+    delete card.dataset.originalHtml;
+    currentlyEditingCard = null;
+  };
+
+  window.saveCardInline = async function (btn) {
+    const card = btn.closest(".employee-card");
+    if (!card) return;
+
+    const eid = card.dataset.eid;
+    const name_input = card.querySelector('[name="name"]');
+    const phone_input = card.querySelector('[name="phone_number"]');
+    const city_input = card.querySelector('[name="city"]');
+    const date_input = card.querySelector('[name="joining_date"]');
+    const level_input = card.querySelector('[name="level"]');
+    const state_input = card.querySelector('[name="state"]');
+
+    if (!name_input) return;
+
+    const name = name_input.value.trim();
+    const phone_number = phone_input ? phone_input.value.trim() : "";
+    const city = city_input ? city_input.value.trim() : "";
+    const display_date = date_input ? date_input.value.trim() : "";
+    const level = level_input ? level_input.value.trim() : "";
+    const state = state_input ? state_input.value.trim() : "";
+
+    const joining_date = ddmmyyyyToIso(display_date);
+
+    if (!name) {
+      alert("Employee name is required.");
+      return;
+    }
+
+    try {
+      const response = await csrfFetch("/api/update_employee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eid,
+          name,
+          phone_number,
+          city,
+          joining_date,
+          level,
+          state
+        })
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || "Failed to update employee");
+        return;
+      }
+
+      // Restore card layout
+      card.innerHTML = card.dataset.originalHtml;
+      card.classList.remove("card-editing");
+      delete card.dataset.originalHtml;
+      currentlyEditingCard = null;
+
+      // Update card values
+      card.querySelector(".employee-avatar").innerText = name.charAt(0).toUpperCase();
+      card.querySelector(".employee-name").innerText = name;
+      card.querySelector(".employee-level").innerText = level;
+      if (card.querySelector('[data-field="phone_number"]')) card.querySelector('[data-field="phone_number"]').innerText = phone_number;
+      if (card.querySelector('[data-field="city"]')) card.querySelector('[data-field="city"]').innerText = city;
+      if (card.querySelector('[data-field="state"]')) card.querySelector('[data-field="state"]').innerText = state;
+      if (card.querySelector('[data-field="joining_date"]')) card.querySelector('[data-field="joining_date"]').innerText = display_date;
+
+      // Update corresponding table row
+      const row = document.querySelector(`tr[data-eid="${eid}"]`);
+      if (row) {
+        row.querySelector('[data-field="name"]').innerText = name;
+        if (row.querySelector('[data-field="phone_number"]')) row.querySelector('[data-field="phone_number"]').innerText = phone_number;
+        if (row.querySelector('[data-field="city"]')) row.querySelector('[data-field="city"]').innerText = city;
+        if (row.querySelector('[data-field="joining_date"]')) row.querySelector('[data-field="joining_date"]').innerText = display_date;
+        if (row.querySelector('[data-field="level"]')) row.querySelector('[data-field="level"]').innerText = level;
+        if (row.querySelector('[data-field="state"]')) row.querySelector('[data-field="state"]').innerText = state;
+
+        if (dt) {
+          dt.row(row).invalidate().draw(false);
+        }
+
+        // Update search snapshot index
+        const snapRow = snapshot.find(s => s.row === row);
+        if (snapRow) {
+          snapRow.text = row.innerText.toLowerCase();
+        }
+      }
+
+      // Success chime and overlay
+      if (typeof triggerSuccessFeedback === "function") {
+        triggerSuccessFeedback({
+          sectionElement: document.getElementById("tileViewContainer"),
+          highlightElements: [card],
+          message: "Employee Saved Successfully",
+          highlightDuration: 3000
+        });
+      } else {
+        card.classList.add("row-updated-glow");
+        setTimeout(() => card.classList.remove("row-updated-glow"), 3000);
+      }
+
+    } catch (err) {
+      alert("Error saving: " + err.message);
+    }
+  };
+
+  /* ===== TOGGLE EMPLOYEE STATUS ===== */
+  window.toggleEmployeeStatus = function(eid, btn) {
+    if (!confirm("Are you sure you want to change employee status?")) return;
+
+    const row = document.querySelector(`tr[data-eid="${eid}"]`);
+    const card = document.querySelector(`.employee-card[data-eid="${eid}"]`);
+
+    const rowBtn = row ? row.querySelector('td[data-field="actions"] button, td:last-child button') : null;
+    const cardBtn = card ? card.querySelector('.employee-card-footer button') : null;
+
+    const originalRowText = rowBtn ? rowBtn.innerText : "";
+    const originalCardText = cardBtn ? cardBtn.innerText : "";
+
+    if (rowBtn) {
+      rowBtn.disabled = true;
+      rowBtn.innerText = "Processing...";
+    }
+    if (cardBtn) {
+      cardBtn.disabled = true;
+      cardBtn.innerText = "Processing...";
+    }
+
+    csrfFetch("/api/employee/toggle_status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedData)
+      body: JSON.stringify({ eid })
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
+        const isActive = data.status === "active";
+        const statusText = data.status.charAt(0).toUpperCase() + data.status.slice(1);
 
-        // Save successful → lock row
-        row.querySelectorAll("td[data-field]").forEach(td => {
-          td.contentEditable = false;
-          td.classList.remove("highlighted");
+        if (row) {
+          if (!isActive) {
+            row.classList.add("inactive-row");
+          } else {
+            row.classList.remove("inactive-row");
+          }
+          const rowStatusCell = row.querySelector(".status-cell");
+          if (rowStatusCell) {
+            rowStatusCell.innerHTML = `<span class="status-badge status-${data.status}">${statusText}</span>`;
+          }
+          if (rowBtn) {
+            rowBtn.innerText = isActive ? "Deactivate" : "Activate";
+            if (isActive) {
+              rowBtn.classList.add("danger-btn");
+            } else {
+              rowBtn.classList.remove("danger-btn");
+            }
+          }
+        }
 
-          // Update original values after successful save
-          td.dataset.originalValue = td.innerText.trim();
-        });
+        if (card) {
+          if (!isActive) {
+            card.classList.add("inactive-card");
+          } else {
+            card.classList.remove("inactive-card");
+          }
+          const cardStatusCell = card.querySelector(".status-cell");
+          if (cardStatusCell) {
+            cardStatusCell.innerHTML = `<span class="status-badge status-${data.status}">${statusText}</span>`;
+          }
+          if (cardBtn) {
+            cardBtn.innerText = isActive ? "Deactivate" : "Activate";
+            if (isActive) {
+              cardBtn.classList.add("danger-btn");
+            } else {
+              cardBtn.classList.remove("danger-btn");
+            }
+          }
+        }
 
-        btn.innerText = "Edit";
+        // Update search snapshot index
+        if (row) {
+          const snapshotItem = snapshot.find(d => d.row === row);
+          if (snapshotItem) {
+            snapshotItem.text = row.innerText.toLowerCase();
+          }
+        }
+
+        if (typeof refreshEmployeeDropdown === "function") {
+          refreshEmployeeDropdown();
+        }
+
+        const employeeSelect = document.getElementById("employeeSelect");
+        if (employeeSelect && employeeSelect.value == eid && !isActive) {
+          csrfFetch("/reset_context", { method: "POST" })
+            .then(() => {
+              employeeSelect.value = "";
+            });
+        }
 
       } else {
-
-        // Restore original values on failed save
-        row.querySelectorAll("td[data-field]").forEach(td => {
-          td.innerText = td.dataset.originalValue || "";
-          td.contentEditable = false;
-          td.classList.remove("highlighted");
-        });
-
-        btn.innerText = "Edit";
-
-        alert("Update failed: " + data.error);
+        alert("Failed: " + (data.error || "Unknown error"));
+        if (rowBtn) rowBtn.innerText = originalRowText;
+        if (cardBtn) cardBtn.innerText = originalCardText;
       }
     })
     .catch(err => {
+      alert("Request failed: " + err.message);
+      if (rowBtn) rowBtn.innerText = originalRowText;
+      if (cardBtn) cardBtn.innerText = originalCardText;
+    })
+    .finally(() => {
+      if (rowBtn) rowBtn.disabled = false;
+      if (cardBtn) cardBtn.disabled = false;
+    });
+  };
 
-      // Restore original values on request failure
-      row.querySelectorAll("td[data-field]").forEach(td => {
-        td.innerText = td.dataset.originalValue || "";
-        td.contentEditable = false;
-        td.classList.remove("highlighted");
+  /* ===== INITIALIZE DATA AND TABLES ===== */
+  updateSummary();
+
+  const dt = $.fn.DataTable.isDataTable('#employeeTable')
+    ? $('#employeeTable').DataTable()
+    : $('#employeeTable').DataTable({
+        paging: false,
+        info: false,
+        searching: true,
+        ordering: true
       });
 
-      btn.innerText = "Edit";
-
-      alert("Request failed: " + err.message);
-    });
-  }
-}
-
-/* ===== TOGGLE EMPLOYEE STATUS ===== */
-
-function toggleEmployeeStatus(eid, btn) {
-
-  csrfFetch("/api/employee/toggle_status", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eid })
-  })
-  .then(res => res.json())
-  .then(data => {
-
-    if (!data.success) {
-      alert(data.error || "Failed");
-      return;
-    }
-
-    const row = btn.closest("tr");
-
-    const statusCell = row.querySelector(".status-cell");
-
-    const isActive = data.status === "active";
-
-    if (isActive) {
-      statusCell.innerHTML = '<span class="status-badge active">Active</span>';
-      btn.innerText = "Deactivate";
-      btn.classList.remove("activate-btn");
-      btn.classList.add("deactivate-btn");
-    } else {
-      statusCell.innerHTML = '<span class="status-badge inactive">Inactive</span>';
-      btn.innerText = "Activate";
-      btn.classList.remove("deactivate-btn");
-      btn.classList.add("activate-btn");
-    }
-
-    // ✅ Ensure row becomes visible immediately after status change
-    row.style.display = "";
-
-    // ✅ Update snapshot text so search/filter works correctly after activation
-    const snapshotItem = Array.from(document.querySelectorAll("#employeeTableBody tr"))
-      .map(r => ({ row: r, text: r.innerText.toLowerCase() }))
-      .find(d => d.row === row);
-
-    if (snapshotItem) {
-      snapshotItem.text = row.innerText.toLowerCase();
-    }
-
-    // 🔥 Refresh employee dropdown (hide inactive)
-    if (typeof refreshEmployeeDropdown === "function") {
-      refreshEmployeeDropdown();
-    }
-
-    // 🔥 If currently selected employee becomes inactive → reset context
-    const employeeSelect = document.getElementById("employeeSelect");
-    if (employeeSelect && employeeSelect.value == eid && !isActive) {
-      csrfFetch("/reset_context", { method: "POST" })
-        .then(() => {
-          employeeSelect.value = "";
-        });
-    }
-  })
-  .catch(err => {
-    alert("Request failed: " + err.message);
+  dt.on('draw', () => {
+    updateSummary();
   });
-}
-
-/* ===== REFRESH EMPLOYEE DROPDOWN ===== */
+});
 
 function refreshEmployeeDropdown() {
   const employeeSelect = document.getElementById("employeeSelect");
-
   if (!employeeSelect) return;
 
-  fetch("/api/employees")  // backend must return ONLY active employees
+  fetch("/api/employees")
     .then(res => res.json())
     .then(data => {
       employeeSelect.innerHTML = '<option value="">-- Select Employee --</option>';
-
       data.forEach(emp => {
         const opt = document.createElement("option");
         opt.value = emp.eid;

@@ -1,83 +1,539 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="page-title">🏘️ Village Table</h2>
+<style>
+  /* ── Segmented Control Switcher (Light-Mode Compliant) ── */
+  .sliding-segmented-container {
+    position: relative;
+    display: inline-flex;
+    background: var(--border-light, #f3f4f6);
+    padding: 4px;
+    border-radius: 30px;
+    border: 1px solid var(--border, #e5e7eb);
+    gap: 4px;
+    height: 38px;
+    box-sizing: border-box;
+    align-items: center;
+  }
+  .segmented-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 6px 18px;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .segmented-btn.active {
+    color: #ffffff !important;
+  }
+  .segmented-btn:hover {
+    color: var(--text, #1a1a2e);
+  }
+  #viewTabPill {
+    position: absolute;
+    height: calc(100% - 8px);
+    top: 4px;
+    left: 4px;
+    background: var(--primary, #1a4d2e);
+    border-radius: 25px;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 1;
+    box-shadow: var(--shadow-sm);
+  }
 
-<div class="raised-box">
+  /* ── Table Inline Inputs & Glow ── */
+  .row-editing {
+    background: var(--primary-lighter, #f0fdf4) !important;
+    border-left: 3px solid var(--primary) !important;
+  }
+  .inline-edit-input {
+    width: 95%;
+    padding: 6px 10px;
+    background: var(--surface, #ffffff) !important;
+    border: 1px solid var(--border, #e5e7eb) !important;
+    color: var(--text, #1a1a2e) !important;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+  .inline-edit-input:focus {
+    outline: none;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 6px rgba(26, 77, 46, 0.15);
+  }
+  .inline-edit-select {
+    width: 95%;
+    padding: 6px 10px;
+    background: var(--surface, #ffffff) !important;
+    border: 1px solid var(--border, #e5e7eb) !important;
+    color: var(--text, #1a1a2e) !important;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+  .inline-edit-select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+
+  @keyframes rowSuccessGlow {
+    0% {
+      background-color: var(--success-light, #e8f5e9) !important;
+      box-shadow: inset 0 0 15px rgba(22, 163, 74, 0.2);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: inset 0 0 0 rgba(22, 163, 74, 0);
+    }
+  }
+  .row-updated-glow {
+    animation: rowSuccessGlow 2.5s ease-out forwards;
+  }
+
+  /* ── Pro-Designer Employee Tiles (Light Mode & Forest Green) ── */
+  .employee-tiles-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    padding: 16px 0;
+  }
+  .employee-tile {
+    position: relative;
+    background: var(--surface, #ffffff);
+    border-radius: var(--radius-lg, 16px);
+    border: 1px solid var(--border, #e5e7eb);
+    padding: 20px;
+    transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .employee-tile:hover {
+    transform: translateY(-4px);
+    border-color: rgba(26, 77, 46, 0.25);
+    box-shadow: var(--shadow-lg);
+  }
+  .employee-tile.drag-target {
+    border-color: var(--primary, #1a4d2e) !important;
+    background: var(--primary-lighter, #f0fdf4) !important;
+    box-shadow: 0 0 20px rgba(26, 77, 46, 0.15) !important;
+    transform: scale(1.02);
+  }
+  .employee-tile.selected-tile {
+    border: 2px solid var(--primary, #1a4d2e) !important;
+    background: rgba(26, 77, 46, 0.03) !important;
+    box-shadow: 0 0 15px rgba(26, 77, 46, 0.1) !important;
+  }
+
+  @keyframes tileSuccessFlash {
+    0% {
+      border-color: var(--border);
+    }
+    15% {
+      border-color: var(--success, #16a34a);
+      box-shadow: 0 0 25px rgba(22, 163, 74, 0.25);
+      background: var(--success-light, #e8f5e9);
+    }
+    100% {
+      border-color: var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+  }
+  .tile-success-flash {
+    animation: tileSuccessFlash 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  }
+
+  .employee-tile-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-light, #f3f4f6);
+    padding-bottom: 12px;
+  }
+  .employee-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .employee-chip {
+    background: var(--primary-light, #e8f5e9);
+    border: 1px solid rgba(26, 77, 46, 0.15);
+    color: var(--primary, #1a4d2e);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: grab;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: var(--shadow-sm);
+  }
+  .employee-chip:hover {
+    background: var(--primary, #1a4d2e);
+    border-color: var(--primary, #1a4d2e);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .employee-chip:active {
+    cursor: grabbing;
+  }
+  .employee-separator {
+    color: var(--text-muted, #9ca3af);
+    font-weight: 700;
+    font-size: 1rem;
+    user-select: none;
+  }
+  .employee-empty-slot {
+    background: rgba(26, 77, 46, 0.01);
+    border: 1px dashed rgba(26, 77, 46, 0.2);
+    color: rgba(26, 77, 46, 0.7);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .employee-empty-slot:hover {
+    background: var(--primary-light, #e8f5e9);
+    border-color: var(--primary, #1a4d2e);
+    color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 6px rgba(26, 77, 46, 0.1);
+  }
+  .employee-pair-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #6b7280);
+    letter-spacing: 0.3px;
+    font-family: 'Inter', sans-serif;
+  }
+  .employee-pair-count {
+    font-size: 0.85rem;
+    color: var(--primary, #1a4d2e);
+    font-weight: 600;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .employee-tile-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 60px;
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--input-bg, #f9fafb);
+    border: 1px solid var(--border-light, #f3f4f6);
+    transition: all 0.2s ease;
+  }
+  .employee-tile-body.drag-over-body {
+    background: var(--primary-lighter, #f0fdf4);
+    border-color: rgba(26, 77, 46, 0.15);
+  }
+  .village-chip {
+    background: var(--primary-lighter, #f0fdf4);
+    border: 1px solid rgba(26, 77, 46, 0.15);
+    color: var(--primary, #1a4d2e);
+    padding: 5px 12px;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: grab;
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+  }
+  .village-chip:hover {
+    background: var(--primary, #1a4d2e);
+    border-color: var(--primary, #1a4d2e);
+    color: #ffffff;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .village-chip:active {
+    cursor: grabbing;
+  }
+  .village-chip.selected-village-chip {
+    background: var(--primary, #1a4d2e) !important;
+    color: #ffffff !important;
+    border-color: var(--primary, #1a4d2e) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* Universal compliance modifications */
+  .customer-table tr {
+    cursor: pointer;
+  }
+  .customer-table th.table-header {
+    user-select: none;
+  }
+
+  /* Control Row Grid Layout for perfect horizontal centering */
+  .control-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+  }
+  .search-wrapper {
+    justify-self: start;
+    width: 100%;
+  }
+  #viewToggleContainer {
+    justify-self: center;
+  }
+  .button-group {
+    justify-self: end;
+  }
+
+  @media (max-width: 900px) {
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .search-wrapper {
+      max-width: 100% !important;
+      justify-self: stretch;
+    }
+    #viewToggleContainer {
+      justify-self: center;
+      width: auto;
+    }
+    .button-group {
+      justify-self: center;
+    }
+  }
+
+  /* Deactivate drop zone styles */
+  #deactivateZone.drag-over-deactivate {
+    background: var(--danger-light, #fef2f2) !important;
+    border-color: var(--danger, #dc2626) !important;
+    color: var(--danger, #dc2626) !important;
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.25) !important;
+    transform: scale(1.05);
+  }
+
+  /* Spacing between Section 1 and Section 2 */
+  #tableViewContainer,
+  #tileViewContainer,
+  #mapViewContainer {
+    margin-top: 24px;
+  }
+
+  /* ── Custom Leaflet Map Tooltip & Popup (Light/Dark Mode Compliant) ── */
+  .custom-map-tooltip {
+    background: var(--surface-elevated, #1a1d27) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    font-family: 'Inter', sans-serif !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-md) !important;
+    padding: 10px 14px !important;
+    font-size: 0.8rem !important;
+    opacity: 0.95 !important;
+  }
+  .custom-map-tooltip h4 {
+    margin: 0 0 6px 0 !important;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif) !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: var(--primary) !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    padding-bottom: 4px !important;
+  }
+  .tooltip-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    margin-bottom: 4px !important;
+  }
+  .tooltip-row strong {
+    color: var(--text-secondary) !important;
+  }
+  .tooltip-footer {
+    margin-top: 6px !important;
+    font-size: 0.7rem !important;
+    color: var(--primary) !important;
+    font-style: italic !important;
+    text-align: center !important;
+    border-top: 1px dashed var(--border-light) !important;
+    padding-top: 4px !important;
+  }
+
+  /* Custom Leaflet Popup Customizations */
+  .leaflet-popup-content-wrapper {
+    background: var(--surface-elevated, #1a1d27) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-lg) !important;
+  }
+  .leaflet-popup-tip {
+    background: var(--surface-elevated, #1a1d27) !important;
+    border-left: 1px solid var(--border) !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  /* Glowing Green Marker styles */
+  .new-age-green-marker {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  .marker-pulse-wrapper {
+    position: relative;
+    width: 14px;
+    height: 14px;
+  }
+  .marker-dot {
+    width: 14px;
+    height: 14px;
+    background-color: #10b981 !important; /* emerald green */
+    border: 2px solid #ffffff !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.9) !important;
+  }
+  .marker-pulse-ring {
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #10b981 !important;
+    border-radius: 50% !important;
+    opacity: 0;
+    animation: marker-pulse 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  }
+  @keyframes marker-pulse {
+    0% {
+      transform: scale(0.3);
+      opacity: 0;
+    }
+    50% {
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1.2);
+      opacity: 0;
+    }
+  }
+</style>
+
+<h2 class="page-title">Villages</h2>
+ 
+<div class="raised-box" style="padding: 16px 20px;">
   <div class="control-row">
-    <label class="search-label">
-      <input type="text" id="searchBox" placeholder="Search village name or code...">
-    </label>
+    <div style="display: flex; gap: 10px; align-items: center; width: 100%; max-width: 560px;">
+      <div class="search-wrapper" style="position: relative; flex: 1; min-width: 200px; max-width: 450px;">
+        <i class="fas fa-search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.9rem;"></i>
+        <input type="search" id="searchBox" placeholder="Search village name or code..." autocomplete="off" style="width: 100%; padding: 10px 14px 10px 38px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);">
+      </div>
+      <button id="restartContextBtn" class="neumorphic-btn" style="padding: 10px 16px; font-size: 0.85rem; font-weight: 600; display: none; align-items: center; gap: 6px; border-color: rgba(220, 38, 38, 0.35); color: var(--danger); margin: 0; background: var(--surface);">
+        <i class="fas fa-undo"></i> Restart
+      </button>
+    </div>
+ 
+    <div class="sliding-segmented-container" id="viewToggleContainer" style="margin: 0;">
+      <div id="viewTabPill"></div>
+      <button id="tableViewBtn" class="segmented-btn">Table</button>
+      <button id="tileViewBtn" class="segmented-btn active">Tiles</button>
+      <button id="mapViewBtn" class="segmented-btn">Map</button>
+    </div>
 
-    <button onclick="applySearch()" class="neumorphic-btn">🔍 Find</button>
-    <button onclick="resetSearch()" class="neumorphic-btn">🔄 Reset</button>
-    <button onclick="printSelected()" class="neumorphic-btn">🖨️ Print</button>
-    <button id="columnSelectorBtn" class="neumorphic-btn">🧩 Table View</button>
-  </div>
-
-  <div class="summary-row">
-    <div class="summary-item">
-      <strong>Total Villages:</strong>
-      <span id="totalCount">{{ total_villages }}</span>
+    <div class="button-group" style="display: flex; gap: 10px; align-items: center;">
+      <button id="createVillageBtn" class="neumorphic-btn" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; color: var(--primary); border-color: rgba(26, 77, 46, 0.35);">
+        <i class="fas fa-plus-circle"></i> Create
+      </button>
+      <button id="deactivateZone" class="neumorphic-btn danger-btn" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border-color: rgba(220, 38, 38, 0.35); color: var(--danger);">Deactivate</button>
+      <button onclick="printSelected()" class="neumorphic-btn" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">Print</button>
+      <button id="columnSelectorBtn" class="neumorphic-btn" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">Columns</button>
     </div>
   </div>
-  <div class="village-view-tabs">
-        <button id="tableViewBtn" class="village-tab active">
-            📋 Table
-        </button>
-
-        <button id="tileViewBtn" class="village-tab">
-            🧱 Tiles
-        </button>
-        <button id="mapViewBtn" class="village-tab">
-            🗺️ Map
-        </button>
-    </div>
 </div>
 
-<div class="raised-box" id="tableViewContainer">
+<div class="raised-box" id="tableViewContainer" style="display:none;">
   <div class="customer-table-wrapper app-table-wrapper">
-    <table id="villageTable" class="customer-table">
+    <table id="villageTable" class="customer-table" style="width: 100% !important;">
       <thead>
         <tr>
-          <th><input type="checkbox" onclick="toggleAll(this)" /></th>
           {% for header in headers %}
-          <th class="table-header">{{ header }}</th>
+          <th class="table-header" onclick="sortTableColumn('{{ header }}')">{{ header }}</th>
           {% endfor %}
           <th>Actions</th>
         </tr>
       </thead>
-
+ 
       <tbody id="villageTableBody">
         {% for row in data %}
-        <tr class="table-row {% if row['status'] == 'inactive' %}inactive-row{% endif %}">
-          <td><input type="checkbox" /></td>
-
+        <tr class="table-row {% if row['status'] == 'inactive' %}inactive-row{% endif %}" data-vid="{{ row.vid }}">
           {% for col in headers %}
             {% if col == 'status' %}
-              <td class="table-cell">
+              <td class="table-cell" data-field="{{ col }}">
                 <span class="status-badge status-{{ row[col]|lower }}">{{ row[col] }}</span>
               </td>
             {% else %}
               <td class="table-cell" data-field="{{ col }}">{{ row[col] }}</td>
             {% endif %}
           {% endfor %}
-
-          <td class="table-cell">
-            <div class="action-buttons">
-              <button class="neumorphic-btn ultrasmall edit-btn"
-                      onclick="openEditModal(this)">
-                Edit
+ 
+          <td class="table-cell" data-field="actions">
+            <div class="action-buttons" style="display: flex; gap: 6px; align-items: center;">
+              <button class="neumorphic-btn ultrasmall" style="color: #00f2fe; border-color: rgba(0, 242, 254, 0.35);"
+                      onclick="event.stopPropagation(); openVillageDashboard('{{ row.vid }}')">
+                Dashboard
+              </button>
+ 
+              {% set has_coords = row.latitude is not none and row.longitude is not none and row.latitude != '' and row.longitude != '' %}
+              <button class="neumorphic-btn ultrasmall location-btn"
+                      style="color: {{ '#16a34a' if has_coords else '#dc2626' }}; border-color: {{ 'rgba(22,163,74,0.35)' if has_coords else 'rgba(220,38,38,0.35)' }};"
+                      data-vid="{{ row.vid }}"
+                      data-has-coords="{{ 'true' if has_coords else 'false' }}"
+                      onclick="event.stopPropagation();"
+                      ondblclick="event.stopPropagation(); window.geocodeVillage('{{ row.vid }}', this)">
+                <i class="fas fa-map-marker-alt"></i> Location
               </button>
 
               {% if row['status'] == 'active' %}
                 <button class="neumorphic-btn ultrasmall danger-btn"
-                        onclick="toggleVillageStatus('{{ row.vid }}', this)">
+                        onclick="event.stopPropagation(); toggleVillageStatus('{{ row.vid }}', this)">
                   Inactivate
                 </button>
               {% else %}
                 <button class="neumorphic-btn ultrasmall"
-                        onclick="toggleVillageStatus('{{ row.vid }}', this)">
+                        onclick="event.stopPropagation(); toggleVillageStatus('{{ row.vid }}', this)">
                   Activate
                 </button>
               {% endif %}
@@ -91,64 +547,35 @@
 </div>
 
 <div class="raised-box" id="tileViewContainer" style="display:none;">
-
-  <div class="tile-view-header">
-    <div class="summary-item">
-      <strong>Employee Pairs:</strong>
-      <span id="tileEmployeePairCount">0</span>
-    </div>
-  </div>
-
   <div id="employeeTilesContainer" class="employee-tiles-container">
     <!-- Dynamically rendered by village.js -->
   </div>
-
 </div>
-<div class="raised-box" id="mapViewContainer" style="display:none;">
 
-  <div class="tile-view-header">
-    <div class="summary-item">
-      <strong>Village Map:</strong>
-      <span id="mapVillageCount">{{ total_villages }}</span>
-    </div>
-  </div>
-
-  <div id="indiaVillageMap" style="height:700px;width:100%;border-radius:14px;"></div>
-
+<div class="raised-box" id="mapViewContainer" style="display:none; padding: 0; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
+  <div id="indiaVillageMap" style="height:700px; width:100%; z-index: 1;"></div>
 </div>
-<!-- Edit Village Modal -->
-<div id="editVillageModal" class="column-modal hidden">
-  <div class="column-modal-content">
-    <h3>✏️ Edit Village</h3>
+ 
+<!-- Create Village Modal -->
+<div id="createVillageOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:10000; align-items:center; justify-content:center; backdrop-filter:blur(8px);">
+  <div style="width:640px; max-width:92vw; max-height:85vh; overflow-y:auto; background:var(--surface-elevated, var(--surface)); border:1px solid var(--border); border-radius:14px; padding:24px; box-shadow:var(--shadow-lg);">
+    <h3 style="margin:0 0 18px 0; color:var(--primary); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1.2rem;">
+      <i class="fas fa-plus-circle"></i> Create Village + Employee Set
+    </h3>
 
-    <div class="form-group">
-      <label>VID</label>
-      <input type="text" id="edit_vid" readonly>
+    <div id="createVillageFormList">
+      <!-- Village forms injected by JS -->
     </div>
 
-    <div class="form-group">
-      <label>Village Code</label>
-      <input type="text" id="edit_village_code">
-    </div>
+    <button id="addAnotherVillageBtn" class="neumorphic-btn" style="width:100%; margin:12px 0; padding:10px; font-size:0.85rem; font-weight:600; color:var(--primary); border-color:rgba(26,77,46,0.25); display:flex; align-items:center; justify-content:center; gap:6px;">
+      <i class="fas fa-plus"></i> Add Another Village
+    </button>
 
-    <div class="form-group">
-      <label>Village Name</label>
-      <input type="text" id="edit_village_name">
-    </div>
-
-    <div class="form-group">
-      <label>Employee 1</label>
-      <select id="edit_emp1"></select>
-    </div>
-
-    <div class="form-group">
-      <label>Employee 2</label>
-      <select id="edit_emp2"></select>
-    </div>
-
-    <div class="modal-actions">
-      <button class="neumorphic-btn small" onclick="saveVillageEdit()">Save</button>
-      <button class="neumorphic-btn small" onclick="closeEditModal()">Cancel</button>
+    <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-light);">
+      <button id="createVillageCancelBtn" class="neumorphic-btn small">Cancel</button>
+      <button id="createVillageSubmitBtn" class="neumorphic-btn small" style="color:var(--primary); border-color:var(--primary); font-weight:700;">
+        <i class="fas fa-check-circle"></i> Submit All
+      </button>
     </div>
   </div>
 </div>
@@ -156,7 +583,7 @@
 <!-- Column Modal -->
 <div id="columnModal" class="column-modal hidden">
   <div class="column-modal-content">
-    <h3>📋 Select Columns</h3>
+    <h3>Select Columns</h3>
     <div id="columnCheckboxList" class="column-list"></div>
     <div class="modal-actions">
       <button id="closeColumnModal" class="neumorphic-btn small">
@@ -174,5 +601,8 @@
 <script src="{{ url_for('static', filename='js/village.js') }}"></script>
 <script>
   window.villageData = {{ data|tojson }};
+  window.selectedVid = "{{ selected_vid if selected_vid else '' }}";
+  window.userLevel = "{{ session.get('level', '') }}";
+  window.stateList = {{ ['ANDHRA PRADESH','TELANGANA','KARNATAKA','MAHARASHTRA','ODISHA','GUJARAT']|tojson }};
 </script>
 {% endblock %}

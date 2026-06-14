@@ -1,88 +1,370 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="section">
-  <h2 class="page-title">💰 Post Payments</h2>
+  <div class="posting-header-row">
+    <h2 class="page-title" style="margin: 0;">Posting</h2>
+    <!-- Tab Switcher -->
+    <div class="posting-tabs-container" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">
+      <button class="posting-tab-btn active" id="tabNewPayments" onclick="switchTab('new-payments')"><i
+          class="fas fa-plus-circle"></i> New Payments</button>
+      <button class="posting-tab-btn" id="tabReport" onclick="switchTab('report')"><i class="fas fa-file-alt"></i>
+        Report</button>
+    </div>
+  </div>
 
-  <!-- Raised Form Box -->
-  <div class="raised-box">
-    <form id="paymentForm" class="form-grid" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label><input type="text" id="pdt" placeholder="dd/mm/yyyy" required></label>
-      <label><input type="text" id="ano" inputmode="numeric" placeholder="Account Number" required></label>
-      <label><input type="number" id="amt" step="0.01" placeholder="Amount" required></label>
-      <button class="neumorphic-btn small" type="submit" id="submitBtn">➕ Add</button>
-    </form>
-    <div class="summary-top">
-      <span>
-        <strong>Total Acc Numbers:</strong>
-        <span id="totalAnotop">0</span>
-      </span>
-      &nbsp;&nbsp;
-      <span>
-        <strong>Total Amount:</strong>
-        <span id="totalAmttop" data-money>0.00</span>
-      </span>
-      &nbsp;&nbsp;
-      <span>
-        <strong>Expected Payments:</strong>
-        <span id="expectedPayments">0</span>
-      </span>
-      &nbsp;&nbsp;
-      <span>
-        <strong>Missed Payments:</strong>
-        <span id="missedPayments">0</span>
-      </span>
+  <div class="post-payment-layout">
+    <!-- LEFT COLUMN: Main Form, Info Tiles, Flippable Analytics Graph, and Temp Table -->
+    <div class="main-payment-panel">
+
+      <!-- Input Form Box + Control Actions -->
+      <div class="raised-box" id="inputFormBox">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;">
+
+          <form id="paymentForm" class="payment-form-row no-loader" method="POST"
+            style="flex: 1; min-width: 320px; margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <label>
+              Payment Date
+              <input type="text" id="pdt" placeholder="dd-mm-yyyy" required>
+            </label>
+
+            <label>
+              Account Number
+              <input type="text" id="ano" inputmode="numeric" placeholder="Account Number" required>
+            </label>
+
+            <label>
+              Amount
+              <input type="number" id="amt" step="0.01" placeholder="Amount" required>
+            </label>
+
+            <button class="neumorphic-btn small" type="submit" id="submitBtn" style="margin-bottom: 12px;">Add</button>
+            <button class="neumorphic-btn small submit-btn" style="margin-bottom: 12px; gap: 6px; color: #16521e;"
+              onclick="submitAllPayments()"><i class="fas fa-check-circle"></i> Submit All</button>
+            <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px;" onclick="printTemp()"><i
+                class="fas fa-print"></i> Print</button>
+            <button class="neumorphic-btn small danger-btn" style="margin-bottom: 12px; gap: 6px; color: #dc3545;"
+              onclick="resetTempTable()"><i class="fas fa-trash-alt"></i> Reset</button>
+          </form>
+
+        </div>
+
+        <div class="message-box error" id="errorMsg" style="display: none; margin-top: 16px;"></div>
+
+        <!-- Customer Info Tiles Grid -->
+        <div id="customerInfo" class="customer-info-tiles-grid" style="display: none;">
+          <div class="info-tile name-tile">
+            <span class="label">Name</span>
+            <span id="customerName" class="value"></span>
+          </div>
+          <div class="info-tile">
+            <span class="label">Amount Given</span>
+            <span id="customerLoanAmount" class="value" data-money></span>
+          </div>
+          <div class="info-tile">
+            <span class="label">Balance</span>
+            <span id="customerOutstanding" class="value" data-money></span>
+          </div>
+          <div class="info-tile">
+            <span class="label">EMI Amount</span>
+            <span id="customerInstallmentAmount" class="value" data-money></span>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Temporary Table Box -->
+      <div class="raised-box" id="tempTableBox">
+        <div class="scroll-table-container">
+          <table id="tempTable" class="customer-table no-datatable">
+            <thead>
+              <tr>
+                <th class="sortable-header" onclick="sortTemp('ano')">Account Number</th>
+                <th class="sortable-header" onclick="sortTemp('pdt')">Payment Date</th>
+                <th class="sortable-header amount-paid" onclick="sortTemp('amt')">Amount Paid</th>
+                <th>Cumulative Amount</th>
+                <th style="width: 40px; text-align: center;"></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+              <tr>
+                <td><strong>Total Acc Numbers:</strong> <span id="totalAno">0</span></td>
+                <td></td>
+                <td><strong>Total Amount:</strong> <span id="totalAmt" data-money>0.00</span></td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- REPORT CONTAINER BOX (Initially Hidden) -->
+      <div id="reportContainer" style="display: none;">
+
+        <!-- Toggle Switch for Current vs Historic -->
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 15px;">
+          <div class="sliding-toggle-container mode-current" id="postingReportToggle" onclick="togglePostingReportView()">
+            <div class="sliding-toggle-pill"></div>
+            <span class="toggle-label current-label">Current</span>
+            <span class="toggle-label historic-label">Historic</span>
+          </div>
+        </div>
+
+        <!-- Filter Controls Row -->
+        <div class="posting-filters-row">
+          <label style="margin:0">
+            Date Range
+            <input type="text" id="filterDateRange" placeholder="Select single or range date">
+          </label>
+          <label style="margin:0">
+            Account Number (ANO)
+            <input type="text" id="filterAno" placeholder="Enter ANO">
+          </label>
+          <button class="neumorphic-btn small" onclick="applyReportFilters()" style="margin-bottom: 2px;">Apply
+            Filters</button>
+          <button class="neumorphic-btn small" onclick="resetReportFilters()" style="margin-bottom: 2px;">Reset</button>
+
+          <!-- Bulk Date Change Tool Trigger Button -->
+          <button class="neumorphic-btn small warning-btn" id="btnToggleBulkDate" onclick="toggleBulkDatePanel()"
+            style="margin-left: auto; color: #b45309; margin-bottom: 2px;"><i class="fas fa-calendar-alt"></i> Date
+            Change</button>
+          <button class="neumorphic-btn small primary-save-btn glow-cyan" id="btnSaveReportChanges"
+            style="display: none; margin-bottom: 2px;" onclick="saveAllReportChanges()"><i class="fas fa-save"></i> Save Changes</button>
+        </div>
+
+        <!-- Bulk Date Change Tool Panel (Initially Hidden) -->
+        <div class="bulk-date-panel" id="bulkDatePanel" style="display: none;">
+          <label>
+            Find Date
+            <input type="text" id="bulkFindDate" placeholder="dd-mm-yyyy">
+          </label>
+          <label>
+            Replace Date
+            <input type="text" id="bulkReplaceDate" placeholder="dd-mm-yyyy">
+          </label>
+          <button class="neumorphic-btn small warning-btn" onclick="submitBulkDateReplace()"
+            style="color: #b45309; margin-bottom: 2px;">Submit</button>
+        </div>
+
+        <!-- Table / Tile View Toggle Row -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <!-- View Toggle Switch -->
+          <div class="sliding-toggle-container mode-active" id="viewToggle" onclick="toggleReportView()">
+            <div class="sliding-toggle-pill" id="viewTogglePill"></div>
+            <span class="toggle-label active-label" id="labelTable">Table View</span>
+            <span class="toggle-label closed-label" id="labelTile">Tile View</span>
+          </div>
+
+          <!-- Table View Column Selector Button -->
+          <button id="tableViewBtn" class="neumorphic-btn small" onclick="toggleColumnModal()" style="margin: 0;"><i
+              class="fas fa-columns"></i> Columns</button>
+        </div>
+
+        <!-- Raised Box for Report Views -->
+        <div class="raised-box" style="position: relative;" id="reportDisplayBox">
+
+          <!-- View 1: Table View -->
+          <div id="reportTableView" class="customer-table-wrapper">
+            <table id="reportTable" class="customer-table no-datatable">
+              <thead>
+                <!-- Will be dynamically populated -->
+              </thead>
+              <tbody>
+                <!-- Will be dynamically populated -->
+              </tbody>
+              <tfoot>
+                <!-- Will be dynamically populated -->
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- View 2: Tile View (Initially Hidden) -->
+          <div id="reportTileViewWrapper" class="customer-table-wrapper" style="display: none;">
+            <div id="reportTileView" class="posting-tiles-grid">
+              <!-- Will be dynamically populated -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
-    <div class="message-box error" id="errorMsg" style="display: none;"></div>
+    <!-- RIGHT COLUMN: Live Summary -->
+    <div class="payment-analytics-panel">
 
-    <div id="customerInfo">
-      <div class="summary-row">
-        <div class="summary-item"><strong>Name:</strong> <span id="customerName"></span></div>
-        <div class="summary-item"><strong>Amount Given:</strong> <span id="customerLoanAmount" data-money></span></div>
-        <div class="summary-item"><strong>Amount Repaid:</strong> <span id="customerTotalRepaid" data-money></span></div>
-        <div class="summary-item"><strong>Outstanding:</strong> <span id="customerOutstanding" data-money></span></div>
-        <div class="summary-item"><strong>EMI AMOUNT:</strong> <span id="customerInstallmentAmount" data-money></span></div>
+      <!-- Last Posting Date Card -->
+      <div class="analytics-card">
+        <div class="analytics-icon"><i class="far fa-calendar-alt"></i></div>
+        <div class="analytics-details">
+          <span class="analytics-label">Last Posting Date</span>
+          <span class="analytics-value" id="lastPostingDisplay" style="font-size: 16px;">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Live Summary Cards -->
+      <div class="analytics-title">Live Summary</div>
+
+      <!-- Acc Numbers Summary Card -->
+      <div class="analytics-card"
+        style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+          <div class="analytics-icon"><i class="fas fa-hashtag"></i></div>
+          <div class="analytics-details">
+            <span class="analytics-label">Total A.No</span>
+            <span class="analytics-value" id="totalAnotop" style="font-size: 24px;">0</span>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
+              Expected: <strong id="expectedAccs">0</strong> | Short: <strong id="shortAccs"
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;" title="Click to view non-paying customers">0</strong>
+            </div>
+          </div>
+        </div>
+        <div
+          style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
+          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last
+            Time</span>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <span class="analytics-value last-week-val" id="lastAnotop" style="font-size: 20px;">0</span>
+            <span id="lastAnoArrow" style="font-size: 14px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Amount Summary Card -->
+      <div class="analytics-card"
+        style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+          <div class="analytics-icon"><i class="fas fa-rupee-sign"></i></div>
+          <div class="analytics-details">
+            <span class="analytics-label">Total Amount</span>
+            <span class="analytics-value" id="totalAmttop" data-money style="font-size: 24px;">0.00</span>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
+              Expected: <strong id="expectedAmt" data-money>0.00</strong> | Short: <strong id="shortAmt"
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;" data-money title="Click to view non-paying customers">0.00</strong>
+            </div>
+          </div>
+        </div>
+        <div
+          style="border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 110px;">
+          <span class="analytics-label" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Last
+            Time</span>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <span class="analytics-value last-week-val" id="lastAmttop" data-money style="font-size: 20px;">0.00</span>
+            <span id="lastAmtArrow" style="font-size: 14px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Analytics (Flippable Card) -->
+      <div class="flip-card">
+        <div class="flip-card-inner" id="analyticsFlipCardInner">
+
+          <!-- Front Face: Canvas mixed chart -->
+          <div class="flip-card-front">
+            <div class="flip-card-header">
+              <h3>Collection History</h3>
+              <!-- Custom Legend Pills -->
+              <div class="custom-chart-legend">
+                <div class="legend-pill">
+                  <span class="legend-dot expected-dot"></span>
+                  <span class="legend-label">Expected</span>
+                </div>
+                <div class="legend-pill">
+                  <span class="legend-dot collected-dot"></span>
+                  <span class="legend-label">Collected</span>
+                </div>
+              </div>
+              <button class="flip-btn" id="btnFlipToBack" title="View details"><i class="fas fa-sync-alt"></i></button>
+            </div>
+
+            <!-- Top Axis Labels -->
+            <div class="chart-top-axis-labels">
+              <span class="axis-label-left">Customers</span>
+              <span class="axis-label-right">Amount</span>
+            </div>
+
+            <div style="position: relative; flex: 1; width: 100%; min-height: 0;">
+              <canvas id="collectionChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Back Face: Summary table -->
+          <div class="flip-card-back">
+            <div class="flip-card-header">
+              <h3>Detailed Metrics</h3>
+              <button class="flip-btn" id="btnFlipToFront" title="View chart"><i class="fas fa-sync-alt"></i></button>
+            </div>
+            <div style="flex: 1; overflow-y: auto;">
+              <table class="details-table">
+                <thead>
+                  <tr>
+                    <th>Week Ending</th>
+                    <th>Active Customers</th>
+                    <th>Paid Unique</th>
+                    <th>Expected Collection</th>
+                    <th>Actual Collected</th>
+                    <th>Failed Collection</th>
+                  </tr>
+                </thead>
+                <tbody id="analyticsTableBody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="successMsg" class="message-box success" style="display: none; margin-top: 16px;"></div>
+
+  <!-- Column Selector Modal -->
+  <div id="columnModal" class="column-modal hidden">
+    <div class="column-modal-content">
+      <h3>Select Columns</h3>
+      <div id="columnCheckboxList" class="column-list"></div>
+      <div class="modal-actions">
+        <button id="closeColumnModal" class="neumorphic-btn small">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- Raised Table Box -->
-  <div class="raised-box">
-    <!-- <h3>📋 Temporary Payment Table</h3> -->
-    <div class="scroll-table-container">
-      <table id="tempTable" class="dataTable customer-table">
-        <thead>
-          <tr>
-            <th>Account Number <button onclick="sortTemp('ano')">⇅</button></th>
-            <th>Payment Date <button onclick="sortTemp('pdt')">⇅</button></th>
-            <th class="amount-paid">Amount Paid <button onclick="sortTemp('amt')">⇅</button></th>
-            <th>Cumulative Amount</th>
-            <th>Edit</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td><strong>Total Acc Number's:</strong> <span id="totalAno">0</span></td>
-            <td></td>
-            <td><strong>Total Amount:</strong> <span id="totalAmt" data-money>0.00</span></td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
-      </table>
+  <!-- Shortfall / Non-paying Customers Modal -->
+  <div id="shortfallModal" class="modal" style="display:none; justify-content: center; align-items: center;">
+    <div class="modal-content" style="max-width: 600px; width: 90%;">
+      <span class="close-btn" onclick="closeShortfallModal()">&times;</span>
+      <h3>Non-Paying Customers (Shortfall)</h3>
+      <div style="margin: 16px 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+        <table class="no-datatable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border);">
+              <th style="text-align: left; padding: 10px; color: var(--text-secondary);">A.No</th>
+              <th style="text-align: left; padding: 10px; color: var(--text-secondary);">Name</th>
+              <th style="text-align: right; padding: 10px; color: var(--text-secondary);">Expected Amt</th>
+              <th style="text-align: right; padding: 10px; color: var(--text-secondary);">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="shortfallTableBody">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeShortfallModal()" class="btn btn-outline" style="margin: 0;">Close</button>
+      </div>
     </div>
-
-    <div class="action-buttons">
-      <button class="neumorphic-btn small" onclick="printTemp()">🖸️ Print Table</button>
-      <button class="neumorphic-btn small" onclick="submitAllPayments()">📤 Submit All Payments</button>
-      <button class="neumorphic-btn small" onclick="resetTempTable()">🗑️ Reset Table</button>
-    </div>
-
-    <div id="successMsg" class="message-box success" style="display: none;"></div>
   </div>
 </div>
+
+
+{% include 'customer_popup.html' %}
 
 <script type="application/json" id="customers-data">
   {{ customers | tojson | safe }}
@@ -90,5 +372,7 @@
 <script>
   window.CUSTOMERS = JSON.parse(document.getElementById("customers-data").textContent);
 </script>
-<script src="{{ url_for('static', filename='js/post_payment.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
+<script src="{{ url_for('static', filename='js/post_payment.js') }}?v={{ range(1, 10000) | random }}"></script>
 {% endblock %}

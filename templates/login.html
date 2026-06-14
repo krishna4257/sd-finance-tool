@@ -1,105 +1,224 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark"> 
-<!-- You can remove data-theme if your JS switches themes automatically -->
+<html lang="en">
 
 <head>
+    <script>
+    (function() {
+        var saved = localStorage.getItem('sd-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved);
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SD Finance – Login</title>
+    <title>Smart Counting – Login</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f5f5f0;
+            font-family: 'Inter', sans-serif;
+        }
+        .login-card {
+            max-width: 420px;
+            width: 90%;
+            padding: 48px 40px;
+            background: #ffffff;
+            border-radius: 20px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        }
+        .login-card .logo-wrap {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .login-card .logo-wrap img {
+            width: 100%;
+            max-width: 180px;
+            height: auto;
+            border-radius: 4px;
+        }
+        .login-brand-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 18px;
+            letter-spacing: -0.03em;
+        }
+        .login-brand-name .smart {
+            color: #1a4d2e;
+        }
+        .login-brand-name .counting {
+            color: #111827;
+            font-weight: 500;
+        }
+        .login-card h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            color: #1a1a2e;
+            text-align: center;
+            margin: 0 0 28px 0;
+        }
+        .login-card .error-msg {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .login-card label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .login-card input[type="text"],
+        .login-card input[type="password"] {
+            width: 100%;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #1a1a2e;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-sizing: border-box;
+        }
+        .login-card input[type="text"]:focus,
+        .login-card input[type="password"]:focus {
+            outline: none;
+            border-color: #1a4d2e;
+            box-shadow: 0 0 0 3px rgba(26, 77, 46, 0.1);
+        }
+        .login-card .field-group {
+            margin-bottom: 20px;
+        }
+        .login-card .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: #1a4d2e;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+            margin-top: 8px;
+        }
+        .login-card .submit-btn:hover {
+            background: #2d6a4f;
+        }
+        .login-card .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Dark Mode Overrides for Login */
+        [data-theme="dark"] body {
+            background: #0f1117;
+        }
+        [data-theme="dark"] .login-card {
+            background: #1a1d27;
+            border-color: #2a2e3a;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+        [data-theme="dark"] .login-card .logo-wrap img {
+            filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.35))
+                    drop-shadow(0 0 30px rgba(16, 185, 129, 0.15));
+        }
+        [data-theme="dark"] .login-brand-name .smart {
+            color: #10b981;
+        }
+        [data-theme="dark"] .login-brand-name .counting {
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card h2 {
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card .error-msg {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: rgba(248, 113, 113, 0.25);
+            color: #f87171;
+        }
+        [data-theme="dark"] .login-card label {
+            color: #9ca3af;
+        }
+        [data-theme="dark"] .login-card input[type="text"],
+        [data-theme="dark"] .login-card input[type="password"] {
+            background: #151821;
+            border-color: #2a2e3a;
+            color: #e8eaed;
+        }
+        [data-theme="dark"] .login-card input[type="text"]:focus,
+        [data-theme="dark"] .login-card input[type="password"]:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+        [data-theme="dark"] .login-card .submit-btn {
+            background: #10b981;
+        }
+        [data-theme="dark"] .login-card .submit-btn:hover {
+            background: #34d399;
+        }
+    </style>
 </head>
 
-<body style="display: flex; justify-content:center; align-items:center; height:100vh;">
-
-    <!-- LOGIN CARD -->
-    <div class="form-glass" style="max-width:420px; width:90%; padding:40px; position:relative;">
-
+<body>
+    <div class="login-card">
         <!-- Logo -->
-        <div style="text-align:center; margin-bottom:20px;">
-            <img src="{{ url_for('static', filename='images/SD_Finance.png') }}"
-                 style="width:140px; height:auto; border-radius:12px;">
+        <div class="logo-wrap">
+            <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Smart Counting Logo">
+            <div class="login-brand-name">
+                <span class="smart">Smart</span><span class="counting"> Counting</span>
+            </div>
         </div>
 
         <!-- Title -->
-        <h2 class="page-title" style="margin-bottom:25px;">Login</h2>
+        <h2>Login</h2>
 
         <!-- Error Messages -->
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <div style="
-                    background: rgba(255, 77, 77, 0.12);
-                    border: 1px solid rgba(255, 77, 77, 0.35);
-                    color: #ffb3b3;
-                    padding: 12px 16px;
-                    border-radius: 12px;
-                    margin-bottom: 20px;
-                    font-size: 14px;
-                    text-align: center;
-                ">
-                    {{ messages[0] }}
-                </div>
+                <div class="error-msg">{{ messages[0] }}</div>
             {% endif %}
         {% endwith %}
 
         {% if error %}
-            <div style="
-                background: rgba(255, 77, 77, 0.12);
-                border: 1px solid rgba(255, 77, 77, 0.35);
-                color: #ffb3b3;
-                padding: 12px 16px;
-                border-radius: 12px;
-                margin-bottom: 20px;
-                font-size: 14px;
-                text-align: center;
-            ">
-                {{ error }}
-            </div>
+            <div class="error-msg">{{ error }}</div>
         {% endif %}
 
         <!-- LOGIN FORM -->
         <form method="POST" action="/login">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <label for="username">Username</label>
-            <input type="text" name="username" required style="margin-bottom:20px;">
-            
-            <label for="password">Password</label>
-            <input type="password" name="password" required style="margin-bottom:25px;">
+            <div class="field-group">
+                <label for="username">Username</label>
+                <input type="text" name="username" id="username" required>
+            </div>
+
+            <div class="field-group">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password" required>
+            </div>
+
             <input type="hidden" name="device_id" id="device_id">
-            <button class="neumorphic-btn large full-width" type="submit">
-                Login
-            </button>
-
+            <button class="submit-btn" type="submit">Sign In</button>
         </form>
-
-        <!-- Theme Switch (optional) -->
-        <div style="margin-top:25px; text-align:center;">
-            <label class="theme-switch">
-                <input type="checkbox" id="themeToggle">
-                <span class="slider">
-                    <span class="icon sun">☀</span>
-                    <span class="icon moon">🌙</span>
-                </span>
-            </label>
-        </div>
-
     </div>
 
 <script>
-    // OPTIONAL: Sync theme toggle with your app
-    const toggle = document.getElementById("themeToggle");
-    toggle?.addEventListener("change", () => {
-        const theme = toggle.checked ? "dark" : "light";
-        document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("theme", theme);
-    });
-
-    // Load saved theme
-    const saved = localStorage.getItem("theme");
-    if (saved) {
-        document.documentElement.setAttribute("data-theme", saved);
-        if (saved === "dark") toggle.checked = true;
-    }
     // Generate once per device & store locally
     function getDeviceID() {
         let id = localStorage.getItem("device_id");

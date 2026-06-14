@@ -2,35 +2,24 @@
 <html lang="en">
 <head>
 
-  <style>
-    html { visibility: hidden; }
-  </style>
- 
 <script>
 (function() {
-    try {
-        const theme = localStorage.getItem("theme") || "dark";
-        document.documentElement.setAttribute("data-theme", theme);
-    } catch(e) {}
-
-    /* CRITICAL — SHOW THE PAGE */
-    document.documentElement.style.visibility = "visible";
+    var saved = localStorage.getItem('sd-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
 })();
-
 </script>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>SD Finance</title>
+  <title>Smart Counting</title>
   <!-- Add the Favicon -->
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/fin_icon.png') }}">
-
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css"/>
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.dataTables.min.css"/>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(1, 10000) | random }}">
 
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
   <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
@@ -41,13 +30,11 @@
        global helper functions. utils.js defines parseDDMMYYYY,
        formatDateToDDMMYYYY, currency formatting and DataTables
        extensions. -->
-  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/utils.js') }}?v={{ range(1, 10000) | random }}"></script>
 
   <!-- Main site-wide script -->
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}?v={{ range(1, 10000) | random }}"></script>
   <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="{{ url_for('static', filename='js/calculator.js') }}"></script>
   
   <script>
@@ -62,6 +49,8 @@
 
       return fetch(url, options);
     };
+
+    window.activeVillageId = "{{ session.get('vid') or '' }}";
 
     document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('form').forEach(form => {
@@ -78,66 +67,218 @@
 </head>
 
 <body>
+  <!-- Sidebar Mobile Backdrop Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- Global Page Loader -->
+  <div id="global-page-loader" class="page-loader">
+    <div class="loader-content">
+      <div class="logo-loader-svg">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" width="120" height="96">
+          <defs>
+            <linearGradient id="load-cyl-body" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#061014" />
+              <stop offset="50%" stop-color="#0b1e25" />
+              <stop offset="100%" stop-color="#163845" />
+            </linearGradient>
+            <linearGradient id="load-top-blue" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#6ec8d3" />
+              <stop offset="100%" stop-color="#b8f5fc" />
+            </linearGradient>
+            <linearGradient id="load-top-green" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#72cd84" />
+              <stop offset="100%" stop-color="#bef9ca" />
+            </linearGradient>
+            <linearGradient id="load-top-yellow" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#bfe600" />
+              <stop offset="100%" stop-color="#f0ff99" />
+            </linearGradient>
+            <radialGradient id="load-shadow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(0,0,0,0.2)" />
+              <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="150" cy="150" rx="120" ry="60" fill="url(#load-shadow)" opacity="0.4" />
+          
+          <g class="cyl cyl-0-0">
+            <path d="M 126 80 L 126 150 A 24 12 0 0 0 174 150 L 174 80 A 24 12 0 0 1 126 80 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="150" cy="80" rx="24" ry="12" fill="url(#load-top-blue)" />
+          </g>
+          <g class="cyl cyl-0-1">
+            <path d="M 74.04 110 L 74.04 168 A 24 12 0 0 0 122.04 168 L 122.04 110 A 24 12 0 0 1 74.04 110 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="98.04" cy="110" rx="24" ry="12" fill="url(#load-top-blue)" />
+          </g>
+          <g class="cyl cyl-1-0">
+            <path d="M 177.96 110 L 177.96 168 A 24 12 0 0 0 225.96 168 L 225.96 110 A 24 12 0 0 1 177.96 110 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="201.96" cy="110" rx="24" ry="12" fill="url(#load-top-blue)" />
+          </g>
+          <g class="cyl cyl-0-2">
+            <path d="M 22.08 140 L 22.08 186 A 24 12 0 0 0 70.08 186 L 70.08 140 A 24 12 0 0 1 22.08 140 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="46.08" cy="140" rx="24" ry="12" fill="url(#load-top-blue)" />
+          </g>
+          <g class="cyl cyl-1-1">
+            <path d="M 126 140 L 126 186 A 24 12 0 0 0 174 186 L 174 140 A 24 12 0 0 1 126 140 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="150" cy="140" rx="24" ry="12" fill="url(#load-top-green)" />
+          </g>
+          <g class="cyl cyl-2-0">
+            <path d="M 229.92 140 L 229.92 186 A 24 12 0 0 0 277.92 186 L 277.92 140 A 24 12 0 0 1 229.92 140 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="253.92" cy="140" rx="24" ry="12" fill="url(#load-top-blue)" />
+          </g>
+          <g class="cyl cyl-1-2">
+            <path d="M 74.04 170 L 74.04 204 A 24 12 0 0 0 122.04 204 L 122.04 170 A 24 12 0 0 1 74.04 170 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="98.04" cy="170" rx="24" ry="12" fill="url(#load-top-green)" />
+          </g>
+          <g class="cyl cyl-2-1">
+            <path d="M 177.96 170 L 177.96 204 A 24 12 0 0 0 225.96 204 L 225.96 170 A 24 12 0 0 1 177.96 170 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="201.96" cy="170" rx="24" ry="12" fill="url(#load-top-green)" />
+          </g>
+          <g class="cyl cyl-2-2">
+            <path d="M 126 200 L 126 222 A 24 12 0 0 0 174 222 L 174 200 A 24 12 0 0 1 126 200 Z" fill="url(#load-cyl-body)" />
+            <ellipse cx="150" cy="200" rx="24" ry="12" fill="url(#load-top-yellow)" />
+          </g>
+        </svg>
+      </div>
+      <div class="loader-text" style="display: block; font-family: 'Space Grotesk', sans-serif; font-weight: 600; color: var(--primary); margin-top: 16px;">Loading...</div>
+    </div>
+  </div>
+
   <aside>
     <div class="logo-container">
-      <a href="/landing"><img src="{{ url_for('static', filename='images/SD_Finance.png') }}" alt="SD Finance Logo"></a>
+      <a href="/village"><img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Smart Counting Logo"></a>
     </div>
+
+    <div class="nav-section-label">MENU</div>
 
     {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'users_page', 'admin_control'] %}
     <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
-    <a href="/village"  class="neumorphic-btn {% if request.endpoint == 'village_page' %}active{% endif %}">🏘️ Village</a>
-    <a href="/employee" class="neumorphic-btn {% if request.endpoint == 'employee_page' %}active{% endif %}">👤 Employee</a>
+    <a href="/village"  class="nav-link {% if request.endpoint == 'village_page' %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Village</a>
+    <a href="/employee" class="nav-link {% if request.endpoint == 'employee_page' %}active{% endif %}"><i class="fas fa-user-tie"></i> Employee</a>
     {% endif %}
     {% if session.level == 'admin' %}
-    <a href="/users"         class="neumorphic-btn {% if request.endpoint == 'users_page' %}active{% endif %}">👥 User Management</a>
-    <a href="/admin_control" class="neumorphic-btn {% if request.endpoint == 'admin_control' %}active{% endif %}">⚙️ Admin Control</a>
+    <a href="/users"         class="nav-link {% if request.endpoint == 'users_page' %}active{% endif %}"><i class="fas fa-users-cog"></i> User Management</a>
+    <a href="/admin_control" class="nav-link {% if request.endpoint == 'admin_control' %}active{% endif %}"><i class="fas fa-cog"></i> Admin Control</a>
     {% endif %}
 
     {% else %}
     <!-- ── APP / VILLAGE DASHBOARD SIDEBAR ── -->
-    <a href="/dashboard"                      class="neumorphic-btn {% if request.endpoint == 'dashboard' %}active{% endif %}">🏠 Dashboard</a>
-    <a href="/add_customer"                   class="neumorphic-btn {% if request.endpoint == 'add_customer' %}active{% endif %}">➕ Add Customer</a>
-    <a href="/post_payment"                   class="neumorphic-btn {% if request.endpoint == 'post_payment_page' %}active{% endif %}">💰 Add Payment</a>
-    <a href="{{ url_for('view_customers') }}" class="neumorphic-btn {% if request.endpoint == 'view_customers' %}active{% endif %}">👁️ Customers</a>
-    <a href="/post_payment_report"            class="neumorphic-btn {% if request.endpoint == 'post_payment_report' %}active{% endif %}">📄 Posting Report</a>
-    <a href="/feed"                           class="neumorphic-btn {% if request.endpoint == 'feed' %}active{% endif %}">📥 Feed</a>
-    <a href="/search"                         class="neumorphic-btn {% if request.endpoint == 'search_customer' %}active{% endif %}">🛠️ Search | Edit</a>
-    <a href="/cashbag" class="neumorphic-btn {% if request.endpoint == 'cashbag' %}active{% endif %}">💼 Cashbag</a>
+    <a href="/dashboard"                      class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"><i class="fas fa-th-large"></i> Dashboard</a>
+    <a href="/add_customer"                   class="nav-link {% if request.endpoint == 'add_customer' %}active{% endif %}"><i class="fas fa-user-plus"></i> Add Customer</a>
+    <a href="/posting"                        class="nav-link {% if request.endpoint == 'posting_page' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Posting</a>
+    <a href="{{ url_for('view_customers') }}" class="nav-link {% if request.endpoint == 'view_customers' %}active{% endif %}"><i class="fas fa-users"></i> Customers</a>
+    <a href="/feed"                           class="nav-link {% if request.endpoint == 'feed' %}active{% endif %}"><i class="fas fa-inbox"></i> Feed</a>
+    <a href="/search"                         class="nav-link {% if request.endpoint == 'search_customer' %}active{% endif %}"><i class="fas fa-search"></i> Search | Edit</a>
+    <a href="/cashbag"                        class="nav-link {% if request.endpoint == 'cashbag' %}active{% endif %}"><i class="fas fa-briefcase"></i> Cashbag</a>
     {% endif %}
+
+    <div class="nav-section-label">GENERAL</div>
+    <a href="/village" class="nav-link"><i class="fas fa-home"></i> Home</a>
 
   </aside>
 
   <main>
     <header>
-      <!-- ── Left: Home button + active context info ── -->
+      <!-- ── Left: Context info tiles ── -->
       <div class="header-left-group">
+        <!-- Hamburger Menu Button (visible on mobile/tablet) -->
+        <button id="sidebar-toggle" class="header-menu-btn" title="Open navigation">
+          <i class="fas fa-bars"></i>
+        </button>
 
-        <!-- Home button always visible -->
-        <a href="/landing" class="neumorphic-btn header-home-btn" title="Back to village selection">
-          🏠 Home
-        </a>
-
-        <!-- Show selected village + employee when context is active -->
-        {% if session.get("vid") %}
-        <div class="header-context-info">
-          <span class="header-context-label">Village:</span>
-          <span class="header-context-value">{{ session.get("village_name", "—") }}</span>
-          <span class="header-context-sep">·</span>
-          <span class="header-context-label">Employee:</span>
-          <span class="header-context-value">{{ session.get("employee_name", "—") }}</span>
+        <!-- Context tiles -->
+        {% if request.endpoint == 'users_page' %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-employee" title="Total Users">
+            <i class="fas fa-users"></i>
+            <span>Users: <strong id="headerTotalUsers">{{ total_users }}</strong></span>
+          </div>
+        </div>
+        {% elif request.endpoint in ['village_page', 'employee_page'] %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-village" title="Total Villages">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>Villages: <strong id="headerTotalVillages">{{ total_villages }}</strong></span>
+          </div>
+          <div class="header-tile header-tile-employee" title="Total Employees">
+            <i class="fas fa-user-tie"></i>
+            <span>Employees: <strong id="headerTotalEmployees">{{ total_employees }}</strong></span>
+          </div>
+          <div class="header-tile header-tile-pairs" title="Employee Pairs">
+            <i class="fas fa-link"></i>
+            <span>Pairs: <strong id="headerEmployeePairs">0</strong></span>
+          </div>
+        </div>
+        {% elif session.get("vid") %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-employee" title="Active Primary Employee">
+            <i class="fas fa-user-tie"></i>
+            <span>{{ session.get("employee_name", "—") }}</span>
+          </div>
+          {% if session.get("employee_name2") %}
+          <div class="header-tile header-tile-employee" title="Active Secondary Employee">
+            <i class="fas fa-user-tie"></i>
+            <span>{{ session.get("employee_name2") }}</span>
+          </div>
+          {% endif %}
+          <div class="header-tile header-tile-village" title="Active Village">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>
+              {{ session.get("village_name", "—") }}
+              {% if session.get("village_code") %}
+                ({{ session.get("village_code") }})
+              {% endif %}
+            </span>
+          </div>
         </div>
         {% endif %}
-
       </div>
 
-      <!-- ── Right: Calculator + Premium Profile Button ── -->
+      <!-- ── Right: Calculator + Notification + Profile ── -->
       <div class="header-right-group">
-        <button id="calculatorToggleBtn" class="neumorphic-btn calc-btn" title="Calculator">
+        {% if request.endpoint == 'dashboard' and session.get("vid") %}
+        <!-- Dashboard View Toggle (Active / Complete) -->
+        <div class="sliding-toggle-container dashboard-toggle-container mode-active" id="dashboardViewToggle" onclick="toggleDashboardView()">
+          <div class="sliding-toggle-pill"></div>
+          <span class="toggle-label active-label">Active</span>
+          <span class="toggle-label complete-label">Complete</span>
+        </div>
+
+        <button id="vpopRecalcBtn" class="icon-btn" title="Refresh Dashboard Data" onclick="refreshDashboardData()">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        {% endif %}
+
+        <button id="calculatorToggleBtn" class="icon-btn" title="Calculator">
           <i class="fas fa-calculator"></i>
         </button>
 
-        <!-- PREMIUM USER PROFILE -->
+        <!-- Notifications System -->
+        <div class="notifications-wrapper" id="notificationsWrapper">
+          <button class="icon-btn" id="notificationBtn" title="Notifications" onclick="toggleNotificationsDropdown(event)">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+          </button>
+          
+          <div id="notificationDropdown" class="notifications-dropdown">
+            <div class="notifications-header">
+              <h4 class="notifications-title">Notifications</h4>
+              <button onclick="toggleNotificationsDropdown(event)" style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1rem;" title="Close">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div class="notifications-tabs">
+              <button class="notification-tab-btn active" id="btnTabIntelligence" onclick="switchNotificationTab('intelligence')">Intelligence</button>
+              <button class="notification-tab-btn" id="btnTabEvents" onclick="switchNotificationTab('events')">Events</button>
+            </div>
+            
+            <div class="notifications-content" id="notificationsContent">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- USER PROFILE -->
         {% if session.get("user_id") %}
         <div class="user-profile" id="userProfileWrapper">
 
@@ -147,27 +288,27 @@
               {{ session.get("username", "?")[0] | upper }}
             </span>
             <span class="user-trigger-name">{{ session.get("username") }}</span>
-            <span class="user-trigger-chevron">▾</span>
+            <span class="user-trigger-chevron">&#9662;</span>
           </button>
 
           <!-- Dropdown panel -->
           <div id="userDropdown" class="user-dropdown" role="menu">
 
-            <!-- Theme toggle row -->
+            <!-- Dark Mode Toggle -->
             <div class="dropdown-theme-row">
-              <span class="dropdown-theme-label">Dark Mode</span>
-              <label class="theme-switch theme-switch--sm">
-                <input type="checkbox" id="theme-toggle">
-                <span class="slider">
-                  <span class="icon sun">☀️</span>
-                  <span class="icon moon">🌙</span>
-                </span>
-              </label>
+              <span>Dark Mode</span>
+              <div class="theme-toggle-icons">
+                <i class="fas fa-sun"></i>
+                <label class="theme-toggle-switch">
+                  <input type="checkbox" id="themeToggleCheckbox">
+                  <span class="theme-toggle-slider"></span>
+                </label>
+                <i class="fas fa-moon"></i>
+              </div>
             </div>
 
             <div class="dropdown-divider"></div>
-
-            <a href="{{ url_for('logout') }}" class="dropdown-logout-link">🚪 Logout</a>
+            <a href="{{ url_for('logout') }}" class="dropdown-logout-link">Logout</a>
           </div>
         </div>
         {% endif %}
@@ -222,8 +363,8 @@
     <select id="emp1Select">
       <option value="">-- Select Employee --</option>
     </select>
-    <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp1')">
-      ➕ Add Employee
+    <button type="button" class="btn btn-primary" onclick="openAddEmployeeModal('emp1')">
+      Add Employee
     </button>
 
     <hr />
@@ -236,18 +377,18 @@
     <select id="emp2Select">
       <option value="">-- Optional --</option>
     </select>
-    <button type="button" class="neumorphic-btn-h" onclick="openAddEmployeeModal('emp2')">
-      ➕ Add Employee
+    <button type="button" class="btn btn-primary" onclick="openAddEmployeeModal('emp2')">
+      Add Employee
     </button>
 
     <!-- ===================== -->
     <!-- Actions -->
     <!-- ===================== -->
     <div class="modal-actions">
-      <button onclick="submitCreateVillage()" class="neumorphic-btn-h">
+      <button onclick="submitCreateVillage()" class="btn btn-primary">
         Create Village
       </button>
-      <button onclick="closeCreateVillageModal()" class="neumorphic-btn-h">
+      <button onclick="closeCreateVillageModal()" class="btn btn-outline">
         Cancel
       </button>
     </div>
@@ -291,7 +432,7 @@
     <!-- Add Employee Modal -->
     <div id="addEmployeeModal" class="modal" style="display:none;">
       <div class="modal-content">
-        <span onclick="closeAddEmployeeModal()" class="close-btn">×</span>
+        <span onclick="closeAddEmployeeModal()" class="close-btn">&times;</span>
         <h3>Add New Employee</h3>
 
         <input id="empId" placeholder="Employee ID" readonly />
@@ -310,10 +451,10 @@
         <input id="empState" placeholder="State" />
 
         <div class="modal-actions">
-          <button onclick="submitAddEmployee()" class="neumorphic-btn-h">
+          <button onclick="submitAddEmployee()" class="btn btn-primary">
             Save Employee
           </button>
-          <button onclick="closeAddEmployeeModal()" class="neumorphic-btn-h">
+          <button onclick="closeAddEmployeeModal()" class="btn btn-outline">
             Cancel
           </button>
         </div>
@@ -332,5 +473,32 @@
     </div>
 {% block scripts %}{% endblock %}
 
+  <!-- Responsive Drawer Script -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const toggleBtn = document.getElementById("sidebar-toggle");
+      const aside = document.querySelector("aside");
+      const overlay = document.getElementById("sidebar-overlay");
+
+      if (toggleBtn && aside && overlay) {
+        toggleBtn.addEventListener("click", () => {
+          aside.classList.add("open");
+          overlay.classList.add("show");
+        });
+
+        overlay.addEventListener("click", () => {
+          aside.classList.remove("open");
+          overlay.classList.remove("show");
+        });
+
+        aside.querySelectorAll("a.nav-link").forEach(link => {
+          link.addEventListener("click", () => {
+            aside.classList.remove("open");
+            overlay.classList.remove("show");
+          });
+        });
+      }
+    });
+  </script>
 </body>
 </html>

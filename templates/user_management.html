@@ -1,408 +1,743 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="page-title">User Management</h2>
-
-<div class="raised-box user-header-box">
-    <button id="btn-add" class="neumorphic-btn">+ Add User</button>
+<!-- Dummy inputs to prevent browser credential autofill on search box -->
+<div style="position: absolute; overflow: hidden; width: 0; height: 0; opacity: 0; pointer-events: none;">
+    <input type="text" name="dummy_username_autofill" autocomplete="username" tabindex="-1">
+    <input type="password" name="dummy_password_autofill" autocomplete="current-password" tabindex="-1">
 </div>
 
-<div class="raised-box">
-  <div class="customer-table-wrapper">
-    <table id="userTable" class="dataTable customer-table">
-        <thead>
-            <tr>
-                <th>Username</th>
-                <th>Employee</th>
-                <th>Device ID</th>
-                <th>Role</th>
-                <th>Assigned Villages</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-  </div>
+<style>
+    /* ── Table Inline Inputs & Glow ── */
+    .row-editing {
+        background: var(--primary-lighter, #f0fdf4) !important;
+        border-left: 3px solid var(--primary) !important;
+    }
+
+    .inline-edit-input {
+        width: 95%;
+        padding: 6px 10px;
+        background: var(--surface, #ffffff) !important;
+        border: 1px solid var(--border, #e5e7eb) !important;
+        color: var(--text, #1a1a2e) !important;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+    }
+
+    .inline-edit-input:focus {
+        outline: none;
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 6px rgba(26, 77, 46, 0.15);
+    }
+
+    .inline-edit-select {
+        width: 95%;
+        padding: 6px 10px;
+        background: var(--surface, #ffffff) !important;
+        border: 1px solid var(--border, #e5e7eb) !important;
+        color: var(--text, #1a1a2e) !important;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+        cursor: pointer;
+    }
+
+    .inline-edit-select:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    @keyframes rowSuccessGlow {
+        0% {
+            background-color: var(--success-light, #e8f5e9) !important;
+            box-shadow: inset 0 0 15px rgba(22, 163, 74, 0.2);
+        }
+
+        100% {
+            background-color: transparent;
+            box-shadow: inset 0 0 0 rgba(22, 163, 74, 0);
+        }
+    }
+
+    .row-updated-glow {
+        animation: rowSuccessGlow 2.5s ease-out forwards;
+    }
+
+    /* Control Row Grid Layout for perfect alignment */
+    .control-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+    }
+
+    .search-wrapper {
+        justify-self: start;
+        width: 100%;
+    }
+
+    .button-group {
+        justify-self: end;
+    }
+
+    @media (max-width: 900px) {
+        .control-row {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .search-wrapper {
+            max-width: 100% !important;
+            justify-self: stretch;
+        }
+
+        .button-group {
+            justify-self: center;
+        }
+    }
+
+    /* Status Badges */
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .status-badge.status-active {
+        background: var(--success-light, #e8f5e9);
+        color: var(--success, #16a34a);
+        border: 1px solid rgba(22, 163, 74, 0.2);
+    }
+
+    .status-badge.status-inactive {
+        background: var(--danger-light, #fef2f2);
+        color: var(--danger, #dc2626);
+        border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+
+    #userTable tr {
+        cursor: pointer;
+    }
+</style>
+
+<h2 class="page-title">User Management</h2>
+
+<div class="raised-box" style="padding: 16px 20px;">
+    <div class="control-row">
+        <div class="search-wrapper" style="max-width: 450px; position: relative; min-width: 250px;">
+            <i class="fas fa-search"
+                style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.9rem;"></i>
+            <input type="search" id="searchBox" placeholder="Search username, employee, or role..." autocomplete="off"
+                style="width: 100%; padding: 10px 14px 10px 38px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);">
+        </div>
+
+        <div class="button-group" style="display: flex; gap: 10px; align-items: center;">
+            <button id="btn-add" class="neumorphic-btn"
+                style="padding: 8px 16px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">Add
+                User</button>
+        </div>
+    </div>
+</div>
+
+<div class="raised-box" id="tableViewContainer" style="margin-top: 24px;">
+    <div class="customer-table-wrapper">
+        <table id="userTable" class="customer-table">
+            <thead>
+                <tr>
+                    <th class="table-header">Username</th>
+                    <th class="table-header">Employee</th>
+                    <th class="table-header">Device ID</th>
+                    <th class="table-header">Role</th>
+                    <th class="table-header">Assigned Villages</th>
+                    <th class="table-header">Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Modal -->
-<div id="user-modal" class="raised-box user-modal" style="display:none;">
+<div id="user-modal" class="modal-overlay"
+    style="display:none; z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div class="raised-box user-modal-box"
+        style="width: 520px; max-width: 90vw; background: var(--surface); padding: 22px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
+        <h3 style="margin:0 0 16px 0;color:var(--primary);font-family:'Space Grotesk',sans-serif;">Add User</h3>
 
-    <label>Employee</label>
-    <select id="u_employee" class="input"></select>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">Employee</label>
+                <select id="u_employee" class="input"
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none;"></select>
+            </div>
 
-    <label>Username</label>
-    <input id="u_username" class="input">
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">Username</label>
+                <input id="u_username" class="input"
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none;">
+            </div>
 
-    <label>Password</label>
-    <input id="u_password" type="password" class="input">
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">Password</label>
+                <input id="u_password" type="password" class="input"
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none;">
+            </div>
 
-    <label>Role (Auto from Employee)</label>
-    <input id="u_role_display" class="input" disabled>
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">Role (Auto from
+                    Employee)</label>
+                <input id="u_role_display" class="input" disabled
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); background:#f3f4f6; color:var(--text-secondary); outline:none;">
+            </div>
 
-    <label>Assigned Villages (Auto)</label>
-    <select id="u_villages_display" class="input" multiple disabled style="height:120px;"></select>
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">Assigned Villages
+                    (Auto)</label>
+                <select id="u_villages_display" class="input" multiple disabled
+                    style="width:100%; height:100px; padding:10px; border-radius:6px; border:1px solid var(--border); background:#f3f4f6; color:var(--text-secondary); outline:none;"></select>
+            </div>
+        </div>
 
-    <div style="margin-top:15px;">
-        <button id="u_save" class="neumorphic-btn">Save</button>
-        <button id="u_cancel" class="neumorphic-btn">Cancel</button>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:12px;">
+            <button id="u_cancel" class="neumorphic-btn small">Cancel</button>
+            <button id="u_save" class="neumorphic-btn small"
+                style="color:var(--primary); border-color:var(--primary);">Save</button>
+        </div>
     </div>
 </div>
 
 <!-- Village Assignment Modal -->
-<div id="village-modal" class="modal-overlay" style="display:none;">
+<div id="village-modal" class="modal-overlay"
+    style="display:none; z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div class="raised-box village-modal-box"
+        style="width:650px; max-width:90vw; background: var(--surface); padding: 22px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
 
-    <div class="raised-box village-modal-box">
+        <h3 style="margin:0 0 16px 0;color:var(--primary);font-family:'Space Grotesk',sans-serif;">Assign Villages</h3>
 
-        <h3 style="margin-bottom:15px;">Assign Villages</h3>
+        <input type="text" id="village-search" class="input" placeholder="Search villages..."
+            style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); outline: none; margin-bottom: 12px;">
 
-        <input type="text" id="village-search" class="input"
-               placeholder="Search villages..." style="margin-bottom:10px;">
-
-        <div style="margin-bottom:10px;">
+        <div style="margin-bottom:12px; display:flex; gap:8px;">
             <button id="select-all" class="neumorphic-btn small">Select All</button>
             <button id="clear-all" class="neumorphic-btn small">Clear All</button>
         </div>
 
-        <div style="display:flex; gap:10px; align-items:center; margin-top:10px;">
+        <div style="display:flex; gap:12px; align-items:center; margin-top:10px;">
+            <div style="flex:1;">
+                <h4 id="all-count"
+                    style="margin:0 0 8px 0; font-family:'Space Grotesk'; font-size:0.9rem; color:var(--text-secondary);">
+                    All Villages (0)</h4>
+                <div id="all-villages-list"
+                    style="max-height:260px; overflow:auto; border:1px solid var(--border); padding:6px; border-radius:6px; background:var(--input-bg);">
+                </div>
+            </div>
 
-    <div style="flex:1;">
-        <h4 id="all-count">All Villages (0)</h4>
-        <div id="all-villages-list"
-             style="max-height:260px; overflow:auto; border:1px solid #444; padding:6px; border-radius:6px;"></div>
-    </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <button id="move-right" class="neumorphic-btn small" style="padding: 8px 12px;">&gt;&gt;</button>
+                <button id="move-left" class="neumorphic-btn small" style="padding: 8px 12px;">&lt;&lt;</button>
+            </div>
 
-    <div style="display:flex; flex-direction:column; gap:6px;">
-        <button id="move-right" class="neumorphic-btn small">&gt;&gt;</button>
-        <button id="move-left" class="neumorphic-btn small">&lt;&lt;</button>
-    </div>
+            <div style="flex:1;">
+                <h4 id="selected-count"
+                    style="margin:0 0 8px 0; font-family:'Space Grotesk'; font-size:0.9rem; color:var(--text-secondary);">
+                    Selected Villages (0)</h4>
+                <div id="selected-villages-list"
+                    style="max-height:260px; overflow:auto; border:1px solid var(--border); padding:6px; border-radius:6px; background:var(--input-bg);">
+                </div>
+            </div>
+        </div>
 
-    <div style="flex:1;">
-        <h4 id="selected-count">Selected Villages (0)</h4>
-        <div id="selected-villages-list"
-             style="max-height:260px; overflow:auto; border:1px solid #444; padding:6px; border-radius:6px;"></div>
-    </div>
-
-</div>
-
-        <div style="margin-top:15px; text-align:right;">
-            <button id="village-save" class="neumorphic-btn">Save</button>
-            <button id="village-cancel" class="neumorphic-btn">Cancel</button>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:12px;">
+            <button id="village-cancel" class="neumorphic-btn small">Cancel</button>
+            <button id="village-save" class="neumorphic-btn small"
+                style="color:var(--primary); border-color:var(--primary);">Save</button>
         </div>
 
     </div>
 </div>
 
-
 <script>
-let selectedUserId = null;
+    let selectedUserId = null;
 
-async function csrfFetch(url, options = {}) {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                      document.querySelector('input[name="csrf_token"]')?.value || "";
+    async function csrfFetch(url, options = {}) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+            document.querySelector('input[name="csrf_token"]')?.value || "";
 
-    options.headers = {
-        ...(options.headers || {}),
-        'X-CSRFToken': csrfToken
+        options.headers = {
+            ...(options.headers || {}),
+            'X-CSRFToken': csrfToken
+        };
+
+        options.credentials = 'same-origin';
+
+        return fetch(url, options);
+    }
+
+    async function loadEmployees() {
+        const res = await fetch('/api/employees');
+        const data = await res.json();
+        const select = document.getElementById("u_employee");
+        select.innerHTML = '';
+        data.forEach(e => {
+            const option = document.createElement("option");
+            option.value = e.eid;
+            option.textContent = e.name;
+            select.appendChild(option);
+        });
+    }
+
+    document.getElementById("btn-add").onclick = async () => {
+        await loadEmployees();
+
+        // Reset form
+        document.getElementById("u_username").value = "";
+        document.getElementById("u_password").value = "";
+        document.getElementById("u_role_display").value = "";
+        document.getElementById("u_villages_display").innerHTML = "";
+
+        const userModal = document.getElementById("user-modal");
+        userModal.style.display = "flex";
+        userModal.classList.add("show");
     };
 
-    options.credentials = 'same-origin';
+    async function loadUsers() {
+        const res = await fetch('/api/users/list');
+        const users = await res.json();
+        window.cachedUsers = users;
 
-    return fetch(url, options);
-}
-async function loadEmployees() {
-    const res = await fetch('/api/employees');
-    const data = await res.json();
-    const select = document.getElementById("u_employee");
-    select.innerHTML = '';
-    data.forEach(e => {
-        select.innerHTML += `<option value="${e.eid}">${e.name}</option>`;
-    });
-}
+        const tbody = document.querySelector('#userTable tbody');
+        tbody.innerHTML = '';
 
-document.getElementById("btn-add").onclick = async () => {
-    await loadEmployees();
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.classList.add("data-row");
+            tr.dataset.id = u.id;
+            tr.dataset.employeeId = u.employee_id;
 
-    // Reset form
-    document.getElementById("u_username").value = "";
-    document.getElementById("u_password").value = "";
-    document.getElementById("u_role_display").value = "";
-    document.getElementById("u_villages_display").innerHTML = "";
-
-    const userModal = document.getElementById("user-modal");
-    userModal.style.display = "block";
-    userModal.classList.add("show");
-};
-
-async function loadUsers(){
-    const res = await fetch('/api/users/list');
-    const users = await res.json();
-    window.cachedUsers = users;
-
-    const tbody = document.querySelector('#userTable tbody');
-    tbody.innerHTML = '';
-
-    users.forEach(u=>{
-        const tr = document.createElement('tr');
-        tr.classList.add("data-row");
-
-        tr.innerHTML = `
-            <td>${u.username}</td>
-            <td>${u.employee_name || '-'}</td>
-            <td>${u.device_id || '-'}</td>
-            <td>${u.role}</td>
-            <td class="left-align">
+            tr.innerHTML = `
+            <td data-field="username">${u.username}</td>
+            <td data-field="employee_name">${u.employee_name || '-'}</td>
+            <td data-field="device_id">${u.device_id || '-'}</td>
+            <td data-field="role">${u.role}</td>
+            <td data-field="villages" class="left-align">
               ${(u.villages || []).map(v => `${v.vid} - ${v.name} - ${v.district}`).join('<br>') || '-'}
             </td>
-            <td>
-              <span class="${u.is_active ? 'status-active' : 'status-defaulted'}">
+            <td data-field="is_active">
+              <span class="status-badge status-${u.is_active ? 'active' : 'inactive'}">
                 ${u.is_active ? 'Active' : 'Disabled'}
               </span>
             </td>
-            <td class="action-buttons">
-                <button class="neumorphic-btn small table-btn toggle-status-btn" data-id="${u.id}" data-active="${u.is_active}">
+            <td data-field="actions" class="action-buttons">
+                <button class="neumorphic-btn small table-btn toggle-status-btn" data-id="${u.id}" data-active="${u.is_active}" style="padding: 4px 8px; font-size:0.75rem;">
                     ${u.is_active ? 'Deactivate' : 'Activate'}
                 </button>
                 ${u.role === 'mgmt' ? `
-                    <button class="neumorphic-btn small table-btn reset-device-btn" data-id="${u.id}">
+                    <button class="neumorphic-btn small table-btn reset-device-btn" data-id="${u.id}" style="padding: 4px 8px; font-size:0.75rem;">
                         Reset Device
                     </button>
                 ` : ``}
-                <button class="neumorphic-btn small table-btn edit-villages-btn" data-id="${u.id}">
+                <button class="neumorphic-btn small table-btn edit-villages-btn" data-id="${u.id}" style="padding: 4px 8px; font-size:0.75rem;">
                      ${(u.villages && u.villages.length > 0) ? 'Edit Villages' : 'Add Villages'}
                 </button>
             </td>
         `;
 
-        tbody.appendChild(tr);
-    });
-    
-}
-
-const tbody = document.querySelector('#userTable tbody');
-tbody.onclick = async function(e) {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-
-    const id = btn.dataset.id;
-
-    if (btn.classList.contains('toggle-status-btn')) {
-        const isActive = btn.dataset.active === "true";
-        if (!confirm(isActive ? "Deactivate this user?" : "Activate this user?")) return;
-
-        const r = await csrfFetch('/api/users/toggle_status', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({id})
+            tbody.appendChild(tr);
         });
 
-        const j = await r.json();
-        if (j.ok) loadUsers();
-        else alert(j.msg);
+        const headerCount = document.getElementById("headerTotalUsers");
+        if (headerCount) {
+            headerCount.textContent = users.length;
+        }
     }
 
-    if (btn.classList.contains('reset-device-btn')) {
-        if (!confirm("Reset device?")) return;
+    const tbody = document.querySelector('#userTable tbody');
+    tbody.onclick = async function (e) {
+        const btn = e.target.closest('button');
+        if (!btn) return;
 
-        const r = await csrfFetch('/api/users/reset_device', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({id})
-        });
+        const id = btn.dataset.id;
 
-        const j = await r.json();
-        if (j.ok) loadUsers();
-    }
+        if (btn.classList.contains('toggle-status-btn')) {
+            const isActive = btn.dataset.active === "true";
+            if (!confirm(isActive ? "Deactivate this user?" : "Activate this user?")) return;
 
-    if (btn.classList.contains('edit-villages-btn')) {
-        selectedUserId = id;
+            const r = await csrfFetch('/api/users/toggle_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
 
-        const vRes = await fetch('/api/villages');
-        const allVillages = await vRes.json();
+            const j = await r.json();
+            if (j.ok) loadUsers();
+            else alert(j.msg);
+        }
 
-        const user = window.cachedUsers.find(x => x.id == id);
-        const assignedSet = new Set((user?.villages || []).map(v => v.vid));
+        if (btn.classList.contains('reset-device-btn')) {
+            if (!confirm("Reset device?")) return;
 
-        const allContainer = document.getElementById("all-villages-list");
-        const selectedContainer = document.getElementById("selected-villages-list");
+            const r = await csrfFetch('/api/users/reset_device', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
 
-        allContainer.innerHTML = "";
-        selectedContainer.innerHTML = "";
+            const j = await r.json();
+            if (j.ok) loadUsers();
+        }
 
-        allVillages.forEach(v => {
-            const label = document.createElement("label");
-            label.className = "village-item";
+        if (btn.classList.contains('edit-villages-btn')) {
+            selectedUserId = id;
 
-            label.innerHTML = `
+            const vRes = await fetch('/api/villages');
+            const allVillages = await vRes.json();
+
+            const user = window.cachedUsers.find(x => x.id == id);
+            const assignedSet = new Set((user?.villages || []).map(v => v.vid));
+
+            const allContainer = document.getElementById("all-villages-list");
+            const selectedContainer = document.getElementById("selected-villages-list");
+
+            allContainer.innerHTML = "";
+            selectedContainer.innerHTML = "";
+
+            allVillages.forEach(v => {
+                const label = document.createElement("label");
+                label.className = "village-item";
+                label.style.display = "grid";
+                label.style.gridTemplateColumns = "20px 40px 1fr 1fr";
+                label.style.padding = "4px 8px";
+                label.style.borderBottom = "1px solid var(--border-light)";
+                label.style.alignItems = "center";
+                label.style.fontSize = "0.85rem";
+
+                label.innerHTML = `
                 <input type="checkbox" value="${v.vid}">
-                <span class="vid">${v.vid}</span>
+                <span class="vid" style="font-weight:600;">${v.vid}</span>
                 <span class="vname">${v.name || ''}</span>
-                <span class="vdistrict">${v.district || ''}</span>
+                <span class="vdistrict" style="color:var(--text-secondary);">${v.district || ''}</span>
             `;
 
-            if (assignedSet.has(v.vid)) {
-                selectedContainer.appendChild(label);
-            } else {
-                allContainer.appendChild(label);
-            }
-        });
+                if (assignedSet.has(v.vid)) {
+                    selectedContainer.appendChild(label);
+                } else {
+                    allContainer.appendChild(label);
+                }
+            });
 
-        updateVillageCounts();
+            updateVillageCounts();
 
-        const villageModal = document.getElementById("village-modal");
-        villageModal.style.display = "flex";
-        villageModal.classList.add("show");
-    }
-};
-
-document.getElementById("u_cancel").onclick = () => {
-    const userModal = document.getElementById("user-modal");
-    userModal.classList.remove("show");
-    userModal.style.display = "none";
-};
-
-document.getElementById("village-cancel").onclick = () => {
-    const villageModal = document.getElementById("village-modal");
-    villageModal.classList.remove("show");
-    villageModal.style.display = "none";
-};
-
-document.getElementById("village-save").onclick = async () => {
-
-    const selected = Array.from(
-        document.querySelectorAll('#selected-villages-list input')
-    ).map(cb => cb.value);
-
-    const res = await csrfFetch('/api/users/update_villages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: selectedUserId, village_ids: selected })
-    });
-
-    const j = await res.json();
-
-    if (j.ok) {
-        const villageModal = document.getElementById("village-modal");
-        villageModal.classList.remove("show");
-        villageModal.style.display = "none";
-        loadUsers();
-    } else {
-        alert(j.msg || "Failed to update villages");
-    }
-};
-
-document.getElementById("u_save").onclick = async () => {
-
-    const payload = {
-        username: document.getElementById("u_username").value,
-        password: document.getElementById("u_password").value,
-        employee_id: document.getElementById("u_employee").value
+            const villageModal = document.getElementById("village-modal");
+            villageModal.style.display = "flex";
+            villageModal.classList.add("show");
+        }
     };
 
-    const res = await csrfFetch("/api/users/add", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-    });
-
-    const j = await res.json();
-
-    if (j.ok) {
+    document.getElementById("u_cancel").onclick = () => {
         const userModal = document.getElementById("user-modal");
         userModal.classList.remove("show");
         userModal.style.display = "none";
-        loadUsers();
-    } else {
-        alert(j.msg);
+    };
+
+    document.getElementById("village-cancel").onclick = () => {
+        const villageModal = document.getElementById("village-modal");
+        villageModal.classList.remove("show");
+        villageModal.style.display = "none";
+    };
+
+    document.getElementById("village-save").onclick = async () => {
+
+        const selected = Array.from(
+            document.querySelectorAll('#selected-villages-list input')
+        ).map(cb => cb.value);
+
+        const res = await csrfFetch('/api/users/update_villages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: selectedUserId, village_ids: selected })
+        });
+
+        const j = await res.json();
+
+        if (j.ok) {
+            const villageModal = document.getElementById("village-modal");
+            villageModal.classList.remove("show");
+            villageModal.style.display = "none";
+            loadUsers();
+        } else {
+            alert(j.msg || "Failed to update villages");
+        }
+    };
+
+    document.getElementById("u_save").onclick = async () => {
+
+        const payload = {
+            username: document.getElementById("u_username").value,
+            password: document.getElementById("u_password").value,
+            employee_id: document.getElementById("u_employee").value
+        };
+
+        const res = await csrfFetch("/api/users/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const j = await res.json();
+
+        if (j.ok) {
+            const userModal = document.getElementById("user-modal");
+            userModal.classList.remove("show");
+            userModal.style.display = "none";
+            loadUsers();
+        } else {
+            alert(j.msg);
+        }
+    };
+
+    document.getElementById("u_employee").onchange = async function () {
+
+        const eid = this.value;
+
+        // Fetch employee level
+        const empRes = await fetch(`/api/employee_level?eid=${eid}`);
+        const empData = await empRes.json();
+        document.getElementById("u_role_display").value = empData.level || "";
+
+        // Fetch villages automatically
+        const villageRes = await fetch(`/api/villages_by_employee?eid=${eid}`);
+        const villages = await villageRes.json();
+
+        const select = document.getElementById("u_villages_display");
+        select.innerHTML = "";
+
+        villages.forEach(v => {
+            select.innerHTML += `<option selected>${v.name}</option>`;
+        });
+    };
+
+    document.getElementById("village-search").oninput = function () {
+        const term = this.value.toLowerCase();
+        document.querySelectorAll("#all-villages-list label").forEach(label => {
+            label.style.display = label.innerText.toLowerCase().includes(term) ? "grid" : "none";
+        });
+    };
+
+    document.getElementById("select-all").onclick = () => {
+        document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = true);
+    };
+
+    document.getElementById("clear-all").onclick = () => {
+        document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = false);
+    };
+
+    document.getElementById("move-right").onclick = () => {
+        const allContainer = document.getElementById("all-villages-list");
+        const selectedContainer = document.getElementById("selected-villages-list");
+
+        const checked = allContainer.querySelectorAll("input:checked");
+
+        checked.forEach(cb => {
+            const label = cb.closest("label");
+            cb.checked = false;
+            selectedContainer.appendChild(label);
+        });
+
+        updateVillageCounts();
+    };
+
+    document.getElementById("move-left").onclick = () => {
+        const allContainer = document.getElementById("all-villages-list");
+        const selectedContainer = document.getElementById("selected-villages-list");
+
+        const checked = selectedContainer.querySelectorAll("input:checked");
+
+        checked.forEach(cb => {
+            const label = cb.closest("label");
+            cb.checked = false;
+            allContainer.appendChild(label);
+        });
+
+        updateVillageCounts();
+    };
+
+    function updateVillageCounts() {
+        document.getElementById("all-count").innerText =
+            `All Villages (${document.querySelectorAll('#all-villages-list label').length})`;
+
+        document.getElementById("selected-count").innerText =
+            `Selected Villages (${document.querySelectorAll('#selected-villages-list label').length})`;
     }
-};
 
-document.getElementById("u_employee").onchange = async function () {
-
-    const eid = this.value;
-
-    // Fetch employee level
-    const empRes = await fetch(`/api/employee_level?eid=${eid}`);
-    const empData = await empRes.json();
-    document.getElementById("u_role_display").value = empData.level || "";
-
-    // Fetch villages automatically
-    const villageRes = await fetch(`/api/villages_by_employee?eid=${eid}`);
-    const villages = await villageRes.json();
-
-    const select = document.getElementById("u_villages_display");
-    select.innerHTML = "";
-
-    villages.forEach(v => {
-        select.innerHTML += `<option selected>${v.name}</option>`;
-    });
-};
-
-document.getElementById("village-search").oninput = function () {
-    const term = this.value.toLowerCase();
-    document.querySelectorAll("#all-villages-list label").forEach(label => {
-        label.style.display = label.innerText.toLowerCase().includes(term) ? "grid" : "none";
-    });
-};
-
-document.getElementById("select-all").onclick = () => {
-    document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = true);
-};
-
-document.getElementById("clear-all").onclick = () => {
-    document.querySelectorAll('#all-villages-list input').forEach(cb => cb.checked = false);
-};
-
-document.getElementById("move-right").onclick = () => {
-    const allContainer = document.getElementById("all-villages-list");
-    const selectedContainer = document.getElementById("selected-villages-list");
-
-    const checked = allContainer.querySelectorAll("input:checked");
-
-    checked.forEach(cb => {
-        const label = cb.closest("label");
-        cb.checked = false;
-        selectedContainer.appendChild(label);
+    /* ===== REAL-TIME AUTO SEARCH ===== */
+    document.getElementById("searchBox").addEventListener("input", function () {
+        const term = this.value.toLowerCase().trim();
+        const rows = document.querySelectorAll("#userTable tbody tr");
+        rows.forEach(row => {
+            const txt = row.innerText.toLowerCase();
+            row.style.display = term === "" || txt.includes(term) ? "" : "none";
+        });
+        const visibleCount = Array.from(rows).filter(r => r.style.display !== "none").length;
+        const headerCount = document.getElementById("headerTotalUsers");
+        if (headerCount) {
+            headerCount.textContent = visibleCount;
+        }
     });
 
-    updateVillageCounts();
-};
+    /* ===== DOUBLE-CLICK INLINE EDITING ===== */
+    let currentlyEditingRow = null;
+    let allEmployeesList = [];
 
-document.getElementById("move-left").onclick = () => {
-    const allContainer = document.getElementById("all-villages-list");
-    const selectedContainer = document.getElementById("selected-villages-list");
+    async function fetchAllEmployees() {
+        try {
+            const res = await fetch("/api/employees");
+            allEmployeesList = await res.json();
+        } catch (e) {
+            console.error("Failed to fetch employees:", e);
+        }
+    }
 
-    const checked = selectedContainer.querySelectorAll("input:checked");
+    tbody.addEventListener("dblclick", function (e) {
+        const row = e.target.closest("tr");
+        if (!row) return;
+        if (row.classList.contains("row-editing")) return;
+        if (e.target.closest("[data-field='actions']")) return;
 
-    checked.forEach(cb => {
-        const label = cb.closest("label");
-        cb.checked = false;
-        allContainer.appendChild(label);
+        makeRowEditable(row);
     });
 
-    updateVillageCounts();
-};
+    async function makeRowEditable(row) {
+        if (currentlyEditingRow) {
+            cancelRowInline(currentlyEditingRow);
+        }
+        if (allEmployeesList.length === 0) {
+            await fetchAllEmployees();
+        }
 
-function updateVillageCounts() {
-    document.getElementById("all-count").innerText =
-        `All Villages (${document.querySelectorAll('#all-villages-list label').length})`;
+        currentlyEditingRow = row;
+        row.dataset.originalHtml = row.innerHTML;
+        row.classList.add("row-editing");
 
-    document.getElementById("selected-count").innerText =
-        `Selected Villages (${document.querySelectorAll('#selected-villages-list label').length})`;
-}
+        const uid = row.dataset.id;
+        const empId = row.dataset.employeeId;
+
+        const usernameCell = row.querySelector("[data-field='username']");
+        const employeeCell = row.querySelector("[data-field='employee_name']");
+
+        if (usernameCell) {
+            const currentUsername = usernameCell.innerText.trim();
+            usernameCell.innerHTML = `<input type="text" class="inline-edit-input" name="username" value="${currentUsername.replace(/"/g, '&quot;')}">`;
+        }
+
+        if (employeeCell) {
+            let options = allEmployeesList.map(emp => `
+            <option value="${emp.eid}" ${String(emp.eid) === String(empId) ? 'selected' : ''}>
+                ${emp.name}
+            </option>
+        `).join('');
+            employeeCell.innerHTML = `<select class="inline-edit-select" name="employee">${options}</select>`;
+        }
+
+        const actionsCell = row.querySelector("[data-field='actions']");
+        if (actionsCell) {
+            actionsCell.innerHTML = `
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <button class="neumorphic-btn small" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35);" onclick="event.stopPropagation(); saveRowInline(this)">
+                    Save
+                </button>
+                <button class="neumorphic-btn small" style="color: var(--text-muted); border-color: rgba(255,255,255,0.2);" onclick="event.stopPropagation(); cancelRowInline(this)">
+                    Cancel
+                </button>
+            </div>
+        `;
+        }
+    }
+
+    window.cancelRowInline = function (btn) {
+        const row = btn.closest("tr");
+        if (!row) return;
+        row.innerHTML = row.dataset.originalHtml;
+        row.classList.remove("row-editing");
+        delete row.dataset.originalHtml;
+        currentlyEditingRow = null;
+    };
+
+    window.saveRowInline = async function (btn) {
+        const row = btn.closest("tr");
+        if (!row) return;
+
+        const uid = row.dataset.id;
+        const username_input = row.querySelector('[name="username"]');
+        const employee_select = row.querySelector('[name="employee"]');
+
+        if (!username_input || !employee_select) return;
+
+        const username = username_input.value.trim();
+        const employee_id = employee_select.value;
+
+        if (!username || !employee_id) {
+            alert("Username and employee are required.");
+            return;
+        }
+
+        try {
+            const response = await csrfFetch("/api/users/update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: uid,
+                    username,
+                    employee_id
+                })
+            });
+
+            const result = await response.json();
+            if (!result.ok) {
+                alert(result.msg || "Failed to update user");
+                return;
+            }
+
+            row.classList.remove("row-editing");
+            delete row.dataset.originalHtml;
+            currentlyEditingRow = null;
+
+            await loadUsers();
+
+            const updatedRow = document.querySelector(`#userTable tbody tr[data-id="${uid}"]`);
+            if (updatedRow) {
+                triggerSuccessFeedback({
+                    sectionElement: document.getElementById("tableViewContainer"),
+                    highlightElements: [updatedRow],
+                    message: "User Saved Successfully",
+                    highlightDuration: 3000
+                });
+            }
+
+        } catch (err) {
+            alert("Error saving: " + err.message);
+        }
+    };
 </script>
 
 <script>
-// Optional: background click closes modal
-document.getElementById("village-modal").onclick = function(e) {
-    if (e.target.id === "village-modal") {
-        this.classList.remove("show");
-        this.style.display = "none";
-    }
-};
+    document.getElementById("village-modal").onclick = function (e) {
+        if (e.target.id === "village-modal") {
+            this.classList.remove("show");
+            this.style.display = "none";
+        }
+    };
 
-loadUsers();
+    loadUsers();
 </script>
 
 {% endblock %}

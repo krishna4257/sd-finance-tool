@@ -14,19 +14,7 @@ $.fn.dataTable.ext.type.order['date-ddmmyyyy-pre'] = function (d) {
 
 // All code MUST be inside this single DOMContentLoaded listener
 document.addEventListener("DOMContentLoaded", () => {
-  function formatDateToDDMMYYYY(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') {
-      return dateStr;
-    }
-
-    // yyyy-mm-dd -> dd-mm-yyyy
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [y, m, d] = dateStr.split('-');
-      return `${d}-${m}-${y}`;
-    }
-
-    return dateStr;
-  }
+  const formatDateToDDMMYYYY = window.formatDate;
   // --- Element Selectors ---
   let activeReplaceMode = null;
 
@@ -83,13 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
   return null;
 }
 
-function formatDateForDisplay(date) {
-  const d = String(date.getDate()).padStart(2, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const y = date.getFullYear();
-
-  return `${d}-${m}-${y}`;
-}
+const formatDateForDisplay = window.formatDate;
 
 function recalculateCustomerLoanFields(row) {
   const startDateCell = row.querySelector("td[data-field='start_date']");
@@ -679,16 +661,17 @@ function recalculateCustomerLoanFields(row) {
   // Add this inside DOMContentLoaded in search.js
   $('#paymentTable tbody').on('click', 'tr', function() {
       // Remove highlight from all rows
-      $('#paymentTable tbody tr').removeClass('highlighted').removeAttr('data-selected');
+      $('#paymentTable tbody tr').removeClass('highlighted-row').removeAttr('data-selected');
 
       // Add highlight & a 'selected' marker to the clicked row
-      $(this).addClass('highlighted').attr('data-selected', 'true');
+      $(this).addClass('highlighted-row').attr('data-selected', 'true');
+      window.currentRow = this; // Update global highlighted row for keyboard navigation!
   });
 
   // Reapply highlight after sorting
   $('#paymentTable').on('order.dt', function() {
-      $('#paymentTable tbody tr').removeClass('highlighted');
-      $('#paymentTable tbody tr[data-selected="true"]').addClass('highlighted');
+      $('#paymentTable tbody tr').removeClass('highlighted-row');
+      $('#paymentTable tbody tr[data-selected="true"]').addClass('highlighted-row');
   });
 
 

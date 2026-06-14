@@ -1,83 +1,122 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="form-glass">
-  <div class="info-box-top-right">
-    <strong>Highest A.No:</strong>
-    <span id="highestAnoDisplay">{{ highest_ano }}</span>
-  </div>
-
-  <h2 class="page-title">➕ Add New Customer</h2>
-
-  <div id="message" class="message-box" style="display: none; margin-bottom: 20px;"></div>
-
-  <form id="customerForm" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-row">
-      <div class="form-col">
-        <label for="ano">Account Number</label>
-        <input id="ano" name="ano" type="text"   placeholder="Account Number (ANO)" required data-tab-order="1" readonly value="{{ next_ano }}">
-
-        <label for="name">Name</label>
-        <input id="name" name="name" type="text" placeholder="Customer Name" required data-tab-order="2">
-
-        <label for="pano">Parent A.no</label>
-        <input id="pano" name="pano" type="text" placeholder="Link to another account (optional)" data-tab-order="3">
-
-        <label for="phone_number">Phone Number</label>
-        <input id="phone_number" name="phone_number" type="text" placeholder="Phone Number" maxlength="10" inputmode="numeric">
-
-        <label for="vid">Village Name</label>
-        <input id="vid" name="vid" type="text" value="{{ village_name }}" readonly>
-
-        <label for="eid">Employee Name</label>
-        <input id="eid" name="eid" type="text" value="{{ employee_name }}" readonly>
-
-        <label for="aadhaar_number">Aadhaar Number</label>
-        <input id="aadhaar_number" name="aadhaar_number" type="text" placeholder="Enter 12 digit aadhaar number">
-
-        <label for="notes">Notes</label>
-        <input id="notes" name="notes" type="text" placeholder="Any additional notes">
-      </div>
-
-      <div class="form-col">
-        <label for="type">Type</label>
-        <select id="type" name="type" required data-tab-order="4">
-          <option value="W" selected>Weekly</option>
-          <option value="M">Monthly</option>
-        </select>
-
-        <label for="period">Period</label>
-        <input id="period" name="period" type="number" required placeholder="Number of Weeks/Months" data-tab-order="5">
-
-        <label for="start_date">Start Date</label>
-        <input id="start_date" name="start_date" type="text" placeholder="dd/mm/yyyy" required data-tab-order="6">
-
-        <label for="end_date">End Date</label>
-        <input id="end_date" name="end_date" type="text" placeholder="Calculated automatically" readonly>
-
-        <label for="total_amount">Total Amount</label>
-        <input id="total_amount" name="total_amount" type="number" required placeholder="Given Loan Amount" data-tab-order="7">
-
-        <label for="installment_amount">Installment Amount</label>
-        <input id="installment_amount" name="installment_amount" type="number" step="0.01" readonly placeholder="Calculated automatically">
-
-        <label for="latitude">Latitude</label>
-        <input id="latitude" name="latitude" type="text" placeholder="Latitude">
-
-        <label for="longitude">Longitude</label>
-        <input id="longitude" name="longitude" type="text" placeholder="Longitude">
+<div class="add-customer-layout">
+  
+  <!-- Left Side: Form Panel -->
+  <div class="form-panel form-glass">
+    <!-- Top Row with Title & Highest A.No Badge -->
+    <div class="form-panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+      <h2 class="page-title" style="margin: 0; font-size: 24px;">Add New Customer</h2>
+      <div class="highest-ano-badge">
+        <span class="label">Highest A.No:</span>
+        <span id="highestAnoDisplay">{{ highest_ano }}</span>
       </div>
     </div>
 
-    <div class="action-buttons" style="justify-content: center; margin-top: 25px;">
-        <button class="neumorphic-btn large full-width" type="submit">Add Customer</button>
-    </div>
-  </form>
+    <div id="message" class="message-box" style="display: none; margin-bottom: 20px;"></div>
+
+    <form id="customerForm" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-row">
+        <div class="form-col">
+          <label for="ano">Account Number</label>
+          <input id="ano" name="ano" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Account Number (ANO)" required data-tab-order="1">
+
+          <label for="name">Name</label>
+          <input id="name" name="name" type="text" placeholder="Customer Name" required data-tab-order="2">
+
+          <label for="pano">Parent A.no</label>
+          <input id="pano" name="pano" type="text" placeholder="Link to another account (optional)" data-tab-order="3">
+
+          <label for="phone_number">Phone Number</label>
+          <input id="phone_number" name="phone_number" type="text" placeholder="Phone Number" maxlength="10" inputmode="numeric">
+
+          <label for="vid">Village Name</label>
+          <input id="vid" name="vid" type="text" value="{{ village_name }}" readonly>
+
+          <label for="eid">Employee Name</label>
+          <input id="eid" name="eid" type="text" value="{{ employee_name }}" readonly>
+
+          <label for="aadhaar_number">Aadhaar Number</label>
+          <input id="aadhaar_number" name="aadhaar_number" type="text" placeholder="Enter 12 digit aadhaar number">
+
+          <label for="notes">Notes</label>
+          <input id="notes" name="notes" type="text" placeholder="Any additional notes">
+        </div>
+
+        <div class="form-col">
+          <label for="type">Type</label>
+          <select id="type" name="type" required data-tab-order="4">
+            <option value="W" selected>Weekly</option>
+            <option value="M">Monthly</option>
+          </select>
+
+          <label for="period">Period</label>
+          <input id="period" name="period" type="number" required placeholder="Number of Weeks/Months" data-tab-order="5">
+
+          <label for="start_date">Start Date</label>
+          <input id="start_date" name="start_date" type="text" placeholder="dd-mm-yyyy" required data-tab-order="6">
+
+          <label for="end_date">End Date</label>
+          <input id="end_date" name="end_date" type="text" placeholder="Calculated automatically" readonly>
+
+          <label for="total_amount">Total Amount</label>
+          <input id="total_amount" name="total_amount" type="number" required placeholder="Given Loan Amount" data-tab-order="7">
+
+          <label for="installment_amount">Installment Amount</label>
+          <input id="installment_amount" name="installment_amount" type="number" step="0.01" readonly placeholder="Calculated automatically">
+
+          <label for="latitude">Latitude</label>
+          <input id="latitude" name="latitude" type="text" placeholder="Latitude">
+
+          <label for="longitude">Longitude</label>
+          <input id="longitude" name="longitude" type="text" placeholder="Longitude">
+        </div>
+      </div>
+
+      <div class="action-buttons" style="justify-content: center; margin-top: 25px;">
+          <button class="neumorphic-btn primary-btn large full-width" type="submit">Add Customer</button>
+      </div>
+    </form>
 
     <div id="parentInfoTooltip" class="parent-info-tooltip">
       <p id="parentInfoText"></p>
     </div>
+  </div>
+
+  <!-- Right Side: Analytics Panel -->
+  <div class="analytics-panel">
+    <h3 class="analytics-title">Village Activity</h3>
+    
+    <!-- Today's Count -->
+    <div class="analytics-card">
+      <div class="analytics-icon"><i class="fas fa-calendar-day"></i></div>
+      <div class="analytics-details">
+        <span class="analytics-label">Added Today</span>
+        <span class="analytics-value" id="countToday">{{ analytics.today }}</span>
+      </div>
+    </div>
+
+    <!-- Weekly Count -->
+    <div class="analytics-card">
+      <div class="analytics-icon"><i class="fas fa-calendar-week"></i></div>
+      <div class="analytics-details">
+        <span class="analytics-label">Added This Week</span>
+        <span class="analytics-value" id="countWeek">{{ analytics.week }}</span>
+      </div>
+    </div>
+
+    <!-- Monthly Count -->
+    <div class="analytics-card">
+      <div class="analytics-icon"><i class="fas fa-calendar-alt"></i></div>
+      <div class="analytics-details">
+        <span class="analytics-label">Added This Month</span>
+        <span class="analytics-value" id="countMonth">{{ analytics.month }}</span>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="{{ url_for('static', filename='js/add_customer.js') }}"></script>

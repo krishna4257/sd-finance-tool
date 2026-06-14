@@ -17,13 +17,13 @@
     <!-- ======================== -->
     <div class="landing-panel" id="employeePanel">
       <div class="panel-header">
-        <h2>👤 Employees</h2>
-        <button class="landing-icon-btn" id="empRestartBtn" title="Restart — clear selection">↺ Restart</button>
+        <h2>Employees</h2>
+        <button class="landing-icon-btn" id="empRestartBtn" title="Restart — clear selection">Restart</button>
       </div>
-
+ 
       <!-- Auto-search input -->
       <div class="landing-search-wrap">
-        <span class="landing-search-icon">🔍</span>
+        <span class="landing-search-icon"><i class="fas fa-search"></i></span>
         <input
           type="text"
           id="empSearchInput"
@@ -32,39 +32,39 @@
           autocomplete="off"
         />
       </div>
-
+ 
       <!-- Employee list -->
       <div class="landing-list" id="empList">
         <div class="landing-empty">Loading employees…</div>
       </div>
-
+ 
       <!-- Create Employee button -->
       {% if session.level in ['admin', 'mgmt'] %}
       <div class="panel-footer">
-        <button class="landing-action-btn" onclick="openAddEmployeeModal('emp1')">➕ Create Employee</button>
+        <button class="landing-action-btn" onclick="openAddEmployeeModal('emp1')">Create Employee</button>
       </div>
       {% endif %}
     </div>
-
+ 
     <!-- ======================== -->
     <!-- VILLAGE PANEL            -->
     <!-- ======================== -->
     <div class="landing-panel" id="villagePanel">
       <div class="panel-header">
-        <h2>🏘️ Villages</h2>
+        <h2>Villages</h2>
       </div>
-
+ 
       <!-- Village list -->
       <div class="landing-list" id="villageList">
         <div class="landing-empty" id="villageEmptyMsg">
-          ← Select an employee to see their villages
+          Select an employee to see their villages
         </div>
       </div>
-
+ 
       <!-- Create Village button -->
       {% if session.level in ['admin', 'mgmt'] %}
       <div class="panel-footer">
-        <button class="landing-action-btn" onclick="openCreateVillageModal()">➕ Create Village</button>
+        <button class="landing-action-btn" onclick="openCreateVillageModal()">Create Village</button>
       </div>
       {% endif %}
     </div>
