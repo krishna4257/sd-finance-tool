@@ -545,7 +545,7 @@ app.secret_key = secret_key
 
 app.config["WTF_CSRF_ENABLED"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
-
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -661,6 +661,8 @@ def session_timeout_check():
 
     if "user_id" not in session:
         return
+    
+    session.permanent = True
 
     now = datetime.utcnow()
     last_activity = session.get("_last_activity")
@@ -671,14 +673,27 @@ def session_timeout_check():
 
             if now - last_activity_dt > app.config["PERMANENT_SESSION_LIFETIME"]:
                 session.clear()
+
+                if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({
+                        "success": False,
+                        "session_expired": True
+                    }), 401
+
                 flash("Session expired. Please login again.", "warning")
                 return redirect(url_for("login"))
 
         except Exception:
             session.clear()
+            if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "success": False,
+                    "session_expired": True
+                }), 401
             return redirect(url_for("login"))
 
     session["_last_activity"] = now.isoformat()
+    session.modified = True
 
     # Auto-recover village_code and village_name if missing from session context
     if "vid" in session and ("village_code" not in session or "village_name" not in session):
@@ -9031,7 +9046,6 @@ def api_dashboard_posting_analytics(vid):
             "employee_breakdown": employee_breakdown,
             "historical_trend": historical_trend
         })
-
     except Exception as e:
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
@@ -9597,6 +9611,8 @@ def login():
         session["employee_id"] = employee_id
         session["level"] = level.strip().lower() if level else None
         session["villages"] = villages
+        session["_last_activity"] = datetime.utcnow().isoformat()
+        session.permanent = True
 
         audit_log(
             action="login",
@@ -9617,18 +9633,29 @@ def login():
         conn.close()
 
 @app.route("/logout")
+@login_required
 def logout():
+    user_id = session.get("user_id")
+    eid = session.get("eid")
+
     audit_log(
-      action="logout",
-      entity_type="user",
-      entity_id=session.get("user_id"),
-      details={
-          "eid": session.get("eid")
-      }
+        action="logout",
+        entity_type="user",
+        entity_id=user_id,
+        details={
+            "eid": eid
+        }
     )
+
     session.clear()
+
+    response = redirect(url_for("login"))
+
+    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))
+
     flash("Logged out", "info")
-    return redirect(url_for("login"))
+
+    return response
 
 @app.route("/users")
 @login_required
