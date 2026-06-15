@@ -1338,6 +1338,8 @@ table.customer-table tbody tr:hover {
 
 table.dataTable tbody tr.highlighted-row,
 table.dataTable tbody tr.highlighted,
+table.customer-table tbody tr.highlighted-row,
+table.customer-table tbody tr.highlighted,
 .highlighted-row,
 .highlighted {
   background: var(--primary) !important;
@@ -1345,6 +1347,14 @@ table.dataTable tbody tr.highlighted,
 
 table.dataTable tbody tr.highlighted-row td,
 table.dataTable tbody tr.highlighted td,
+table.customer-table tbody tr.highlighted-row td,
+table.customer-table tbody tr.highlighted td,
+[data-theme="dark"] table.dataTable tbody tr.highlighted-row td,
+[data-theme="dark"] table.dataTable tbody tr.highlighted td,
+[data-theme="dark"] table.customer-table tbody tr.highlighted-row td,
+[data-theme="dark"] table.customer-table tbody tr.highlighted td,
+[data-theme="dark"] .highlighted-row td,
+[data-theme="dark"] .highlighted td,
 .highlighted-row td,
 .highlighted td {
   background: var(--primary) !important;
@@ -1357,7 +1367,19 @@ table.dataTable tbody tr.highlighted-row td span:not(.status-badge):not(.wk-badg
 table.dataTable tbody tr.highlighted-row td i,
 table.dataTable tbody tr.highlighted td a,
 table.dataTable tbody tr.highlighted td span:not(.status-badge):not(.wk-badge),
-table.dataTable tbody tr.highlighted td i {
+table.dataTable tbody tr.highlighted td i,
+table.customer-table tbody tr.highlighted-row td a,
+table.customer-table tbody tr.highlighted-row td span:not(.status-badge):not(.wk-badge),
+table.customer-table tbody tr.highlighted-row td i,
+table.customer-table tbody tr.highlighted td a,
+table.customer-table tbody tr.highlighted td span:not(.status-badge):not(.wk-badge),
+table.customer-table tbody tr.highlighted td i,
+.highlighted-row td a,
+.highlighted-row td span:not(.status-badge):not(.wk-badge),
+.highlighted-row td i,
+.highlighted td a,
+.highlighted td span:not(.status-badge):not(.wk-badge),
+.highlighted td i {
   color: #ffffff !important;
 }
 
