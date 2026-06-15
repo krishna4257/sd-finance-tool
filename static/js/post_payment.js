@@ -124,11 +124,11 @@ function isPostingDateValidForCustomer(ano, postingDate) {
     };
   }
 
-  if (postingIso <= startIso) {
+  if (postingIso < startIso) {
     return {
       valid: false,
       customer,
-      error: `❌ Customer ANO - ${ano} start_date is ${startDisplay}. Posting date must be after start_date.`
+      error: `❌ Customer ANO - ${ano} start_date is ${startDisplay}. Posting date must be greater than or equal to start_date.`
     };
   }
 
@@ -377,6 +377,14 @@ function makeCellEditable(cell, index, field, currentValue) {
 
 function updateTable() {
   const tbody = document.querySelector("#tempTable tbody");
+  
+  // Try to preserve row highlight index
+  let highlightedIndex = -1;
+  if (window.currentRow && window.currentRow.closest("#tempTable")) {
+      const oldRows = Array.from(document.querySelectorAll("#tempTable tbody tr"));
+      highlightedIndex = oldRows.indexOf(window.currentRow);
+  }
+
   tbody.innerHTML = "";
   const uniqueAno = new Set();
   let totalAmt = 0;
@@ -489,6 +497,18 @@ function updateTable() {
   updateComparativeStats();
   applyGlobalMoneyFormatting();
   updateCollectionStats();
+
+  // Restore row highlight index if applicable
+  if (highlightedIndex !== -1) {
+      const newRows = document.querySelectorAll("#tempTable tbody tr");
+      if (newRows.length > 0) {
+          const indexToHighlight = Math.min(highlightedIndex, newRows.length - 1);
+          window.currentRow = newRows[indexToHighlight];
+          window.currentRow.classList.add("highlighted-row");
+      } else {
+          window.currentRow = null;
+      }
+  }
 }
 
 
@@ -678,8 +698,8 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
   const customerStartDateIso = normalizeDateForComparison(customer.start_date);
   const customerStartDateDisplay = formatDateDDMMYYYY(customer.start_date);
 
-  if (postingDateIso && customerStartDateIso && postingDateIso <= customerStartDateIso) {
-    showError(`❌ Customer ANO - ${ano} start_date is ${customerStartDateDisplay}. Posting date must be after start_date.`);
+  if (postingDateIso && customerStartDateIso && postingDateIso < customerStartDateIso) {
+    showError(`❌ Customer ANO - ${ano} start_date is ${customerStartDateDisplay}. Posting date must be greater than or equal to start_date.`);
     document.getElementById("pdt").focus();
     return;
   }
@@ -700,8 +720,17 @@ document.getElementById("paymentForm").addEventListener("submit", function (e) {
     amt: Number(amt)
   });
 
-
   saveAndUpdate();
+
+  // Automatically highlight the newly added row
+  const firstRow = document.querySelector("#tempTable tbody tr");
+  if (firstRow) {
+      if (window.currentRow) {
+          window.currentRow.classList.remove("highlighted-row");
+      }
+      window.currentRow = firstRow;
+      window.currentRow.classList.add("highlighted-row");
+  }
 
   document.getElementById("ano").value = "";
   document.getElementById("amt").value = "";
