@@ -12,13 +12,32 @@
       const redirectedToLogin = response.redirected &&
         response.url.includes("/login");
 
-      const unauthorized = response.status === 401;
+      const unauthorized =
+    response.status === 401 &&
+    responseData &&
+    responseData.session_expired === true;
+      let responseData = null;
+
+      if (contentType.includes("application/json")) {
+        try {
+          responseData = await response.clone().json();
+        } catch (_) {}
+      }
+
+      const sessionExpired =
+        response.status === 401 &&
+        responseData &&
+        responseData.session_expired === true;
 
       const htmlLoginPage =
         contentType.includes("text/html") &&
         response.url.includes("/login");
 
-      if (redirectedToLogin || unauthorized || htmlLoginPage) {
+      if (
+        redirectedToLogin ||
+        htmlLoginPage ||
+        sessionExpired
+      ) {
 
         // Prevent duplicate alerts
         if (!window.__sessionExpiredShown) {
@@ -39,6 +58,41 @@
     return response;
   };
 })();
+
+// =====================================================
+// CLIENT IDLE SESSION TIMER
+// =====================================================
+
+const SESSION_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+let lastActivity = Date.now();
+
+[
+  "click",
+  "mousemove",
+  "keydown",
+  "scroll",
+  "touchstart"
+].forEach(event => {
+  document.addEventListener(event, () => {
+    lastActivity = Date.now();
+  }, true);
+});
+
+setInterval(() => {
+  const idleTime = Date.now() - lastActivity;
+
+  if (
+    idleTime >= SESSION_TIMEOUT_MS &&
+    !window.__sessionExpiredShown
+  ) {
+    window.__sessionExpiredShown = true;
+
+    alert("Session expired. Please login again.");
+
+    window.location.href = "/login";
+  }
+}, 60000);
 
 // =====================================================
 // GLOBAL STATE (DO NOT REMOVE – used across features)

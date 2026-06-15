@@ -450,97 +450,6 @@ def normalize_mobile_payment_payload(payload):
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# ----------------------------------------------------
-# DATABASE MIGRATIONS ON STARTUP
-# ----------------------------------------------------
-def run_db_migrations():
-    logger.info("Starting database migrations...")
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'customer'")
-        cust_cols = {row[0] for row in cur.fetchall()}
-        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'closed_cust_account'")
-        closed_cols = {row[0] for row in cur.fetchall()}
-        
-        if 'customer_rating' not in cust_cols:
-            cur.execute("ALTER TABLE customer ADD COLUMN customer_rating numeric DEFAULT 100.0")
-            if 'repayment_score' in cust_cols:
-                cur.execute("UPDATE customer SET customer_rating = repayment_score WHERE repayment_score IS NOT NULL")
-        if 'customer_rating' not in closed_cols:
-            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN customer_rating numeric DEFAULT 100.0")
-            if 'repayment_score' in closed_cols:
-                cur.execute("UPDATE closed_cust_account SET customer_rating = repayment_score WHERE repayment_score IS NOT NULL")
-                
-        if 'final_frozen_rating' not in cust_cols:
-            cur.execute("ALTER TABLE customer ADD COLUMN final_frozen_rating numeric DEFAULT NULL")
-        if 'final_frozen_rating' not in closed_cols:
-            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN final_frozen_rating numeric DEFAULT NULL")
-            
-        if 'final_risk_level' not in cust_cols:
-            cur.execute("ALTER TABLE customer ADD COLUMN final_risk_level text DEFAULT NULL")
-        if 'final_risk_level' not in closed_cols:
-            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN final_risk_level text DEFAULT NULL")
-            
-        if 'freeze_date' not in cust_cols:
-            cur.execute("ALTER TABLE customer ADD COLUMN freeze_date timestamp with time zone DEFAULT NULL")
-        if 'freeze_date' not in closed_cols:
-            cur.execute("ALTER TABLE closed_cust_account ADD COLUMN freeze_date timestamp with time zone DEFAULT NULL")
-            
-        for col in ['repayment_score', 'successful_streak', 'missed_streak', 'partial_streak']:
-            if col in cust_cols:
-                cur.execute(f"ALTER TABLE customer DROP COLUMN {col}")
-            if col in closed_cols:
-                cur.execute(f"ALTER TABLE closed_cust_account DROP COLUMN {col}")
-                
-        # ----------------------------------------------------
-        # NEW: Cache table for Village Health History snapshots
-        # ----------------------------------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS village_health_cache (
-                vid INT NOT NULL,
-                view VARCHAR(20) NOT NULL,
-                sub_view VARCHAR(20) NOT NULL,
-                time_range VARCHAR(20) NOT NULL,
-                date_key DATE NOT NULL,
-                health_score NUMERIC(5, 2) NOT NULL,
-                metrics JSONB NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (vid, view, sub_view, time_range, date_key)
-            )
-        """)
-
-        # Ensure base_amount, cutting_amount, interest_amount columns exist in customer and closed_cust_account
-        for col in ['base_amount', 'cutting_amount', 'interest_amount']:
-            if col not in cust_cols:
-                cur.execute(f"ALTER TABLE customer ADD COLUMN {col} numeric DEFAULT 0.0")
-            if col not in closed_cols:
-                cur.execute(f"ALTER TABLE closed_cust_account ADD COLUMN {col} numeric DEFAULT 0.0")
-
-        # Village table migrations
-        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'village'")
-        village_cols = {row[0] for row in cur.fetchall()}
-        
-        if 'interest_rate' not in village_cols:
-            cur.execute("ALTER TABLE village ADD COLUMN interest_rate numeric DEFAULT 0.0")
-        if 'cutting_rate' not in village_cols:
-            cur.execute("ALTER TABLE village ADD COLUMN cutting_rate numeric DEFAULT 0.0")
-
-        # Add indexes on payment tables for optimization
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_payment_cid_date ON payment (cid, payment_date)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_closed_payment_cid_date ON closed_cust_payment (cid, payment_date)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_historic_payment_cid_date ON historic_payment_data (cid, payment_date)")
-        
-        conn.commit()
-        logger.info("Database migrations finished successfully.")
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Error executing database migrations: {e}")
-    finally:
-        cur.close()
-        conn.close()
-
-run_db_migrations()
 
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
@@ -636,7 +545,7 @@ app.secret_key = secret_key
 
 app.config["WTF_CSRF_ENABLED"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
-
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -752,6 +661,8 @@ def session_timeout_check():
 
     if "user_id" not in session:
         return
+    
+    session.permanent = True
 
     now = datetime.utcnow()
     last_activity = session.get("_last_activity")
@@ -762,14 +673,27 @@ def session_timeout_check():
 
             if now - last_activity_dt > app.config["PERMANENT_SESSION_LIFETIME"]:
                 session.clear()
+
+                if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({
+                        "success": False,
+                        "session_expired": True
+                    }), 401
+
                 flash("Session expired. Please login again.", "warning")
                 return redirect(url_for("login"))
 
         except Exception:
             session.clear()
+            if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "success": False,
+                    "session_expired": True
+                }), 401
             return redirect(url_for("login"))
 
     session["_last_activity"] = now.isoformat()
+    session.modified = True
 
     # Auto-recover village_code and village_name if missing from session context
     if "vid" in session and ("village_code" not in session or "village_name" not in session):
@@ -9122,7 +9046,6 @@ def api_dashboard_posting_analytics(vid):
             "employee_breakdown": employee_breakdown,
             "historical_trend": historical_trend
         })
-
     except Exception as e:
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
@@ -9688,6 +9611,8 @@ def login():
         session["employee_id"] = employee_id
         session["level"] = level.strip().lower() if level else None
         session["villages"] = villages
+        session["_last_activity"] = datetime.utcnow().isoformat()
+        session.permanent = True
 
         audit_log(
             action="login",
@@ -9708,18 +9633,29 @@ def login():
         conn.close()
 
 @app.route("/logout")
+@login_required
 def logout():
+    user_id = session.get("user_id")
+    eid = session.get("eid")
+
     audit_log(
-      action="logout",
-      entity_type="user",
-      entity_id=session.get("user_id"),
-      details={
-          "eid": session.get("eid")
-      }
+        action="logout",
+        entity_type="user",
+        entity_id=user_id,
+        details={
+            "eid": eid
+        }
     )
+
     session.clear()
+
+    response = redirect(url_for("login"))
+
+    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))
+
     flash("Logged out", "info")
-    return redirect(url_for("login"))
+
+    return response
 
 @app.route("/users")
 @login_required

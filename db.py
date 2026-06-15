@@ -72,27 +72,54 @@ class PooledConnection:
 
 
 def get_pg_connection():
-    try:
-        conn = pg_pool.getconn()
+    last_error = None
+
+    for _ in range(5):
+        conn = None
         try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-        except Exception:
+            conn = pg_pool.getconn()
             try:
-                pg_pool.putconn(conn, close=True)
+                conn.rollback()
             except Exception:
                 pass
 
-            conn = pg_pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
 
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-    except PoolError as e:
-        raise DatabasePoolExhausted(
-            "PostgreSQL connection pool exhausted"
-        ) from e
+                return PooledConnection(conn, pg_pool)
 
-    return PooledConnection(conn, pg_pool)
+            except Exception:
+                try:
+                    pg_pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+                last_error = RuntimeError(
+                    "Connection validation failed"
+                )
+
+        except PoolError as e:
+            raise DatabasePoolExhausted(
+                "PostgreSQL connection pool exhausted"
+            ) from e
+
+        except Exception as e:
+            last_error = e
+            print(f"[DB] Dead connection detected: {e}")
+
+            if conn is not None:
+                try:
+                    pg_pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError(
+        "Failed to obtain PostgreSQL connection after 5 attempts"
+    )
+
 
 
 def get_pool_stats():
