@@ -4,7 +4,11 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!table || !tableBody) {
     return;
   }
-  const rows = Array.from(tableBody.querySelectorAll("tr"));
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialSearch = urlParams.get("search") || "";
+  const isParentSearch = urlParams.get("parent_search") === "1";
+  const currentMode = window.CURRENT_MODE || urlParams.get("mode") || "active";
+
   const clean = v => v.replace(/[₹,]/g, "").trim();
 
   // Column keys in order of generation
@@ -46,6 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
   ];
 
   const formatDate = window.formatDate;
+  const formatDateToISO = window.formatDateToISO;
 
   function createSnapshotItem(row) {
     const ano = clean(row.querySelector(".col-ano")?.textContent || "").toLowerCase();
@@ -75,7 +80,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // 🔒 Mutable snapshot
-  let snapshot = rows.map(row => createSnapshotItem(row));
+  let snapshot = [];
 
   function updateSummary() {
     if (!window.ALL_CUSTOMERS_STATS) {
@@ -569,9 +574,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ordering: true,
         order: [[1, 'desc']],
         autoWidth: false,
-        scrollX: true,
-        scrollCollapse: true,
-        fixedHeader: false
+        scrollX: false
       });
 
       rebuiltTable.on('draw', () => {
@@ -671,9 +674,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ordering: true,
         order: [[1, 'desc']],
         autoWidth: false,
-        scrollX: true,
-        scrollCollapse: true,
-        fixedHeader: false
+        scrollX: false
       });
 
       rebuiltTable.on('draw', () => {
@@ -740,27 +741,92 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  if (initialSearch) {
-    if (searchBox) {
-      searchBox.value = initialSearch;
-
-      if (isParentSearch) {
-        window.applyParentSearch();
-      } else {
-        window.applySearch();
+  async function loadInitialData() {
+    try {
+      const response = await fetch(`/api/view_customers/data?mode=${currentMode}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+      const result = await response.json();
+      if (!result.success) {
+        console.error("Failed to load customer data:", result.error);
+        return;
+      }
+
+      // 1. Update ALL_CUSTOMERS_STATS
+      window.ALL_CUSTOMERS_STATS = result.all_customers_stats;
+
+      // 2. Clear table and populate rows
+      if ($.fn.DataTable.isDataTable('#customerTable')) {
+        $('#customerTable').DataTable().clear().destroy();
+      }
+      tableBody.innerHTML = "";
+
+      const customers = result.data || [];
+      customers.forEach(customer => {
+        const tr = document.createElement("tr");
+        tr.className = "table-row";
+        tr.setAttribute("data-ano", customer.ano);
+        tr.setAttribute("data-cid", customer.cid);
+        tr.setAttribute("data-source", customer.source || currentMode);
+
+        appendCustomerCells(tr, customer, currentMode);
+        tableBody.appendChild(tr);
+      });
+
+      // 3. Rebuild snapshot
+      const newRows = Array.from(tableBody.querySelectorAll("tr"));
+      snapshot = newRows.map(row => createSnapshotItem(row));
+
+      // 4. Update Summary Cards
+      updateSummary();
+
+      // 5. Initialize DataTable
+      const tableObj = $('#customerTable').DataTable({
+        paging: false,
+        info: false,
+        searching: true,
+        ordering: true,
+        order: [[1, 'desc']],
+        autoWidth: false,
+        scrollX: false
+      });
+
+      tableObj.on('draw', () => {
+        if (typeof window.updateSummary === 'function') {
+          window.updateSummary();
+        }
+      });
+
+      // Initialize columns configurator dropdown checkboxes if applicable
+      if (typeof window.initColumnConfigurator === 'function') {
+        window.initColumnConfigurator();
+      }
+
+      setTimeout(() => {
+        tableObj.columns.adjust().draw(false);
+      }, 50);
+
+      // 6. Handle initialSearch if present
+      if (initialSearch) {
+        const searchBox = document.getElementById("searchBox");
+        if (searchBox) {
+          searchBox.value = initialSearch;
+          if (isParentSearch) {
+            window.applyParentSearch(initialSearch);
+          } else {
+            window.applySearch();
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error("Error loading initial view_customers data:", err);
+      tableBody.innerHTML = `<tr><td colspan="30" style="text-align: center; padding: 20px; color: #ef4444;">Failed to load customers data: ${err.message || err}. Please refresh the page.</td></tr>`;
     }
-  } else {
-    updateSummary();
   }
 
-  // Format existing table dates on initial page load
-  tableBody.querySelectorAll("tr").forEach(row => {
-    const startCell = row.querySelector(".col-start_date");
-    if (startCell) startCell.textContent = formatDate(startCell.textContent);
-    const endCell = row.querySelector(".col-end_date");
-    if (endCell) endCell.textContent = formatDate(endCell.textContent);
-  });
+  loadInitialData();
 });
 
 window.addEventListener("load", () => {
@@ -775,38 +841,6 @@ window.addEventListener("load", () => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-  const hasCustTable = document.getElementById("customerTable") !== null;
-  if (hasCustTable) {
-    const table = $.fn.DataTable.isDataTable('#customerTable')
-      ? $('#customerTable').DataTable().order([1, 'desc'])
-      : $('#customerTable').DataTable({
-          paging: false,
-          info: false,
-          searching: true,
-          ordering: true,
-          order: [[1, 'desc']],
-          autoWidth: false,
-          scrollX: true,
-          scrollCollapse: true,
-          fixedHeader: false
-        });
-
-    table.on('draw', () => {
-      if (typeof window.updateSummary === 'function') {
-        window.updateSummary();
-      }
-    });
-
-    // Initialize columns configurator dropdown checkboxes
-    if (typeof window.initColumnConfigurator === 'function') {
-      window.initColumnConfigurator();
-    }
-
-    setTimeout(() => {
-      table.columns.adjust().draw(false);
-    }, 50);
-  }
-
   // ========================================================
   // 👤 CUSTOMER DASHBOARD POPUP ENGINE & EVENTS
   // ========================================================

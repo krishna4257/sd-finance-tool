@@ -366,11 +366,8 @@
 
 {% include 'customer_popup.html' %}
 
-<script type="application/json" id="customers-data">
-  {{ customers | tojson | safe }}
-</script>
 <script>
-  window.CUSTOMERS = JSON.parse(document.getElementById("customers-data").textContent);
+  window.CUSTOMERS = [];
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>

@@ -12,12 +12,7 @@
       const redirectedToLogin = response.redirected &&
         response.url.includes("/login");
 
-      const unauthorized =
-    response.status === 401 &&
-    responseData &&
-    responseData.session_expired === true;
       let responseData = null;
-
       if (contentType.includes("application/json")) {
         try {
           responseData = await response.clone().json();
@@ -60,12 +55,54 @@
 })();
 
 // =====================================================
-// CLIENT IDLE SESSION TIMER
+// CLIENT IDLE SESSION TIMER (Multi-Tab Safe via localStorage)
 // =====================================================
 
 const SESSION_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+const WARNING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const KEEPALIVE_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
 
-let lastActivity = Date.now();
+let lastKeepAlivePing = Date.now();
+
+async function pingKeepAlive() {
+  try {
+    const csrfTokenEl = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfTokenEl ? csrfTokenEl.value || csrfTokenEl.getAttribute('content') : '';
+    
+    const headers = {};
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    await fetch('/api/session/keepalive', {
+      method: 'POST',
+      headers: headers
+    });
+    lastKeepAlivePing = Date.now();
+  } catch (err) {
+    console.error("Keep-alive ping failed:", err);
+  }
+}
+
+function updateLastActivity() {
+  const now = Date.now();
+  localStorage.setItem("sd_last_activity", now.toString());
+  
+  const modal = document.getElementById("session-extension-modal");
+  if (modal && modal.style.display === "flex") {
+    modal.style.display = "none";
+    modal.classList.remove("show");
+  }
+  
+  if (now - lastKeepAlivePing > KEEPALIVE_THROTTLE_MS) {
+    pingKeepAlive();
+  }
+}
+
+// Initialize activity on load if not present
+if (!localStorage.getItem("sd_last_activity")) {
+  updateLastActivity();
+}
 
 [
   "click",
@@ -74,25 +111,72 @@ let lastActivity = Date.now();
   "scroll",
   "touchstart"
 ].forEach(event => {
-  document.addEventListener(event, () => {
-    lastActivity = Date.now();
-  }, true);
+  document.addEventListener(event, updateLastActivity, true);
 });
 
 setInterval(() => {
-  const idleTime = Date.now() - lastActivity;
+  const lastActivityStr = localStorage.getItem("sd_last_activity");
+  const lastActivityTime = lastActivityStr ? parseInt(lastActivityStr, 10) : Date.now();
+  const idleTime = Date.now() - lastActivityTime;
+  const remainingTime = Math.max(0, SESSION_TIMEOUT_MS - idleTime);
 
-  if (
-    idleTime >= SESSION_TIMEOUT_MS &&
-    !window.__sessionExpiredShown
-  ) {
-    window.__sessionExpiredShown = true;
-
-    alert("Session expired. Please login again.");
-
-    window.location.href = "/login";
+  const clockElement = document.getElementById("session-timer-clock");
+  const pillElement = document.getElementById("session-timer-pill");
+  
+  if (clockElement && pillElement) {
+    pillElement.style.display = "flex";
+    
+    const hours = Math.floor(remainingTime / 3600000);
+    const minutes = Math.floor((remainingTime % 3600000) / 60000);
+    const seconds = Math.floor((remainingTime % 60000) / 1000);
+    
+    const formattedTime = 
+      String(hours).padStart(2, '0') + ":" + 
+      String(minutes).padStart(2, '0') + ":" + 
+      String(seconds).padStart(2, '0');
+      
+    clockElement.textContent = formattedTime;
+    
+    if (remainingTime <= WARNING_THRESHOLD_MS) {
+      clockElement.style.color = "#ef4444";
+      pillElement.style.borderColor = "rgba(239, 68, 68, 0.35)";
+    } else {
+      clockElement.style.color = "";
+      pillElement.style.borderColor = "";
+    }
   }
-}, 60000);
+
+  const modal = document.getElementById("session-extension-modal");
+  const countdownText = document.getElementById("session-warning-countdown");
+  
+  if (remainingTime <= WARNING_THRESHOLD_MS && remainingTime > 0) {
+    if (modal && modal.style.display !== "flex" && !window.__sessionExpiredShown) {
+      modal.style.display = "flex";
+      modal.classList.add("show");
+    }
+    
+    if (countdownText) {
+      const min = Math.floor(remainingTime / 60000);
+      const sec = Math.floor((remainingTime % 60000) / 1000);
+      countdownText.textContent = min + ":" + String(sec).padStart(2, '0');
+    }
+  } else if (remainingTime <= 0) {
+    if (!window.__sessionExpiredShown) {
+      window.__sessionExpiredShown = true;
+      if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("show");
+      }
+      alert("Session expired. Please login again.");
+      window.location.href = "/logout";
+    }
+  } else {
+    if (modal && modal.style.display === "flex") {
+      modal.style.display = "none";
+      modal.classList.remove("show");
+    }
+  }
+}, 1000);
 
 // =====================================================
 // GLOBAL STATE (DO NOT REMOVE – used across features)
@@ -109,12 +193,33 @@ let isContextReady = false;
 // DOM READY
 // =====================================================
 document.addEventListener("DOMContentLoaded", () => {
+  // Session extension modal button listeners
+  const btnExtend = document.getElementById("btn-extend-session");
+  const btnLogout = document.getElementById("btn-logout-session");
+  const extModal = document.getElementById("session-extension-modal");
+
+  if (btnExtend) {
+    btnExtend.addEventListener("click", () => {
+      pingKeepAlive();
+      updateLastActivity();
+      if (extModal) {
+        extModal.style.display = "none";
+        extModal.classList.remove("show");
+      }
+    });
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener("click", () => {
+      window.location.href = "/logout";
+    });
+  }
 
   // ===================================================
   // SAFE TABLE INIT (does NOT touch business features)
   // ===================================================
   document.querySelectorAll("table").forEach(t => {
-    if (t.id === "popPaymentTable" || t.id === "feedPaymentTable" || t.classList.contains("no-datatable") || t.classList.contains("popup-mini-table")) return;
+    if (t.id === "customerTable" || t.id === "userTable" || t.id === "popPaymentTable" || t.id === "feedPaymentTable" || t.classList.contains("no-datatable") || t.classList.contains("popup-mini-table")) return;
     if (!t.querySelector("thead")) return;
     if ($.fn.DataTable.isDataTable(t)) return;
 
