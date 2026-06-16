@@ -36,40 +36,41 @@ window.tileSortStates = window.tileSortStates || {};
 
 // --- Instant lookup mapping ---
 const CUSTOMER_MAP = {};
+let expectedAccCount = 0;
+let expectedTotalAmount = 0;
 
-(window.CUSTOMERS || []).forEach(c => {
-    try {
+function initCustomerMapAndStats() {
+    (window.CUSTOMERS || []).forEach(c => {
+        try {
+            if (!c || c.ano === null || c.ano === undefined) {
+                console.warn("Skipping invalid customer:", c);
+                return;
+            }
 
-        if (!c || c.ano === null || c.ano === undefined) {
-            console.warn("Skipping invalid customer:", c);
-            return;
+            // Normalize backend keys to the frontend expected shape
+            const normalized = {
+                ano: String(c.ano).trim(),
+                name: c.name || "",
+                amt: Number(c.total_amount) || 0,
+                pamt: Number(c.paid_amount) || 0,
+                bamt: Number(c.balance_amount) || 0,
+                da: Number(c.installment_amount) || 0,
+                start_date: c.start_date || ""
+            };
+
+            if (normalized.ano) {
+                CUSTOMER_MAP[normalized.ano] = normalized;
+            }
+        } catch (err) {
+            console.error("Failed loading customer:", c, err);
         }
+    });
 
-        // Normalize backend keys to the frontend expected shape
-        const normalized = {
-            ano: String(c.ano).trim(),
-            name: c.name || "",
-            amt: Number(c.total_amount) || 0,
-            pamt: Number(c.paid_amount) || 0,
-            bamt: Number(c.balance_amount) || 0,
-            da: Number(c.installment_amount) || 0,
-            start_date: c.start_date || ""
-        };
-
-
-        if (normalized.ano) {
-            CUSTOMER_MAP[normalized.ano] = normalized;
-        }
-
-    } catch (err) {
-        console.error("Failed loading customer:", c, err);
-    }
-});
-
-// --- Expected Stats Calculations ---
-const activeCustomers = window.CUSTOMERS.filter(c => (Number(c.balance_amount) || 0) > 0);
-const expectedAccCount = activeCustomers.length;
-const expectedTotalAmount = activeCustomers.reduce((sum, c) => sum + (Number(c.installment_amount) || 0), 0);
+    // --- Expected Stats Calculations ---
+    const activeCustomers = window.CUSTOMERS.filter(c => (Number(c.balance_amount) || 0) > 0);
+    expectedAccCount = activeCustomers.length;
+    expectedTotalAmount = activeCustomers.reduce((sum, c) => sum + (Number(c.installment_amount) || 0), 0);
+}
 
 // --- Helper function to show errors and play sound ---
 function showError(message) {
@@ -1084,9 +1085,30 @@ function loadAnalytics() {
     .catch(err => console.error("Failed to load analytics data:", err));
 }
 
-updateTable();
-applyGlobalMoneyFormatting();
-loadAnalytics(); // Fetch analytics and render mixed chart on page load
+// Async load of posting customers list
+function loadPostingCustomersAsync() {
+  fetch('/api/posting/customers')
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        window.CUSTOMERS = data.customers || [];
+        initCustomerMapAndStats();
+        
+        // Run initializations now that data is present
+        updateTable();
+        applyGlobalMoneyFormatting();
+        loadAnalytics();
+      } else {
+        showError("Failed to load customer list: " + (data.error || "Unknown error"));
+      }
+    })
+    .catch(err => {
+      console.error("Error loading posting customers:", err);
+      showError("Connection error. Could not load customer list.");
+    });
+}
+
+loadPostingCustomersAsync();
 
 // --- Auto-focus & flatpickr & live collection stats loader & flip card listeners ---
 document.addEventListener("DOMContentLoaded", () => {

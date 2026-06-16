@@ -635,8 +635,9 @@ def set_security_headers(response):
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-    # Prevent caching in debug/development mode
-    if app.debug:
+    # Prevent caching of dynamic resources (HTML and API responses)
+    # to avoid stale session/village context on navigation
+    if app.debug or response.mimetype in ["text/html", "application/json"]:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -1074,17 +1075,6 @@ def set_context():
         session.pop("eid2", None)
         session.pop("employee_name2", None)
     
-    logger.info(
-      "[CONTEXT SET] user=%s vid=%s village=%s code=%s eid1=%s employee1=%s eid2=%s employee2=%s",
-      session.get("username"),
-      session.get("vid"),
-      session.get("village_name"),
-      session.get("village_code"),
-      session.get("eid"),
-      session.get("employee_name"),
-      session.get("eid2"),
-      session.get("employee_name2")
-    )
     cur.close()
     conn.close()
     return jsonify(success=True)
@@ -3482,9 +3472,6 @@ def add_customer():
         })
 
     # GET
-    highest_ano = get_highest_ano_by_vid(vid)
-    analytics = get_customer_analytics(vid)
-
     # Fetch interest_rate and cutting_rate for the current village
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -3503,13 +3490,30 @@ def add_customer():
 
     return render_template(
         "add_customer.html",
-        highest_ano=highest_ano,
         village_name=session.get("village_name"),
         employee_name=session.get("employee_name"),
-        analytics=analytics,
         interest_rate=interest_rate,
         cutting_rate=cutting_rate
     )
+
+@app.route("/api/add_customer/metadata")
+@login_required
+def api_add_customer_metadata():
+    vid = session.get("vid")
+    if not vid:
+        return jsonify(success=False, error="No active village context"), 400
+
+    try:
+        highest_ano = get_highest_ano_by_vid(vid)
+        analytics = get_customer_analytics(vid)
+        return jsonify(
+            success=True,
+            highest_ano=highest_ano,
+            analytics=analytics
+        )
+    except Exception as e:
+        logger.error(f"Error fetching add customer metadata: {e}")
+        return jsonify(success=False, error=str(e)), 500
 
 @app.route("/view_customers")
 @login_required
@@ -3521,369 +3525,242 @@ def view_customers():
         flash("Please select Village from Dashboard first", "warning")
         return redirect(url_for("dashboard"))
 
-    # 🔸 NEW: mode toggle (active / closed / historic)
     mode = request.args.get("mode", "active")  # default = active
 
     conn = get_pg_connection()
     cur = conn.cursor()
-
-    cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
-    rates_row = cur.fetchone()
-    interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
-    cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
-
-
-    # 📊 Overhauled Analytics Calculations
-    # Active Stats (from customer table)
-    cur.execute("""
-        SELECT 
-            COALESCE(COUNT(*), 0),
-            COALESCE(SUM(balance_amount), 0.0)
-        FROM customer
-        WHERE vid = %s
-    """, (vid,))
-    active_count, active_bal_sum = cur.fetchone()
-
-    # Closed Stats: Defaulted (balance_amount > 0) and Closed (balance_amount <= 0) from closed_cust_account
-    cur.execute("""
-        SELECT 
-            COALESCE(COUNT(*) FILTER (WHERE balance_amount > 0), 0),
-            COALESCE(SUM(balance_amount) FILTER (WHERE balance_amount > 0), 0.0),
-            COALESCE(COUNT(*) FILTER (WHERE balance_amount <= 0), 0)
-        FROM closed_cust_account
-        WHERE vid = %s
-    """, (vid,))
-    defaulted_count, defaulted_bal_sum, closed_count = cur.fetchone()
-
-    # Average Scores Calculations
-    # 1. Active average score
-    cur.execute("""
-        SELECT COALESCE(AVG(customer_rating), 100.0)
-        FROM customer
-        WHERE vid = %s
-    """, (vid,))
-    active_avg_score = float(cur.fetchone()[0])
-
-    # 2. Defaulted average score: (closed_cust_account balance > 0) + (customer)
-    cur.execute("""
-        SELECT COALESCE(AVG(customer_rating), 100.0)
-        FROM (
-            SELECT customer_rating FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
-            UNION ALL
-            SELECT customer_rating FROM customer WHERE vid = %s
-        ) defaulted_group
-    """, (vid, vid))
-    defaulted_avg_score = float(cur.fetchone()[0])
-
-    # 3. Complete average score: (all closed_cust_account) + (customer) + (historic_customer_data)
-    cur.execute("""
-        SELECT COALESCE(AVG(customer_rating), 100.0)
-        FROM (
-            SELECT customer_rating FROM closed_cust_account WHERE vid = %s
-            UNION ALL
-            SELECT customer_rating FROM customer WHERE vid = %s
-            UNION ALL
-            SELECT customer_rating FROM historic_customer_data WHERE vid = %s
-        ) complete_group
-    """, (vid, vid, vid))
-    complete_avg_score = float(cur.fetchone()[0])
-
-    # Fetch Table Rows based on mode
-    if mode == "closed":
-        cur.execute("""
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date,
-                base_amount,
-                cutting_amount,
-                interest_amount
-            FROM closed_cust_account
-            WHERE vid = %s
-            ORDER BY ano DESC
-        """, (vid,))
-    elif mode == "historic":
-        cur.execute("""
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date,
-                base_amount,
-                cutting_amount,
-                interest_amount
-            FROM historic_customer_data
-            WHERE vid = %s
-            
-            ORDER BY ano DESC
-        """, (vid,))
-    elif mode == "yearly":
-        cur.execute("""
-
-        SELECT
-            cid,
-            ano,
-            name,
-            vid,
-            start_date,
-            end_date,
-            total_amount,
-            paid_amount,
-            balance_amount,
-            installment_amount,
-            type,
-            period,
-            pano,
-            created_at,
-            aadhaar_number,
-            notes,
-            latitude,
-            longitude,
-            eid,
-            phone_number,
-            'active' AS status,
-            base_amount,
-            cutting_amount,
-            interest_amount
-        FROM customer
-        WHERE vid = %s
-
-        UNION ALL
-
-        SELECT
-            cid,
-            ano,
-            name,
-            vid,
-            start_date,
-            end_date,
-            total_amount,
-            paid_amount,
-            balance_amount,
-            installment_amount,
-            type,
-            period,
-            pano,
-            created_at,
-            aadhaar_number,
-            notes,
-            latitude,
-            longitude,
-            eid,
-            phone_number,
-            status,
-            base_amount,
-            cutting_amount,
-            interest_amount
-        FROM closed_cust_account
-        WHERE vid = %s
-        AND LOWER(TRIM(status)) != 'written_off'
-        AND LOWER(TRIM(status)) != 'closed'
-
-        UNION ALL
-
-        SELECT
-            cid,
-            ano,
-            name,
-            vid,
-            start_date,
-            end_date,
-            total_amount,
-            paid_amount,
-            balance_amount,
-            installment_amount,
-            type,
-            period,
-            pano,
-            created_at,
-            aadhaar_number,
-            notes,
-            latitude,
-            longitude,
-            eid,
-            phone_number,
-            status,
-            base_amount,
-            cutting_amount,
-            interest_amount
-        FROM historic_customer_data
-        WHERE vid = %s
-        AND LOWER(TRIM(status)) != 'written_off'
-        AND LOWER(TRIM(status)) != 'closed'
-        AND balance_amount > 0
-
-        ORDER BY ano DESC
-
-    """, (vid, vid, vid))
-    else:
-        cur.execute("""
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                'active' AS status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date,
-                base_amount,
-                cutting_amount,
-                interest_amount
-            FROM customer
-            WHERE vid = %s
-            ORDER BY ano DESC
-        """, (vid,))
-
-    rows = cur.fetchall()
-    headers = [desc[0] for desc in cur.description] # type: ignore
-
-    data = [dict(zip(headers, r)) for r in rows]
-    data = format_customer_ratings_with_trends(cur, data)
-
-    # Format dates to dd-mm-yyyy for frontend display
-    for d in data:
-        for key in ['start_date', 'end_date', 'created_at', 'freeze_date', 'updated_at']:
-            if key in d and d[key]:
-                val = d[key]
-                if isinstance(val, (date, datetime)):
-                    d[f"{key}_raw"] = val.strftime("%Y-%m-%d")
-                elif isinstance(val, str):
-                    parsed = parse_date_input(val)
-                    d[f"{key}_raw"] = parsed.strftime("%Y-%m-%d") if parsed else val
-                else:
-                    d[f"{key}_raw"] = str(val)
-                d[key] = format_date_display(d[key])
-            else:
-                d[f"{key}_raw"] = ""
-
-    # Fetch all customers in this village across active, closed, and historic tables for global stats
-    cur.execute("""
-        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source
-        FROM customer
-        WHERE vid = %s
-    """, (vid,))
-    active_all = cur.fetchall()
-    
-    cur.execute("""
-        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source
-        FROM closed_cust_account
-        WHERE vid = %s
-    """, (vid,))
-    closed_all = cur.fetchall()
-    
-    cur.execute("""
-        SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source
-        FROM historic_customer_data
-        WHERE vid = %s
-    """, (vid,))
-    historic_all = cur.fetchall()
-
-    all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source']
-    
-    active_dicts = [dict(zip(all_cols, r)) for r in active_all]
-    closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
-    historic_dicts = [dict(zip(all_cols, r)) for r in historic_all]
-
-    active_dicts = format_customer_ratings_with_trends(cur, active_dicts)
-    closed_dicts = format_customer_ratings_with_trends(cur, closed_dicts)
-    historic_dicts = format_customer_ratings_with_trends(cur, historic_dicts)
-
-    all_stats_list = active_dicts + closed_dicts + historic_dicts
-
-    def make_serializable(val):
-        if isinstance(val, Decimal):
-            return float(val)
-        if isinstance(val, (datetime, date)):
-            return val.isoformat()
-        if isinstance(val, dict):
-            return {k: make_serializable(v) for k, v in val.items()}
-        if isinstance(val, list):
-            return [make_serializable(v) for v in val]
-        return val
-
-    all_customers_stats_json = json.dumps(make_serializable(all_stats_list))
-
-    cur.close()
-    conn.close()
+    try:
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        rates_row = cur.fetchone()
+        interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
+        cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
+    except Exception as e:
+        logger.error(f"Error fetching rates in view_customers: {e}")
+        interest_rate = 0.0
+        cutting_rate = 0.0
+    finally:
+        cur.close()
+        conn.close()
 
     return render_template(
         "view_customers.html",
-        headers=headers,
-        data=data,
-        active_customers=active_count,
-        defaulted_customers=defaulted_count,
-        closed_customers=closed_count,
-        active_balance_amount=active_bal_sum,
-        defaulted_balance_amount=defaulted_bal_sum,
-        active_avg_score=active_avg_score,
-        defaulted_avg_score=defaulted_avg_score,
-        complete_avg_score=complete_avg_score,
-        all_customers_stats_json=all_customers_stats_json,
-        mode=mode,
         interest_rate=interest_rate,
-        cutting_rate=cutting_rate
+        cutting_rate=cutting_rate,
+        current_mode=mode
     )
+
+@app.route("/api/view_customers/data")
+@login_required
+def api_view_customers_data():
+    vid = session.get("vid")
+    user_level = session.get("level")
+    allowed_villages = session.get("villages", [])
+
+    if not vid:
+        return jsonify(success=False, error="No active village context"), 400
+
+    if user_level not in ["admin", "mgmt"] and vid not in allowed_villages:
+        return jsonify(success=False, error="Unauthorized village access"), 403
+
+    mode = request.args.get("mode", "active")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Active Stats
+        cur.execute("""
+            SELECT 
+                COALESCE(COUNT(*), 0),
+                COALESCE(SUM(balance_amount), 0.0)
+            FROM customer
+            WHERE vid = %s
+        """, (vid,))
+        active_count, active_bal_sum = cur.fetchone()
+
+        # Closed Stats
+        cur.execute("""
+            SELECT 
+                COALESCE(COUNT(*) FILTER (WHERE balance_amount > 0), 0),
+                COALESCE(SUM(balance_amount) FILTER (WHERE balance_amount > 0), 0.0),
+                COALESCE(COUNT(*) FILTER (WHERE balance_amount <= 0), 0)
+            FROM closed_cust_account
+            WHERE vid = %s
+        """, (vid,))
+        defaulted_count, defaulted_bal_sum, closed_count = cur.fetchone()
+
+        # Average Ratings
+        cur.execute("""
+            SELECT COALESCE(AVG(customer_rating), 100.0)
+            FROM customer
+            WHERE vid = %s
+        """, (vid,))
+        active_avg_score = float(cur.fetchone()[0])
+
+        cur.execute("""
+            SELECT COALESCE(AVG(customer_rating), 100.0)
+            FROM (
+                SELECT customer_rating FROM closed_cust_account WHERE vid = %s AND balance_amount > 0
+                UNION ALL
+                SELECT customer_rating FROM customer WHERE vid = %s
+            ) defaulted_group
+        """, (vid, vid))
+        defaulted_avg_score = float(cur.fetchone()[0])
+
+        cur.execute("""
+            SELECT COALESCE(AVG(customer_rating), 100.0)
+            FROM (
+                SELECT customer_rating FROM closed_cust_account WHERE vid = %s
+                UNION ALL
+                SELECT customer_rating FROM customer WHERE vid = %s
+                UNION ALL
+                SELECT customer_rating FROM historic_customer_data WHERE vid = %s
+            ) complete_group
+        """, (vid, vid, vid))
+        complete_avg_score = float(cur.fetchone()[0])
+
+        # Fetch Table Rows based on mode
+        if mode == "closed":
+            cur.execute("""
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                FROM closed_cust_account
+                WHERE vid = %s
+                ORDER BY ano DESC
+            """, (vid,))
+        elif mode == "historic":
+            cur.execute("""
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                FROM historic_customer_data
+                WHERE vid = %s
+                ORDER BY ano DESC
+            """, (vid,))
+        elif mode == "yearly":
+            cur.execute("""
+            SELECT
+                cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                base_amount, cutting_amount, interest_amount
+            FROM customer
+            WHERE vid = %s
+            UNION ALL
+            SELECT
+                cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                base_amount, cutting_amount, interest_amount
+            FROM closed_cust_account
+            WHERE vid = %s AND LOWER(TRIM(status)) != 'written_off' AND LOWER(TRIM(status)) != 'closed'
+            UNION ALL
+            SELECT
+                cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                base_amount, cutting_amount, interest_amount
+            FROM historic_customer_data
+            WHERE vid = %s AND LOWER(TRIM(status)) != 'written_off' AND LOWER(TRIM(status)) != 'closed' AND balance_amount > 0
+            ORDER BY ano DESC
+            """, (vid, vid, vid))
+        else:  # default "active"
+            cur.execute("""
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                FROM customer
+                WHERE vid = %s
+                ORDER BY ano DESC
+            """, (vid,))
+
+        rows = cur.fetchall()
+        headers = [desc[0] for desc in cur.description]
+        data = [dict(zip(headers, r)) for r in rows]
+        data = format_customer_ratings_with_trends(cur, data)
+
+        # Format dates
+        for d in data:
+            for key in ['start_date', 'end_date', 'created_at', 'freeze_date', 'updated_at']:
+                if key in d and d[key]:
+                    val = d[key]
+                    if isinstance(val, (date, datetime)):
+                        d[f"{key}_raw"] = val.strftime("%Y-%m-%d")
+                    elif isinstance(val, str):
+                        parsed = parse_date_input(val)
+                        d[f"{key}_raw"] = parsed.strftime("%Y-%m-%d") if parsed else val
+                    else:
+                        d[f"{key}_raw"] = str(val)
+                    d[key] = format_date_display(d[key])
+                else:
+                    d[f"{key}_raw"] = ""
+
+        # Global stats list
+        cur.execute("""
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source
+            FROM customer WHERE vid = %s
+        """, (vid,))
+        active_all = cur.fetchall()
+        
+        cur.execute("""
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source
+            FROM closed_cust_account WHERE vid = %s
+        """, (vid,))
+        closed_all = cur.fetchall()
+        
+        cur.execute("""
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source
+            FROM historic_customer_data WHERE vid = %s
+        """, (vid,))
+        historic_all = cur.fetchall()
+
+        all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source']
+        
+        active_dicts = [dict(zip(all_cols, r)) for r in active_all]
+        closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
+        historic_dicts = [dict(zip(all_cols, r)) for r in historic_all]
+
+        active_dicts = format_customer_ratings_with_trends(cur, active_dicts)
+        closed_dicts = format_customer_ratings_with_trends(cur, closed_dicts)
+        historic_dicts = format_customer_ratings_with_trends(cur, historic_dicts)
+
+        all_stats_list = active_dicts + closed_dicts + historic_dicts
+
+        def make_serializable(val):
+            if isinstance(val, Decimal):
+                return float(val)
+            if isinstance(val, (datetime, date)):
+                return val.isoformat()
+            if isinstance(val, dict):
+                return {k: make_serializable(v) for k, v in val.items()}
+            if isinstance(val, list):
+                return [make_serializable(v) for v in val]
+            return val
+
+        serializable_data = make_serializable(data)
+        serializable_stats = make_serializable(all_stats_list)
+
+        return jsonify(
+            success=True,
+            data=serializable_data,
+            all_customers_stats=serializable_stats,
+            summary={
+                "active_customers": active_count,
+                "defaulted_customers": defaulted_count,
+                "closed_customers": closed_count,
+                "active_balance_amount": float(active_bal_sum) if active_bal_sum is not None else 0.0,
+                "defaulted_balance_amount": float(defaulted_bal_sum) if defaulted_bal_sum is not None else 0.0,
+                "active_avg_score": active_avg_score,
+                "defaulted_avg_score": defaulted_avg_score,
+                "complete_avg_score": complete_avg_score,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error fetching view customers data: {e}")
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/api/balance_report")
 @login_required
@@ -4219,41 +4096,52 @@ def posting_page():
         flash("Please select Village first", "warning")
         return redirect("/dashboard")
 
+    return render_template("post_payment.html", customers=[])
+
+@app.route("/api/posting/customers", methods=["GET"])
+@login_required
+def api_posting_customers():
+    vid = session.get("vid")
+    if not vid:
+        return jsonify(success=False, error="No active village context"), 400
+
     conn = get_pg_connection()
     cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                cid,
+                ano,
+                name,
+                start_date,
+                total_amount,
+                paid_amount,
+                balance_amount,
+                installment_amount
+            FROM customer
+            WHERE vid = %s AND (status IS NULL OR status != 'closed')
+        """, (vid,))
 
-    cur.execute("""
-        SELECT
-            cid,
-            ano,
-            name,
-            start_date,
-            total_amount,
-            paid_amount,
-            balance_amount,
-            installment_amount
-        FROM customer
-        WHERE vid = %s AND (status IS NULL OR status != 'closed')
-    """, (vid,))
-
-    customers = [
-        dict(
-            cid=r[0],
-            ano=r[1],
-            name=r[2],
-            start_date=r[3],
-            total_amount=r[4],
-            paid_amount=r[5],
-            balance_amount=r[6],
-            installment_amount=r[7],
-        )
-        for r in cur.fetchall()
-    ]
-
-    cur.close()
-    conn.close()
-
-    return render_template("post_payment.html", customers=customers)
+        customers = [
+            dict(
+                cid=r[0],
+                ano=r[1],
+                name=r[2],
+                start_date=r[3].isoformat() if isinstance(r[3], (date, datetime)) else r[3],
+                total_amount=float(r[4]) if r[4] is not None else 0.0,
+                paid_amount=float(r[5]) if r[5] is not None else 0.0,
+                balance_amount=float(r[6]) if r[6] is not None else 0.0,
+                installment_amount=float(r[7]) if r[7] is not None else 0.0,
+            )
+            for r in cur.fetchall()
+        ]
+        return jsonify(success=True, customers=customers)
+    except Exception as e:
+        logger.error(f"Error fetching posting customers: {e}")
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/get_customer_info")
 @login_required
@@ -4857,11 +4745,18 @@ def api_customer_save_payments():
 
             if pid and pid in existing_pids:
                 # UPDATE
-                cur.execute(f"""
-                    UPDATE {table_payment}
-                    SET amt = %s, payment_date = %s, updated_at = NOW()
-                    WHERE pid = %s AND cid = %s
-                """, (amt, pdt, pid, cid))
+                if table_payment == "payment":
+                    cur.execute(f"""
+                        UPDATE {table_payment}
+                        SET amt = %s, payment_date = %s, updated_at = NOW()
+                        WHERE pid = %s AND cid = %s
+                    """, (amt, pdt, pid, cid))
+                else:
+                    cur.execute(f"""
+                        UPDATE {table_payment}
+                        SET amt = %s, payment_date = %s
+                        WHERE pid = %s AND cid = %s
+                    """, (amt, pdt, pid, cid))
                 incoming_pids.add(pid)
             else:
                 # INSERT
@@ -7641,6 +7536,8 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     # Precompute customer-specific parameters with pre-parsed start_dt/end_dt/installment/period
     cust_list = []
     for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status, origin in all_cust_rows:
+        if not start_date or not end_date:
+            continue
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_list.append({
@@ -8164,6 +8061,8 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     dt3 = dates[3]
     
     for cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, c_type, period, phone_number, status, db_rating in cust_rows:
+        if not start_date or not end_date:
+            continue
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_payments = payments_by_cid.get(cid, [])
@@ -8630,6 +8529,8 @@ def api_dashboard_analytics(vid):
 
                 # Process currently active customers
                 for cid, start_date, total_amount, balance_amount, paid_amount in active_rows:
+                    if not start_date:
+                        continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
                     if start_dt > dt:
                         continue
@@ -8644,6 +8545,8 @@ def api_dashboard_analytics(vid):
 
                 # Process currently closed and historic customers
                 for cid, start_date, closed_at, total_amount, balance_amount, paid_amount in closed_rows + historic_rows:
+                    if not start_date:
+                        continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
                     if start_dt > dt:
                         continue
@@ -8812,7 +8715,7 @@ def api_dashboard_posting_analytics(vid):
 
         # Group payments by payment_date
         payments_by_date = {}
-        for p_cid, p_amt, p_date, p_created_at, p_eid in payments:
+        for p_cid, p_amt, p_date, p_created_at, p_eid in (p[:5] for p in payments):
             dt = p_date.date() if isinstance(p_date, datetime) else p_date
             if dt not in payments_by_date:
                 payments_by_date[dt] = []
@@ -8982,7 +8885,7 @@ def api_dashboard_posting_analytics(vid):
 
         # Employee Breakdown (Lag and Collections)
         employee_map = {}
-        for p_cid, p_amt, p_date, p_created_at, p_eid in payments:
+        for p_cid, p_amt, p_date, p_created_at, p_eid in (p[:5] for p in payments):
             if not p_eid:
                 continue
             if p_eid not in employee_map:
@@ -9020,7 +8923,7 @@ def api_dashboard_posting_analytics(vid):
 
         # Calculate avg_entry_lag_days as the average of the weekly averages
         weekly_lags = {}
-        for p_cid, p_amt, p_date, p_created_at, p_eid in payments:
+        for p_cid, p_amt, p_date, p_created_at, p_eid in (p[:5] for p in payments):
             p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
             c_dt = p_created_at.date() if isinstance(p_created_at, datetime) else p_created_at
             if p_dt and p_dt.year >= 2025:
@@ -9696,6 +9599,13 @@ def logout():
     flash("Logged out", "info")
 
     return response
+
+@app.route("/api/session/keepalive", methods=["POST"])
+@login_required
+def api_session_keepalive():
+    session["_last_activity"] = pytime.time()
+    session.modified = True
+    return jsonify(success=True)
 
 @app.route("/users")
 @login_required

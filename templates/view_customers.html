@@ -39,7 +39,7 @@
     </div>
 
     <!-- Premium Sliding Toggle Switch -->
-    <div class="sliding-toggle-container three-way mode-{{ mode if mode else 'active' }}" id="customerModeToggle">
+    <div class="sliding-toggle-container three-way mode-{{ current_mode if current_mode else 'active' }}" id="customerModeToggle">
       <div class="sliding-toggle-pill"></div>
       <span class="toggle-label active-label" data-mode="active">Active</span>
       <span class="toggle-label closed-label" data-mode="closed">Closed</span>
@@ -62,15 +62,7 @@
   </div>
 
   <!-- Responsive Overhauled Analytics Tiles -->
-  <div class="customer-analytics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); gap: 20px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;"
-       data-init-active-count="{{ active_customers }}"
-       data-init-defaulted-count="{{ defaulted_customers }}"
-       data-init-closed-count="{{ closed_customers }}"
-       data-init-active-bal="{{ active_balance_amount }}"
-       data-init-defaulted-bal="{{ defaulted_balance_amount }}"
-       data-init-active-score="{{ active_avg_score }}"
-       data-init-defaulted-score="{{ defaulted_avg_score }}"
-       data-init-complete-score="{{ complete_avg_score }}">
+  <div class="customer-analytics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); gap: 20px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
     
     <!-- Tile 1: Customers -->
     <div class="analytics-card card-glass">
@@ -80,17 +72,17 @@
       <div class="card-stats">
         <div class="stat-item align-center">
           <span class="label">Active</span>
-          <span class="value" id="activeCustomersCount">{{ active_customers }}</span>
+          <span class="value" id="activeCustomersCount">...</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Defaulted</span>
-          <span class="value" id="defaultedCustomersCount">{{ defaulted_customers }}</span>
+          <span class="value" id="defaultedCustomersCount">...</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Closed</span>
-          <span class="value" id="closedCustomersCount">{{ closed_customers }}</span>
+          <span class="value" id="closedCustomersCount">...</span>
         </div>
       </div>
     </div>
@@ -103,12 +95,12 @@
       <div class="card-stats">
         <div class="stat-item align-center">
           <span class="label">Active</span>
-          <span class="value" id="activeBalAmt" data-money>{{ active_balance_amount }}</span>
+          <span class="value" id="activeBalAmt" data-money>...</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item align-center">
           <span class="label">Defaulted</span>
-          <span class="value" id="defaultedBalAmt" data-money>{{ defaulted_balance_amount }}</span>
+          <span class="value" id="defaultedBalAmt" data-money>...</span>
         </div>
       </div>
     </div>
@@ -122,7 +114,7 @@
         <div class="stat-item align-center">
           <span class="label">Active</span>
           <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
-            <span class="value" id="activeAvgScore">{{ "%.1f"|format(active_avg_score) }}</span>
+            <span class="value" id="activeAvgScore">...</span>
             <span class="trend-arrow" id="activeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
           </div>
         </div>
@@ -130,7 +122,7 @@
         <div class="stat-item align-center">
           <span class="label">Defaulted</span>
           <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
-            <span class="value" id="defaultedAvgScore">{{ "%.1f"|format(defaulted_avg_score) }}</span>
+            <span class="value" id="defaultedAvgScore">...</span>
             <span class="trend-arrow" id="defaultedAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
           </div>
         </div>
@@ -138,7 +130,7 @@
         <div class="stat-item align-center">
           <span class="label">Complete</span>
           <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
-            <span class="value" id="completeAvgScore">{{ "%.1f"|format(complete_avg_score) }}</span>
+            <span class="value" id="completeAvgScore">...</span>
             <span class="trend-arrow" id="completeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
           </div>
         </div>
@@ -186,49 +178,14 @@
         </tr>
       </thead>
       <tbody id="customerTableBody">
-        {% for row in data %}
-        <tr class="table-row" data-ano="{{ row['ano'] }}" data-cid="{{ row['cid'] }}" data-source="{{ 'active' if mode == 'active' else 'closed' if mode == 'closed' else 'historic' if mode == 'historic' else 'active' }}">
-          <td class="checkbox-column" style="text-align: center;"><input type="checkbox" /></td>
-          <td class="col-ano" data-order="{{ row['ano'] }}">{{ row['ano'] }}</td>
-          <td class="col-name">{{ row['name'] }}</td>
-          <td class="col-start_date" data-order="{{ row['start_date_raw'] }}">{{ row['start_date'] }}</td>
-          <td class="col-end_date" data-order="{{ row['end_date_raw'] }}">{{ row['end_date'] }}</td>
-          <td class="col-total_amount" data-order="{{ row['total_amount'] }}" data-money>{{ row['total_amount'] }}</td>
-          <td class="col-paid_amount" data-order="{{ row['paid_amount'] }}" data-money>{{ row['paid_amount'] }}</td>
-          <td class="col-balance_amount amount-paid" data-order="{{ row['balance_amount'] }}" data-money>{{ row['balance_amount'] }}</td>
-          <td class="col-installment_amount" data-order="{{ row['installment_amount'] }}" data-money>{{ row['installment_amount'] }}</td>
-          <td class="col-type">{{ row['type'] }}</td>
-          <td class="col-period" data-order="{{ row['period'] }}">{{ row['period'] }}</td>
-          <td class="col-pano" data-order="{{ row['pano'] }}">{{ row['pano'] }}</td>
-          <td class="col-notes">{{ row['notes'] }}</td>
-          
-          <!-- Default hidden -->
-          <td class="col-base_amount" data-order="{{ row['base_amount'] }}" data-money>{{ row['base_amount'] }}</td>
-          <td class="col-cutting_amount" data-order="{{ row['cutting_amount'] }}" data-money>{{ row['cutting_amount'] }}</td>
-          <td class="col-interest_amount" data-order="{{ row['interest_amount'] }}" data-money>{{ row['interest_amount'] }}</td>
-          <td class="col-phone_number">{{ row['phone_number'] }}</td>
-          <td class="col-aadhaar_number">{{ row['aadhaar_number'] }}</td>
-          <td class="col-customer_rating" data-order="{{ row['customer_rating_raw'] if row['customer_rating_raw'] is not none else '' }}">
-            {% if '↑' in row['customer_rating'] %}
-              <span style="color: #10b981; font-weight: bold;">{{ row['customer_rating'] }}</span>
-            {% elif '↓' in row['customer_rating'] %}
-              <span style="color: #ef4444; font-weight: bold;">{{ row['customer_rating'] }}</span>
-            {% else %}
-              <span style="color: #64748b; font-weight: bold;">{{ row['customer_rating'] }}</span>
-            {% endif %}
-          </td>
-          <td class="col-final_frozen_rating" data-order="{{ row['final_frozen_rating'] }}">{{ row['final_frozen_rating'] }}</td>
-          <td class="col-final_risk_level">{{ row['final_risk_level'] }}</td>
-          <td class="col-freeze_date" data-order="{{ row['freeze_date_raw'] }}">{{ row['freeze_date'] }}</td>
-          <td class="col-latitude" data-order="{{ row['latitude'] }}">{{ row['latitude'] }}</td>
-          <td class="col-longitude" data-order="{{ row['longitude'] }}">{{ row['longitude'] }}</td>
-          <td class="col-eid">{{ row['eid'] }}</td>
-          <td class="col-created_at" data-order="{{ row['created_at_raw'] }}">{{ row['created_at'] }}</td>
-          <td class="col-status">
-            <span class="status-badge status-{{ row['status']|lower|replace(' ', '-') }}">{{ row['status'] }}</span>
+        <tr id="tableLoaderRow">
+          <td colspan="30" style="text-align: center; padding: 48px; background: var(--surface);">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+              <div style="width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: notif-spin 1s linear infinite;"></div>
+              <div style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-secondary);">Loading customers...</div>
+            </div>
           </td>
         </tr>
-        {% endfor %}
       </tbody>
     </table>
   </div>
@@ -242,10 +199,10 @@
 <script>
 window.VILLAGE_INTEREST_RATE = {{ interest_rate }};
 window.VILLAGE_CUTTING_RATE = {{ cutting_rate }};
+window.CURRENT_MODE = "{{ current_mode }}";
 </script>
 <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
 <script>
-window.ALL_CUSTOMERS_STATS = {{ all_customers_stats_json|safe }};
 document.addEventListener("DOMContentLoaded", function () {
   const toggleContainer = document.getElementById("customerModeToggle");
   if (toggleContainer) {

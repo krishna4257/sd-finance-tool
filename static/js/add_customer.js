@@ -414,14 +414,35 @@ anoInput.addEventListener("change", checkAno);
     setFormFieldsEnabled(true);
     anoInput.focus();
 
-    const highestAno = parseInt(
-      document.getElementById("highestAnoDisplay")?.innerText || "0",
-      10
-    );
+    function loadMetadata() {
+        fetch('/api/add_customer/metadata')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const highestAnoDisplay = document.getElementById('highestAnoDisplay');
+                    if (highestAnoDisplay) {
+                        highestAnoDisplay.textContent = data.highest_ano;
+                    }
+                    if (data.highest_ano && !anoInput.value) {
+                        anoInput.value = data.highest_ano + 1;
+                    }
 
-    if (!isNaN(highestAno)) {
-      anoInput.value = highestAno + 1;
+                    if (data.analytics) {
+                        const countToday = document.getElementById('countToday');
+                        const countWeek = document.getElementById('countWeek');
+                        const countMonth = document.getElementById('countMonth');
+                        if (countToday) countToday.textContent = data.analytics.today;
+                        if (countWeek) countWeek.textContent = data.analytics.week;
+                        if (countMonth) countMonth.textContent = data.analytics.month;
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Error loading add_customer metadata:", err);
+            });
     }
+
+    loadMetadata();
 
     // Preserve previously selected loan configuration during repeated entries
     if (typeInput.value && periodInput.value && startDateInput.value) {

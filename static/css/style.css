@@ -5548,4 +5548,23 @@ table.popup-mini-table tbody tr:hover td {
 /* Hide default DataTables search box globally */
 .dataTables_filter {
   display: none !important;
+}
+
+/* ── Session Timer Pill ── */
+.session-timer-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-raised);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-right: 12px;
+}
+.session-timer-pill .timer-icon {
+  font-size: 14px;
 }

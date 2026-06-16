@@ -1,4 +1,5 @@
 import os
+import time
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool, PoolError
 from dotenv import load_dotenv
@@ -97,6 +98,7 @@ def get_pg_connection():
                 last_error = RuntimeError(
                     "Connection validation failed"
                 )
+                time.sleep(0.2)
 
         except PoolError as e:
             raise DatabasePoolExhausted(
@@ -112,6 +114,7 @@ def get_pg_connection():
                     pg_pool.putconn(conn, close=True)
                 except Exception:
                     pass
+            time.sleep(0.2)
 
     if last_error is not None:
         raise last_error

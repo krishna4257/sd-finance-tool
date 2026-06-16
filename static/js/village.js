@@ -2028,6 +2028,7 @@ function refreshVillageDropdown() {
 }
 
 window.openVillageDashboard = function (vid) {
+  localStorage.setItem("landing_selected_vid", String(vid));
   csrfFetch("/set_context", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
