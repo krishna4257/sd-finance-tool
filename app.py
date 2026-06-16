@@ -554,20 +554,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Local development on http://127.0.0.1:8080 must keep this disabled,
 # otherwise Flask cannot store the session cookie and CSRF fails.
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
-
-from flask.sessions import SecureCookieSessionInterface
-
-class CustomSessionInterface(SecureCookieSessionInterface):
-    def get_cookie_domain(self, app):
-        try:
-            host = request.headers.get("Host", "")
-            if "sivadurga.in" in host:
-                return ".sivadurga.in"
-        except Exception:
-            pass
-        return app.config.get("SESSION_COOKIE_DOMAIN")
-
-app.session_interface = CustomSessionInterface()
+app.config["SESSION_COOKIE_NAME"] = "sivadurga_session"
+app.config["SESSION_COOKIE_DOMAIN"] = None
 
 csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
@@ -659,7 +647,18 @@ def set_security_headers(response):
 
 # ----------------------------------------------------
 # Session timeout and activity tracking
-# ----------------------------------------------------
+@app.before_request
+def redirect_www():
+    # Skip for static assets
+    if request.path.startswith("/static/"):
+        return
+    host = request.headers.get("Host", "")
+    if host.startswith("www."):
+        new_host = host[4:]
+        is_https = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
+        scheme = "https" if is_https else "http"
+        return redirect(f"{scheme}://{new_host}{request.full_path}", code=301)
+
 @app.before_request
 def session_timeout_check():
     # Skip session timeout verification for static assets
@@ -9689,7 +9688,10 @@ def logout():
 
     response = redirect(url_for("login"))
 
-    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))
+    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "sivadurga_session"))
+    # Active cleanup of legacy/stale 'session' cookies
+    response.delete_cookie("session")
+    response.delete_cookie("session", domain=".sivadurga.in")
 
     flash("Logged out", "info")
 
