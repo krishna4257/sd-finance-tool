@@ -544,7 +544,7 @@ if not secret_key:
 app.secret_key = secret_key
 
 app.config["WTF_CSRF_ENABLED"] = True
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=3)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True

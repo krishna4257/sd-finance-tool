@@ -58,7 +58,7 @@
 // CLIENT IDLE SESSION TIMER (Multi-Tab Safe via localStorage)
 // =====================================================
 
-const SESSION_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const WARNING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const KEEPALIVE_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
 
