@@ -555,6 +555,20 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # otherwise Flask cannot store the session cookie and CSRF fails.
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
 
+from flask.sessions import SecureCookieSessionInterface
+
+class CustomSessionInterface(SecureCookieSessionInterface):
+    def get_cookie_domain(self, app):
+        try:
+            host = request.headers.get("Host", "")
+            if "sivadurga.in" in host:
+                return ".sivadurga.in"
+        except Exception:
+            pass
+        return app.config.get("SESSION_COOKIE_DOMAIN")
+
+app.session_interface = CustomSessionInterface()
+
 csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -621,16 +635,6 @@ except Exception as exc:
     logger.warning("Could not ensure customer_docs_feed table: %s", exc)
 
 
-@app.before_request
-def fix_cookie_domain():
-    host = request.headers.get("Host", "")
-    # Allow both domains
-    if "sivadurga.in" in host:
-        app.config["SESSION_COOKIE_DOMAIN"] = ".sivadurga.in"
-    else:
-        # Allows Cloud Run direct link to work
-        app.config["SESSION_COOKIE_DOMAIN"] = None
-
 # Set security headers after each request
 @app.after_request
 def set_security_headers(response):
@@ -658,20 +662,38 @@ def set_security_headers(response):
 # ----------------------------------------------------
 @app.before_request
 def session_timeout_check():
+    # Skip session timeout verification for static assets
+    if request.path.startswith("/static/"):
+        return
 
     if "user_id" not in session:
         return
     
     session.permanent = True
 
-    now = datetime.utcnow()
+    now = pytime.time()
     last_activity = session.get("_last_activity")
 
     if last_activity:
         try:
-            last_activity_dt = datetime.fromisoformat(last_activity)
+            # Handle float Unix timestamps (new style) and ISO strings (old style/transition)
+            if isinstance(last_activity, (int, float)):
+                last_activity_val = float(last_activity)
+            elif isinstance(last_activity, str):
+                try:
+                    last_activity_val = float(last_activity)
+                except ValueError:
+                    # Fallback parsing for active sessions that stored ISO strings
+                    last_activity_dt = datetime.fromisoformat(last_activity)
+                    if last_activity_dt.tzinfo:
+                        last_activity_val = last_activity_dt.timestamp()
+                    else:
+                        last_activity_val = last_activity_dt.replace(tzinfo=timezone.utc).timestamp()
+            else:
+                last_activity_val = float(last_activity)
 
-            if now - last_activity_dt > app.config["PERMANENT_SESSION_LIFETIME"]:
+            lifetime_seconds = app.config["PERMANENT_SESSION_LIFETIME"].total_seconds()
+            if now - last_activity_val > lifetime_seconds:
                 session.clear()
 
                 if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -683,16 +705,14 @@ def session_timeout_check():
                 flash("Session expired. Please login again.", "warning")
                 return redirect(url_for("login"))
 
-        except Exception:
-            session.clear()
-            if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return jsonify({
-                    "success": False,
-                    "session_expired": True
-                }), 401
-            return redirect(url_for("login"))
+        except Exception as e:
+            # Avoid logging out the user due to formatting/parsing/timezone errors.
+            # Log the error and safely update the activity time to keep their session.
+            logger.error(f"Error parsing session _last_activity: {e}")
+            session["_last_activity"] = now
+            session.modified = True
 
-    session["_last_activity"] = now.isoformat()
+    session["_last_activity"] = now
     session.modified = True
 
     # Auto-recover village_code and village_name if missing from session context
@@ -992,7 +1012,14 @@ def api_villages_by_employee():
 @login_required
 def get_context():
     return jsonify({
-        "vid": session.get("vid")
+        "vid": session.get("vid"),
+        "eid": session.get("eid"),
+        "eid2": session.get("eid2"),
+        "village_name": session.get("village_name"),
+        "village_code": session.get("village_code"),
+        "employee_name": session.get("employee_name"),
+        "employee_name2": session.get("employee_name2"),
+        "username": session.get("username")
     })
 
 
@@ -1047,7 +1074,18 @@ def set_context():
     else:
         session.pop("eid2", None)
         session.pop("employee_name2", None)
-
+    
+    logger.info(
+      "[CONTEXT SET] user=%s vid=%s village=%s code=%s eid1=%s employee1=%s eid2=%s employee2=%s",
+      session.get("username"),
+      session.get("vid"),
+      session.get("village_name"),
+      session.get("village_code"),
+      session.get("eid"),
+      session.get("employee_name"),
+      session.get("eid2"),
+      session.get("employee_name2")
+    )
     cur.close()
     conn.close()
     return jsonify(success=True)
@@ -9611,7 +9649,7 @@ def login():
         session["employee_id"] = employee_id
         session["level"] = level.strip().lower() if level else None
         session["villages"] = villages
-        session["_last_activity"] = datetime.utcnow().isoformat()
+        session["_last_activity"] = pytime.time()
         session.permanent = True
 
         audit_log(

@@ -35,6 +35,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // ── Village Context Selection ──
   window.selectVillageContext = async function (vid) {
+    console.log("================================");
+    console.log("SETTING VILLAGE CONTEXT");
+    console.log("Selected VID:", vid);
+    console.log("================================");
     try {
       const response = await csrfFetch("/set_context", {
         method: "POST",
