@@ -168,7 +168,6 @@
     <a href="{{ url_for('view_customers') }}" class="nav-link {% if request.endpoint == 'view_customers' %}active{% endif %}"><i class="fas fa-users"></i> Customers</a>
     <a href="/feed"                           class="nav-link {% if request.endpoint == 'feed' %}active{% endif %}"><i class="fas fa-inbox"></i> Feed</a>
     <a href="/search"                         class="nav-link {% if request.endpoint == 'search_customer' %}active{% endif %}"><i class="fas fa-search"></i> Search | Edit</a>
-    <a href="/cashbag"                        class="nav-link {% if request.endpoint == 'cashbag' %}active{% endif %}"><i class="fas fa-briefcase"></i> Cashbag</a>
     {% endif %}
 
     <div class="nav-section-label">GENERAL</div>

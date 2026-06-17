@@ -7931,7 +7931,12 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         """, (vid, view, sub_view, eval_today))
         cached_row = cur.fetchone()
         if cached_row:
-            return cached_row[0]
+            cached_metrics = cached_row[0]
+            # Safety: the dashboard cache stores the entire payload as metrics.
+            # Only return it if it actually has village_name (full payload) — not a metrics_breakdown blob.
+            if isinstance(cached_metrics, dict) and "village_name" in cached_metrics:
+                return cached_metrics
+            # Otherwise fall through and recompute (stale/wrong format)
 
     # Get evaluated customers for the village
     if view == "active":
@@ -10031,12 +10036,13 @@ def update_payment_date_bulk():
 @login_required
 def cashbag():
 
-    vid = session.get("vid")
+    # ── Scope: employee pair from query params ──
+    emp1 = request.args.get("emp1", type=int)
+    emp2 = request.args.get("emp2", type=int)  # may be None if solo employee
 
-    # Enforce village context
-    if not vid:
-        flash("Please select Village from Dashboard first", "warning")
-        return redirect(url_for("dashboard"))
+    if not emp1:
+        flash("Please open Cash Bag from a village group tile.", "warning")
+        return redirect(url_for("village"))
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -10044,57 +10050,97 @@ def cashbag():
     try:
 
         # ------------------------------------------------
-        # SUMMARY TOTALS
+        # BUILD emp pair WHERE clause helper
+        # ------------------------------------------------
+        # Match rows where emp1 matches AND (emp2 matches or emp2 is NULL/not provided)
+        if emp2:
+            pair_filter = "emp1 = %s AND emp2 = %s"
+            pair_params_single = (emp1, emp2)
+            pair_params_tuple = (emp1, emp2)
+        else:
+            pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
+            pair_params_single = (emp1,)
+            pair_params_tuple = (emp1,)
+
+        # ------------------------------------------------
+        # EMPLOYEE NAMES for page header
+        # ------------------------------------------------
+        cur.execute("SELECT name FROM employee WHERE eid = %s", (emp1,))
+        row_e1 = cur.fetchone()
+        emp1_name = row_e1[0] if row_e1 else f"Employee {emp1}"
+
+        emp2_name = None
+        if emp2:
+            cur.execute("SELECT name FROM employee WHERE eid = %s", (emp2,))
+            row_e2 = cur.fetchone()
+            emp2_name = row_e2[0] if row_e2 else f"Employee {emp2}"
+
+        # ------------------------------------------------
+        # VILLAGES in this group (for context display)
+        # ------------------------------------------------
+        if emp2:
+            cur.execute("""
+                SELECT village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND emp2 = %s AND status = 'active'
+                ORDER BY village_code
+            """, (emp1, emp2))
+        else:
+            cur.execute("""
+                SELECT village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
+                ORDER BY village_code
+            """, (emp1,))
+        group_villages = [{"name": r[0], "code": r[1]} for r in cur.fetchall()]
+
+        # ------------------------------------------------
+        # SUMMARY TOTALS  (scoped to emp pair)
         # ------------------------------------------------
 
         # Office Cash
-        cur.execute("""
+        cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
               AND txn_type = 'office_credit'
-        """, (vid,))
-
+        """, pair_params_single)
         office_cash = float(cur.fetchone()[0] or 0)
 
         # Collections
-        cur.execute("""
+        cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
               AND txn_type = 'customer_collection'
-        """, (vid,))
-
+        """, pair_params_single)
         collections = float(cur.fetchone()[0] or 0)
 
         # Loans Dispensed
-        cur.execute("""
+        cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
               AND txn_type = 'loan_disbursed'
-        """, (vid,))
-
+        """, pair_params_single)
         loans_disbursed = float(cur.fetchone()[0] or 0)
 
         # Expenses
-        cur.execute("""
+        cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
               AND txn_type = 'expense'
-        """, (vid,))
-
+        """, pair_params_single)
         expenses = float(cur.fetchone()[0] or 0)
 
         # Adjustments
-        cur.execute("""
+        cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
               AND txn_type = 'adjustment'
-        """, (vid,))
-
+        """, pair_params_single)
         adjustments = float(cur.fetchone()[0] or 0)
 
         # ------------------------------------------------
@@ -10113,7 +10159,7 @@ def cashbag():
         # TRANSACTION HISTORY
         # ------------------------------------------------
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 id,
                 txn_type,
@@ -10125,9 +10171,9 @@ def cashbag():
                     'DD/MM/YYYY HH12:MI AM'
                 ) AS created_at
             FROM cashbag_transactions
-            WHERE vid = %s
+            WHERE {pair_filter}
             ORDER BY created_at DESC, id DESC
-        """, (vid,))
+        """, pair_params_single)
 
         rows = cur.fetchall()
 
@@ -10147,6 +10193,12 @@ def cashbag():
         return render_template(
             "cashbag.html",
 
+            emp1=emp1,
+            emp2=emp2,
+            emp1_name=emp1_name,
+            emp2_name=emp2_name,
+            group_villages=group_villages,
+
             cashbag_total=cashbag_total,
             office_cash=office_cash,
             collections=collections,
@@ -10162,12 +10214,14 @@ def cashbag():
 
         flash(f"Cashbag loading failed: {str(e)}", "danger")
 
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("village"))
 
     finally:
 
         cur.close()
         conn.close()
+
+
 
 
 # ----------------------------------------------------
@@ -10178,11 +10232,13 @@ def cashbag():
 @login_required
 def add_cashbag_transaction():
 
-    vid = session.get("vid")
+    # emp1/emp2 come as hidden fields from the cashbag form
+    emp1 = request.form.get("emp1", type=int)
+    emp2 = request.form.get("emp2", type=int)
 
-    if not vid:
-        flash("Please select Village first", "warning")
-        return redirect(url_for("dashboard"))
+    if not emp1:
+        flash("Employee group context missing", "warning")
+        return redirect(url_for("village"))
 
     txn_type = request.form.get("txn_type")
     amount = request.form.get("amount")
@@ -10197,20 +10253,25 @@ def add_cashbag_transaction():
         "adjustment"
     ]
 
+    # Build redirect URL back to this cashbag page with pair params
+    redirect_args = {"emp1": emp1}
+    if emp2:
+        redirect_args["emp2"] = emp2
+
     if txn_type not in allowed_types:
 
         flash("Invalid transaction type", "danger")
 
-        return redirect(url_for("cashbag"))
+        return redirect(url_for("cashbag", **redirect_args)) # type: ignore
 
     try:
         amount = float(amount or 0)
         if amount <= 0:
             flash("Amount must be greater than zero", "warning")
-            return redirect(url_for("cashbag"))
+            return redirect(url_for("cashbag", **redirect_args)) # type: ignore
     except Exception:
         flash("Invalid amount", "danger")
-        return redirect(url_for("cashbag"))
+        return redirect(url_for("cashbag", **redirect_args)) # type: ignore
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -10219,16 +10280,18 @@ def add_cashbag_transaction():
 
         cur.execute("""
             INSERT INTO cashbag_transactions (
-                vid,
+                emp1,
+                emp2,
                 eid,
                 txn_type,
                 amount,
                 notes,
                 created_by
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
-            vid,
+            emp1,
+            emp2,
             session.get("eid"),
             txn_type,
             amount,
@@ -10241,8 +10304,10 @@ def add_cashbag_transaction():
         audit_log(
             action="cashbag_transaction_added",
             entity_type="cashbag_transaction",
-            entity_id=vid,
+            entity_id=emp1,
             details={
+                "emp1": emp1,
+                "emp2": emp2,
                 "txn_type": txn_type,
                 "amount": amount,
                 "notes": notes
@@ -10264,7 +10329,7 @@ def add_cashbag_transaction():
         cur.close()
         conn.close()
 
-    return redirect(url_for("cashbag"))
+    return redirect(url_for("cashbag", **redirect_args)) # type: ignore
 
 
 @app.route("/api/village/update_employee_pair", methods=["POST"])

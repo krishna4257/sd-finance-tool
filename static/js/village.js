@@ -362,6 +362,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             `;
           }).join("")}
         </div>
+
+        <div class="tile-cashbag-footer">
+          <div class="tile-cashbag-divider">
+            <span class="tile-cashbag-divider-label"></span>
+          </div>
+          <a
+            href="/cashbag?emp1=${group.emp1}&emp2=${group.emp2 && group.emp2 !== 'None' ? group.emp2 : ''}"
+            class="tile-cashbag-btn"
+            onclick="event.stopPropagation();">
+            <i class="fas fa-wallet"></i> Cash Bag
+          </a>
+        </div>
       `;
 
       employeeTilesContainer.appendChild(tile);
