@@ -278,11 +278,6 @@
           </div>
         </div>
 
-        <!-- SESSION TIMEOUT CLOCK -->
-        <div id="session-timer-pill" class="session-timer-pill" style="display: none;">
-          <span class="timer-icon">&#9200;</span>
-          <span id="session-timer-clock">03:00:00</span>
-        </div>
 
         <!-- USER PROFILE -->
         {% if session.get("user_id") %}
@@ -506,18 +501,5 @@
     });
   </script>
 
-  <!-- Session Extension Warning Modal -->
-  <div id="session-extension-modal" class="modal" style="display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px);">
-    <div class="modal-content" style="max-width: 400px; text-align: center; padding: 28px; background: var(--bg-raised); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-      <h3 style="margin-top: 0; color: var(--text); font-family: var(--font-header); font-size: 1.25rem;">Session Expiring</h3>
-      <p style="margin: 16px 0; color: var(--text-muted); font-family: var(--font-body); font-size: 0.95rem; line-height: 1.5;">
-        Your session is about to expire in <span id="session-warning-countdown" style="font-weight: 700; color: #ef4444; font-size: 1.05rem;">5:00</span>.<br>Would you like to extend your session?
-      </p>
-      <div style="display: flex; gap: 12px; justify-content: center; margin-top: 20px;">
-        <button id="btn-extend-session" class="neumorphic-btn" style="color: #10b981; border-color: rgba(16, 185, 129, 0.35); padding: 8px 16px; font-weight: 600; font-size: 0.9rem;">Yes, Extend</button>
-        <button id="btn-logout-session" class="neumorphic-btn" style="color: var(--text-muted); border-color: rgba(255,255,255,0.15); padding: 8px 16px; font-weight: 500; font-size: 0.9rem;">No, Logout</button>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
