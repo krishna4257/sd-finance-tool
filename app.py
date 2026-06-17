@@ -696,7 +696,16 @@ def session_timeout_check():
             if now - last_activity_val > lifetime_seconds:
                 session.clear()
 
-                if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                # Return JSON for any AJAX / API request so the JS interceptor
+                # can handle the expiry gracefully without a false-positive alert.
+                # Covers /api/ paths, explicit XHR, JSON bodies, and JSON Accept headers.
+                is_ajax = (
+                    request.path.startswith("/api/")
+                    or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.is_json
+                    or "application/json" in request.headers.get("Accept", "")
+                )
+                if is_ajax:
                     return jsonify({
                         "success": False,
                         "session_expired": True
@@ -704,6 +713,7 @@ def session_timeout_check():
 
                 flash("Session expired. Please login again.", "warning")
                 return redirect(url_for("login"))
+
 
         except Exception as e:
             # Avoid logging out the user due to formatting/parsing/timezone errors.
@@ -740,6 +750,17 @@ def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
+            # Detect AJAX / API / JSON requests and return a proper 401 JSON
+            # instead of an HTML redirect, so the JS interceptor handles it
+            # correctly and doesn't show false "Session expired" alerts.
+            is_api_request = (
+                request.path.startswith("/api/")
+                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+                or "application/json" in request.headers.get("Accept", "")
+            )
+            if is_api_request:
+                return jsonify(success=False, session_expired=True), 401
             return redirect("/login")
         return f(*args, **kwargs)
     return wrapper
@@ -3404,6 +3425,10 @@ def add_customer():
     eid = session.get("eid")
 
     if not vid:
+        # For AJAX POST requests return JSON error — never return an HTML redirect
+        # from a POST endpoint (it cascades through fetch interceptor as false session expiry)
+        if request.method == "POST":
+            return jsonify(success=False, error="No village selected. Please select a village first."), 400
         return redirect("/dashboard")
 
     if request.method == "POST":

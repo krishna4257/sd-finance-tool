@@ -9,8 +9,20 @@
 
     try {
       const contentType = response.headers.get("content-type") || "";
-      const redirectedToLogin = response.redirected &&
-        response.url.includes("/login");
+
+      // Determine the original requested URL before any redirect
+      const originalUrl =
+        typeof args[0] === "string"
+          ? args[0]
+          : args[0] instanceof Request
+          ? args[0].url
+          : "";
+
+      // TRUE only if this fetch was NOT already targeting /login and got redirected there
+      const redirectedToLogin =
+        response.redirected &&
+        response.url.includes("/login") &&
+        !originalUrl.includes("/login");
 
       let responseData = null;
       if (contentType.includes("application/json")) {
@@ -19,20 +31,20 @@
         } catch (_) {}
       }
 
+      // Explicit 401 + session_expired flag from the backend (most reliable signal)
       const sessionExpired =
         response.status === 401 &&
         responseData &&
         responseData.session_expired === true;
 
+      // HTML login page check: only fire if the original request was NOT to /login
+      // AND it ended up serving the login page (i.e. a genuine auth redirect happened)
       const htmlLoginPage =
+        !originalUrl.includes("/login") &&
         contentType.includes("text/html") &&
         response.url.includes("/login");
 
-      if (
-        redirectedToLogin ||
-        htmlLoginPage ||
-        sessionExpired
-      ) {
+      if (redirectedToLogin || htmlLoginPage || sessionExpired) {
 
         // Prevent duplicate alerts
         if (!window.__sessionExpiredShown) {
@@ -47,12 +59,16 @@
       }
 
     } catch (err) {
-      console.error("Session handling error:", err);
+      // Only log truly unexpected errors — not the "Session expired" rejection we throw above
+      if (err.message !== "Session expired") {
+        console.error("Session handling error:", err);
+      }
     }
 
     return response;
   };
 })();
+
 
 // =====================================================
 // CLIENT IDLE SESSION TIMER (Multi-Tab Safe via localStorage)
