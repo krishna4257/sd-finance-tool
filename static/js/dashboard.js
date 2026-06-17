@@ -65,17 +65,25 @@ async function loadDashboardData(vid, forceRecalc = false) {
     loadingEl.style.display = "none";
     contentEl.style.display = "flex";
 
+    const safeJson = async (res) => {
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        return { success: false, error: `Server returned non-JSON response (HTTP ${res.status})` };
+      }
+      return res.json();
+    };
+
     const dashboardPromise = fetch(
       `/api/dashboard/analytics/${vid}?view=${currentView}`
-    ).then(r => r.json());
+    ).then(safeJson);
 
     const postingPromise = fetch(
       `/api/dashboard/posting_analytics/${vid}`
-    ).then(r => r.json());
+    ).then(safeJson);
 
     const behavioralPromise = fetch(
       `/api/village/behavioral_analytics/${vid}?view=${currentView}&sub_view=${localSubView}${forceStr}`
-    ).then(r => r.json());
+    ).then(safeJson);
 
     const dashboardResult = await dashboardPromise;
 
@@ -111,7 +119,8 @@ async function loadDashboardData(vid, forceRecalc = false) {
 
     const behavioralResult = await behavioralPromise;
     if (!behavioralResult.success) {
-      alert("Failed to load village behavioral analytics: " + (behavioralResult.error || "Unknown error"));
+      console.error("Village behavioral analytics error:", behavioralResult.error || "Unknown error");
+      // Don't block — the rest of the dashboard has already loaded
       return;
     }
     const data = behavioralResult.data;
@@ -327,7 +336,6 @@ async function loadDashboardData(vid, forceRecalc = false) {
     console.error("Dashboard render failed:", err);
     if (refreshBtn) refreshBtn.classList.remove("spinning");
     loadingEl.style.display = "none";
-    alert("Connection error occurred while retrieving intelligence. Error: " + err.message + "\nStack: " + err.stack);
   }
 }
 

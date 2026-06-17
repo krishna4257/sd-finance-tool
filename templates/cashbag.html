@@ -2,223 +2,492 @@
 
 {% block content %}
 
-<div class="section">
-    <!-- PAGE TITLE -->
-    <h2 class="page-title">💼 Cash Bag Management</h2>
-    <!-- SUMMARY CARDS -->
-    <div class="raised-box">
-        <div class="summary-row">
-            <div class="summary-item">
-                <strong>Cash Bag Total</strong>
-                <span data-money>
-                    ₹{{ "{:,.2f}".format(cashbag_total|float) if cashbag_total else "0.00" }}
-                </span>
-            </div>
+<style>
+  /* ── Context Banner Chips ── */
+  .ctx-chip {
+    background: var(--primary-light, #e8f5e9);
+    border: 1px solid rgba(26, 77, 46, 0.18);
+    color: var(--primary, #1a4d2e);
+    padding: 5px 13px;
+    border-radius: 20px;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .ctx-village-chip {
+    background: var(--input-bg, #f9fafb);
+    border: 1px solid var(--border-light, #f3f4f6);
+    color: var(--text, #1a1a2e);
+    padding: 4px 11px;
+    border-radius: 20px;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.78rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .ctx-separator {
+    color: var(--text-muted, #9ca3af);
+    font-weight: 700;
+    font-size: 1rem;
+    user-select: none;
+  }
+  .ctx-section-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .ctx-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ctx-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border, #e5e7eb);
+    flex-shrink: 0;
+    margin: 0 4px;
+  }
 
-            <div class="summary-item">
-                <strong>Office Cash</strong>
-                <span data-money>
-                    ₹{{ "{:,.2f}".format(office_cash|float) if office_cash else "0.00" }}
-                </span>
-            </div>
+  /* ── Summary Cards: 5-col uniform grid ── */
+  .cashbag-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1100px) {
+    .cashbag-summary-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .cashbag-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .cb-card {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: var(--radius-lg, 16px);
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .cb-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .cb-card.total-card {
+    background: linear-gradient(135deg, #1a4d2e 0%, #2d6a4f 100%);
+    border: none;
+    color: #fff;
+  }
+  .cb-card-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-body, 'Inter', sans-serif);
+    letter-spacing: 0.2px;
+  }
+  .cb-card.total-card .cb-card-label {
+    color: rgba(255,255,255,0.75);
+  }
+  .cb-card-value {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text, #1a1a2e);
+    line-height: 1.1;
+  }
+  .cb-card.total-card .cb-card-value {
+    color: #fff;
+  }
+  .cb-card-icon {
+    font-size: 1rem;
+    opacity: 0.55;
+    margin-bottom: 2px;
+  }
+  .cb-card.total-card .cb-card-icon {
+    opacity: 0.65;
+    color: #fff;
+  }
 
-            <div class="summary-item">
-                <strong>Collections</strong>
-                <span data-money>
-                    ₹{{ "{:,.2f}".format(collections|float) if collections else "0.00" }}
-                </span>
-            </div>
+  /* ── Add Entry Form ── */
+  .cb-form-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 2fr auto;
+    gap: 14px;
+    align-items: end;
+  }
+  @media (max-width: 900px) {
+    .cb-form-row { grid-template-columns: 1fr 1fr; }
+    .cb-form-row > *:last-child { grid-column: span 2; }
+  }
+  @media (max-width: 560px) {
+    .cb-form-row { grid-template-columns: 1fr; }
+    .cb-form-row > *:last-child { grid-column: span 1; }
+  }
+  .cb-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cb-field-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-body, 'Inter', sans-serif);
+    letter-spacing: 0.2px;
+  }
+  .cb-input,
+  .cb-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    background: var(--input-bg, #f9fafb);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: var(--radius-sm, 8px);
+    color: var(--text, #1a1a2e);
+    font-family: var(--font-body, 'Inter', sans-serif);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .cb-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+    cursor: pointer;
+  }
+  .cb-input:focus,
+  .cb-select:focus {
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 0 3px rgba(26, 77, 46, 0.1);
+    background: var(--surface, #fff);
+  }
+  .cb-submit-btn {
+    padding: 10px 22px;
+    background: var(--primary, #1a4d2e);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm, 8px);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    height: 42px;
+  }
+  .cb-submit-btn:hover {
+    background: var(--primary-dark, #16a34a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(26, 77, 46, 0.3);
+  }
+  .cb-submit-btn:active {
+    transform: translateY(0);
+  }
 
-            <div class="summary-item">
-                <strong>Loans Dispensed</strong>
-                <span data-money>
-                    ₹{{ "{:,.2f}".format(loans_disbursed|float) if loans_disbursed else "0.00" }}
-                </span>
-            </div>
+  /* Section headers */
+  .cb-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .cb-section-title h3 {
+    margin: 0;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text, #1a1a2e);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cb-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: var(--input-bg, #f9fafb);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-body, 'Inter', sans-serif);
+  }
 
-            <div class="summary-item">
-                <strong>Expenses</strong>
-                <span data-money>
-                    ₹{{ "{:,.2f}".format(expenses|float) if expenses else "0.00" }}
-                </span>
-            </div>
+  /* Page spacing */
+  .cb-page-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .cb-page-header h2 {
+    margin: 0;
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text, #1a1a2e);
+  }
+</style>
+
+<div class="section" style="display: flex; flex-direction: column; gap: 20px;">
+
+  <!-- ① PAGE HEADER -->
+  <div class="cb-page-header">
+    <a href="/village" class="neumorphic-btn small"
+       style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px;
+              font-size: 0.82rem; text-decoration: none; color: var(--text-secondary); flex-shrink: 0;">
+      <i class="fas fa-arrow-left"></i> Back to Villages
+    </a>
+    <h2>💼 Cash Bag Management</h2>
+  </div>
+
+  <!-- ② CONTEXT BANNER -->
+  <div class="raised-box" style="padding: 18px 22px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+
+      <!-- Employee Group Row -->
+      <div class="ctx-row">
+        <span class="ctx-section-label"><i class="fas fa-users"></i> Employee Group</span>
+        <div class="ctx-divider"></div>
+        <span class="ctx-chip">
+          <i class="fas fa-user-tie"></i> {{ emp1_name }}
+        </span>
+        {% if emp2_name %}
+        <span class="ctx-separator">+</span>
+        <span class="ctx-chip">
+          <i class="fas fa-user-tie"></i> {{ emp2_name }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Village Group Row -->
+      {% if group_villages %}
+      <div class="ctx-row">
+        <span class="ctx-section-label"><i class="fas fa-map-marker-alt"></i> Village Group</span>
+        <div class="ctx-divider"></div>
+        {% for v in group_villages %}
+        <span class="ctx-village-chip">
+          <i class="fas fa-map-pin"></i> {{ v.name }} ({{ v.code }})
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- ③ SUMMARY CARDS -->
+  <div class="raised-box" style="padding: 22px;">
+    <div class="cashbag-summary-grid">
+
+      <div class="cb-card total-card">
+        <div class="cb-card-icon"><i class="fas fa-wallet"></i></div>
+        <div class="cb-card-label">Cash Bag Total</div>
+        <div class="cb-card-value" data-money>
+          ₹{{ "{:,.2f}".format(cashbag_total|float) if cashbag_total else "0.00" }}
         </div>
+      </div>
+
+      <div class="cb-card">
+        <div class="cb-card-icon" style="color: var(--primary);"><i class="fas fa-university"></i></div>
+        <div class="cb-card-label">Office Cash</div>
+        <div class="cb-card-value" data-money>
+          ₹{{ "{:,.2f}".format(office_cash|float) if office_cash else "0.00" }}
+        </div>
+      </div>
+
+      <div class="cb-card">
+        <div class="cb-card-icon" style="color: #16a34a;"><i class="fas fa-hand-holding-usd"></i></div>
+        <div class="cb-card-label">Collections</div>
+        <div class="cb-card-value" data-money>
+          ₹{{ "{:,.2f}".format(collections|float) if collections else "0.00" }}
+        </div>
+      </div>
+
+      <div class="cb-card">
+        <div class="cb-card-icon" style="color: #2563eb;"><i class="fas fa-paper-plane"></i></div>
+        <div class="cb-card-label">Loans Dispensed</div>
+        <div class="cb-card-value" data-money>
+          ₹{{ "{:,.2f}".format(loans_disbursed|float) if loans_disbursed else "0.00" }}
+        </div>
+      </div>
+
+      <div class="cb-card">
+        <div class="cb-card-icon" style="color: #dc2626;"><i class="fas fa-receipt"></i></div>
+        <div class="cb-card-label">Expenses</div>
+        <div class="cb-card-value" data-money>
+          ₹{{ "{:,.2f}".format(expenses|float) if expenses else "0.00" }}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ④ ADD ENTRY -->
+  <div class="raised-box" style="padding: 22px;">
+    <div class="cb-section-title">
+      <h3><i class="fas fa-plus-circle" style="color: var(--primary);"></i> Add Cashbag Entry</h3>
     </div>
 
-    <!-- ADD TRANSACTION -->
-    <div class="raised-box">
-        <h3 style="margin-bottom:20px; color: var(--highlight); text-align:center;">
-            ➕ Add Cashbag Entry
-        </h3>
+    <form method="POST" action="{{ url_for('add_cashbag_transaction') }}">
+      <!-- Hidden context -->
+      <input type="hidden" name="emp1" value="{{ emp1 }}">
+      <input type="hidden" name="emp2" value="{{ emp2 or '' }}">
 
-        <form method="POST"
-              action="{{ url_for('add_cashbag_transaction') }}"
-              class="form-grid">
-            <!-- TRANSACTION TYPE -->
-            <label>
-                Transaction Type
-                <select name="txn_type" required>
-                    <option value="">-- Select Type --</option>
-                    <option value="office_credit">
-                        💰 Office Cash
-                    </option>
-                    <option value="expense">
-                        🧾 Expense
-                    </option>
-                    <option value="adjustment">
-                        🛠️ Adjustment
-                    </option>
-                </select>
-            </label>
+      <div class="cb-form-row">
 
-            <!-- AMOUNT -->
-            <label>
-                Amount
-                <input type="number"
-                       step="0.01"
-                       name="amount"
-                       placeholder="Enter Amount"
-                       required>
-            </label>
-
-            <!-- NOTES -->
-            <label>
-                Notes
-                <input type="text"
-                       name="notes"
-                       placeholder="Example: Petrol / Rent / Office Funding">
-            </label>
-
-            <!-- BUTTON -->
-            <div style="display:flex; align-items:end;">
-                <button type="submit"
-                        class="neumorphic-btn small">
-                    ➕ Add Entry
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- TRANSACTION TABLE -->
-    <div class="raised-box">
-
-        <div style="display:flex;
-                    justify-content:space-between;
-                    align-items:center;
-                    margin-bottom:20px;
-                    flex-wrap:wrap;
-                    gap:10px;">
-
-            <h3 style="color: var(--highlight);">
-                📒 Cashbag Ledger
-            </h3>
-
-            <div style="font-size:14px; opacity:0.8;">
-                Total Entries:
-                <strong>{{ transactions|length }}</strong>
-            </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Transaction Type</label>
+          <select name="txn_type" class="cb-select" required>
+            <option value="">— Select Type —</option>
+            <option value="office_credit">💰 Office Cash</option>
+            <option value="expense">🧾 Expense</option>
+            <option value="adjustment">🛠️ Adjustment</option>
+          </select>
         </div>
 
-        <div class="scroll-table-container">
-
-            <table id="cashbagTable"
-                   class="dataTable customer-table">
-
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Transaction Type</th>
-                        <th>Amount</th>
-                        <th>Notes</th>
-                        <th>Created By</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if transactions %}
-                        {% for row in transactions %}
-                        <tr>
-                            <!-- DATE -->
-                            {% set date_str = row.created_at %}
-                            {% if date_str|length >= 10 %}
-                                {% set date_part = date_str[:10] %}
-                                {% set time_part = date_str[10:] %}
-                                {% set parts = date_part.split('/') %}
-                                {% if parts|length == 3 %}
-                                    {% set year = parts[2] %}
-                                    {% set month = parts[1] %}
-                                    {% set day = parts[0] %}
-                                    {% set hour_str = time_part[1:3] %}
-                                    {% set min_str = time_part[4:6] %}
-                                    {% set ampm = time_part[7:9] %}
-                                    {% set hour = hour_str|int %}
-                                    {% if ampm == 'PM' and hour < 12 %}
-                                        {% set hour = hour + 12 %}
-                                    {% elif ampm == 'AM' and hour == 12 %}
-                                        {% set hour = 0 %}
-                                    {% endif %}
-                                    {% set hour_formatted = "%02d"|format(hour) %}
-                                    {% set sort_val = year ~ '-' ~ month ~ '-' ~ day ~ ' ' ~ hour_formatted ~ ':' ~ min_str %}
-                                {% else %}
-                                    {% set sort_val = row.created_at %}
-                                {% endif %}
-                            {% else %}
-                                {% set sort_val = row.created_at %}
-                            {% endif %}
-                            <td data-order="{{ sort_val }}">
-                                {{ row.created_at }}
-                            </td>
-                            <!-- TYPE -->
-                            <td>
-                                {% if row.txn_type == 'office_credit' %}
-                                    💰 Office Cash
-                                {% elif row.txn_type == 'expense' %}
-                                    🧾 Expense
-                                {% elif row.txn_type == 'loan_disbursed' %}
-                                    📤 Loan Dispensed
-                                {% elif row.txn_type == 'customer_collection' %}
-                                    📥 Collection
-                                {% elif row.txn_type == 'adjustment' %}
-                                    🛠️ Adjustment
-                                {% else %}
-                                    {{ row.txn_type }}
-                                {% endif %}
-                            </td>
-                            <!-- AMOUNT -->
-                            {% set amt_sign = '-' if row.txn_type in ['expense', 'loan_disbursed'] else '+' %}
-                            {% set amt_order = -1 * (row.amount|float) if amt_sign == '-' else (row.amount|float) %}
-                            <td class="
-                                {% if row.txn_type in ['office_credit', 'customer_collection'] %}
-                                    cumulative-amt
-                                {% endif %}
-                            " data-order="{{ amt_order }}">
-                                {{ amt_sign }}₹{{ "{:,.2f}".format(row.amount|float) }}
-                            </td>
-                            <!-- NOTES -->
-                            <td>
-                                {{ row.notes or "-" }}
-                            </td>
-                            <!-- CREATED BY -->
-                            <td>
-                                {{ row.created_by or "-" }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="5"
-                                style="padding:40px;
-                                       text-align:center;
-                                       opacity:0.7;">
-
-                                No cashbag transactions available.
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Amount (₹)</label>
+          <input type="number" step="0.01" name="amount"
+                 placeholder="0.00" required class="cb-input">
         </div>
+
+        <div class="cb-field-group">
+          <label class="cb-field-label">Notes</label>
+          <input type="text" name="notes"
+                 placeholder="E.g. Petrol / Rent / Office Funding" class="cb-input">
+        </div>
+
+        <div style="display: flex; align-items: flex-end;">
+          <button type="submit" class="cb-submit-btn">
+            <i class="fas fa-plus"></i> Add Entry
+          </button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  <!-- ⑤ LEDGER TABLE -->
+  <div class="raised-box" style="padding: 22px;">
+    <div class="cb-section-title">
+      <h3><i class="fas fa-book" style="color: var(--primary);"></i> Cashbag Ledger</h3>
+      <span class="cb-badge">{{ transactions|length }} Entries</span>
     </div>
+
+    <div class="scroll-table-container">
+      <table id="cashbagTable" class="dataTable customer-table" style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Transaction Type</th>
+            <th>Amount</th>
+            <th>Notes</th>
+            <th>Created By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if transactions %}
+            {% for row in transactions %}
+            <tr>
+              <!-- DATE -->
+              {% set date_str = row.created_at %}
+              {% if date_str|length >= 10 %}
+                {% set date_part = date_str[:10] %}
+                {% set time_part = date_str[10:] %}
+                {% set parts = date_part.split('/') %}
+                {% if parts|length == 3 %}
+                  {% set year = parts[2] %}
+                  {% set month = parts[1] %}
+                  {% set day = parts[0] %}
+                  {% set hour_str = time_part[1:3] %}
+                  {% set min_str = time_part[4:6] %}
+                  {% set ampm = time_part[7:9] %}
+                  {% set hour = hour_str|int %}
+                  {% if ampm == 'PM' and hour < 12 %}
+                    {% set hour = hour + 12 %}
+                  {% elif ampm == 'AM' and hour == 12 %}
+                    {% set hour = 0 %}
+                  {% endif %}
+                  {% set hour_formatted = "%02d"|format(hour) %}
+                  {% set sort_val = year ~ '-' ~ month ~ '-' ~ day ~ ' ' ~ hour_formatted ~ ':' ~ min_str %}
+                {% else %}
+                  {% set sort_val = row.created_at %}
+                {% endif %}
+              {% else %}
+                {% set sort_val = row.created_at %}
+              {% endif %}
+              <td data-order="{{ sort_val }}">{{ row.created_at }}</td>
+
+              <!-- TYPE -->
+              <td>
+                {% if row.txn_type == 'office_credit' %}
+                  💰 Office Cash
+                {% elif row.txn_type == 'expense' %}
+                  🧾 Expense
+                {% elif row.txn_type == 'loan_disbursed' %}
+                  📤 Loan Dispensed
+                {% elif row.txn_type == 'customer_collection' %}
+                  📥 Collection
+                {% elif row.txn_type == 'adjustment' %}
+                  🛠️ Adjustment
+                {% else %}
+                  {{ row.txn_type }}
+                {% endif %}
+              </td>
+
+              <!-- AMOUNT -->
+              {% set amt_sign = '-' if row.txn_type in ['expense', 'loan_disbursed'] else '+' %}
+              {% set amt_order = -1 * (row.amount|float) if amt_sign == '-' else (row.amount|float) %}
+              <td class="{% if row.txn_type in ['office_credit', 'customer_collection'] %}cumulative-amt{% endif %}"
+                  data-order="{{ amt_order }}">
+                {{ amt_sign }}₹{{ "{:,.2f}".format(row.amount|float) }}
+              </td>
+
+              <td>{{ row.notes or "—" }}</td>
+              <td>{{ row.created_by or "—" }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" style="padding: 48px; text-align: center; opacity: 0.6;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                  <i class="fas fa-inbox" style="font-size: 1.8rem; opacity: 0.4;"></i>
+                  <span>No cashbag transactions yet.</span>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
-
 
 {% endblock %}

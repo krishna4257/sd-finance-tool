@@ -450,6 +450,68 @@
       opacity: 0;
     }
   }
+
+  /* ── Tile Cash Bag Footer ── */
+  .tile-cashbag-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+  }
+  .tile-cashbag-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tile-cashbag-divider::before,
+  .tile-cashbag-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-light, #f3f4f6);
+  }
+  .tile-cashbag-divider-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .tile-cashbag-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: transparent;
+    border: 1px dashed rgba(26, 77, 46, 0.3);
+    color: var(--primary, #1a4d2e);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .tile-cashbag-btn:hover {
+    background: var(--primary, #1a4d2e);
+    border-color: var(--primary, #1a4d2e);
+    border-style: solid;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(26, 77, 46, 0.2);
+    transform: translateY(-1px);
+  }
+  .tile-cashbag-btn:active {
+    transform: translateY(0);
+  }
 </style>
 
 <h2 class="page-title">Villages</h2>
