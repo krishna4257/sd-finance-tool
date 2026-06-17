@@ -346,16 +346,7 @@ anoInput.addEventListener("change", checkAno);
             method: "POST",
             body: formData
         })
-        .then(res => {
-            // Guard: only parse as JSON if the response actually is JSON.
-            // If the server returned an unexpected HTML page (e.g. redirect to dashboard),
-            // surface a clear error instead of a cryptic JSON parse failure.
-            const ct = res.headers.get("content-type") || "";
-            if (!ct.includes("application/json")) {
-                throw new Error(`Unexpected server response (status ${res.status}). Please refresh and try again.`);
-            }
-            return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
             if (data.error) {
                 message.textContent = `Error: ${data.error}`;

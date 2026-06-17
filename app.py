@@ -544,7 +544,7 @@ if not secret_key:
 app.secret_key = secret_key
 
 app.config["WTF_CSRF_ENABLED"] = True
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -660,72 +660,14 @@ def redirect_www():
         scheme = "https" if is_https else "http"
         return redirect(f"{scheme}://{new_host}{request.full_path}", code=301)
 
+# Auto-recover village context fields if missing (runs on every request for logged-in users)
 @app.before_request
-def session_timeout_check():
-    # Skip session timeout verification for static assets
+def restore_village_context():
     if request.path.startswith("/static/"):
         return
-
     if "user_id" not in session:
         return
-    
     session.permanent = True
-
-    now = pytime.time()
-    last_activity = session.get("_last_activity")
-
-    if last_activity:
-        try:
-            # Handle float Unix timestamps (new style) and ISO strings (old style/transition)
-            if isinstance(last_activity, (int, float)):
-                last_activity_val = float(last_activity)
-            elif isinstance(last_activity, str):
-                try:
-                    last_activity_val = float(last_activity)
-                except ValueError:
-                    # Fallback parsing for active sessions that stored ISO strings
-                    last_activity_dt = datetime.fromisoformat(last_activity)
-                    if last_activity_dt.tzinfo:
-                        last_activity_val = last_activity_dt.timestamp()
-                    else:
-                        last_activity_val = last_activity_dt.replace(tzinfo=timezone.utc).timestamp()
-            else:
-                last_activity_val = float(last_activity)
-
-            lifetime_seconds = app.config["PERMANENT_SESSION_LIFETIME"].total_seconds()
-            if now - last_activity_val > lifetime_seconds:
-                session.clear()
-
-                # Return JSON for any AJAX / API request so the JS interceptor
-                # can handle the expiry gracefully without a false-positive alert.
-                # Covers /api/ paths, explicit XHR, JSON bodies, and JSON Accept headers.
-                is_ajax = (
-                    request.path.startswith("/api/")
-                    or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                    or request.is_json
-                    or "application/json" in request.headers.get("Accept", "")
-                )
-                if is_ajax:
-                    return jsonify({
-                        "success": False,
-                        "session_expired": True
-                    }), 401
-
-                flash("Session expired. Please login again.", "warning")
-                return redirect(url_for("login"))
-
-
-        except Exception as e:
-            # Avoid logging out the user due to formatting/parsing/timezone errors.
-            # Log the error and safely update the activity time to keep their session.
-            logger.error(f"Error parsing session _last_activity: {e}")
-            session["_last_activity"] = now
-            session.modified = True
-
-    session["_last_activity"] = now
-    session.modified = True
-
-    # Auto-recover village_code and village_name if missing from session context
     if "vid" in session and ("village_code" not in session or "village_name" not in session):
         try:
             conn = get_pg_connection()
@@ -740,6 +682,7 @@ def session_timeout_check():
         except Exception:
             pass
 
+
 @app.context_processor
 def inject_csrf_token():
     return dict(csrf_token=generate_csrf)
@@ -750,17 +693,6 @@ def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
-            # Detect AJAX / API / JSON requests and return a proper 401 JSON
-            # instead of an HTML redirect, so the JS interceptor handles it
-            # correctly and doesn't show false "Session expired" alerts.
-            is_api_request = (
-                request.path.startswith("/api/")
-                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.is_json
-                or "application/json" in request.headers.get("Accept", "")
-            )
-            if is_api_request:
-                return jsonify(success=False, session_expired=True), 401
             return redirect("/login")
         return f(*args, **kwargs)
     return wrapper
@@ -3425,10 +3357,6 @@ def add_customer():
     eid = session.get("eid")
 
     if not vid:
-        # For AJAX POST requests return JSON error — never return an HTML redirect
-        # from a POST endpoint (it cascades through fetch interceptor as false session expiry)
-        if request.method == "POST":
-            return jsonify(success=False, error="No village selected. Please select a village first."), 400
         return redirect("/dashboard")
 
     if request.method == "POST":
@@ -9576,7 +9504,6 @@ def login():
         session["employee_id"] = employee_id
         session["level"] = level.strip().lower() if level else None
         session["villages"] = villages
-        session["_last_activity"] = pytime.time()
         session.permanent = True
 
         audit_log(
@@ -9625,12 +9552,6 @@ def logout():
 
     return response
 
-@app.route("/api/session/keepalive", methods=["POST"])
-@login_required
-def api_session_keepalive():
-    session["_last_activity"] = pytime.time()
-    session.modified = True
-    return jsonify(success=True)
 
 @app.route("/users")
 @login_required
