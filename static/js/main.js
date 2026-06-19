@@ -680,6 +680,22 @@ function getNotificationId(item, type) {
 }
 
 async function fetchNotificationCounts(vid) {
+  const cacheKey = `sd-notifications-cache-${vid}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const cacheData = JSON.parse(cached);
+      const age = Date.now() - cacheData.timestamp;
+      if (age < 300000) { // 5 minutes cache
+        cachedNotifications.stress_alerts = cacheData.stress_alerts;
+        updateNotificationBadge();
+        return;
+      }
+    } catch (e) {
+      console.warn("Stale notification cache parse failed:", e);
+    }
+  }
+
   try {
     const [resAnalytics, resPosting] = await Promise.all([
       fetch(`/api/village/behavioral_analytics/${vid}`),
@@ -707,6 +723,12 @@ async function fetchNotificationCounts(vid) {
     }
     cachedNotifications.stress_alerts = alerts;
     updateNotificationBadge();
+
+    // Cache the result
+    sessionStorage.setItem(cacheKey, JSON.stringify({
+      timestamp: Date.now(),
+      stress_alerts: alerts
+    }));
   } catch (e) {
     console.error("Failed to pre-fetch notification counts:", e);
   }
@@ -829,6 +851,13 @@ async function loadNotificationsContent() {
       });
     }
     cachedNotifications.stress_alerts = alerts;
+
+    // Cache the fresh results in sessionStorage
+    const cacheKey = `sd-notifications-cache-${vid}`;
+    sessionStorage.setItem(cacheKey, JSON.stringify({
+      timestamp: Date.now(),
+      stress_alerts: alerts
+    }));
 
     if (dataHistory.success) {
       cachedNotifications.events = dataHistory.events || [];
