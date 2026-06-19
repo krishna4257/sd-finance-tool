@@ -16,6 +16,7 @@ import json
 from functools import wraps
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from flask import (
@@ -450,6 +451,12 @@ def normalize_mobile_payment_payload(payload):
 # ----------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+# Fix: Running behind nginx reverse proxy — ProxyFix makes Flask correctly
+# read X-Forwarded-Proto and X-Forwarded-For so HTTPS is detected properly.
+# Without this, SESSION_COOKIE_SECURE cookies are silently dropped on
+# any request that Flask thinks arrived over HTTP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
@@ -544,16 +551,20 @@ if not secret_key:
 app.secret_key = secret_key
 
 app.config["WTF_CSRF_ENABLED"] = True
+# Disable CSRF token time expiry — the default 3600s (1 hour) was causing
+# sudden logouts when employees kept a page open for over an hour and then
+# refreshed or navigated. The session cookie itself provides auth security.
+app.config["WTF_CSRF_TIME_LIMIT"] = None
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-# Only force secure cookies in production HTTPS deployments
-# Local development on http://127.0.0.1:8080 must keep this disabled,
-# otherwise Flask cannot store the session cookie and CSRF fails.
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
+# Always enforce Secure cookie — the site is always served over HTTPS at
+# sivadurga.in. ProxyFix above ensures Flask sees the correct protocol.
+# Set DISABLE_SECURE_COOKIE=1 only for local http:// development.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("DISABLE_SECURE_COOKIE") != "1"
 app.config["SESSION_COOKIE_NAME"] = "sivadurga_session"
 app.config["SESSION_COOKIE_DOMAIN"] = None
 
@@ -10052,15 +10063,12 @@ def cashbag():
         # ------------------------------------------------
         # BUILD emp pair WHERE clause helper
         # ------------------------------------------------
-        # Match rows where emp1 matches AND (emp2 matches or emp2 is NULL/not provided)
         if emp2:
             pair_filter = "emp1 = %s AND emp2 = %s"
             pair_params_single = (emp1, emp2)
-            pair_params_tuple = (emp1, emp2)
         else:
             pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
             pair_params_single = (emp1,)
-            pair_params_tuple = (emp1,)
 
         # ------------------------------------------------
         # EMPLOYEE NAMES for page header
@@ -10080,114 +10088,222 @@ def cashbag():
         # ------------------------------------------------
         if emp2:
             cur.execute("""
-                SELECT village_name, village_code
+                SELECT vid, village_name, village_code
                 FROM village
                 WHERE emp1 = %s AND emp2 = %s AND status = 'active'
                 ORDER BY village_code
             """, (emp1, emp2))
         else:
             cur.execute("""
-                SELECT village_name, village_code
+                SELECT vid, village_name, village_code
                 FROM village
                 WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
                 ORDER BY village_code
             """, (emp1,))
-        group_villages = [{"name": r[0], "code": r[1]} for r in cur.fetchall()]
+        rows_v = cur.fetchall()
+        group_villages = [{"id": r[0], "name": r[1], "code": r[2]} for r in rows_v]
+        vids = [r[0] for r in rows_v]
 
         # ------------------------------------------------
-        # SUMMARY TOTALS  (scoped to emp pair)
+        # SUMMARY TOTALS  (scoped to emp pair / vids)
         # ------------------------------------------------
 
-        # Office Cash
+        # 1. Office Cash (money received from office)
         cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
             WHERE {pair_filter}
-              AND txn_type = 'office_credit'
+              AND txn = 'OFFICE_CASH'
         """, pair_params_single)
         office_cash = float(cur.fetchone()[0] or 0)
 
-        # Collections
+        # 2. Expenses
         cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
             WHERE {pair_filter}
-              AND txn_type = 'customer_collection'
-        """, pair_params_single)
-        collections = float(cur.fetchone()[0] or 0)
-
-        # Loans Dispensed
-        cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-              AND txn_type = 'loan_disbursed'
-        """, pair_params_single)
-        loans_disbursed = float(cur.fetchone()[0] or 0)
-
-        # Expenses
-        cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-              AND txn_type = 'expense'
+              AND txn = 'EXPENSE'
         """, pair_params_single)
         expenses = float(cur.fetchone()[0] or 0)
 
-        # Adjustments
+        # 3. Adjustments Add
         cur.execute(f"""
             SELECT COALESCE(SUM(amount), 0)
             FROM cashbag_transactions
             WHERE {pair_filter}
-              AND txn_type = 'adjustment'
+              AND txn = 'ADJUSTMENT' AND txn_sub = 'ADD'
         """, pair_params_single)
-        adjustments = float(cur.fetchone()[0] or 0)
+        adjustments_add = float(cur.fetchone()[0] or 0)
+
+        # 4. Adjustments Minus
+        cur.execute(f"""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM cashbag_transactions
+            WHERE {pair_filter}
+              AND txn = 'ADJUSTMENT' AND txn_sub = 'MINUS'
+        """, pair_params_single)
+        adjustments_minus = float(cur.fetchone()[0] or 0)
+
+        # 5. Loans Dispensed (Auto calculated from customer table)
+        if vids:
+            cur.execute("""
+                SELECT COALESCE(SUM(base_amount), 0)
+                FROM customer
+                WHERE vid = ANY(%s) AND status != 'deleted'
+            """, (vids,))
+            loans_disbursed = float(cur.fetchone()[0] or 0)
+        else:
+            loans_disbursed = 0.0
+
+        # 6. Loan Commission (Auto calculated from customer table)
+        if vids:
+            cur.execute("""
+                SELECT COALESCE(SUM(cutting_amount), 0)
+                FROM customer
+                WHERE vid = ANY(%s) AND status != 'deleted'
+            """, (vids,))
+            loan_commission = float(cur.fetchone()[0] or 0)
+        else:
+            loan_commission = 0.0
+
+        # 7. Installment Collections (Auto calculated from payment table)
+        if vids:
+            cur.execute("""
+                SELECT COALESCE(SUM(amt), 0)
+                FROM payment
+                WHERE vid = ANY(%s)
+            """, (vids,))
+            installments = float(cur.fetchone()[0] or 0)
+        else:
+            installments = 0.0
 
         # ------------------------------------------------
         # FINAL CASHBAG TOTAL
+        # Cash in hand = office_cash + installments + loan_commission + adjustments_add - loans_disbursed - expenses - adjustments_minus
         # ------------------------------------------------
-
         cashbag_total = (
             office_cash
-            + collections
-            + adjustments
+            + installments
+            + loan_commission
+            + adjustments_add
             - loans_disbursed
             - expenses
+            - adjustments_minus
         )
 
         # ------------------------------------------------
-        # TRANSACTION HISTORY
+        # TRANSACTION HISTORY (Unified Ledger)
         # ------------------------------------------------
+        if vids:
+            query = f"""
+                SELECT 
+                    id,
+                    txn,
+                    txn_sub,
+                    txn_type,
+                    amount,
+                    notes,
+                    created_by,
+                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
+                FROM (
+                    -- Manual entries (Office Cash, Expense, Adjustment)
+                    SELECT 
+                        id::text AS id,
+                        txn,
+                        txn_sub,
+                        txn_type,
+                        amount,
+                        notes,
+                        created_by,
+                        created_at
+                    FROM cashbag_transactions
+                    WHERE {pair_filter}
+                      AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
 
-        cur.execute(f"""
-            SELECT
-                id,
-                txn_type,
-                amount,
-                notes,
-                created_by,
-                TO_CHAR(
-                    created_at AT TIME ZONE 'Asia/Kolkata',
-                    'DD/MM/YYYY HH12:MI AM'
-                ) AS created_at
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-            ORDER BY created_at DESC, id DESC
-        """, pair_params_single)
+                    UNION ALL
+
+                    -- Customer Loans (Auto)
+                    SELECT 
+                        'loan_' || cid::text AS id,
+                        'LOAN' AS txn,
+                        NULL AS txn_sub,
+                        'CASH' AS txn_type,
+                        base_amount AS amount,
+                        'Loan issued to ' || name || ' (A/c: ' || ano || ')' AS notes,
+                        'System' AS created_by,
+                        start_date::timestamp WITH time zone AS created_at
+                    FROM customer
+                    WHERE vid = ANY(%s) AND status != 'deleted'
+
+                    UNION ALL
+
+                    -- Customer Loan Commission (Auto)
+                    SELECT 
+                        'comm_' || cid::text AS id,
+                        'LOAN_COMMISION' AS txn,
+                        NULL AS txn_sub,
+                        'CASH' AS txn_type,
+                        cutting_amount AS amount,
+                        'Loan Commission - ' || name || ' (A/c: ' || ano || ')' AS notes,
+                        'System' AS created_by,
+                        start_date::timestamp WITH time zone AS created_at
+                    FROM customer
+                    WHERE vid = ANY(%s) AND status != 'deleted'
+
+                    UNION ALL
+
+                    -- Customer Payments (Auto)
+                    SELECT 
+                        'pay_' || p.pid::text AS id,
+                        'INSTALLMENT_AMOUNT' AS txn,
+                        NULL AS txn_sub,
+                        p.payment_type AS txn_type,
+                        p.amt AS amount,
+                        'Collection from ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
+                        'System' AS created_by,
+                        p.created_at AS created_at
+                    FROM payment p
+                    JOIN customer c ON p.cid = c.cid
+                    WHERE c.vid = ANY(%s)
+                ) AS combined
+                ORDER BY combined.created_at DESC, id DESC
+            """
+            if emp2:
+                params = (emp1, emp2, vids, vids, vids)
+            else:
+                params = (emp1, vids, vids, vids)
+            cur.execute(query, params)
+        else:
+            query = f"""
+                SELECT 
+                    id::text AS id,
+                    txn,
+                    txn_sub,
+                    txn_type,
+                    amount,
+                    notes,
+                    created_by,
+                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
+                FROM cashbag_transactions
+                WHERE {pair_filter}
+                  AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
+                ORDER BY created_at DESC, id DESC
+            """
+            cur.execute(query, pair_params_single)
 
         rows = cur.fetchall()
-
         transactions = []
 
         for row in rows:
-
             transactions.append({
-                "id": row[0],
-                "txn_type": row[1],
-                "amount": float(row[2] or 0),
-                "notes": row[3],
-                "created_by": row[4],
-                "created_at": row[5]
+                "id":         row[0],
+                "txn":        row[1],
+                "txn_sub":    row[2],
+                "txn_type":   row[3],
+                "amount":     float(row[4] or 0),
+                "notes":      row[5],
+                "created_by": row[6],
+                "created_at": row[7]
             })
 
         return render_template(
@@ -10201,9 +10317,12 @@ def cashbag():
 
             cashbag_total=cashbag_total,
             office_cash=office_cash,
-            collections=collections,
+            installments=installments,
             loans_disbursed=loans_disbursed,
+            loan_commission=loan_commission,
             expenses=expenses,
+            adjustments_add=adjustments_add,
+            adjustments_minus=adjustments_minus,
 
             transactions=transactions
         )
@@ -10211,17 +10330,13 @@ def cashbag():
     except Exception as e:
 
         traceback.print_exc()
-
         flash(f"Cashbag loading failed: {str(e)}", "danger")
-
         return redirect(url_for("village"))
 
     finally:
 
         cur.close()
         conn.close()
-
-
 
 
 # ----------------------------------------------------
@@ -10240,38 +10355,66 @@ def add_cashbag_transaction():
         flash("Employee group context missing", "warning")
         return redirect(url_for("village"))
 
-    txn_type = request.form.get("txn_type")
-    amount = request.form.get("amount")
-    notes = request.form.get("notes")
+    # ── New schema fields ──
+    txn      = request.form.get("txn", "").strip().upper()       # main category
+    txn_sub  = request.form.get("txn_sub", "").strip().upper()   # sub-type (optional)
+    txn_type = request.form.get("txn_type", "CASH").strip().upper()  # payment method
 
+    amount = request.form.get("amount")
+    notes  = request.form.get("notes", "").strip()
     username = session.get("username") or "Unknown"
 
-    # Allowed transaction types
-    allowed_types = [
-        "office_credit",
-        "expense",
-        "adjustment"
+    # Valid transaction categories
+    allowed_txn = [
+        "OFFICE_CASH",
+        "EXPENSE",
+        "ADJUSTMENT"
     ]
 
-    # Build redirect URL back to this cashbag page with pair params
+    # Valid expense sub-types
+    allowed_txn_sub = [
+        "PETROL", "SADAR", "SALARY", "ARA",
+        "ROOM_RENT", "ROOM_RENT_ADVANCE", "BIKE", "OTHER_EXPENSES"
+    ]
+
+    # Valid adjustment directions
+    allowed_adj_sub = ["ADD", "MINUS"]
+
+    # Valid payment methods
+    allowed_txn_type = ["CASH", "UPI"]
+
+    # Build redirect URL back to cashbag page with pair params
     redirect_args = {"emp1": emp1}
     if emp2:
         redirect_args["emp2"] = emp2
 
-    if txn_type not in allowed_types:
+    # Validate
+    if txn not in allowed_txn:
+        flash("Invalid transaction category", "danger")
+        return redirect(url_for("cashbag", **redirect_args))  # type: ignore
 
-        flash("Invalid transaction type", "danger")
+    if txn == "EXPENSE" and txn_sub not in allowed_txn_sub:
+        flash("Invalid expense sub-type", "danger")
+        return redirect(url_for("cashbag", **redirect_args))  # type: ignore
 
-        return redirect(url_for("cashbag", **redirect_args)) # type: ignore
+    if txn == "ADJUSTMENT" and txn_sub not in allowed_adj_sub:
+        flash("Invalid adjustment direction (must select Add or Minus)", "danger")
+        return redirect(url_for("cashbag", **redirect_args))  # type: ignore
+
+    if txn == "OFFICE_CASH":
+        txn_sub = ""  # No subtype needed for office cash
+
+    if txn_type not in allowed_txn_type:
+        txn_type = "CASH"
 
     try:
         amount = float(amount or 0)
         if amount <= 0:
             flash("Amount must be greater than zero", "warning")
-            return redirect(url_for("cashbag", **redirect_args)) # type: ignore
+            return redirect(url_for("cashbag", **redirect_args))  # type: ignore
     except Exception:
         flash("Invalid amount", "danger")
-        return redirect(url_for("cashbag", **redirect_args)) # type: ignore
+        return redirect(url_for("cashbag", **redirect_args))  # type: ignore
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -10283,19 +10426,23 @@ def add_cashbag_transaction():
                 emp1,
                 emp2,
                 eid,
+                txn,
+                txn_sub,
                 txn_type,
                 amount,
                 notes,
                 created_by
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             emp1,
             emp2,
             session.get("eid"),
+            txn,
+            txn_sub or None,
             txn_type,
             amount,
-            notes,
+            notes or None,
             username
         ))
 
@@ -10306,11 +10453,13 @@ def add_cashbag_transaction():
             entity_type="cashbag_transaction",
             entity_id=emp1,
             details={
-                "emp1": emp1,
-                "emp2": emp2,
+                "emp1":     emp1,
+                "emp2":     emp2,
+                "txn":      txn,
+                "txn_sub":  txn_sub,
                 "txn_type": txn_type,
-                "amount": amount,
-                "notes": notes
+                "amount":   amount,
+                "notes":    notes
             }
         )
 
@@ -10319,9 +10468,7 @@ def add_cashbag_transaction():
     except Exception as e:
 
         conn.rollback()
-
         traceback.print_exc()
-
         flash(f"Failed to add transaction: {str(e)}", "danger")
 
     finally:
@@ -10329,7 +10476,8 @@ def add_cashbag_transaction():
         cur.close()
         conn.close()
 
-    return redirect(url_for("cashbag", **redirect_args)) # type: ignore
+    return redirect(url_for("cashbag", **redirect_args))  # type: ignore
+
 
 
 @app.route("/api/village/update_employee_pair", methods=["POST"])
