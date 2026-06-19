@@ -7894,6 +7894,7 @@ def api_village_health_history(vid):
                 "entity_id": r[5]
             })
 
+        conn.commit()
         return jsonify(success=True, history=history_points, events=events)
     except Exception as e:
         traceback.print_exc()
@@ -8388,6 +8389,7 @@ def api_village_behavioral_analytics(vid):
     try:
         t0 = pytime.perf_counter()
         payload = compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, force_recalc)
+        conn.commit()
         print(
             f"Health history took "
             f"{pytime.perf_counter() - t0:.2f}s"
@@ -8955,6 +8957,295 @@ def api_dashboard_posting_analytics(vid):
             "employee_breakdown": employee_breakdown,
             "historical_trend": historical_trend
         })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/ledger", methods=["GET"])
+@login_required
+def api_ledger():
+    emp1 = request.args.get("emp1", type=int)
+    emp2 = request.args.get("emp2", type=int)
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    if not emp1 or not start_date_str or not end_date_str:
+        return jsonify(success=False, error="Missing required parameters"), 400
+
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify(success=False, error="Invalid date format"), 400
+
+    if emp2:
+        pair_filter = "emp1 = %s AND emp2 = %s"
+        pair_params_single = (emp1, emp2)
+    else:
+        pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
+        pair_params_single = (emp1,)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        # 1. Fetch active villages for this employee group
+        if emp2:
+            cur.execute("""
+                SELECT vid, village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND emp2 = %s AND status = 'active'
+            """, (emp1, emp2))
+        else:
+            cur.execute("""
+                SELECT vid, village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
+            """, (emp1,))
+        
+        village_rows = cur.fetchall()
+        vids = [r[0] for r in village_rows]
+
+        if not vids:
+            return jsonify(success=True, opening_balance=0.0, dates={}, dates_list=[])
+
+        # -----------------------------------------------------------------
+        # CALCULATE OPENING BALANCE (all transactions before start_date)
+        # -----------------------------------------------------------------
+        # Manual transactions before start_date
+        cur.execute(f"""
+            SELECT txn, txn_sub, amount
+            FROM cashbag_transactions
+            WHERE {pair_filter} AND created_at::date < %s
+        """, pair_params_single + (start_date,))
+        hist_manual = cur.fetchall()
+
+        office_cash_h = 0.0
+        expenses_h = 0.0
+        adj_add_h = 0.0
+        adj_minus_h = 0.0
+
+        for txn, txn_sub, amount in hist_manual:
+            amt = float(amount or 0)
+            if txn == 'OFFICE_CASH':
+                office_cash_h += amt
+            elif txn == 'EXPENSE':
+                expenses_h += amt
+            elif txn == 'ADJUSTMENT':
+                if txn_sub == 'ADD':
+                    adj_add_h += amt
+                elif txn_sub == 'MINUS':
+                    adj_minus_h += amt
+
+        # Payments before start_date
+        cur.execute("""
+            SELECT COALESCE(SUM(amt), 0)
+            FROM payment p
+            JOIN customer c ON p.cid = c.cid
+            WHERE c.vid = ANY(%s) AND p.payment_date < %s
+        """, (vids, start_date))
+        installments_h = float(cur.fetchone()[0] or 0)
+
+        # Loans & commissions before start_date
+        cur.execute("""
+            SELECT c.base_amount, c.cutting_amount, c.total_amount,
+                   v.interest_rate, v.cutting_rate
+            FROM customer c
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s) AND c.status != 'deleted' AND c.start_date < %s
+        """, (vids, start_date))
+        hist_loans = cur.fetchall()
+
+        loans_disbursed_h = 0.0
+        loan_commission_h = 0.0
+
+        for base_amt_db, cutting_amt_db, total_amt_db, ir_db, cr_db in hist_loans:
+            base_amt = float(base_amt_db or 0)
+            cutting_amt = float(cutting_amt_db or 0)
+            total_amt = float(total_amt_db or 0)
+
+            if base_amt <= 0.0:
+                ir = float(ir_db or 0)
+                cr = float(cr_db or 0)
+                interest = round(total_amt * (ir / 100.0), 2)
+                cutting_amt = round(total_amt * (cr / 100.0), 2)
+                base_amt = round(total_amt - interest - cutting_amt, 2)
+
+            loans_disbursed_h += base_amt
+            loan_commission_h += cutting_amt
+
+        opening_balance = (
+            office_cash_h
+            + installments_h
+            + loan_commission_h
+            + adj_add_h
+            - loans_disbursed_h
+            - expenses_h
+            - adj_minus_h
+        )
+
+        # -----------------------------------------------------------------
+        # QUERY DAILY DETAILS (within [start_date, end_date])
+        # -----------------------------------------------------------------
+        # A. Loans & Commissions within range
+        cur.execute("""
+            SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
+                   v.village_code, v.interest_rate, v.cutting_rate
+            FROM customer c
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s) AND c.status != 'deleted'
+              AND c.start_date >= %s AND c.start_date <= %s
+            ORDER BY c.start_date ASC, c.cid ASC
+        """, (vids, start_date, end_date))
+        loans_rows = cur.fetchall()
+
+        # B. Payments (Collections) within range
+        cur.execute("""
+            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code
+            FROM payment p
+            JOIN customer c ON p.cid = c.cid
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s)
+              AND p.payment_date >= %s AND p.payment_date <= %s
+            ORDER BY p.payment_date ASC, p.pid ASC
+        """, (vids, start_date, end_date))
+        payments_rows = cur.fetchall()
+
+        # C. Manual entries within range
+        cur.execute(f"""
+            SELECT id, txn, txn_sub, txn_type, amount, notes, created_at
+            FROM cashbag_transactions
+            WHERE {pair_filter}
+              AND created_at::date >= %s AND created_at::date <= %s
+            ORDER BY created_at ASC, id ASC
+        """, pair_params_single + (start_date, end_date))
+        manual_rows = cur.fetchall()
+
+        # -----------------------------------------------------------------
+        # GROUP BY DATE (chronological ASC)
+        # -----------------------------------------------------------------
+        dates_in_range = []
+        curr = start_date
+        while curr <= end_date:
+            dates_in_range.append(curr)
+            curr += timedelta(days=1)
+
+        dates_data = {}
+        for d in dates_in_range:
+            d_str = d.strftime("%Y-%m-%d")
+            dates_data[d_str] = {
+                "date_label": d.strftime("%d-%m-%Y"),
+                "villages": [],
+                "loans": [],
+                "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0},
+                "payments": [],
+                "payments_total": 0.0,
+                "expenses": [],
+                "expenses_total": 0.0,
+                "office_cash": [],
+                "office_cash_total": 0.0,
+                "adjustments_add": [],
+                "adjustments_total_add": 0.0,
+                "adjustments_minus": [],
+                "adjustments_total_minus": 0.0
+            }
+
+        # Populate Loans
+        for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_dt, v_code, ir_db, cr_db in loans_rows:
+            d_str = start_dt.strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            base_amt = float(base_amt_db or 0)
+            cutting_amt = float(cutting_amt_db or 0)
+            total_amt = float(total_amt_db or 0)
+
+            ir = float(ir_db or 0)
+            cr = float(cr_db or 0)
+            interest = round(total_amt * (ir / 100.0), 2)
+            if base_amt <= 0.0:
+                cutting_amt = round(total_amt * (cr / 100.0), 2)
+                base_amt = round(total_amt - interest - cutting_amt, 2)
+
+            dates_data[d_str]["loans"].append({
+                "ano": ano,
+                "name": name,
+                "amount": base_amt,
+                "interest": interest,
+                "commission": cutting_amt,
+                "village_code": v_code
+            })
+            dates_data[d_str]["loans_total"]["amount"] += base_amt
+            dates_data[d_str]["loans_total"]["interest"] += interest
+            dates_data[d_str]["loans_total"]["commission"] += cutting_amt
+            if v_code not in dates_data[d_str]["villages"]:
+                dates_data[d_str]["villages"].append(v_code)
+
+        # Populate Payments
+        for pid, ano, name, amt, payment_date, v_code in payments_rows:
+            d_str = payment_date.strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            dates_data[d_str]["payments"].append({
+                "ano": ano,
+                "name": name,
+                "amount": float(amt or 0),
+                "village_code": v_code
+            })
+            dates_data[d_str]["payments_total"] += float(amt or 0)
+            if v_code not in dates_data[d_str]["villages"]:
+                dates_data[d_str]["villages"].append(v_code)
+
+        # Populate Manual transactions
+        for tid, txn, txn_sub, txn_type, amount_db, notes, created_at in manual_rows:
+            d_str = created_at.date().strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            amt = float(amount_db or 0)
+            if txn == 'OFFICE_CASH':
+                dates_data[d_str]["office_cash"].append({
+                    "notes": notes or "Office Cash",
+                    "amount": amt,
+                    "txn_type": txn_type
+                })
+                dates_data[d_str]["office_cash_total"] += amt
+            elif txn == 'EXPENSE':
+                dates_data[d_str]["expenses"].append({
+                    "notes": notes or "Expense",
+                    "amount": amt,
+                    "txn_type": txn_type
+                })
+                dates_data[d_str]["expenses_total"] += amt
+            elif txn == 'ADJUSTMENT':
+                if txn_sub == 'ADD':
+                    dates_data[d_str]["adjustments_add"].append({
+                        "notes": notes or "Adjustment Add",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_add"] += amt
+                elif txn_sub == 'MINUS':
+                    dates_data[d_str]["adjustments_minus"].append({
+                        "notes": notes or "Adjustment Minus",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_minus"] += amt
+
+        dates_list = [d.strftime("%Y-%m-%d") for d in dates_in_range]
+
+        return jsonify(
+            success=True,
+            opening_balance=opening_balance,
+            dates=dates_data,
+            dates_list=dates_list
+        )
+
     except Exception as e:
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
@@ -10108,63 +10399,179 @@ def cashbag():
         # SUMMARY TOTALS  (scoped to emp pair / vids)
         # ------------------------------------------------
 
-        # 1. Office Cash (money received from office)
+        # Helpers for date/month sorting
+        def parse_month_key(key):
+            try:
+                m_name, y_str = key.split('/')
+                m_num = datetime.strptime(m_name, "%B").month
+                return (int(y_str), m_num)
+            except Exception:
+                return (0, 0)
+
+        def parse_date_key(key):
+            try:
+                d, m, y = map(int, key.split('/'))
+                return (y, m, d)
+            except Exception:
+                return (0, 0, 0)
+
+        # 1, 2, 3, 4. Consolidated Manual Transactions & Running Totals
         cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
+            SELECT id, txn, txn_sub, txn_type, amount, notes, created_by, created_at
             FROM cashbag_transactions
             WHERE {pair_filter}
-              AND txn = 'OFFICE_CASH'
+            ORDER BY created_at DESC, id DESC
         """, pair_params_single)
-        office_cash = float(cur.fetchone()[0] or 0)
+        manual_rows = cur.fetchall()
 
-        # 2. Expenses
-        cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-              AND txn = 'EXPENSE'
-        """, pair_params_single)
-        expenses = float(cur.fetchone()[0] or 0)
+        office_cash = 0.0
+        expenses = 0.0
+        adjustments_add = 0.0
+        adjustments_minus = 0.0
 
-        # 3. Adjustments Add
-        cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-              AND txn = 'ADJUSTMENT' AND txn_sub = 'ADD'
-        """, pair_params_single)
-        adjustments_add = float(cur.fetchone()[0] or 0)
+        office_cash_grouped = {}
+        expenses_grouped = {}
+        adjustments_grouped = {}
 
-        # 4. Adjustments Minus
-        cur.execute(f"""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-              AND txn = 'ADJUSTMENT' AND txn_sub = 'MINUS'
-        """, pair_params_single)
-        adjustments_minus = float(cur.fetchone()[0] or 0)
+        for tid, txn, txn_sub, txn_type, amount_db, notes, created_by, created_at in manual_rows:
+            amt = float(amount_db or 0)
+            if txn == 'OFFICE_CASH':
+                office_cash += amt
+            elif txn == 'EXPENSE':
+                expenses += amt
+            elif txn == 'ADJUSTMENT':
+                if txn_sub == 'ADD':
+                    adjustments_add += amt
+                elif txn_sub == 'MINUS':
+                    adjustments_minus += amt
 
-        # 5. Loans Dispensed (Auto calculated from customer table)
-        if vids:
-            cur.execute("""
-                SELECT COALESCE(SUM(base_amount), 0)
-                FROM customer
-                WHERE vid = ANY(%s) AND status != 'deleted'
-            """, (vids,))
-            loans_disbursed = float(cur.fetchone()[0] or 0)
-        else:
-            loans_disbursed = 0.0
+            if not created_at:
+                continue
 
-        # 6. Loan Commission (Auto calculated from customer table)
-        if vids:
-            cur.execute("""
-                SELECT COALESCE(SUM(cutting_amount), 0)
-                FROM customer
-                WHERE vid = ANY(%s) AND status != 'deleted'
-            """, (vids,))
-            loan_commission = float(cur.fetchone()[0] or 0)
-        else:
-            loan_commission = 0.0
+            month_name = created_at.strftime("%B")
+            month_key = f"{month_name}/{created_at.year}"
+
+            day_val = created_at.day
+            if day_val <= 7:
+                w_day = 1
+            elif day_val <= 14:
+                w_day = 8
+            elif day_val <= 21:
+                w_day = 15
+            elif day_val <= 28:
+                w_day = 22
+            else:
+                w_day = 29
+            week_start_date = created_at.replace(day=w_day)
+            week_key = week_start_date.strftime("%-d/%-m/%Y")
+
+            day_key = created_at.strftime("%-d/%-m/%Y")
+
+            if txn == 'OFFICE_CASH':
+                if month_key not in office_cash_grouped:
+                    office_cash_grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                office_cash_grouped[month_key]["total_amount"] += amt
+
+                weeks = office_cash_grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += amt
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "transactions": []}
+                days[day_key]["total_amount"] += amt
+
+                days[day_key]["transactions"].append({
+                    "id": tid,
+                    "txn_type": txn_type,
+                    "amount": amt,
+                    "notes": notes,
+                    "created_by": created_by
+                })
+
+            elif txn == 'EXPENSE':
+                if month_key not in expenses_grouped:
+                    expenses_grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                expenses_grouped[month_key]["total_amount"] += amt
+
+                weeks = expenses_grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += amt
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "transactions": []}
+                days[day_key]["total_amount"] += amt
+
+                days[day_key]["transactions"].append({
+                    "id": tid,
+                    "txn_type": txn_type,
+                    "amount": amt,
+                    "notes": notes,
+                    "created_by": created_by
+                })
+
+            elif txn == 'ADJUSTMENT':
+                signed_amt = amt if txn_sub == 'ADD' else -amt
+                if month_key not in adjustments_grouped:
+                    adjustments_grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                adjustments_grouped[month_key]["total_amount"] += signed_amt
+
+                weeks = adjustments_grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += signed_amt
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "transactions": []}
+                days[day_key]["total_amount"] += signed_amt
+
+                days[day_key]["transactions"].append({
+                    "id": tid,
+                    "txn_sub": txn_sub,
+                    "txn_type": txn_type,
+                    "amount": amt,
+                    "signed_amount": signed_amt,
+                    "notes": notes,
+                    "created_by": created_by
+                })
+
+        def build_manual_tree(grouped_dict):
+            tree_list = []
+            sorted_months = sorted(grouped_dict.keys(), key=parse_month_key, reverse=True)
+            for m_key in sorted_months:
+                m_data = grouped_dict[m_key]
+                sorted_weeks = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+                weeks_list = []
+                for w_key in sorted_weeks:
+                    w_data = m_data["weeks"][w_key]
+                    sorted_days = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                    days_list = []
+                    for d_key in sorted_days:
+                        d_data = w_data["days"][d_key]
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "transactions": d_data["transactions"]
+                        })
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+                tree_list.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+            return tree_list
+
+        office_cash_tree = build_manual_tree(office_cash_grouped)
+        expenses_tree = build_manual_tree(expenses_grouped)
+        adjustments_tree = build_manual_tree(adjustments_grouped)
 
         # 7. Installment Collections (Auto calculated from payment table)
         if vids:
@@ -10176,6 +10583,298 @@ def cashbag():
             installments = float(cur.fetchone()[0] or 0)
         else:
             installments = 0.0
+
+        # 5, 6, 8. Loans Dispensed, commissions, and Collapsible Loans Grouped Tree
+        loans_disbursed = 0.0
+        loan_commission = 0.0
+
+        loans_tree = []
+        installments_tree = []
+        commissions_tree = []
+        if vids:
+            # 1. Build Loans Grouped Tree
+            cur.execute("""
+                SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
+                       v.interest_rate, v.cutting_rate
+                FROM customer c
+                JOIN village v ON c.vid = v.vid
+                WHERE c.vid = ANY(%s) AND c.status != 'deleted'
+                ORDER BY c.start_date DESC, c.cid DESC
+            """, (vids,))
+            loan_rows = cur.fetchall()
+
+            loans_grouped = {}
+            commissions_grouped = {}
+            for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_date, ir_db, cr_db in loan_rows:
+                base_amt = float(base_amt_db or 0)
+                cutting_amt = float(cutting_amt_db or 0)
+                total_amt = float(total_amt_db or 0)
+
+                # Fallback calculations if base_amount is 0 or None
+                if base_amt <= 0.0:
+                    ir = float(ir_db or 0)
+                    cr = float(cr_db or 0)
+                    interest = round(total_amt * (ir / 100.0), 2)
+                    cutting_amt = round(total_amt * (cr / 100.0), 2)
+                    base_amt = round(total_amt - interest - cutting_amt, 2)
+
+                loans_disbursed += base_amt
+                loan_commission += cutting_amt
+
+                if not start_date:
+                    continue
+
+                # Month key: e.g. "June/2026"
+                month_name = start_date.strftime("%B")
+                month_key = f"{month_name}/{start_date.year}"
+
+                # Calculate week starting boundaries (1st, 8th, 15th, 22nd, 29th of the month)
+                day_val = start_date.day
+                if day_val <= 7:
+                    w_day = 1
+                elif day_val <= 14:
+                    w_day = 8
+                elif day_val <= 21:
+                    w_day = 15
+                elif day_val <= 28:
+                    w_day = 22
+                else:
+                    w_day = 29
+                week_start_date = start_date.replace(day=w_day)
+                week_key = week_start_date.strftime("%-d/%-m/%Y")
+
+                day_key = start_date.strftime("%-d/%-m/%Y")
+
+                # Populate loans_grouped
+                if month_key not in loans_grouped:
+                    loans_grouped[month_key] = {
+                        "month_name": month_key,
+                        "total_amount": 0.0,
+                        "weeks": {}
+                    }
+                loans_grouped[month_key]["total_amount"] += base_amt
+
+                weeks_dict = loans_grouped[month_key]["weeks"]
+                if week_key not in weeks_dict:
+                    weeks_dict[week_key] = {
+                        "week_date": week_key,
+                        "total_amount": 0.0,
+                        "days": {}
+                    }
+                weeks_dict[week_key]["total_amount"] += base_amt
+
+                days_dict = weeks_dict[week_key]["days"]
+                if day_key not in days_dict:
+                    days_dict[day_key] = {
+                        "day_date": day_key,
+                        "total_amount": 0.0,
+                        "customers": []
+                    }
+                days_dict[day_key]["total_amount"] += base_amt
+
+                days_dict[day_key]["customers"].append({
+                    "cid": cid,
+                    "ano": ano,
+                    "name": name,
+                    "amount": base_amt
+                })
+
+                # Populate commissions_grouped
+                if cutting_amt > 0.0:
+                    if month_key not in commissions_grouped:
+                        commissions_grouped[month_key] = {
+                            "month_name": month_key,
+                            "total_amount": 0.0,
+                            "weeks": {}
+                        }
+                    commissions_grouped[month_key]["total_amount"] += cutting_amt
+
+                    weeks_dict_c = commissions_grouped[month_key]["weeks"]
+                    if week_key not in weeks_dict_c:
+                        weeks_dict_c[week_key] = {
+                            "week_date": week_key,
+                            "total_amount": 0.0,
+                            "days": {}
+                        }
+                    weeks_dict_c[week_key]["total_amount"] += cutting_amt
+
+                    days_dict_c = weeks_dict_c[week_key]["days"]
+                    if day_key not in days_dict_c:
+                        days_dict_c[day_key] = {
+                            "day_date": day_key,
+                            "total_amount": 0.0,
+                            "customers": []
+                        }
+                    days_dict_c[day_key]["total_amount"] += cutting_amt
+
+                    days_dict_c[day_key]["customers"].append({
+                        "cid": cid,
+                        "ano": ano,
+                        "name": name,
+                        "amount": cutting_amt
+                    })
+
+            sorted_month_keys = sorted(loans_grouped.keys(), key=parse_month_key, reverse=True)
+            for m_key in sorted_month_keys:
+                m_data = loans_grouped[m_key]
+
+                sorted_week_keys = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+                weeks_list = []
+                for w_key in sorted_week_keys:
+                    w_data = m_data["weeks"][w_key]
+
+                    sorted_day_keys = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                    days_list = []
+                    for d_key in sorted_day_keys:
+                        d_data = w_data["days"][d_key]
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "customers": d_data["customers"]
+                        })
+
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+
+                loans_tree.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+
+            # Sort and build commissions_tree
+            sorted_month_keys_c = sorted(commissions_grouped.keys(), key=parse_month_key, reverse=True)
+            for m_key in sorted_month_keys_c:
+                m_data = commissions_grouped[m_key]
+
+                sorted_week_keys = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+                weeks_list = []
+                for w_key in sorted_week_keys:
+                    w_data = m_data["weeks"][w_key]
+
+                    sorted_day_keys = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                    days_list = []
+                    for d_key in sorted_day_keys:
+                        d_data = w_data["days"][d_key]
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "customers": d_data["customers"]
+                        })
+
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+
+                commissions_tree.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+
+            # 2. Build Installments Grouped Tree
+            cur.execute("""
+                SELECT p.pid, c.ano, c.name, p.amt, p.payment_date
+                FROM payment p
+                JOIN customer c ON p.cid = c.cid
+                WHERE c.vid = ANY(%s)
+                ORDER BY p.payment_date DESC, p.pid DESC
+            """, (vids,))
+            pay_rows = cur.fetchall()
+
+            pay_grouped = {}
+            for pid, ano, name, amt, payment_date in pay_rows:
+                if not payment_date:
+                    continue
+
+                month_name = payment_date.strftime("%B")
+                month_key = f"{month_name}/{payment_date.year}"
+
+                # Calculate week starting boundaries (1st, 8th, 15th, 22nd, 29th of the month)
+                day_val = payment_date.day
+                if day_val <= 7:
+                    w_day = 1
+                elif day_val <= 14:
+                    w_day = 8
+                elif day_val <= 21:
+                    w_day = 15
+                elif day_val <= 28:
+                    w_day = 22
+                else:
+                    w_day = 29
+                week_start_date = payment_date.replace(day=w_day)
+                week_key = week_start_date.strftime("%-d/%-m/%Y")
+
+                day_key = payment_date.strftime("%-d/%-m/%Y")
+
+                if month_key not in pay_grouped:
+                    pay_grouped[month_key] = {
+                        "month_name": month_key,
+                        "total_amount": 0.0,
+                        "weeks": {}
+                    }
+                pay_grouped[month_key]["total_amount"] += float(amt or 0)
+
+                weeks_dict = pay_grouped[month_key]["weeks"]
+                if week_key not in weeks_dict:
+                    weeks_dict[week_key] = {
+                        "week_date": week_key,
+                        "total_amount": 0.0,
+                        "days": {}
+                    }
+                weeks_dict[week_key]["total_amount"] += float(amt or 0)
+
+                days_dict = weeks_dict[week_key]["days"]
+                if day_key not in days_dict:
+                    days_dict[day_key] = {
+                        "day_date": day_key,
+                        "total_amount": 0.0,
+                        "customers": []
+                    }
+                days_dict[day_key]["total_amount"] += float(amt or 0)
+
+                days_dict[day_key]["customers"].append({
+                    "pid": pid,
+                    "ano": ano,
+                    "name": name,
+                    "amount": float(amt or 0)
+                })
+
+            sorted_month_keys_p = sorted(pay_grouped.keys(), key=parse_month_key, reverse=True)
+            for m_key in sorted_month_keys_p:
+                m_data = pay_grouped[m_key]
+
+                sorted_week_keys = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+                weeks_list = []
+                for w_key in sorted_week_keys:
+                    w_data = m_data["weeks"][w_key]
+
+                    sorted_day_keys = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                    days_list = []
+                    for d_key in sorted_day_keys:
+                        d_data = w_data["days"][d_key]
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "customers": d_data["customers"]
+                        })
+
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+
+                installments_tree.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
 
         # ------------------------------------------------
         # FINAL CASHBAG TOTAL
@@ -10224,31 +10923,39 @@ def cashbag():
 
                     -- Customer Loans (Auto)
                     SELECT 
-                        'loan_' || cid::text AS id,
+                        'loan_' || c.cid::text AS id,
                         'LOAN' AS txn,
                         NULL AS txn_sub,
                         'CASH' AS txn_type,
-                        base_amount AS amount,
-                        'Loan issued to ' || name || ' (A/c: ' || ano || ')' AS notes,
+                        CASE 
+                            WHEN c.base_amount > 0 THEN c.base_amount
+                            ELSE ROUND(c.total_amount - (c.total_amount * (v.interest_rate / 100.0)) - (c.total_amount * (v.cutting_rate / 100.0)), 2)
+                        END AS amount,
+                        'Loan issued to ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
-                        start_date::timestamp WITH time zone AS created_at
-                    FROM customer
-                    WHERE vid = ANY(%s) AND status != 'deleted'
+                        c.start_date::timestamp WITH time zone AS created_at
+                    FROM customer c
+                    JOIN village v ON c.vid = v.vid
+                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
 
                     UNION ALL
 
                     -- Customer Loan Commission (Auto)
                     SELECT 
-                        'comm_' || cid::text AS id,
+                        'comm_' || c.cid::text AS id,
                         'LOAN_COMMISION' AS txn,
                         NULL AS txn_sub,
                         'CASH' AS txn_type,
-                        cutting_amount AS amount,
-                        'Loan Commission - ' || name || ' (A/c: ' || ano || ')' AS notes,
+                        CASE 
+                            WHEN c.cutting_amount > 0 THEN c.cutting_amount
+                            ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
+                        END AS amount,
+                        'Loan Commission - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
-                        start_date::timestamp WITH time zone AS created_at
-                    FROM customer
-                    WHERE vid = ANY(%s) AND status != 'deleted'
+                        c.start_date::timestamp WITH time zone AS created_at
+                    FROM customer c
+                    JOIN village v ON c.vid = v.vid
+                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
 
                     UNION ALL
 
@@ -10323,6 +11030,12 @@ def cashbag():
             expenses=expenses,
             adjustments_add=adjustments_add,
             adjustments_minus=adjustments_minus,
+            loans_tree=loans_tree,
+            installments_tree=installments_tree,
+            commissions_tree=commissions_tree,
+            office_cash_tree=office_cash_tree,
+            expenses_tree=expenses_tree,
+            adjustments_tree=adjustments_tree,
 
             transactions=transactions
         )
