@@ -476,6 +476,21 @@ def debug_session_writer(response):
 
     return response
 
+@app.after_request
+def debug_session_cookie(response):
+    try:
+        for hdr in response.headers.getlist("Set-Cookie"):
+            if "sivadurga_session" in hdr:
+                logger.warning(
+                    f"SESSION_COOKIE_WRITE "
+                    f"path={request.path} "
+                    f"status={response.status_code}"
+                )
+    except Exception:
+        pass
+
+    return response
+
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
     conn = get_pg_connection()
@@ -708,7 +723,6 @@ def restore_village_context():
         return
     if "user_id" not in session:
         return
-    session.permanent = True
     if "vid" in session and ("village_code" not in session or "village_name" not in session):
         try:
             conn = get_pg_connection()
