@@ -19,12 +19,22 @@ DB_CONFIG = {
     "port": os.environ.get("DB_PORT", "5432").strip(),
 }
 
-# Industrial-grade PostgreSQL connection pool
-pg_pool = ThreadedConnectionPool(
-    minconn=5,
-    maxconn=40,
-    **DB_CONFIG
-)
+# Process-safe lazy connection pool wrapper to prevent socket sharing across Gunicorn pre-forked workers
+_pg_pool = None
+_pool_pid = None
+
+def get_pool():
+    global _pg_pool, _pool_pid
+    current_pid = os.getpid()
+    if _pg_pool is None or _pool_pid != current_pid:
+        _pg_pool = ThreadedConnectionPool(
+            minconn=5,
+            maxconn=40,
+            **DB_CONFIG
+        )
+        _pool_pid = current_pid
+        print(f"[DB] Initialized ThreadedConnectionPool for process {current_pid}")
+    return _pg_pool
 
 
 # Custom exception for pool exhaustion
@@ -74,11 +84,12 @@ class PooledConnection:
 
 def get_pg_connection():
     last_error = None
+    pool = get_pool()
 
     for _ in range(5):
         conn = None
         try:
-            conn = pg_pool.getconn()
+            conn = pool.getconn()
             try:
                 conn.rollback()
             except Exception:
@@ -88,11 +99,11 @@ def get_pg_connection():
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
 
-                return PooledConnection(conn, pg_pool)
+                return PooledConnection(conn, pool)
 
             except Exception:
                 try:
-                    pg_pool.putconn(conn, close=True)
+                    pool.putconn(conn, close=True)
                 except Exception:
                     pass
                 last_error = RuntimeError(
@@ -111,7 +122,7 @@ def get_pg_connection():
 
             if conn is not None:
                 try:
-                    pg_pool.putconn(conn, close=True)
+                    pool.putconn(conn, close=True)
                 except Exception:
                     pass
             time.sleep(0.2)
@@ -124,15 +135,14 @@ def get_pg_connection():
     )
 
 
-
 def get_pool_stats():
     """Return PostgreSQL connection pool statistics."""
-
-    used_connections = len(getattr(pg_pool, "_used", {}))
-    available_connections = len(getattr(pg_pool, "_pool", []))
+    pool = get_pool()
+    used_connections = len(getattr(pool, "_used", {}))
+    available_connections = len(getattr(pool, "_pool", []))
 
     return {
         "used_connections": used_connections,
         "available_connections": available_connections,
-        "max_connections": pg_pool.maxconn
+        "max_connections": pool.maxconn
     }
