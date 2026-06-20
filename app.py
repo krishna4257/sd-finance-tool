@@ -457,6 +457,24 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 # any request that Flask thinks arrived over HTTP.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+@app.after_request
+def debug_session_writer(response):
+
+    try:
+        set_cookie = response.headers.getlist("Set-Cookie")
+
+        for hdr in set_cookie:
+            if "sivadurga_session" in hdr:
+                logger.warning(
+                    f"SESSION_COOKIE_WRITTEN "
+                    f"path={request.path} "
+                    f"status={response.status_code} "
+                    f"cookie={hdr[:200]}"
+                )
+    except Exception:
+        pass
+
+    return response
 
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
@@ -9773,7 +9791,7 @@ def landing():
 # Login / Logout
 # ----------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("15 per minute")
 def login():
 
     if request.method == "GET":
