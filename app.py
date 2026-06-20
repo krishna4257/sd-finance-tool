@@ -712,6 +712,20 @@ def inject_csrf_token():
 # ----------------------------------------------------
 # Decorators
 # ----------------------------------------------------
+def is_ajax_request():
+    # If Sec-Fetch-Mode is present, verify if it is not a document navigation
+    fetch_mode = request.headers.get("Sec-Fetch-Mode")
+    if fetch_mode:
+        return fetch_mode != "navigate"
+
+    # Fallback for older browsers, custom API clients, and crawlers
+    return (
+        request.path.startswith("/api/")
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.is_json
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -745,17 +759,11 @@ def login_required(f):
             # Set-Cookie header in this redirect response.
             session.modified = False
 
-            # API / AJAX / JSON requests should receive 401 Unauthorized instead of a 302
+            # API / AJAX / Fetch requests should receive 401 Unauthorized instead of a 302
             # redirect to /login. This prevents the browser fetch engine from fetching
             # /login in the background and generating a sparse session cookie that
             # overwrites the user's valid session cookie.
-            is_api_request = (
-                request.path.startswith("/api/")
-                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.is_json
-                or "application/json" in request.headers.get("Accept", "")
-            )
-            if is_api_request:
+            if is_ajax_request():
                 return jsonify(success=False, error="Session expired. Please login again.", session_expired=True), 401
 
             return redirect("/login")
@@ -770,26 +778,14 @@ def admin_required(f):
 
         if not user_id:
             session.modified = False
-            is_api_request = (
-                request.path.startswith("/api/")
-                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.is_json
-                or "application/json" in request.headers.get("Accept", "")
-            )
-            if is_api_request:
+            if is_ajax_request():
                 return jsonify(success=False, error="Session expired. Please login again.", session_expired=True), 401
             flash("Please login", "danger")
             return redirect(url_for("login"))
 
         # Only admin and mgmt allowed
         if level not in ["admin", "mgmt"]:
-            is_api_request = (
-                request.path.startswith("/api/")
-                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.is_json
-                or "application/json" in request.headers.get("Accept", "")
-            )
-            if is_api_request:
+            if is_ajax_request():
                 return jsonify(success=False, error="Access denied."), 403
             flash("Access denied", "danger")
             return redirect(url_for("dashboard"))
