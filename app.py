@@ -704,6 +704,33 @@ def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
+            # --- SESSION DIAGNOSTIC LOG ---
+            # Every unexpected redirect to /login is logged here so we can
+            # identify exactly why the session was lost.
+            try:
+                import datetime as _dt
+                _ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                _ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+                _ua = request.headers.get("User-Agent", "unknown")
+                _url = request.url
+                _method = request.method
+                _cookie_hdr = request.headers.get("Cookie", "")
+                _has_session_cookie = "sivadurga_session" in _cookie_hdr
+                _session_keys = list(session.keys())
+                _log_line = (
+                    f"[{_ts}] UNEXPECTED_LOGOUT "
+                    f"ip={_ip} method={_method} url={_url} "
+                    f"cookie_present={_has_session_cookie} "
+                    f"session_keys={_session_keys} "
+                    f"ua={_ua}\n"
+                )
+                log_path = "/tmp/sd_session_debug.log"
+                with open(log_path, "a") as _lf:
+                    _lf.write(_log_line)
+                logger.warning(_log_line.strip())
+            except Exception:
+                pass
+            # --- END DIAGNOSTIC LOG ---
             return redirect("/login")
         return f(*args, **kwargs)
     return wrapper
