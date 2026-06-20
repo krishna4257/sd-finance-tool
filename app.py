@@ -556,7 +556,13 @@ app.config["WTF_CSRF_ENABLED"] = True
 # refreshed or navigated. The session cookie itself provides auth security.
 app.config["WTF_CSRF_TIME_LIMIT"] = None
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
-app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+# SESSION_REFRESH_EACH_REQUEST = False is critical.
+# With 8 gunicorn workers × 4 threads = 32 concurrent handlers, setting this
+# to True means EVERY response (including 302 redirects with empty sessions from
+# login_required) writes a Set-Cookie. A stale/empty cookie from a slow or failed
+# concurrent request then overwrites the browser's valid session → sudden logout.
+# With False, Flask only writes Set-Cookie when the session data actually changed.
+app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 # Secure session cookie settings
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -705,8 +711,6 @@ def login_required(f):
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
             # --- SESSION DIAGNOSTIC LOG ---
-            # Every unexpected redirect to /login is logged here so we can
-            # identify exactly why the session was lost.
             try:
                 import datetime as _dt
                 _ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -731,6 +735,14 @@ def login_required(f):
             except Exception:
                 pass
             # --- END DIAGNOSTIC LOG ---
+            # IMPORTANT: Mark session as unmodified so Flask does NOT send a
+            # Set-Cookie header in this redirect response. Without this, an empty
+            # or sparse session (just csrf_token) would be written to the browser
+            # cookie, overwriting the user's valid session stored in another tab
+            # or from a concurrent request. SESSION_REFRESH_EACH_REQUEST=False
+            # already prevents this for unmodified sessions, but being explicit here
+            # adds defence-in-depth.
+            session.modified = False
             return redirect("/login")
         return f(*args, **kwargs)
     return wrapper
@@ -3413,7 +3425,13 @@ def add_customer():
         else:
             tdt = fdt + timedelta(weeks=period)# type: ignore
 
-        total_amount = float(data["total_amount"])
+        raw_total = data.get("total_amount", "").strip()
+        if not raw_total:
+            return jsonify(error="Total amount is required"), 400
+        try:
+            total_amount = float(raw_total)
+        except (ValueError, TypeError):
+            return jsonify(error="Total amount must be a valid number"), 400
         installment_amount = round(total_amount / period, 2)
         paid_amount = 0.0
         balance_amount = total_amount
