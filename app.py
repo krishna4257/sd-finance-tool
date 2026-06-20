@@ -666,14 +666,20 @@ def set_security_headers(response):
 # ----------------------------------------------------
 # Session timeout and activity tracking
 @app.before_request
-def redirect_www():
+def redirect_www_and_force_https():
     # Skip for static assets
     if request.path.startswith("/static/"):
         return
+
+    # Force HTTPS in production to prevent Secure cookies from being blocked/discarded
+    is_https = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
+    if not is_https and os.environ.get("DISABLE_SECURE_COOKIE") != "1":
+        url = request.url.replace("http://", "https://", 1)
+        return redirect(url, code=301)
+
     host = request.headers.get("Host", "")
     if host.startswith("www."):
         new_host = host[4:]
-        is_https = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
         scheme = "https" if is_https else "http"
         return redirect(f"{scheme}://{new_host}{request.full_path}", code=301)
 
@@ -736,13 +742,22 @@ def login_required(f):
                 pass
             # --- END DIAGNOSTIC LOG ---
             # IMPORTANT: Mark session as unmodified so Flask does NOT send a
-            # Set-Cookie header in this redirect response. Without this, an empty
-            # or sparse session (just csrf_token) would be written to the browser
-            # cookie, overwriting the user's valid session stored in another tab
-            # or from a concurrent request. SESSION_REFRESH_EACH_REQUEST=False
-            # already prevents this for unmodified sessions, but being explicit here
-            # adds defence-in-depth.
+            # Set-Cookie header in this redirect response.
             session.modified = False
+
+            # API / AJAX / JSON requests should receive 401 Unauthorized instead of a 302
+            # redirect to /login. This prevents the browser fetch engine from fetching
+            # /login in the background and generating a sparse session cookie that
+            # overwrites the user's valid session cookie.
+            is_api_request = (
+                request.path.startswith("/api/")
+                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+                or "application/json" in request.headers.get("Accept", "")
+            )
+            if is_api_request:
+                return jsonify(success=False, error="Session expired. Please login again.", session_expired=True), 401
+
             return redirect("/login")
         return f(*args, **kwargs)
     return wrapper
@@ -754,11 +769,28 @@ def admin_required(f):
         level = session.get("level")
 
         if not user_id:
+            session.modified = False
+            is_api_request = (
+                request.path.startswith("/api/")
+                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+                or "application/json" in request.headers.get("Accept", "")
+            )
+            if is_api_request:
+                return jsonify(success=False, error="Session expired. Please login again.", session_expired=True), 401
             flash("Please login", "danger")
             return redirect(url_for("login"))
 
         # Only admin and mgmt allowed
         if level not in ["admin", "mgmt"]:
+            is_api_request = (
+                request.path.startswith("/api/")
+                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+                or "application/json" in request.headers.get("Accept", "")
+            )
+            if is_api_request:
+                return jsonify(success=False, error="Access denied."), 403
             flash("Access denied", "danger")
             return redirect(url_for("dashboard"))
 
