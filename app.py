@@ -2827,6 +2827,296 @@ def mobile_cashbag_get():
         cur.close()
         conn.close()
 
+@app.get("/api/mobile/ledger")
+def mobile_ledger_get():
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return {"error": "missing token"}, 401
+
+    token_data = verify_mobile_token(token)
+    if not token_data:
+        return {"error": "invalid token"}, 401
+
+    eid = token_data.get("eid")
+    if not eid:
+        return {"error": "invalid token data"}, 400
+
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    if not start_date_str or not end_date_str:
+        return {"error": "Missing start_date or end_date"}, 400
+
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Invalid date format"}, 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT emp1, emp2 FROM village WHERE emp1 = %s OR emp2 = %s LIMIT 1", (eid, eid))
+        row = cur.fetchone()
+        if row:
+            emp1, emp2 = row[0], row[1]
+        else:
+            emp1, emp2 = eid, None
+
+        if emp2:
+            pair_filter = "emp1 = %s AND emp2 = %s"
+            pair_params_single = (emp1, emp2)
+        else:
+            pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
+            pair_params_single = (emp1,)
+
+        if emp2:
+            cur.execute("""
+                SELECT vid, village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND emp2 = %s AND status = 'active'
+            """, (emp1, emp2))
+        else:
+            cur.execute("""
+                SELECT vid, village_name, village_code
+                FROM village
+                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
+            """, (emp1,))
+        
+        village_rows = cur.fetchall()
+        vids = [r[0] for r in village_rows]
+
+        if not vids:
+            return {
+                "success": True,
+                "opening_balance": 0.0,
+                "dates": {},
+                "dates_list": []
+            }
+
+        cur.execute(f"""
+            SELECT txn, txn_sub, amount
+            FROM cashbag_transactions
+            WHERE {pair_filter} AND created_at::date < %s
+        """, pair_params_single + (start_date,))
+        hist_manual = cur.fetchall()
+
+        office_cash_h = 0.0
+        expenses_h = 0.0
+        adj_add_h = 0.0
+        adj_minus_h = 0.0
+
+        for txn, txn_sub, amount in hist_manual:
+            amt = float(amount or 0)
+            if txn == 'OFFICE_CASH':
+                office_cash_h += amt
+            elif txn == 'EXPENSE':
+                expenses_h += amt
+            elif txn == 'ADJUSTMENT':
+                if txn_sub == 'ADD':
+                    adj_add_h += amt
+                elif txn_sub == 'MINUS':
+                    adj_minus_h += amt
+
+        cur.execute("""
+            SELECT COALESCE(SUM(amt), 0)
+            FROM payment p
+            JOIN customer c ON p.cid = c.cid
+            WHERE c.vid = ANY(%s) AND p.payment_date < %s
+        """, (vids, start_date))
+        installments_h = float(cur.fetchone()[0] or 0)
+
+        cur.execute("""
+            SELECT c.base_amount, c.cutting_amount, c.total_amount,
+                   v.interest_rate, v.cutting_rate
+            FROM customer c
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s) AND c.status != 'deleted' AND c.start_date < %s
+        """, (vids, start_date))
+        hist_loans = cur.fetchall()
+
+        loans_disbursed_h = 0.0
+        loan_commission_h = 0.0
+
+        for base_amt_db, cutting_amt_db, total_amt_db, ir_db, cr_db in hist_loans:
+            base_amt = float(base_amt_db or 0)
+            cutting_amt = float(cutting_amt_db or 0)
+            total_amt = float(total_amt_db or 0)
+
+            if base_amt <= 0.0:
+                ir = float(ir_db or 0)
+                cr = float(cr_db or 0)
+                interest = round(total_amt * (ir / 100.0), 2)
+                cutting_amt = round(total_amt * (cr / 100.0), 2)
+                base_amt = round(total_amt - interest - cutting_amt, 2)
+
+            loans_disbursed_h += base_amt
+            loan_commission_h += cutting_amt
+
+        opening_balance = (
+            office_cash_h
+            + installments_h
+            + loan_commission_h
+            + adj_add_h
+            - loans_disbursed_h
+            - expenses_h
+            - adj_minus_h
+        )
+
+        cur.execute("""
+            SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
+                   v.village_code, v.interest_rate, v.cutting_rate
+            FROM customer c
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s) AND c.status != 'deleted'
+              AND c.start_date >= %s AND c.start_date <= %s
+            ORDER BY c.start_date ASC, c.cid ASC
+        """, (vids, start_date, end_date))
+        loans_rows = cur.fetchall()
+
+        cur.execute("""
+            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code
+            FROM payment p
+            JOIN customer c ON p.cid = c.cid
+            JOIN village v ON c.vid = v.vid
+            WHERE c.vid = ANY(%s)
+              AND p.payment_date >= %s AND p.payment_date <= %s
+            ORDER BY p.payment_date ASC, p.pid ASC
+        """, (vids, start_date, end_date))
+        payments_rows = cur.fetchall()
+
+        cur.execute(f"""
+            SELECT id, txn, txn_sub, txn_type, amount, notes, created_at
+            FROM cashbag_transactions
+            WHERE {pair_filter}
+              AND created_at::date >= %s AND created_at::date <= %s
+            ORDER BY created_at ASC, id ASC
+        """, pair_params_single + (start_date, end_date))
+        manual_rows = cur.fetchall()
+
+        dates_in_range = []
+        curr = start_date
+        while curr <= end_date:
+            dates_in_range.append(curr)
+            curr += timedelta(days=1)
+
+        dates_data = {}
+        for d in dates_in_range:
+            d_str = d.strftime("%Y-%m-%d")
+            dates_data[d_str] = {
+                "date_label": d.strftime("%d-%m-%Y"),
+                "villages": [],
+                "loans": [],
+                "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0},
+                "payments": [],
+                "payments_total": 0.0,
+                "expenses": [],
+                "expenses_total": 0.0,
+                "office_cash": [],
+                "office_cash_total": 0.0,
+                "adjustments_add": [],
+                "adjustments_total_add": 0.0,
+                "adjustments_minus": [],
+                "adjustments_total_minus": 0.0
+            }
+
+        for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_dt, v_code, ir_db, cr_db in loans_rows:
+            d_str = start_dt.strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            base_amt = float(base_amt_db or 0)
+            cutting_amt = float(cutting_amt_db or 0)
+            total_amt = float(total_amt_db or 0)
+
+            ir = float(ir_db or 0)
+            cr = float(cr_db or 0)
+            interest = round(total_amt * (ir / 100.0), 2)
+            if base_amt <= 0.0:
+                cutting_amt = round(total_amt * (cr / 100.0), 2)
+                base_amt = round(total_amt - interest - cutting_amt, 2)
+
+            dates_data[d_str]["loans"].append({
+                "ano": ano,
+                "name": name,
+                "amount": base_amt,
+                "interest": interest,
+                "commission": cutting_amt,
+                "village_code": v_code
+            })
+            dates_data[d_str]["loans_total"]["amount"] += base_amt
+            dates_data[d_str]["loans_total"]["interest"] += interest
+            dates_data[d_str]["loans_total"]["commission"] += cutting_amt
+            if v_code not in dates_data[d_str]["villages"]:
+                dates_data[d_str]["villages"].append(v_code)
+
+        for pid, ano, name, amt, payment_date, v_code in payments_rows:
+            d_str = payment_date.strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            dates_data[d_str]["payments"].append({
+                "ano": ano,
+                "name": name,
+                "amount": float(amt or 0),
+                "village_code": v_code
+            })
+            dates_data[d_str]["payments_total"] += float(amt or 0)
+            if v_code not in dates_data[d_str]["villages"]:
+                dates_data[d_str]["villages"].append(v_code)
+
+        for tid, txn, txn_sub, txn_type, amount_db, notes, created_at in manual_rows:
+            d_str = created_at.date().strftime("%Y-%m-%d")
+            if d_str not in dates_data:
+                continue
+
+            amt = float(amount_db or 0)
+            if txn == 'OFFICE_CASH':
+                dates_data[d_str]["office_cash"].append({
+                    "notes": notes or "Office Cash",
+                    "amount": amt,
+                    "txn_type": txn_type
+                })
+                dates_data[d_str]["office_cash_total"] += amt
+            elif txn == 'EXPENSE':
+                dates_data[d_str]["expenses"].append({
+                    "notes": notes or "Expense",
+                    "amount": amt,
+                    "txn_type": txn_type
+                })
+                dates_data[d_str]["expenses_total"] += amt
+            elif txn == 'ADJUSTMENT':
+                if txn_sub == 'ADD':
+                    dates_data[d_str]["adjustments_add"].append({
+                        "notes": notes or "Adjustment Add",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_add"] += amt
+                elif txn_sub == 'MINUS':
+                    dates_data[d_str]["adjustments_minus"].append({
+                        "notes": notes or "Adjustment Minus",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_minus"] += amt
+
+        dates_list = [d.strftime("%Y-%m-%d") for d in dates_in_range]
+
+        return {
+            "success": True,
+            "opening_balance": opening_balance,
+            "dates": dates_data,
+            "dates_list": dates_list
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}, 500
+    finally:
+        cur.close()
+        conn.close()
+
 
 @csrf.exempt
 @app.post("/api/mobile/cashbag/add")
