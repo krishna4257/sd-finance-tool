@@ -266,6 +266,29 @@
     </div>
 </div>
 
+<!-- Reset Password Modal -->
+<div id="reset-password-modal" class="modal-overlay"
+    style="display:none; z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div class="raised-box reset-password-modal-box"
+        style="width: 400px; max-width: 90vw; background: var(--surface); padding: 22px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
+        <h3 id="reset-password-title" style="margin:0 0 16px 0;color:var(--primary);font-family:'Space Grotesk',sans-serif;">Reset Password</h3>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <div>
+                <label style="font-weight:600; font-size:0.9rem; margin-bottom:6px; display:block;">New Password</label>
+                <input id="rp_password" type="password" class="input" placeholder="Enter new password"
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none;">
+            </div>
+        </div>
+
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:12px;">
+            <button id="rp_cancel" class="neumorphic-btn small">Cancel</button>
+            <button id="rp_save" class="neumorphic-btn small"
+                style="color:var(--danger, #dc2626); border-color:var(--danger, #dc2626);">Reset</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let selectedUserId = null;
 
@@ -350,6 +373,9 @@
                         Reset Device
                     </button>
                 ` : ``}
+                <button class="neumorphic-btn small table-btn reset-password-btn" data-id="${u.id}" data-username="${u.username}" style="padding: 4px 8px; font-size:0.75rem;">
+                    Reset Password
+                </button>
                 <button class="neumorphic-btn small table-btn edit-villages-btn" data-id="${u.id}" style="padding: 4px 8px; font-size:0.75rem;">
                      ${(u.villages && u.villages.length > 0) ? 'Edit Villages' : 'Add Villages'}
                 </button>
@@ -414,6 +440,16 @@
 
             const j = await r.json();
             if (j.ok) loadUsers();
+        }
+
+        if (btn.classList.contains('reset-password-btn')) {
+            selectedUserId = id;
+            const username = btn.dataset.username;
+            document.getElementById("reset-password-title").textContent = `Reset Password for ${username}`;
+            document.getElementById("rp_password").value = "";
+            const rpModal = document.getElementById("reset-password-modal");
+            rpModal.style.display = "flex";
+            rpModal.classList.add("show");
         }
 
         if (btn.classList.contains('edit-villages-btn')) {
@@ -496,6 +532,38 @@
             loadUsers();
         } else {
             alert(j.msg || "Failed to update villages");
+        }
+    };
+
+    document.getElementById("rp_cancel").onclick = () => {
+        const rpModal = document.getElementById("reset-password-modal");
+        rpModal.classList.remove("show");
+        rpModal.style.display = "none";
+    };
+
+    document.getElementById("rp_save").onclick = async () => {
+        const password = document.getElementById("rp_password").value.trim();
+        if (!password) {
+            alert("Password cannot be empty");
+            return;
+        }
+
+        const res = await csrfFetch('/api/users/reset_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: selectedUserId, password })
+        });
+
+        const j = await res.json();
+
+        if (j.ok) {
+            const rpModal = document.getElementById("reset-password-modal");
+            rpModal.classList.remove("show");
+            rpModal.style.display = "none";
+            alert("Password reset successfully");
+            loadUsers();
+        } else {
+            alert(j.msg || "Failed to reset password");
         }
     };
 
@@ -751,6 +819,13 @@
 <script>
     document.getElementById("village-modal").onclick = function (e) {
         if (e.target.id === "village-modal") {
+            this.classList.remove("show");
+            this.style.display = "none";
+        }
+    };
+
+    document.getElementById("reset-password-modal").onclick = function (e) {
+        if (e.target.id === "reset-password-modal") {
             this.classList.remove("show");
             this.style.display = "none";
         }
