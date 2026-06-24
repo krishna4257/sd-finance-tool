@@ -797,73 +797,11 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if loans_tree %}
-        <div class="loans-tree-container">
-          {% for month in loans_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: #b45309;"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(month.total_amount) }}</span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(37, 99, 235, 0.04); border-radius: 6px; border: 1px solid rgba(37, 99, 235, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: #2563eb;"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(week.total_amount) }}</span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(37, 99, 235, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(22, 163, 74, 0.03); border-radius: 4px; border: 1px solid rgba(22, 163, 74, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: #16a34a;"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(day.total_amount) }}</span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(22, 163, 74, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">A/c No</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">Customer Name</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif; text-align: right;">Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for cust in day.customers %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ cust.ano }}</td>
-                                    <td style="padding: 6px 8px; font-weight: 500; color: #fff;">{{ cust.name }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #16a34a;">₹{{ "{:,.2f}".format(cust.amount) }}</td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No loans dispensed for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="loansModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
 
   </div>
@@ -884,73 +822,11 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if installments_tree %}
-        <div class="loans-tree-container">
-          {% for month in installments_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: #b45309;"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(month.total_amount) }}</span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(22, 163, 74, 0.04); border-radius: 6px; border: 1px solid rgba(22, 163, 74, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: #16a34a;"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(week.total_amount) }}</span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(22, 163, 74, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(22, 163, 74, 0.03); border-radius: 4px; border: 1px solid rgba(22, 163, 74, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: #16a34a;"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; color: #16a34a;">₹{{ "{:,.2f}".format(day.total_amount) }}</span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(22, 163, 74, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">A/c No</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">Customer Name</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif; text-align: right;">Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for cust in day.customers %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ cust.ano }}</td>
-                                    <td style="padding: 6px 8px; font-weight: 500; color: #fff;">{{ cust.name }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #16a34a;">₹{{ "{:,.2f}".format(cust.amount) }}</td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No installments collected for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="installmentsModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
 
   </div>
@@ -971,73 +847,11 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if commissions_tree %}
-        <div class="loans-tree-container">
-          {% for month in commissions_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: #b45309;"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; color: #b45309;">₹{{ "{:,.2f}".format(month.total_amount) }}</span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(180, 83, 9, 0.04); border-radius: 6px; border: 1px solid rgba(180, 83, 9, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: #b45309;"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; color: #b45309;">₹{{ "{:,.2f}".format(week.total_amount) }}</span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(180, 83, 9, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(180, 83, 9, 0.03); border-radius: 4px; border: 1px solid rgba(180, 83, 9, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: #b45309;"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; color: #b45309;">₹{{ "{:,.2f}".format(day.total_amount) }}</span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(180, 83, 9, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">A/c No</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">Customer Name</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif; text-align: right;">Commission</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for cust in day.customers %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ cust.ano }}</td>
-                                    <td style="padding: 6px 8px; font-weight: 500; color: #fff;">{{ cust.name }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #b45309;">₹{{ "{:,.2f}".format(cust.amount) }}</td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No commissions collected for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="commissionsModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
 
   </div>
@@ -1058,75 +872,11 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if office_cash_tree %}
-        <div class="loans-tree-container">
-          {% for month in office_cash_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: var(--primary);"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; color: var(--primary);">₹{{ "{:,.2f}".format(month.total_amount) }}</span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(255, 107, 0, 0.04); border-radius: 6px; border: 1px solid rgba(255, 107, 0, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: var(--primary);"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; color: var(--primary);">₹{{ "{:,.2f}".format(week.total_amount) }}</span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(255, 107, 0, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(255, 107, 0, 0.03); border-radius: 4px; border: 1px solid rgba(255, 107, 0, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: var(--primary);"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; color: var(--primary);">₹{{ "{:,.2f}".format(day.total_amount) }}</span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(255, 107, 0, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for txn in day.transactions %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge {{ 'badge-upi' if txn.txn_type == 'UPI' else 'badge-cash' }}">{{ txn.txn_type }}</span></td>
-                                    <td style="padding: 6px 8px; color: #fff;">{{ txn.notes }}</td>
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ txn.created_by }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: var(--primary);">₹{{ "{:,.2f}".format(txn.amount) }}</td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No office cash entries for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="officeCashModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
 
   </div>
@@ -1147,75 +897,11 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if expenses_tree %}
-        <div class="loans-tree-container">
-          {% for month in expenses_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: #dc2626;"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; color: #dc2626;">₹{{ "{:,.2f}".format(month.total_amount) }}</span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(220, 38, 38, 0.04); border-radius: 6px; border: 1px solid rgba(220, 38, 38, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: #dc2626;"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; color: #dc2626;">₹{{ "{:,.2f}".format(week.total_amount) }}</span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(220, 38, 38, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(220, 38, 38, 0.03); border-radius: 4px; border: 1px solid rgba(220, 38, 38, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: #dc2626;"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; color: #dc2626;">₹{{ "{:,.2f}".format(day.total_amount) }}</span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(220, 38, 38, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for txn in day.transactions %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge {{ 'badge-upi' if txn.txn_type == 'UPI' else 'badge-cash' }}">{{ txn.txn_type }}</span></td>
-                                    <td style="padding: 6px 8px; color: #fff;">{{ txn.notes }}</td>
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ txn.created_by }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #dc2626;">₹{{ "{:,.2f}".format(txn.amount) }}</td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No expenses logged for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="expensesModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
 
   </div>
@@ -1236,95 +922,12 @@
     </div>
 
     <!-- Modal Body (Scrollable) -->
-    <div style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
-      {% if adjustments_tree %}
-        <div class="loans-tree-container">
-          {% for month in adjustments_tree %}
-            <details class="tree-node month-node" {% if loop.first %}open{% endif %} style="margin-bottom: 12px;">
-              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                <i class="fas fa-calendar-alt" style="color: #2563eb;"></i>
-                <span style="color: #fff;">{{ month.month_name }}</span>
-                <span style="margin-left: auto; font-weight: 700; color: {{ '#16a34a' if month.total_amount >= 0 else '#dc2626' }};">
-                  {% if month.total_amount >= 0 %}+₹{{ "{:,.2f}".format(month.total_amount) }}{% else %}-₹{{ "{:,.2f}".format(month.total_amount|abs) }}{% endif %}
-                </span>
-              </summary>
-              
-              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
-                {% for week in month.weeks %}
-                  <details class="tree-node week-node" {% if loop.first %}open{% endif %} style="margin-bottom: 10px;">
-                    <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: rgba(37, 99, 235, 0.04); border-radius: 6px; border: 1px solid rgba(37, 99, 235, 0.04);">
-                      <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                      <i class="fas fa-calendar-week" style="color: #2563eb;"></i>
-                      <span style="color: #e2e8f0;">Week of {{ week.week_date }}</span>
-                      <span style="margin-left: auto; font-weight: 700; color: {{ '#16a34a' if week.total_amount >= 0 else '#dc2626' }};">
-                        {% if week.total_amount >= 0 %}+₹{{ "{:,.2f}".format(week.total_amount) }}{% else %}-₹{{ "{:,.2f}".format(week.total_amount|abs) }}{% endif %}
-                      </span>
-                    </summary>
-
-                    <div style="padding-left: 18px; border-left: 2px solid rgba(37, 99, 235, 0.1); margin-left: 16px; margin-top: 6px;">
-                      {% for day in week.days %}
-                        <details class="tree-node day-node" style="margin-bottom: 8px;">
-                          <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: rgba(37, 99, 235, 0.03); border-radius: 4px; border: 1px solid rgba(37, 99, 235, 0.03);">
-                            <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
-                            <i class="fas fa-calendar-day" style="color: #2563eb;"></i>
-                            <span style="color: #cbd5e1;">{{ day.day_date }}</span>
-                            <span style="margin-left: auto; font-weight: 700; color: {{ '#16a34a' if day.total_amount >= 0 else '#dc2626' }};">
-                              {% if day.total_amount >= 0 %}+₹{{ "{:,.2f}".format(day.total_amount) }}{% else %}-₹{{ "{:,.2f}".format(day.total_amount|abs) }}{% endif %}
-                            </span>
-                          </summary>
-
-                          <div style="padding-left: 14px; border-left: 2px solid rgba(37, 99, 235, 0.1); margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
-                            <table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-                              <thead>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Action</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
-                                  <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for txn in day.transactions %}
-                                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
-                                    <td style="padding: 6px 8px;">
-                                      {% if txn.txn_sub == 'ADD' %}
-                                        <span style="color: #16a34a; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: rgba(22, 163, 74, 0.1); border-radius: 4px;">ADD</span>
-                                      {% else %}
-                                        <span style="color: #dc2626; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: rgba(220, 38, 38, 0.1); border-radius: 4px;">MINUS</span>
-                                      {% endif %}
-                                    </td>
-                                    <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge {{ 'badge-upi' if txn.txn_type == 'UPI' else 'badge-cash' }}">{{ txn.txn_type }}</span></td>
-                                    <td style="padding: 6px 8px; color: #fff;">{{ txn.notes }}</td>
-                                    <td style="padding: 6px 8px; color: #9ca3af;">{{ txn.created_by }}</td>
-                                    <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: {{ '#16a34a' if txn.txn_sub == 'ADD' else '#dc2626' }};">
-                                      {% if txn.txn_sub == 'ADD' %}+{% else %}-{% endif %}₹{{ "{:,.2f}".format(txn.amount) }}
-                                    </td>
-                                  </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      {% endfor %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            </details>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div style="text-align: center; padding: 40px; opacity: 0.5;">
-          <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
-          <p>No adjustments logged for this employee group.</p>
-        </div>
-      {% endif %}
+    <div id="adjustmentsModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
     </div>
-
-  </div>
-</dialog>
 
   </div>
 </dialog>
@@ -1385,6 +988,312 @@
 </div>
 
 <script>
+  function loadBreakdownData(type, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const emp1 = "{{ emp1 }}";
+    const emp2 = "{{ emp2 if emp2 and emp2 != 'None' else '' }}";
+
+    // Set loading spinner
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
+    `;
+
+    fetch(`/api/cashbag/breakdown?emp1=${emp1}&emp2=${emp2}&type=${type}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #dc2626;">
+              <i class="fas fa-exclamation-triangle" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+              <p>Error loading breakdown: ${data.error || 'Unknown error'}</p>
+            </div>
+          `;
+          return;
+        }
+
+        const formatCurrency = (val) => {
+          const num = parseFloat(val);
+          if (isNaN(num)) return '₹0.00';
+          return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        const formatCurrencySigned = (val) => {
+          const num = parseFloat(val);
+          if (isNaN(num)) return '₹0.00';
+          const sign = num >= 0 ? '+' : '-';
+          return `${sign}₹` + Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        const tree = data.tree || [];
+        if (tree.length === 0) {
+          let emptyMsg = "No entries for this employee group.";
+          if (type === 'loans') emptyMsg = "No loans dispensed for this employee group.";
+          else if (type === 'installments') emptyMsg = "No installments collected for this employee group.";
+          else if (type === 'commissions') emptyMsg = "No commissions collected for this employee group.";
+          else if (type === 'office_cash') emptyMsg = "No office cash entries for this employee group.";
+          else if (type === 'expenses') emptyMsg = "No expenses logged for this employee group.";
+          else if (type === 'adjustments') emptyMsg = "No adjustments logged for this employee group.";
+
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; opacity: 0.5;">
+              <i class="fas fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+              <p>${emptyMsg}</p>
+            </div>
+          `;
+          return;
+        }
+
+        let html = '<div class="loans-tree-container">';
+        tree.forEach((month, mIdx) => {
+          const isMonthOpen = mIdx === 0 ? 'open' : '';
+          
+          let monthColor = '#16a34a';
+          let monthIcon = 'fa-calendar-alt';
+          if (type === 'commissions') {
+            monthColor = '#b45309';
+          } else if (type === 'office_cash') {
+            monthColor = 'var(--primary)';
+          } else if (type === 'expenses') {
+            monthColor = '#dc2626';
+          } else if (type === 'adjustments') {
+            monthColor = '#2563eb';
+          }
+
+          let formattedMonthTotal = formatCurrency(month.total_amount);
+          if (type === 'adjustments') {
+            formattedMonthTotal = formatCurrencySigned(month.total_amount);
+          }
+
+          html += `
+            <details class="tree-node month-node" ${isMonthOpen} style="margin-bottom: 12px;">
+              <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 1.05rem; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
+                <i class="fas ${monthIcon}" style="color: ${monthColor};"></i>
+                <span style="color: #fff;">${month.month_name}</span>
+                <span style="margin-left: auto; color: ${type === 'adjustments' ? (month.total_amount >= 0 ? '#16a34a' : '#dc2626') : monthColor}; font-weight: 700;">${formattedMonthTotal}</span>
+              </summary>
+              <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
+          `;
+
+          month.weeks.forEach((week, wIdx) => {
+            const isWeekOpen = (mIdx === 0 && wIdx === 0) ? 'open' : '';
+            
+            let weekBg = 'rgba(37, 99, 235, 0.04)';
+            let weekBorder = 'rgba(37, 99, 235, 0.04)';
+            let weekIconColor = '#2563eb';
+            let weekAmountColor = '#16a34a';
+
+            if (type === 'installments') {
+              weekBg = 'rgba(22, 163, 74, 0.04)';
+              weekBorder = 'rgba(22, 163, 74, 0.04)';
+              weekIconColor = '#16a34a';
+            } else if (type === 'commissions') {
+              weekBg = 'rgba(180, 83, 9, 0.04)';
+              weekBorder = 'rgba(180, 83, 9, 0.04)';
+              weekIconColor = '#b45309';
+              weekAmountColor = '#b45309';
+            } else if (type === 'office_cash') {
+              weekBg = 'rgba(255, 107, 0, 0.04)';
+              weekBorder = 'rgba(255, 107, 0, 0.04)';
+              weekIconColor = 'var(--primary)';
+              weekAmountColor = 'var(--primary)';
+            } else if (type === 'expenses') {
+              weekBg = 'rgba(220, 38, 38, 0.04)';
+              weekBorder = 'rgba(220, 38, 38, 0.04)';
+              weekIconColor = '#dc2626';
+              weekAmountColor = '#dc2626';
+            } else if (type === 'adjustments') {
+              weekBg = 'rgba(37, 99, 235, 0.04)';
+              weekBorder = 'rgba(37, 99, 235, 0.04)';
+              weekIconColor = '#2563eb';
+            }
+
+            let formattedWeekTotal = formatCurrency(week.total_amount);
+            if (type === 'adjustments') {
+              formattedWeekTotal = formatCurrencySigned(week.total_amount);
+              weekAmountColor = week.total_amount >= 0 ? '#16a34a' : '#dc2626';
+            }
+
+            html += `
+              <details class="tree-node week-node" ${isWeekOpen} style="margin-bottom: 10px;">
+                <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: ${weekBg}; border-radius: 6px; border: 1px solid ${weekBorder};">
+                  <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
+                  <i class="fas fa-calendar-week" style="color: ${weekIconColor};"></i>
+                  <span style="color: #e2e8f0;">Week of ${week.week_date}</span>
+                  <span style="margin-left: auto; color: ${weekAmountColor}; font-weight: 700;">${formattedWeekTotal}</span>
+                </summary>
+                <div style="padding-left: 18px; border-left: 2px solid ${weekIconColor}1a; margin-left: 16px; margin-top: 6px;">
+            `;
+
+            week.days.forEach(day => {
+              let dayBg = 'rgba(22, 163, 74, 0.03)';
+              let dayBorder = 'rgba(22, 163, 74, 0.03)';
+              let dayIconColor = '#16a34a';
+              let dayAmountColor = '#16a34a';
+
+              if (type === 'loans') {
+                dayBg = 'rgba(22, 163, 74, 0.03)';
+                dayBorder = 'rgba(22, 163, 74, 0.03)';
+                dayIconColor = '#16a34a';
+              } else if (type === 'commissions') {
+                dayBg = 'rgba(180, 83, 9, 0.03)';
+                dayBorder = 'rgba(180, 83, 9, 0.03)';
+                dayIconColor = '#b45309';
+                dayAmountColor = '#b45309';
+              } else if (type === 'office_cash') {
+                dayBg = 'rgba(255, 107, 0, 0.03)';
+                dayBorder = 'rgba(255, 107, 0, 0.03)';
+                dayIconColor = 'var(--primary)';
+                dayAmountColor = 'var(--primary)';
+              } else if (type === 'expenses') {
+                dayBg = 'rgba(220, 38, 38, 0.03)';
+                dayBorder = 'rgba(220, 38, 38, 0.03)';
+                dayIconColor = '#dc2626';
+                dayAmountColor = '#dc2626';
+              } else if (type === 'adjustments') {
+                dayBg = 'rgba(37, 99, 235, 0.03)';
+                dayBorder = 'rgba(37, 99, 235, 0.03)';
+                dayIconColor = '#2563eb';
+              }
+
+              let formattedDayTotal = formatCurrency(day.total_amount);
+              if (type === 'adjustments') {
+                formattedDayTotal = formatCurrencySigned(day.total_amount);
+                dayAmountColor = day.total_amount >= 0 ? '#16a34a' : '#dc2626';
+              }
+
+              html += `
+                <details class="tree-node day-node" style="margin-bottom: 8px;">
+                  <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: ${dayBg}; border-radius: 4px; border: 1px solid ${dayBorder};">
+                    <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
+                    <i class="fas fa-calendar-day" style="color: ${dayIconColor};"></i>
+                    <span style="color: #cbd5e1;">${day.day_date}</span>
+                    <span style="margin-left: auto; color: ${dayAmountColor}; font-weight: 700;">${formattedDayTotal}</span>
+                  </summary>
+                  <div style="padding-left: 14px; border-left: 2px solid ${dayIconColor}1a; margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
+              `;
+
+              // Render Table
+              html += `<table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">`;
+              if (type === 'loans' || type === 'installments' || type === 'commissions') {
+                const headerAmount = type === 'commissions' ? 'Commission' : 'Amount';
+                const headerAmountColor = type === 'commissions' ? '#b45309' : '#16a34a';
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">A/c No</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif;">Customer Name</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; font-family: var(--font-body), sans-serif; text-align: right;">${headerAmount}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.customers.forEach(cust => {
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
+                      <td style="padding: 6px 8px; color: #9ca3af;">${cust.ano}</td>
+                      <td style="padding: 6px 8px; font-weight: 500; color: #fff;">${cust.name}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${headerAmountColor};">${formatCurrency(cust.amount)}</td>
+                    </tr>
+                  `;
+                });
+              } else if (type === 'office_cash' || type === 'expenses') {
+                const amountColor = type === 'expenses' ? '#dc2626' : 'var(--primary)';
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.transactions.forEach(txn => {
+                  const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
+                      <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
+                      <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
+                      <td style="padding: 6px 8px; color: #9ca3af;">${txn.created_by || ''}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${formatCurrency(txn.amount)}</td>
+                    </tr>
+                  `;
+                });
+              } else if (type === 'adjustments') {
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Action</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.transactions.forEach(txn => {
+                  const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+                  const actionLabel = txn.txn_sub === 'ADD' ? 'ADD' : 'MINUS';
+                  const actionColor = txn.txn_sub === 'ADD' ? '#16a34a' : '#dc2626';
+                  const actionBg = txn.txn_sub === 'ADD' ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)';
+                  const amountColor = txn.txn_sub === 'ADD' ? '#16a34a' : '#dc2626';
+                  const amountPrefix = txn.txn_sub === 'ADD' ? '+' : '-';
+
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
+                      <td style="padding: 6px 8px;">
+                        <span style="color: ${actionColor}; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: ${actionBg}; border-radius: 4px;">${actionLabel}</span>
+                      </td>
+                      <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
+                      <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
+                      <td style="padding: 6px 8px; color: #9ca3af;">${txn.created_by || ''}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${amountPrefix}${formatCurrency(txn.amount)}</td>
+                    </tr>
+                  `;
+                });
+              }
+
+              html += `
+                  </tbody>
+                </table>
+              </div>
+              </details>
+              `;
+            });
+
+            html += `
+              </div>
+              </details>
+            `;
+          });
+
+          html += `
+            </div>
+            </details>
+          `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+      })
+      .catch(err => {
+        console.error(err);
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: #dc2626;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+            <p>Failed to retrieve data from server.</p>
+          </div>
+        `;
+      });
+  }
+
   function openLoansModal() {
     const modal = document.getElementById('loansModal');
     if (modal) {
@@ -1392,6 +1301,7 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('loans', 'loansModalBody');
     }
   }
 
@@ -1421,6 +1331,7 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('installments', 'installmentsModalBody');
     }
   }
 
@@ -1450,8 +1361,16 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('commissions', 'commissionsModalBody');
     }
   }
+
+  // Click outside to close
+  document.getElementById('commissionsModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeCommissionsModal();
+    }
+  });
 
   function closeCommissionsModal() {
     const modal = document.getElementById('commissionsModal');
@@ -1465,13 +1384,6 @@
     }
   }
 
-  // Click outside to close
-  document.getElementById('commissionsModal')?.addEventListener('click', function(e) {
-    if (e.target === this) {
-      closeCommissionsModal();
-    }
-  });
-
   // --- Office Cash Modal ---
   function openOfficeCashModal() {
     const modal = document.getElementById('officeCashModal');
@@ -1480,6 +1392,7 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('office_cash', 'officeCashModalBody');
     }
   }
   function closeOfficeCashModal() {
@@ -1507,6 +1420,7 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('expenses', 'expensesModalBody');
     }
   }
   function closeExpensesModal() {
@@ -1534,6 +1448,7 @@
       requestAnimationFrame(() => {
         modal.classList.add('dialog-open');
       });
+      loadBreakdownData('adjustments', 'adjustmentsModalBody');
     }
   }
   function closeAdjustmentsModal() {
