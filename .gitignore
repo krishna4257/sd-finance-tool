@@ -223,3 +223,4 @@ testing/*
 
 # own python files folder
 python_files/*
+.npm-cache/
