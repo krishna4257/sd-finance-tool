@@ -83,6 +83,7 @@
               <select id="popInputType" class="glass-input">
                 <option value="W">Weekly</option>
                 <option value="M">Monthly</option>
+                <option value="D">Daily</option>
               </select>
             </div>
             <div class="form-group">
@@ -339,7 +340,7 @@
 <div id="popWeeklyLogModal" class="modal pop-inner-modal">
   <div class="modal-content card-glass" style="max-width: 650px !important; margin-top: 5vh !important; max-height: 85vh; display: flex; flex-direction: column;">
     <span class="close-btn" onclick="closePopWeeklyLogModal()">&times;</span>
-    <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-top: 0; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.03em;">
+    <h3 id="popWeeklyLogTitle" style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-top: 0; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.03em;">
       Weekly Repayment Log
     </h3>
     <div class="table-card-container" style="margin-bottom: 0; flex: 1; min-height: 450px; display: flex; flex-direction: column; overflow: hidden;">

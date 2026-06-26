@@ -174,6 +174,8 @@ anoInput.addEventListener("change", checkAno);
                 let endDate = new Date(startDate);
                 if (type === 'W') {
                     endDate.setDate(endDate.getDate() + (period * 7));
+                } else if (type === 'D') {
+                    endDate.setDate(endDate.getDate() + period);
                 } else {
                     endDate.setMonth(endDate.getMonth() + period);
                 }
@@ -230,6 +232,19 @@ anoInput.addEventListener("change", checkAno);
     
     [typeInput, periodInput, startDateInput, totalAmountInput]
   .forEach(el => el.addEventListener('input', calculateLoanFields));
+
+    function updatePeriodPlaceholder() {
+        const type = typeInput.value;
+        if (type === 'W') {
+            periodInput.placeholder = "Number of Weeks";
+        } else if (type === 'M') {
+            periodInput.placeholder = "Number of Months";
+        } else if (type === 'D') {
+            periodInput.placeholder = "Number of Days";
+        }
+    }
+    typeInput.addEventListener('change', updatePeriodPlaceholder);
+    updatePeriodPlaceholder();
 
     const interestInput = document.getElementById('interest_amount');
     const cuttingInput = document.getElementById('cutting_amount');

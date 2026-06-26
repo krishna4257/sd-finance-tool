@@ -1624,7 +1624,7 @@ def customer_exists_by_ano_and_vid(ano, vid):
     conn.close()
     return exists
 
-def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, today=None):
+def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, loan_type="W", today=None):
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -1665,14 +1665,25 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         if p["payment_date"] > max_eval_date:
             max_eval_date = p["payment_date"]
 
-    total_weeks_cap = int(period) + 156
+    if loan_type == "M":
+        total_periods_cap = int(period) + 36
+    elif loan_type == "D":
+        total_periods_cap = int(period) + 1095
+    else:
+        total_periods_cap = int(period) + 156
+
     due_dates = []
     w = 1
     while True:
-        due = start_date + timedelta(days=7 * w + 1)
+        if loan_type == "M":
+            due = start_date + relativedelta(months=w) + timedelta(days=1)
+        elif loan_type == "D":
+            due = start_date + timedelta(days=w)
+        else:
+            due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap: # type: ignore
+            if due >= max_eval_date or w >= total_periods_cap: # type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -1887,7 +1898,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     return float(round(score, 2)), risk_level, overdue_penalty, week_details
 
 
-def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, today=None):
+def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, loan_type="W", today=None):
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -1943,7 +1954,12 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         
     due_dates = []
     w = 1
-    total_weeks_cap = int(period) + 156
+    if loan_type == "M":
+        total_periods_cap = int(period) + 36
+    elif loan_type == "D":
+        total_periods_cap = int(period) + 1095
+    else:
+        total_periods_cap = int(period) + 156
     max_eval_date = end_date
     if today > max_eval_date:# type: ignore
         max_eval_date = today
@@ -1952,10 +1968,15 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
             max_eval_date = p["payment_date"]
             
     while True:
-        due = start_date + timedelta(days=7 * w + 1)
+        if loan_type == "M":
+            due = start_date + relativedelta(months=w) + timedelta(days=1)
+        elif loan_type == "D":
+            due = start_date + timedelta(days=w)
+        else:
+            due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap:# type: ignore
+            if due >= max_eval_date or w >= total_periods_cap:# type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -2060,23 +2081,34 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     if bal_amt <= 0:
         predicted_end = end_date
         net_weeks = 0
+        diff_badge = "On Time"
     else:
+        if loan_type == "M":
+            period_days = 30.0
+            period_name = "month"
+        elif loan_type == "D":
+            period_days = 1.0
+            period_name = "day"
+        else:
+            period_days = 7.0
+            period_name = "week"
+
         unpaid_equivalents = float(bal_amt / inst_amt) if inst_amt > 0 else 0.0
         if today < end_date:# type: ignore
-            scheduled_remaining_weeks = (end_date - today).days / 7.0# type: ignore
-            delay_weeks = max(0.0, unpaid_equivalents - scheduled_remaining_weeks)
-            predicted_end = end_date + timedelta(days=int(round(delay_weeks * 7.0)))
+            scheduled_remaining_periods = (end_date - today).days / period_days
+            delay_periods = max(0.0, unpaid_equivalents - scheduled_remaining_periods)
+            predicted_end = end_date + timedelta(days=int(round(delay_periods * period_days)))
         else:
-            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * 7.0)))# type: ignore
+            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * period_days)))# type: ignore
         
-        net_weeks = int(round((predicted_end - end_date).days / 7.0))
+        net_weeks = int(round((predicted_end - end_date).days / period_days))
 
-    if net_weeks > 0:
-        diff_badge = f"+{net_weeks} week{'s' if net_weeks > 1 else ''} late"
-    elif net_weeks < 0:
-        diff_badge = f"{abs(net_weeks)} week{'s' if abs(net_weeks) > 1 else ''} early"
-    else:
-        diff_badge = "On Time"
+        if net_weeks > 0:
+            diff_badge = f"+{net_weeks} {period_name}{'s' if net_weeks > 1 else ''} late"
+        elif net_weeks < 0:
+            diff_badge = f"{abs(net_weeks)} {period_name}{'s' if abs(net_weeks) > 1 else ''} early"
+        else:
+            diff_badge = "On Time"
 
     # 5. Discipline profile counts
     on_time_count = 0
@@ -2224,7 +2256,7 @@ def format_customer_ratings_with_trends(cur, data):
         
         # Run calculation
         score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-            c["start_date"], c["end_date"], c["installment_amount"], c["period"], payments, c["balance_amount"]
+            c["start_date"], c["end_date"], c["installment_amount"], c["period"], payments, c["balance_amount"], loan_type=c.get("type", "W")
         )
         
         # Filter out future in-progress weeks for trend calculation
@@ -2288,17 +2320,16 @@ def format_customer_ratings_with_trends(cur, data):
 
 
 def recalc_customer_repayment_score(cur, cid, force_recalc=False):
-    # Fetch customer details
     cur.execute("""
-        SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table
+        SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table, type
         FROM (
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, 'active' AS status, cid, 'customer' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, 'active' AS status, cid, 'customer' AS source_table, type
             FROM customer
             UNION ALL
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'closed_cust_account' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'closed_cust_account' AS source_table, type
             FROM closed_cust_account
             UNION ALL
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'historic_customer_data' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'historic_customer_data' AS source_table, type
             FROM historic_customer_data
         ) all_cust
         WHERE cid = %s
@@ -2307,7 +2338,7 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
     if not row:
         return None
 
-    start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table = row
+    start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table, loan_type = row
     
     # Freeze logic:
     if balance_amount is not None and balance_amount <= 0 and freeze_date is not None and not force_recalc:
@@ -2334,7 +2365,7 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
     payments = [{"amt": prow[0], "payment_date": prow[1]} for prow in prows]
 
     score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-        start_date, end_date, installment_amount, period, payments, balance_amount
+        start_date, end_date, installment_amount, period, payments, balance_amount, loan_type=loan_type
     )
 
     table_name = source_table
@@ -2746,7 +2777,7 @@ def mobile_cashbag_get():
                             WHEN c.cutting_amount > 0 THEN c.cutting_amount
                             ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
                         END AS amount,
-                        'Loan Commission - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
+                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
                     FROM customer c
@@ -4156,6 +4187,8 @@ def add_customer():
 
         if loan_type == "M":
             tdt = fdt + relativedelta(months=period)# type: ignore
+        elif loan_type == "D":
+            tdt = fdt + timedelta(days=period)# type: ignore
         else:
             tdt = fdt + timedelta(weeks=period)# type: ignore
 
@@ -5717,13 +5750,13 @@ def api_customer_detail_with_payments(account_no):
 
         # Calculate week details log dynamically (strictly read-only!)
         score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"]
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], loan_type=cust.get("type", "W")
         )
         
         cust["customer_rating"] = score
 
         behavioral_analytics = calculate_behavioral_analytics(
-            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details, loan_type=cust.get("type", "W")
         )
 
         logger.info(f"Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}")
@@ -7632,8 +7665,8 @@ def update_customer_pg():
         if not name:
             return jsonify(success=False, error="Name is required"), 400
 
-        if loan_type not in ["W", "M"]:
-            return jsonify(success=False, error="Loan type must be W or M"), 400
+        if loan_type not in ["W", "M", "D"]:
+            return jsonify(success=False, error="Loan type must be W, M or D"), 400
 
         if period <= 0:
             return jsonify(success=False, error="Period must be greater than 0"), 400
@@ -7656,6 +7689,8 @@ def update_customer_pg():
         # ðŸ”¹ Recalculate derived fields
         if loan_type == "M":
             end_date = start_date + relativedelta(months=period)
+        elif loan_type == "D":
+            end_date = start_date + timedelta(days=period)
         else:
             end_date = start_date + timedelta(weeks=period)
 
@@ -8284,23 +8319,24 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_list.append({
-    "cid": cid,
-    "name": name,
-    "ano": ano,
-    "start_dt": start_dt,
-    "end_dt": end_dt,
-    "total_amount": float(total_amount or 0.0),
-    "balance_amount": float(balance_amount or 0.0),
-    "installment_amount": float(installment_amount or 0.0),
-    "period": period,
-    "origin": origin,
-    "payments": payments_by_cid.get(cid, []),
-    "payment_dates": [p["payment_date"]
-        for p in payments_by_cid.get(cid, [])
-    ],
-    "cumulative_payments": cumulative_payments_by_cid.get(cid, []),
-    "status_orig": status
-})
+            "cid": cid,
+            "name": name,
+            "ano": ano,
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "total_amount": float(total_amount or 0.0),
+            "balance_amount": float(balance_amount or 0.0),
+            "installment_amount": float(installment_amount or 0.0),
+            "period": period,
+            "type": c_type,
+            "origin": origin,
+            "payments": payments_by_cid.get(cid, []),
+            "payment_dates": [p["payment_date"]
+                for p in payments_by_cid.get(cid, [])
+            ],
+            "cumulative_payments": cumulative_payments_by_cid.get(cid, []),
+            "status_orig": status
+        })
         
     def get_total_paid_until(cumulative_list, eval_date):
         if not cumulative_list:
@@ -8334,10 +8370,10 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             balance_by_date[d][c["cid"]] = bal_at_d
             # Run rating details
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, today=d
+                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, loan_type=c["type"], today=d
             )
             beh_h = calculate_behavioral_analytics(
-                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, wk_details_h, today=d
+                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, wk_details_h, loan_type=c["type"], today=d
             )
             
             ratings_by_date[d][c["cid"]] = score_h
@@ -8820,10 +8856,10 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         eval_payments = [p for p in cust_payments if p["payment_date"] <= eval_today]
         
         score_t, risk_t, pen_t, wk_details_t = calculate_customer_rating_details(
-            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, today=eval_today
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, loan_type=c_type, today=eval_today
         )
         beh_t = calculate_behavioral_analytics(
-            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, today=eval_today
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, loan_type=c_type, today=eval_today
         )
         
         last_pay_date = None
@@ -8870,10 +8906,10 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         else:
             sub_payments = [p for p in eval_payments if p["payment_date"] <= dt4]
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt4
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, loan_type=c_type, today=dt4
             )
             beh_h = calculate_behavioral_analytics(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, today=dt4
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, loan_type=c_type, today=dt4
             )
             historical_ratings[4][cid] = score_h
             historical_status[4][cid] = beh_h["status"]
@@ -8887,7 +8923,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         else:
             sub_payments = [p for p in eval_payments if p["payment_date"] <= dt3]
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt3
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, loan_type=c_type, today=dt3
             )
             historical_ratings[3][cid] = score_h
             historical_status[3][cid] = "OnTrack"
@@ -9883,7 +9919,7 @@ def api_ledger():
 
         # B. Payments (Collections) within range
         cur.execute("""
-            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code
+            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code, p.payment_type, p.cash_amount, p.upi_amount
             FROM payment p
             JOIN customer c ON p.cid = c.cid
             JOIN village v ON c.vid = v.vid
@@ -9920,16 +9956,30 @@ def api_ledger():
                 "villages": [],
                 "loans": [],
                 "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0},
+                "loans_cash_total": 0.0,
+                "loans_upi_total": 0.0,
+                "commissions_cash_total": 0.0,
+                "commissions_upi_total": 0.0,
                 "payments": [],
                 "payments_total": 0.0,
+                "payments_cash_total": 0.0,
+                "payments_upi_total": 0.0,
                 "expenses": [],
                 "expenses_total": 0.0,
+                "expenses_cash_total": 0.0,
+                "expenses_upi_total": 0.0,
                 "office_cash": [],
                 "office_cash_total": 0.0,
+                "office_cash_cash_total": 0.0,
+                "office_cash_upi_total": 0.0,
                 "adjustments_add": [],
                 "adjustments_total_add": 0.0,
+                "adjustments_add_cash_total": 0.0,
+                "adjustments_add_upi_total": 0.0,
                 "adjustments_minus": [],
-                "adjustments_total_minus": 0.0
+                "adjustments_total_minus": 0.0,
+                "adjustments_minus_cash_total": 0.0,
+                "adjustments_minus_upi_total": 0.0
             }
 
         # Populate Loans
@@ -9960,11 +10010,16 @@ def api_ledger():
             dates_data[d_str]["loans_total"]["amount"] += base_amt
             dates_data[d_str]["loans_total"]["interest"] += interest
             dates_data[d_str]["loans_total"]["commission"] += cutting_amt
+
+            # Since loans are default to CASH in database:
+            dates_data[d_str]["loans_cash_total"] += base_amt
+            dates_data[d_str]["commissions_cash_total"] += cutting_amt
+
             if v_code not in dates_data[d_str]["villages"]:
                 dates_data[d_str]["villages"].append(v_code)
 
         # Populate Payments
-        for pid, ano, name, amt, payment_date, v_code in payments_rows:
+        for pid, ano, name, amt, payment_date, v_code, pay_type, cash_amt, upi_amt in payments_rows:
             d_str = payment_date.strftime("%Y-%m-%d")
             if d_str not in dates_data:
                 continue
@@ -9973,9 +10028,28 @@ def api_ledger():
                 "ano": ano,
                 "name": name,
                 "amount": float(amt or 0),
-                "village_code": v_code
+                "village_code": v_code,
+                "payment_type": pay_type,
+                "cash_amount": float(cash_amt or 0),
+                "upi_amount": float(upi_amt or 0)
             })
-            dates_data[d_str]["payments_total"] += float(amt or 0)
+            p_amt = float(amt or 0)
+            dates_data[d_str]["payments_total"] += p_amt
+
+            # Populate cash/upi payments totals
+            p_type = (pay_type or "cash").lower()
+            c_amt = float(cash_amt or 0)
+            u_amt = float(upi_amt or 0)
+            if p_type == "cash":
+                dates_data[d_str]["payments_cash_total"] += p_amt
+            elif p_type == "upi":
+                dates_data[d_str]["payments_upi_total"] += p_amt
+            elif p_type == "partial":
+                dates_data[d_str]["payments_cash_total"] += c_amt
+                dates_data[d_str]["payments_upi_total"] += u_amt
+            else:
+                dates_data[d_str]["payments_cash_total"] += p_amt
+
             if v_code not in dates_data[d_str]["villages"]:
                 dates_data[d_str]["villages"].append(v_code)
 
@@ -9986,6 +10060,7 @@ def api_ledger():
                 continue
 
             amt = float(amount_db or 0)
+            t_type = (txn_type or "CASH").upper()
             if txn == 'OFFICE_CASH':
                 dates_data[d_str]["office_cash"].append({
                     "notes": notes or "Office Cash",
@@ -9993,6 +10068,10 @@ def api_ledger():
                     "txn_type": txn_type
                 })
                 dates_data[d_str]["office_cash_total"] += amt
+                if t_type == 'UPI':
+                    dates_data[d_str]["office_cash_upi_total"] += amt
+                else:
+                    dates_data[d_str]["office_cash_cash_total"] += amt
             elif txn == 'EXPENSE':
                 dates_data[d_str]["expenses"].append({
                     "notes": notes or "Expense",
@@ -10000,6 +10079,10 @@ def api_ledger():
                     "txn_type": txn_type
                 })
                 dates_data[d_str]["expenses_total"] += amt
+                if t_type == 'UPI':
+                    dates_data[d_str]["expenses_upi_total"] += amt
+                else:
+                    dates_data[d_str]["expenses_cash_total"] += amt
             elif txn == 'ADJUSTMENT':
                 if txn_sub == 'ADD':
                     dates_data[d_str]["adjustments_add"].append({
@@ -10008,6 +10091,10 @@ def api_ledger():
                         "txn_type": txn_type
                     })
                     dates_data[d_str]["adjustments_total_add"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_add_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_add_cash_total"] += amt
                 elif txn_sub == 'MINUS':
                     dates_data[d_str]["adjustments_minus"].append({
                         "notes": notes or "Adjustment Minus",
@@ -10015,6 +10102,10 @@ def api_ledger():
                         "txn_type": txn_type
                     })
                     dates_data[d_str]["adjustments_total_minus"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_minus_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_minus_cash_total"] += amt
 
         dates_list = [d.strftime("%Y-%m-%d") for d in dates_in_range]
 
@@ -10188,13 +10279,13 @@ def api_cashbag_breakdown():
                 })
             return jsonify(success=True, tree=tree_list)
 
-        elif breakdown_type in ('loans', 'commissions'):
+        elif breakdown_type in ('loans', 'commissions', 'interest'):
             if not vids:
                 return jsonify(success=True, tree=[])
 
             cur.execute("""
                 SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
-                       v.interest_rate, v.cutting_rate
+                       v.interest_rate, v.cutting_rate, c.interest_amount
                 FROM customer c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
@@ -10203,19 +10294,25 @@ def api_cashbag_breakdown():
             loan_rows = cur.fetchall()
 
             grouped = {}
-            for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_date, ir_db, cr_db in loan_rows:
+            for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_date, ir_db, cr_db, interest_amt_db in loan_rows:
                 base_amt = float(base_amt_db or 0)
                 cutting_amt = float(cutting_amt_db or 0)
                 total_amt = float(total_amt_db or 0)
+                interest_amt = float(interest_amt_db or 0)
 
+                ir = float(ir_db or 0)
+                cr = float(cr_db or 0)
+                interest = interest_amt if interest_amt > 0 else round(total_amt * (ir / 100.0), 2)
                 if base_amt <= 0.0:
-                    ir = float(ir_db or 0)
-                    cr = float(cr_db or 0)
-                    interest = round(total_amt * (ir / 100.0), 2)
                     cutting_amt = round(total_amt * (cr / 100.0), 2)
                     base_amt = round(total_amt - interest - cutting_amt, 2)
 
-                amt = base_amt if breakdown_type == 'loans' else cutting_amt
+                if breakdown_type == 'loans':
+                    amt = base_amt
+                elif breakdown_type == 'commissions':
+                    amt = cutting_amt
+                else:
+                    amt = interest
                 if amt <= 0.0:
                     continue
 
@@ -11585,33 +11682,73 @@ def cashbag():
         cur.execute(f"""
             SELECT 
                 COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' THEN amount ELSE 0 END), 0) AS office_cash,
+                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS office_cash_cash,
+                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS office_cash_upi,
+                
                 COALESCE(SUM(CASE WHEN txn = 'EXPENSE' THEN amount ELSE 0 END), 0) AS expenses,
+                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS expenses_cash,
+                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS expenses_upi,
+                
                 COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' THEN amount ELSE 0 END), 0) AS adj_add,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_add_cash,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_add_upi,
+                
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_minus_cash,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_minus_upi
             FROM cashbag_transactions
             WHERE {pair_filter}
         """, pair_params_single)
         row_manual = cur.fetchone()
         office_cash = float(row_manual[0] or 0)
-        expenses = float(row_manual[1] or 0)
-        adjustments_add = float(row_manual[2] or 0)
-        adjustments_minus = float(row_manual[3] or 0)
+        office_cash_cash = float(row_manual[1] or 0)
+        office_cash_upi = float(row_manual[2] or 0)
+        expenses = float(row_manual[3] or 0)
+        expenses_cash = float(row_manual[4] or 0)
+        expenses_upi = float(row_manual[5] or 0)
+        adjustments_add = float(row_manual[6] or 0)
+        adjustments_add_cash = float(row_manual[7] or 0)
+        adjustments_add_upi = float(row_manual[8] or 0)
+        adjustments_minus = float(row_manual[9] or 0)
+        adjustments_minus_cash = float(row_manual[10] or 0)
+        adjustments_minus_upi = float(row_manual[11] or 0)
 
         # 2. Installments sum
+        installments = 0.0
+        installments_cash = 0.0
+        installments_upi = 0.0
         if vids:
             cur.execute("""
-                SELECT COALESCE(SUM(amt), 0)
+                SELECT 
+                    COALESCE(SUM(p.amt), 0) AS total,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(p.payment_type) = 'cash' THEN p.amt 
+                        WHEN LOWER(p.payment_type) = 'upi' THEN 0 
+                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.cash_amount, 0)
+                        ELSE p.amt 
+                    END), 0) AS cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(p.payment_type) = 'upi' THEN p.amt 
+                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.upi_amount, 0)
+                        ELSE 0 
+                    END), 0) AS upi
                 FROM payment p
                 JOIN customer c ON p.cid = c.cid
                 WHERE c.vid = ANY(%s)
             """, (vids,))
-            installments = float(cur.fetchone()[0] or 0)
-        else:
-            installments = 0.0
+            row_inst = cur.fetchone()
+            installments = float(row_inst[0] or 0)
+            installments_cash = float(row_inst[1] or 0)
+            installments_upi = float(row_inst[2] or 0)
 
         # 3. Loans & commissions sum
         loans_disbursed = 0.0
+        loans_disbursed_cash = 0.0
+        loans_disbursed_upi = 0.0
         loan_commission = 0.0
+        loan_commission_cash = 0.0
+        loan_commission_upi = 0.0
+        interest_total = 0.0
         if vids:
             cur.execute("""
                 SELECT 
@@ -11620,30 +11757,66 @@ def cashbag():
                         ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) 
                     END), 0) AS loans_disbursed,
                     COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
+                        ELSE (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                    END), 0) AS loans_disbursed_cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                        ELSE 0
+                    END), 0) AS loans_disbursed_upi,
+                    
+                    COALESCE(SUM(CASE 
                         WHEN c.cutting_amount > 0 THEN c.cutting_amount 
                         ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) 
-                    END), 0) AS loan_commission
+                    END), 0) AS loan_commission,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
+                        ELSE (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
+                    END), 0) AS loan_commission_cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
+                        ELSE 0
+                    END), 0) AS loan_commission_upi,
+                    
+                    COALESCE(SUM(CASE 
+                        WHEN c.interest_amount > 0 THEN c.interest_amount 
+                        ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
+                    END), 0) AS interest_total
                 FROM customer c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
             """, (vids,))
             row_loans = cur.fetchone()
             loans_disbursed = float(row_loans[0] or 0)
-            loan_commission = float(row_loans[1] or 0)
+            loans_disbursed_cash = float(row_loans[1] or 0)
+            loans_disbursed_upi = float(row_loans[2] or 0)
+            loan_commission = float(row_loans[3] or 0)
+            loan_commission_cash = float(row_loans[4] or 0)
+            loan_commission_upi = float(row_loans[5] or 0)
+            interest_total = float(row_loans[6] or 0)
 
         # ------------------------------------------------
-        # FINAL CASHBAG TOTAL
-        # Cash in hand = office_cash + installments + loan_commission + adjustments_add - loans_disbursed - expenses - adjustments_minus
+        # FINAL CASHBAG TOTALS
         # ------------------------------------------------
-        cashbag_total = (
-            office_cash
-            + installments
-            + loan_commission
-            + adjustments_add
-            - loans_disbursed
-            - expenses
-            - adjustments_minus
+        cashbag_total_cash = (
+            office_cash_cash
+            + installments_cash
+            + loan_commission_cash
+            + adjustments_add_cash
+            - loans_disbursed_cash
+            - expenses_cash
+            - adjustments_minus_cash
         )
+        cashbag_total_upi = (
+            office_cash_upi
+            + installments_upi
+            + loan_commission_upi
+            + adjustments_add_upi
+            - loans_disbursed_upi
+            - expenses_upi
+            - adjustments_minus_upi
+        )
+        cashbag_total = cashbag_total_cash + cashbag_total_upi
 
         # ------------------------------------------------
         # TRANSACTION HISTORY (Unified Ledger)
@@ -11705,7 +11878,7 @@ def cashbag():
                             WHEN c.cutting_amount > 0 THEN c.cutting_amount
                             ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
                         END AS amount,
-                        'Loan Commission - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
+                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
                     FROM customer c
@@ -11780,10 +11953,13 @@ def cashbag():
             group_villages=group_villages,
 
             cashbag_total=cashbag_total,
+            cashbag_total_cash=cashbag_total_cash,
+            cashbag_total_upi=cashbag_total_upi,
             office_cash=office_cash,
             installments=installments,
             loans_disbursed=loans_disbursed,
             loan_commission=loan_commission,
+            interest_total=interest_total,
             expenses=expenses,
             adjustments_add=adjustments_add,
             adjustments_minus=adjustments_minus,
