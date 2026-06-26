@@ -2746,7 +2746,7 @@ def mobile_cashbag_get():
                             WHEN c.cutting_amount > 0 THEN c.cutting_amount
                             ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
                         END AS amount,
-                        'Loan Commission - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
+                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
                     FROM customer c
@@ -9883,7 +9883,7 @@ def api_ledger():
 
         # B. Payments (Collections) within range
         cur.execute("""
-            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code
+            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code, p.payment_type, p.cash_amount, p.upi_amount
             FROM payment p
             JOIN customer c ON p.cid = c.cid
             JOIN village v ON c.vid = v.vid
@@ -9920,16 +9920,30 @@ def api_ledger():
                 "villages": [],
                 "loans": [],
                 "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0},
+                "loans_cash_total": 0.0,
+                "loans_upi_total": 0.0,
+                "commissions_cash_total": 0.0,
+                "commissions_upi_total": 0.0,
                 "payments": [],
                 "payments_total": 0.0,
+                "payments_cash_total": 0.0,
+                "payments_upi_total": 0.0,
                 "expenses": [],
                 "expenses_total": 0.0,
+                "expenses_cash_total": 0.0,
+                "expenses_upi_total": 0.0,
                 "office_cash": [],
                 "office_cash_total": 0.0,
+                "office_cash_cash_total": 0.0,
+                "office_cash_upi_total": 0.0,
                 "adjustments_add": [],
                 "adjustments_total_add": 0.0,
+                "adjustments_add_cash_total": 0.0,
+                "adjustments_add_upi_total": 0.0,
                 "adjustments_minus": [],
-                "adjustments_total_minus": 0.0
+                "adjustments_total_minus": 0.0,
+                "adjustments_minus_cash_total": 0.0,
+                "adjustments_minus_upi_total": 0.0
             }
 
         # Populate Loans
@@ -9960,11 +9974,16 @@ def api_ledger():
             dates_data[d_str]["loans_total"]["amount"] += base_amt
             dates_data[d_str]["loans_total"]["interest"] += interest
             dates_data[d_str]["loans_total"]["commission"] += cutting_amt
+
+            # Since loans are default to CASH in database:
+            dates_data[d_str]["loans_cash_total"] += base_amt
+            dates_data[d_str]["commissions_cash_total"] += cutting_amt
+
             if v_code not in dates_data[d_str]["villages"]:
                 dates_data[d_str]["villages"].append(v_code)
 
         # Populate Payments
-        for pid, ano, name, amt, payment_date, v_code in payments_rows:
+        for pid, ano, name, amt, payment_date, v_code, pay_type, cash_amt, upi_amt in payments_rows:
             d_str = payment_date.strftime("%Y-%m-%d")
             if d_str not in dates_data:
                 continue
@@ -9973,9 +9992,28 @@ def api_ledger():
                 "ano": ano,
                 "name": name,
                 "amount": float(amt or 0),
-                "village_code": v_code
+                "village_code": v_code,
+                "payment_type": pay_type,
+                "cash_amount": float(cash_amt or 0),
+                "upi_amount": float(upi_amt or 0)
             })
-            dates_data[d_str]["payments_total"] += float(amt or 0)
+            p_amt = float(amt or 0)
+            dates_data[d_str]["payments_total"] += p_amt
+
+            # Populate cash/upi payments totals
+            p_type = (pay_type or "cash").lower()
+            c_amt = float(cash_amt or 0)
+            u_amt = float(upi_amt or 0)
+            if p_type == "cash":
+                dates_data[d_str]["payments_cash_total"] += p_amt
+            elif p_type == "upi":
+                dates_data[d_str]["payments_upi_total"] += p_amt
+            elif p_type == "partial":
+                dates_data[d_str]["payments_cash_total"] += c_amt
+                dates_data[d_str]["payments_upi_total"] += u_amt
+            else:
+                dates_data[d_str]["payments_cash_total"] += p_amt
+
             if v_code not in dates_data[d_str]["villages"]:
                 dates_data[d_str]["villages"].append(v_code)
 
@@ -9986,6 +10024,7 @@ def api_ledger():
                 continue
 
             amt = float(amount_db or 0)
+            t_type = (txn_type or "CASH").upper()
             if txn == 'OFFICE_CASH':
                 dates_data[d_str]["office_cash"].append({
                     "notes": notes or "Office Cash",
@@ -9993,6 +10032,10 @@ def api_ledger():
                     "txn_type": txn_type
                 })
                 dates_data[d_str]["office_cash_total"] += amt
+                if t_type == 'UPI':
+                    dates_data[d_str]["office_cash_upi_total"] += amt
+                else:
+                    dates_data[d_str]["office_cash_cash_total"] += amt
             elif txn == 'EXPENSE':
                 dates_data[d_str]["expenses"].append({
                     "notes": notes or "Expense",
@@ -10000,6 +10043,10 @@ def api_ledger():
                     "txn_type": txn_type
                 })
                 dates_data[d_str]["expenses_total"] += amt
+                if t_type == 'UPI':
+                    dates_data[d_str]["expenses_upi_total"] += amt
+                else:
+                    dates_data[d_str]["expenses_cash_total"] += amt
             elif txn == 'ADJUSTMENT':
                 if txn_sub == 'ADD':
                     dates_data[d_str]["adjustments_add"].append({
@@ -10008,6 +10055,10 @@ def api_ledger():
                         "txn_type": txn_type
                     })
                     dates_data[d_str]["adjustments_total_add"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_add_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_add_cash_total"] += amt
                 elif txn_sub == 'MINUS':
                     dates_data[d_str]["adjustments_minus"].append({
                         "notes": notes or "Adjustment Minus",
@@ -10015,6 +10066,10 @@ def api_ledger():
                         "txn_type": txn_type
                     })
                     dates_data[d_str]["adjustments_total_minus"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_minus_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_minus_cash_total"] += amt
 
         dates_list = [d.strftime("%Y-%m-%d") for d in dates_in_range]
 
@@ -10188,13 +10243,13 @@ def api_cashbag_breakdown():
                 })
             return jsonify(success=True, tree=tree_list)
 
-        elif breakdown_type in ('loans', 'commissions'):
+        elif breakdown_type in ('loans', 'commissions', 'interest'):
             if not vids:
                 return jsonify(success=True, tree=[])
 
             cur.execute("""
                 SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
-                       v.interest_rate, v.cutting_rate
+                       v.interest_rate, v.cutting_rate, c.interest_amount
                 FROM customer c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
@@ -10203,19 +10258,25 @@ def api_cashbag_breakdown():
             loan_rows = cur.fetchall()
 
             grouped = {}
-            for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_date, ir_db, cr_db in loan_rows:
+            for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_date, ir_db, cr_db, interest_amt_db in loan_rows:
                 base_amt = float(base_amt_db or 0)
                 cutting_amt = float(cutting_amt_db or 0)
                 total_amt = float(total_amt_db or 0)
+                interest_amt = float(interest_amt_db or 0)
 
+                ir = float(ir_db or 0)
+                cr = float(cr_db or 0)
+                interest = interest_amt if interest_amt > 0 else round(total_amt * (ir / 100.0), 2)
                 if base_amt <= 0.0:
-                    ir = float(ir_db or 0)
-                    cr = float(cr_db or 0)
-                    interest = round(total_amt * (ir / 100.0), 2)
                     cutting_amt = round(total_amt * (cr / 100.0), 2)
                     base_amt = round(total_amt - interest - cutting_amt, 2)
 
-                amt = base_amt if breakdown_type == 'loans' else cutting_amt
+                if breakdown_type == 'loans':
+                    amt = base_amt
+                elif breakdown_type == 'commissions':
+                    amt = cutting_amt
+                else:
+                    amt = interest
                 if amt <= 0.0:
                     continue
 
@@ -11585,33 +11646,73 @@ def cashbag():
         cur.execute(f"""
             SELECT 
                 COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' THEN amount ELSE 0 END), 0) AS office_cash,
+                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS office_cash_cash,
+                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS office_cash_upi,
+                
                 COALESCE(SUM(CASE WHEN txn = 'EXPENSE' THEN amount ELSE 0 END), 0) AS expenses,
+                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS expenses_cash,
+                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS expenses_upi,
+                
                 COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' THEN amount ELSE 0 END), 0) AS adj_add,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_add_cash,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_add_upi,
+                
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_minus_cash,
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_minus_upi
             FROM cashbag_transactions
             WHERE {pair_filter}
         """, pair_params_single)
         row_manual = cur.fetchone()
         office_cash = float(row_manual[0] or 0)
-        expenses = float(row_manual[1] or 0)
-        adjustments_add = float(row_manual[2] or 0)
-        adjustments_minus = float(row_manual[3] or 0)
+        office_cash_cash = float(row_manual[1] or 0)
+        office_cash_upi = float(row_manual[2] or 0)
+        expenses = float(row_manual[3] or 0)
+        expenses_cash = float(row_manual[4] or 0)
+        expenses_upi = float(row_manual[5] or 0)
+        adjustments_add = float(row_manual[6] or 0)
+        adjustments_add_cash = float(row_manual[7] or 0)
+        adjustments_add_upi = float(row_manual[8] or 0)
+        adjustments_minus = float(row_manual[9] or 0)
+        adjustments_minus_cash = float(row_manual[10] or 0)
+        adjustments_minus_upi = float(row_manual[11] or 0)
 
         # 2. Installments sum
+        installments = 0.0
+        installments_cash = 0.0
+        installments_upi = 0.0
         if vids:
             cur.execute("""
-                SELECT COALESCE(SUM(amt), 0)
+                SELECT 
+                    COALESCE(SUM(p.amt), 0) AS total,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(p.payment_type) = 'cash' THEN p.amt 
+                        WHEN LOWER(p.payment_type) = 'upi' THEN 0 
+                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.cash_amount, 0)
+                        ELSE p.amt 
+                    END), 0) AS cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(p.payment_type) = 'upi' THEN p.amt 
+                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.upi_amount, 0)
+                        ELSE 0 
+                    END), 0) AS upi
                 FROM payment p
                 JOIN customer c ON p.cid = c.cid
                 WHERE c.vid = ANY(%s)
             """, (vids,))
-            installments = float(cur.fetchone()[0] or 0)
-        else:
-            installments = 0.0
+            row_inst = cur.fetchone()
+            installments = float(row_inst[0] or 0)
+            installments_cash = float(row_inst[1] or 0)
+            installments_upi = float(row_inst[2] or 0)
 
         # 3. Loans & commissions sum
         loans_disbursed = 0.0
+        loans_disbursed_cash = 0.0
+        loans_disbursed_upi = 0.0
         loan_commission = 0.0
+        loan_commission_cash = 0.0
+        loan_commission_upi = 0.0
+        interest_total = 0.0
         if vids:
             cur.execute("""
                 SELECT 
@@ -11620,30 +11721,66 @@ def cashbag():
                         ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) 
                     END), 0) AS loans_disbursed,
                     COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
+                        ELSE (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                    END), 0) AS loans_disbursed_cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                        ELSE 0
+                    END), 0) AS loans_disbursed_upi,
+                    
+                    COALESCE(SUM(CASE 
                         WHEN c.cutting_amount > 0 THEN c.cutting_amount 
                         ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) 
-                    END), 0) AS loan_commission
+                    END), 0) AS loan_commission,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
+                        ELSE (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
+                    END), 0) AS loan_commission_cash,
+                    COALESCE(SUM(CASE 
+                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
+                        ELSE 0
+                    END), 0) AS loan_commission_upi,
+                    
+                    COALESCE(SUM(CASE 
+                        WHEN c.interest_amount > 0 THEN c.interest_amount 
+                        ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
+                    END), 0) AS interest_total
                 FROM customer c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
             """, (vids,))
             row_loans = cur.fetchone()
             loans_disbursed = float(row_loans[0] or 0)
-            loan_commission = float(row_loans[1] or 0)
+            loans_disbursed_cash = float(row_loans[1] or 0)
+            loans_disbursed_upi = float(row_loans[2] or 0)
+            loan_commission = float(row_loans[3] or 0)
+            loan_commission_cash = float(row_loans[4] or 0)
+            loan_commission_upi = float(row_loans[5] or 0)
+            interest_total = float(row_loans[6] or 0)
 
         # ------------------------------------------------
-        # FINAL CASHBAG TOTAL
-        # Cash in hand = office_cash + installments + loan_commission + adjustments_add - loans_disbursed - expenses - adjustments_minus
+        # FINAL CASHBAG TOTALS
         # ------------------------------------------------
-        cashbag_total = (
-            office_cash
-            + installments
-            + loan_commission
-            + adjustments_add
-            - loans_disbursed
-            - expenses
-            - adjustments_minus
+        cashbag_total_cash = (
+            office_cash_cash
+            + installments_cash
+            + loan_commission_cash
+            + adjustments_add_cash
+            - loans_disbursed_cash
+            - expenses_cash
+            - adjustments_minus_cash
         )
+        cashbag_total_upi = (
+            office_cash_upi
+            + installments_upi
+            + loan_commission_upi
+            + adjustments_add_upi
+            - loans_disbursed_upi
+            - expenses_upi
+            - adjustments_minus_upi
+        )
+        cashbag_total = cashbag_total_cash + cashbag_total_upi
 
         # ------------------------------------------------
         # TRANSACTION HISTORY (Unified Ledger)
@@ -11705,7 +11842,7 @@ def cashbag():
                             WHEN c.cutting_amount > 0 THEN c.cutting_amount
                             ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
                         END AS amount,
-                        'Loan Commission - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
+                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
                     FROM customer c
@@ -11780,10 +11917,13 @@ def cashbag():
             group_villages=group_villages,
 
             cashbag_total=cashbag_total,
+            cashbag_total_cash=cashbag_total_cash,
+            cashbag_total_upi=cashbag_total_upi,
             office_cash=office_cash,
             installments=installments,
             loans_disbursed=loans_disbursed,
             loan_commission=loan_commission,
+            interest_total=interest_total,
             expenses=expenses,
             adjustments_add=adjustments_add,
             adjustments_minus=adjustments_minus,

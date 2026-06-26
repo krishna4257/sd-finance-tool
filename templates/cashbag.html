@@ -64,13 +64,13 @@
     flex-shrink: 0;
   }
 
-  /* ── Summary Cards — 5-column uniform ── */
+  /* ── Summary Cards — 6-column uniform ── */
   .cashbag-summary-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 14px;
   }
-  @media (max-width: 1100px) { .cashbag-summary-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 1300px) { .cashbag-summary-grid { grid-template-columns: repeat(3, 1fr); } }
   @media (max-width: 700px)  { .cashbag-summary-grid { grid-template-columns: repeat(2, 1fr); } }
 
   .cb-card {
@@ -489,7 +489,7 @@
       <button class="neumorphic-btn"
               style="border-color: rgba(180, 83, 9, 0.4); color: #b45309; padding: 10px 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;"
               onclick="openLedgerModal('{{ emp1 }}', '{{ emp2 if emp2 and emp2 != 'None' else '' }}')">
-        <i class="fas fa-book"></i> Ledger
+        <i class="fas fa-book"></i> Daily Sheet
       </button>
     </div>
   </div>
@@ -498,10 +498,27 @@
   <div class="raised-box" style="padding: 22px;">
     <div class="cashbag-summary-grid">
 
-      <div class="cb-card total-card">
-        <div class="cb-card-icon"><i class="fas fa-wallet"></i></div>
-        <div class="cb-card-label">Cash Bag Total</div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(cashbag_total|float) }}</div>
+      <div class="cb-card total-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+          <div class="cb-card-label" style="color: rgba(255,255,255,0.75);">Cash Bag Total</div>
+          <div class="cb-card-icon" style="color: #fff; opacity: 0.7;"><i class="fas fa-wallet"></i></div>
+        </div>
+        <div class="cb-card-value" style="color: #fff; font-size: 1.35rem;" data-money>₹{{ "{:,.2f}".format(cashbag_total|float) }}</div>
+        
+        <!-- Divider -->
+        <div style="height: 1px; background: rgba(255, 255, 255, 0.15); margin: 8px 0 6px 0;"></div>
+        
+        <!-- Cash and UPI Subsections -->
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: rgba(255, 255, 255, 0.85); font-family: var(--font-body), sans-serif;">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="opacity: 0.7; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.3px;">Cash</span>
+            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.2f}".format(cashbag_total_cash|float) }}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+            <span style="opacity: 0.7; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.3px;">UPI</span>
+            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.2f}".format(cashbag_total_upi|float) }}</span>
+          </div>
+        </div>
       </div>
 
       <div class="cb-card" ondblclick="openOfficeCashModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
@@ -531,9 +548,17 @@
       <div class="cb-card" ondblclick="openCommissionsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div class="cb-card-icon" style="color: #b45309;"><i class="fas fa-percentage"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
-          Loan Commission <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+          Rusum <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
         <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(loan_commission|float) }}</div>
+      </div>
+
+      <div class="cb-card" ondblclick="openInterestModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+        <div class="cb-card-icon" style="color: #0284c7;"><i class="fas fa-percentage"></i></div>
+        <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
+          Commission <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+        </div>
+        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(interest_total|float) }}</div>
       </div>
 
       <div class="cb-card" ondblclick="openExpensesModal()" style="cursor: pointer; grid-column: span 3;" title="Double click to view detailed breakdown">
@@ -546,7 +571,7 @@
         </div>
       </div>
 
-      <div class="cb-card" ondblclick="openAdjustmentsModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
+      <div class="cb-card" ondblclick="openAdjustmentsModal()" style="cursor: pointer; grid-column: span 3;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="cb-card-icon" style="color: #2563eb;"><i class="fas fa-sliders-h"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
@@ -681,7 +706,7 @@
                 {% elif row.txn == 'LOAN' %}
                   <span class="txn-badge loan"><i class="fas fa-paper-plane"></i> Loan</span>
                 {% elif row.txn == 'LOAN_COMMISION' %}
-                  <span class="txn-badge commis"><i class="fas fa-percentage"></i> Loan Commission</span>
+                  <span class="txn-badge commis"><i class="fas fa-percentage"></i> Rusum</span>
                 {% elif row.txn == 'INSTALLMENT_AMOUNT' %}
                   <span class="txn-badge install"><i class="fas fa-hand-holding-usd"></i> Installment</span>
                 {% elif row.txn == 'ADJUSTMENT' %}
@@ -832,14 +857,14 @@
   </div>
 </dialog>
 
-<!-- COMMISSIONS BREAKDOWN MODAL -->
+<!-- RUSUM BREAKDOWN MODAL -->
 <dialog id="commissionsModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
   <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
     
     <!-- Modal Header -->
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
       <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
-        <i class="fas fa-percentage" style="color: #b45309;"></i> Loan Commission Breakdown
+        <i class="fas fa-percentage" style="color: #b45309;"></i> Rusum Breakdown
       </h3>
       <button onclick="closeCommissionsModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
         <i class="fas fa-times"></i>
@@ -848,6 +873,31 @@
 
     <!-- Modal Body (Scrollable) -->
     <div id="commissionsModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
+    </div>
+
+  </div>
+</dialog>
+
+<!-- COMMISSION (INTEREST) BREAKDOWN MODAL -->
+<dialog id="interestModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
+  <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    
+    <!-- Modal Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
+        <i class="fas fa-percentage" style="color: #0284c7;"></i> Commission Breakdown
+      </h3>
+      <button onclick="closeInterestModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body (Scrollable) -->
+    <div id="interestModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
       <div style="text-align: center; padding: 40px; opacity: 0.5;">
         <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
         <p>Loading breakdown details...</p>
@@ -1034,7 +1084,8 @@
           let emptyMsg = "No entries for this employee group.";
           if (type === 'loans') emptyMsg = "No loans dispensed for this employee group.";
           else if (type === 'installments') emptyMsg = "No installments collected for this employee group.";
-          else if (type === 'commissions') emptyMsg = "No commissions collected for this employee group.";
+          else if (type === 'commissions') emptyMsg = "No Rusum collected for this employee group.";
+          else if (type === 'interest') emptyMsg = "No Commission collected for this employee group.";
           else if (type === 'office_cash') emptyMsg = "No office cash entries for this employee group.";
           else if (type === 'expenses') emptyMsg = "No expenses logged for this employee group.";
           else if (type === 'adjustments') emptyMsg = "No adjustments logged for this employee group.";
@@ -1056,6 +1107,8 @@
           let monthIcon = 'fa-calendar-alt';
           if (type === 'commissions') {
             monthColor = '#b45309';
+          } else if (type === 'interest') {
+            monthColor = '#0284c7';
           } else if (type === 'office_cash') {
             monthColor = 'var(--primary)';
           } else if (type === 'expenses') {
@@ -1097,6 +1150,11 @@
               weekBorder = 'rgba(180, 83, 9, 0.04)';
               weekIconColor = '#b45309';
               weekAmountColor = '#b45309';
+            } else if (type === 'interest') {
+              weekBg = 'rgba(2, 132, 199, 0.04)';
+              weekBorder = 'rgba(2, 132, 199, 0.04)';
+              weekIconColor = '#0284c7';
+              weekAmountColor = '#0284c7';
             } else if (type === 'office_cash') {
               weekBg = 'rgba(255, 107, 0, 0.04)';
               weekBorder = 'rgba(255, 107, 0, 0.04)';
@@ -1145,6 +1203,11 @@
                 dayBorder = 'rgba(180, 83, 9, 0.03)';
                 dayIconColor = '#b45309';
                 dayAmountColor = '#b45309';
+              } else if (type === 'interest') {
+                dayBg = 'rgba(2, 132, 199, 0.03)';
+                dayBorder = 'rgba(2, 132, 199, 0.03)';
+                dayIconColor = '#0284c7';
+                dayAmountColor = '#0284c7';
               } else if (type === 'office_cash') {
                 dayBg = 'rgba(255, 107, 0, 0.03)';
                 dayBorder = 'rgba(255, 107, 0, 0.03)';
@@ -1180,9 +1243,9 @@
 
               // Render Table
               html += `<table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">`;
-              if (type === 'loans' || type === 'installments' || type === 'commissions') {
-                const headerAmount = type === 'commissions' ? 'Commission' : 'Amount';
-                const headerAmountColor = type === 'commissions' ? '#b45309' : '#16a34a';
+              if (type === 'loans' || type === 'installments' || type === 'commissions' || type === 'interest') {
+                const headerAmount = type === 'commissions' ? 'Rusum' : (type === 'interest' ? 'Commission' : 'Amount');
+                const headerAmountColor = type === 'commissions' ? '#b45309' : (type === 'interest' ? '#0284c7' : '#16a34a');
                 html += `
                   <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
@@ -1209,20 +1272,29 @@
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
-                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">User</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                 `;
                 day.transactions.forEach(txn => {
+                  const isDebit = type === 'expenses';
+                  const amountPrefix = isDebit ? '-' : '+';
+                  const actionBg = isDebit ? 'rgba(220, 38, 38, 0.1)' : 'rgba(22, 163, 74, 0.1)';
+                  const actionColor = isDebit ? '#ef4444' : '#22c55e';
+                  const actionLabel = isDebit ? 'EXPENSE' : 'OFFICE CASH';
                   const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+
                   html += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
+                      <td style="padding: 6px 8px;">
+                        <span style="color: ${actionColor}; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: ${actionBg}; border-radius: 4px;">${actionLabel}</span>
+                      </td>
                       <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
                       <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
                       <td style="padding: 6px 8px; color: #9ca3af;">${txn.created_by || ''}</td>
-                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${formatCurrency(txn.amount)}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${amountPrefix}${formatCurrency(txn.amount)}</td>
                     </tr>
                   `;
                 });
@@ -1230,22 +1302,23 @@
                 html += `
                   <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Action</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Direction</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
-                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">By</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">User</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                 `;
                 day.transactions.forEach(txn => {
+                  const isDebit = txn.txn_sub === 'MINUS';
+                  const amountPrefix = isDebit ? '-' : '+';
+                  const amountColor = isDebit ? '#dc2626' : '#16a34a';
+                  const actionBg = isDebit ? 'rgba(220, 38, 38, 0.1)' : 'rgba(22, 163, 74, 0.1)';
+                  const actionColor = isDebit ? '#ef4444' : '#22c55e';
+                  const actionLabel = isDebit ? 'SUBTRACT' : 'ADD';
                   const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
-                  const actionLabel = txn.txn_sub === 'ADD' ? 'ADD' : 'MINUS';
-                  const actionColor = txn.txn_sub === 'ADD' ? '#16a34a' : '#dc2626';
-                  const actionBg = txn.txn_sub === 'ADD' ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)';
-                  const amountColor = txn.txn_sub === 'ADD' ? '#16a34a' : '#dc2626';
-                  const amountPrefix = txn.txn_sub === 'ADD' ? '+' : '-';
 
                   html += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
@@ -1374,6 +1447,35 @@
 
   function closeCommissionsModal() {
     const modal = document.getElementById('commissionsModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+
+  function openInterestModal() {
+    const modal = document.getElementById('interestModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+      loadBreakdownData('interest', 'interestModalBody');
+    }
+  }
+
+  document.getElementById('interestModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeInterestModal();
+    }
+  });
+
+  function closeInterestModal() {
+    const modal = document.getElementById('interestModal');
     if (modal) {
       modal.classList.remove('dialog-open');
       const handleTransitionEnd = () => {
@@ -1600,12 +1702,40 @@
         const opening = runningBalance;
         
         const collections = parseFloat(dayData.payments_total || 0);
+        const collections_cash = parseFloat(dayData.payments_cash_total || 0);
+        const collections_upi = parseFloat(dayData.payments_upi_total || 0);
+        
         const commissions = parseFloat(dayData.loans_total.commission || 0);
+        const commissions_cash = parseFloat(dayData.commissions_cash_total || 0);
+        const commissions_upi = parseFloat(dayData.commissions_upi_total || 0);
+        
         const office_cash = parseFloat(dayData.office_cash_total || 0);
+        const office_cash_cash = parseFloat(dayData.office_cash_cash_total || 0);
+        const office_cash_upi = parseFloat(dayData.office_cash_upi_total || 0);
+        
         const adjustments_add = parseFloat(dayData.adjustments_total_add || 0);
+        const adjustments_add_cash = parseFloat(dayData.adjustments_add_cash_total || 0);
+        const adjustments_add_upi = parseFloat(dayData.adjustments_add_upi_total || 0);
+        
         const base_loans = parseFloat(dayData.loans_total.amount || 0);
+        const loans_cash = parseFloat(dayData.loans_cash_total || 0);
+        const loans_upi = parseFloat(dayData.loans_upi_total || 0);
+        
         const expenses = parseFloat(dayData.expenses_total || 0);
+        const expenses_cash = parseFloat(dayData.expenses_cash_total || 0);
+        const expenses_upi = parseFloat(dayData.expenses_upi_total || 0);
+        
         const adjustments_minus = parseFloat(dayData.adjustments_total_minus || 0);
+        const adjustments_minus_cash = parseFloat(dayData.adjustments_minus_cash_total || 0);
+        const adjustments_minus_upi = parseFloat(dayData.adjustments_minus_upi_total || 0);
+        
+        const adjustments_net_cash = adjustments_add_cash - adjustments_minus_cash;
+        const adjustments_net_upi = adjustments_add_upi - adjustments_minus_upi;
+        
+        const category_total_cash = collections_cash + commissions_cash + office_cash_cash + adjustments_add_cash - loans_cash - expenses_cash - adjustments_minus_cash;
+        const category_total_upi = collections_upi + commissions_upi + office_cash_upi + adjustments_add_upi - loans_upi - expenses_upi - adjustments_minus_upi;
+        
+        const net_total_change = category_total_cash + category_total_upi;
         
         const closing = opening + collections + commissions + office_cash + adjustments_add - base_loans - expenses - adjustments_minus;
         runningBalance = closing;
@@ -1617,11 +1747,11 @@
           dayData.loans.forEach(loan => {
             rows += `
               <tr>
-                <td>${formatNumber(loan.commission)}</td>
+                <td>${formatNumber(loan.interest)}</td>
                 <td>${loan.ano}</td>
                 <td>${loan.name} [${loan.village_code}]</td>
                 <td style="text-align: right;">${formatNumber(loan.amount)}</td>
-                <td style="text-align: right;">${formatNumber(loan.interest)}</td>
+                <td style="text-align: right;">${formatNumber(loan.commission)}</td>
               </tr>
             `;
           });
@@ -1633,17 +1763,17 @@
                   <th style="width: 15%;">Ano</th>
                   <th>Name</th>
                   <th style="width: 25%; text-align: right;">Amount</th>
-                  <th style="width: 25%; text-align: right;">Interest</th>
+                  <th style="width: 25%; text-align: right;">Rus</th>
                 </tr>
               </thead>
               <tbody>
                 ${rows}
                 <tr class="ledger-total-row">
-                  <td>${formatNumber(dayData.loans_total.commission)}</td>
+                  <td>${formatNumber(dayData.loans_total.interest)}</td>
                   <td></td>
                   <td>TOTAL</td>
                   <td style="text-align: right;">${formatNumber(base_loans)}</td>
-                  <td style="text-align: right;">${formatNumber(dayData.loans_total.interest)}</td>
+                  <td style="text-align: right;">${formatNumber(dayData.loans_total.commission)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1652,40 +1782,24 @@
           loansHtml = '<div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No loans dispensed today</div>';
         }
 
-        // Collections rows
+        // Collections summary
         let collectionsHtml = '';
         if (dayData.payments.length > 0) {
-          let rows = '';
-          dayData.payments.forEach(pmt => {
-            rows += `
-              <tr>
-                <td>${pmt.ano}</td>
-                <td>${pmt.name} [${pmt.village_code}]</td>
-                <td style="text-align: right;">${formatNumber(pmt.amount)}</td>
-              </tr>
-            `;
-          });
+          const customerCount = dayData.payments.length;
           collectionsHtml = `
-            <table class="ledger-table">
-              <thead>
-                <tr>
-                  <th style="width: 15%;">Ano</th>
-                  <th>Name</th>
-                  <th style="width: 35%; text-align: right;">Amount Collected</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-                <tr class="ledger-total-row">
-                  <td></td>
-                  <td>TOTAL COLLECTIONS</td>
-                  <td style="text-align: right;">${formatNumber(collections)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="ledger-section-title" style="margin-bottom: 12px;">
+              <span>Collection Today - ${customerCount} customers</span>
+              <span>Total: ${formatCurrency(collections)}</span>
+            </div>
           `;
         } else {
-          collectionsHtml = '<div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No collections today</div>';
+          collectionsHtml = `
+            <div class="ledger-section-title" style="margin-bottom: 6px;">
+              <span>Collections Today</span>
+              <span>Total: ${formatCurrency(0)}</span>
+            </div>
+            <div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No collections today</div>
+          `;
         }
 
         // Expenses rows
@@ -1787,10 +1901,6 @@
             ${loansHtml}
             
             <!-- Collections Section -->
-            <div class="ledger-section-title">
-              <span>Collections Today</span>
-              <span>Total: ${formatCurrency(collections)}</span>
-            </div>
             ${collectionsHtml}
 
             <!-- Expenses Section -->
@@ -1804,26 +1914,82 @@
             ${adjustmentsHtml}
 
             <!-- Summary calculation breakdown -->
-            <div class="ledger-summary-box">
-              <div style="flex: 1; padding-right: 12px;">
-                <div style="font-size: 0.65rem; font-weight: normal; margin-bottom: 4px; color: rgba(28,25,23,0.5); letter-spacing: 0.5px;">CALCULATION BREAKDOWN:</div>
-                <div style="font-size: 0.75rem; font-family: monospace; line-height: 1.5; color: rgba(28,25,23,0.85);">
-                  &nbsp;&nbsp;${formatNumber(opening)} (Op. Bal) <br>
-                  + ${formatNumber(collections)} (Collections) <br>
-                  + ${formatNumber(commissions)} (Commissions) <br>
-                  ${office_cash > 0 ? `+ ${formatNumber(office_cash)} (Office Cash) <br>` : ''}
-                  ${adjustments_add > 0 ? `+ ${formatNumber(adjustments_add)} (Adj. Add) <br>` : ''}
-                  - ${formatNumber(base_loans)} (Loans Dispensed) <br>
-                  - ${formatNumber(expenses)} (Expenses) <br>
-                  ${adjustments_minus > 0 ? `- ${formatNumber(adjustments_minus)} (Adj. Minus) <br>` : ''}
-                </div>
+            <div class="ledger-summary-box" style="display: flex; flex-direction: column; width: 100%; border-top: 1.5px solid #1c1917; padding-top: 12px; margin-top: 20px; font-family: 'Courier New', Courier, monospace; font-size: 0.82rem; line-height: 1.4; color: #1c1917;">
+              
+              <div style="font-size: 0.7rem; font-weight: bold; margin-bottom: 8px; color: rgba(28,25,23,0.6); letter-spacing: 0.5px; text-transform: uppercase;">
+                CALCULATION BREAKDOWN:
               </div>
-              <div style="text-align: right; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; min-width: 180px;">
-                <span style="font-size: 0.75rem; color: rgba(28,25,23,0.7);">CLOSING BALANCE:</span>
-                <span style="font-size: 1.05rem; border-bottom: 3px double #1c1917; display: inline-block; padding-top: 4px; font-weight: bold;">
-                  ${formatCurrency(closing)}
-                </span>
+
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 0.8rem;">
+                <thead>
+                  <tr style="border-bottom: 1px solid #1c1917; font-weight: bold;">
+                    <th style="text-align: left; padding: 4px 6px; width: 40%;">Category</th>
+                    <th style="text-align: right; padding: 4px 6px; width: 30%;">CASH</th>
+                    <th style="text-align: right; padding: 4px 6px; width: 30%;">UPI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Collection</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(collections_cash)}</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(collections_upi)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Rusum</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(commissions_cash)}</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(commissions_upi)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Loans Dispensed</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(loans_cash)}</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(loans_upi)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Expenses</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(expenses_cash)}</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(expenses_upi)}</td>
+                  </tr>
+                  ${office_cash > 0 ? `
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Office Cash</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(office_cash_cash)}</td>
+                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(office_cash_upi)}</td>
+                  </tr>
+                  ` : ''}
+                  ${(adjustments_add > 0 || adjustments_minus > 0) ? `
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Adjustments (Net)</td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${adjustments_net_cash >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${adjustments_net_cash >= 0 ? '+' : ''}${formatNumber(adjustments_net_cash)}
+                    </td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${adjustments_net_upi >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${adjustments_net_upi >= 0 ? '+' : ''}${formatNumber(adjustments_net_upi)}
+                    </td>
+                  </tr>
+                  ` : ''}
+                  <tr style="border-top: 1px solid #1c1917; font-weight: bold;">
+                    <td style="padding: 4px 6px; text-align: left;">Total (Cat)</td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${category_total_cash >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${category_total_cash >= 0 ? '+' : ''}${formatNumber(category_total_cash)}
+                    </td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${category_total_upi >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${category_total_upi >= 0 ? '+' : ''}${formatNumber(category_total_upi)}
+                    </td>
+                  </tr>
+                  <tr style="border-top: 1px dashed rgba(28,25,23,0.3); font-weight: bold;">
+                    <td style="padding: 6px 6px; text-align: left;" colspan="2">Net Change (Total)</td>
+                    <td style="padding: 6px 6px; text-align: right; color: ${net_total_change >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${net_total_change >= 0 ? '+' : ''}${formatNumber(net_total_change)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style="display: flex; justify-content: space-between; border-top: 2px double #1c1917; padding-top: 8px; font-weight: bold; font-size: 0.9rem;">
+                <span>CLOSING BALANCE:</span>
+                <span>${formatCurrency(closing)}</span>
               </div>
+
             </div>
           </div>
         `;
