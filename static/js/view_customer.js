@@ -967,7 +967,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputName").value = cust.name || "";
       document.getElementById("popInputTotalAmount").value = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
       document.getElementById("popInputInstallment").value = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
-      document.getElementById("popInputType").value = cust.type === "M" ? "M" : "W";
+      document.getElementById("popInputType").value = cust.type || "W";
       document.getElementById("popInputPeriod").value = cust.period || "";
       document.getElementById("popInputPhone").value = cust.phone_number || "";
       document.getElementById("popInputPano").value = cust.pano || "";
@@ -992,7 +992,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputName").dataset.original = cust.name || "";
       document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
       document.getElementById("popInputInstallment").dataset.original = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
-      document.getElementById("popInputType").dataset.original = cust.type === "M" ? "M" : "W";
+      document.getElementById("popInputType").dataset.original = cust.type || "W";
       document.getElementById("popInputPeriod").dataset.original = cust.period || "";
       document.getElementById("popInputPhone").dataset.original = cust.phone_number || "";
       document.getElementById("popInputPano").dataset.original = cust.pano || "";
@@ -1160,13 +1160,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const weeklyLogBody = document.getElementById("popWeeklyLogBody");
       if (weeklyLogBody) {
         weeklyLogBody.innerHTML = "";
+        
+        // Dynamically update title based on type
+        const weeklyLogTitle = document.getElementById("popWeeklyLogTitle");
+        if (weeklyLogTitle) {
+          const typeLabel = (data.customer && data.customer.type === "M") ? "Monthly" : 
+                            (data.customer && data.customer.type === "D") ? "Daily" : "Weekly";
+          weeklyLogTitle.textContent = typeLabel + " Repayment Log";
+        }
+
         if (data.week_details && data.week_details.length > 0) {
+          const typePrefix = (data.customer && data.customer.type) ? data.customer.type : "W";
           data.week_details.forEach(wk => {
             const tr = document.createElement("tr");
             
             // Format Week
             const tdWk = document.createElement("td");
-            tdWk.textContent = "W" + wk.week;
+            tdWk.textContent = typePrefix + wk.week;
             tdWk.style.fontWeight = "bold";
             tr.appendChild(tdWk);
             
@@ -1481,6 +1491,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function calculateEndDate() {
+    const startStr = document.getElementById("popInputStartDate").value.trim();
+    const period = parseInt(document.getElementById("popInputPeriod").value) || 0;
+    const type = document.getElementById("popInputType").value;
+    const endEl = document.getElementById("popInputEndDate");
+    if (startStr && period > 0 && type && endEl) {
+      const startDate = parseDDMMYYYY(startStr);
+      if (startDate) {
+        let endDate = new Date(startDate);
+        if (type === 'W') {
+          endDate.setDate(endDate.getDate() + (period * 7));
+        } else if (type === 'D') {
+          endDate.setDate(endDate.getDate() + period);
+        } else {
+          endDate.setMonth(endDate.getMonth() + period);
+        }
+        endEl.value = formatDate(endDate);
+      }
+    }
+  }
+
   async function autoSaveCustomerDetails() {
     const name = document.getElementById("popInputName").value.trim();
     const lettersOnly = name.replace(/\s/g, "");
@@ -1577,6 +1608,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (id === "popInputTotalAmount" || id === "popInputPeriod") {
         calculateInstallment();
+      }
+      if (id === "popInputStartDate" || id === "popInputPeriod" || id === "popInputType") {
+        calculateEndDate();
       }
       checkInputsChanged();
     });

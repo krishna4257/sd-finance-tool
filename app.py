@@ -1624,7 +1624,7 @@ def customer_exists_by_ano_and_vid(ano, vid):
     conn.close()
     return exists
 
-def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, today=None):
+def calculate_customer_rating_details(start_date, end_date, installment_amount, period, payments, balance_amount, loan_type="W", today=None):
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -1665,14 +1665,25 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         if p["payment_date"] > max_eval_date:
             max_eval_date = p["payment_date"]
 
-    total_weeks_cap = int(period) + 156
+    if loan_type == "M":
+        total_periods_cap = int(period) + 36
+    elif loan_type == "D":
+        total_periods_cap = int(period) + 1095
+    else:
+        total_periods_cap = int(period) + 156
+
     due_dates = []
     w = 1
     while True:
-        due = start_date + timedelta(days=7 * w + 1)
+        if loan_type == "M":
+            due = start_date + relativedelta(months=w) + timedelta(days=1)
+        elif loan_type == "D":
+            due = start_date + timedelta(days=w)
+        else:
+            due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap: # type: ignore
+            if due >= max_eval_date or w >= total_periods_cap: # type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -1887,7 +1898,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     return float(round(score, 2)), risk_level, overdue_penalty, week_details
 
 
-def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, today=None):
+def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, loan_type="W", today=None):
     KOLKATA = pytz.timezone('Asia/Kolkata')
     
     if not today:
@@ -1943,7 +1954,12 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
         
     due_dates = []
     w = 1
-    total_weeks_cap = int(period) + 156
+    if loan_type == "M":
+        total_periods_cap = int(period) + 36
+    elif loan_type == "D":
+        total_periods_cap = int(period) + 1095
+    else:
+        total_periods_cap = int(period) + 156
     max_eval_date = end_date
     if today > max_eval_date:# type: ignore
         max_eval_date = today
@@ -1952,10 +1968,15 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
             max_eval_date = p["payment_date"]
             
     while True:
-        due = start_date + timedelta(days=7 * w + 1)
+        if loan_type == "M":
+            due = start_date + relativedelta(months=w) + timedelta(days=1)
+        elif loan_type == "D":
+            due = start_date + timedelta(days=w)
+        else:
+            due = start_date + timedelta(days=7 * w + 1)
         due_dates.append(due)
         if w >= int(period):
-            if due >= max_eval_date or w >= total_weeks_cap:# type: ignore
+            if due >= max_eval_date or w >= total_periods_cap:# type: ignore
                 break
         w += 1
     total_weeks = len(due_dates)
@@ -2060,23 +2081,34 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     if bal_amt <= 0:
         predicted_end = end_date
         net_weeks = 0
+        diff_badge = "On Time"
     else:
+        if loan_type == "M":
+            period_days = 30.0
+            period_name = "month"
+        elif loan_type == "D":
+            period_days = 1.0
+            period_name = "day"
+        else:
+            period_days = 7.0
+            period_name = "week"
+
         unpaid_equivalents = float(bal_amt / inst_amt) if inst_amt > 0 else 0.0
         if today < end_date:# type: ignore
-            scheduled_remaining_weeks = (end_date - today).days / 7.0# type: ignore
-            delay_weeks = max(0.0, unpaid_equivalents - scheduled_remaining_weeks)
-            predicted_end = end_date + timedelta(days=int(round(delay_weeks * 7.0)))
+            scheduled_remaining_periods = (end_date - today).days / period_days
+            delay_periods = max(0.0, unpaid_equivalents - scheduled_remaining_periods)
+            predicted_end = end_date + timedelta(days=int(round(delay_periods * period_days)))
         else:
-            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * 7.0)))# type: ignore
+            predicted_end = today + timedelta(days=int(round(unpaid_equivalents * period_days)))# type: ignore
         
-        net_weeks = int(round((predicted_end - end_date).days / 7.0))
+        net_weeks = int(round((predicted_end - end_date).days / period_days))
 
-    if net_weeks > 0:
-        diff_badge = f"+{net_weeks} week{'s' if net_weeks > 1 else ''} late"
-    elif net_weeks < 0:
-        diff_badge = f"{abs(net_weeks)} week{'s' if abs(net_weeks) > 1 else ''} early"
-    else:
-        diff_badge = "On Time"
+        if net_weeks > 0:
+            diff_badge = f"+{net_weeks} {period_name}{'s' if net_weeks > 1 else ''} late"
+        elif net_weeks < 0:
+            diff_badge = f"{abs(net_weeks)} {period_name}{'s' if abs(net_weeks) > 1 else ''} early"
+        else:
+            diff_badge = "On Time"
 
     # 5. Discipline profile counts
     on_time_count = 0
@@ -2224,7 +2256,7 @@ def format_customer_ratings_with_trends(cur, data):
         
         # Run calculation
         score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-            c["start_date"], c["end_date"], c["installment_amount"], c["period"], payments, c["balance_amount"]
+            c["start_date"], c["end_date"], c["installment_amount"], c["period"], payments, c["balance_amount"], loan_type=c.get("type", "W")
         )
         
         # Filter out future in-progress weeks for trend calculation
@@ -2288,17 +2320,16 @@ def format_customer_ratings_with_trends(cur, data):
 
 
 def recalc_customer_repayment_score(cur, cid, force_recalc=False):
-    # Fetch customer details
     cur.execute("""
-        SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table
+        SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table, type
         FROM (
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, 'active' AS status, cid, 'customer' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, 'active' AS status, cid, 'customer' AS source_table, type
             FROM customer
             UNION ALL
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'closed_cust_account' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'closed_cust_account' AS source_table, type
             FROM closed_cust_account
             UNION ALL
-            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'historic_customer_data' AS source_table
+            SELECT start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, cid, 'historic_customer_data' AS source_table, type
             FROM historic_customer_data
         ) all_cust
         WHERE cid = %s
@@ -2307,7 +2338,7 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
     if not row:
         return None
 
-    start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table = row
+    start_date, end_date, installment_amount, period, balance_amount, customer_rating, final_frozen_rating, final_risk_level, freeze_date, status, source_table, loan_type = row
     
     # Freeze logic:
     if balance_amount is not None and balance_amount <= 0 and freeze_date is not None and not force_recalc:
@@ -2334,7 +2365,7 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
     payments = [{"amt": prow[0], "payment_date": prow[1]} for prow in prows]
 
     score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-        start_date, end_date, installment_amount, period, payments, balance_amount
+        start_date, end_date, installment_amount, period, payments, balance_amount, loan_type=loan_type
     )
 
     table_name = source_table
@@ -4156,6 +4187,8 @@ def add_customer():
 
         if loan_type == "M":
             tdt = fdt + relativedelta(months=period)# type: ignore
+        elif loan_type == "D":
+            tdt = fdt + timedelta(days=period)# type: ignore
         else:
             tdt = fdt + timedelta(weeks=period)# type: ignore
 
@@ -5717,13 +5750,13 @@ def api_customer_detail_with_payments(account_no):
 
         # Calculate week details log dynamically (strictly read-only!)
         score, risk_level, overdue_penalty, week_details = calculate_customer_rating_details(
-            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"]
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], loan_type=cust.get("type", "W")
         )
         
         cust["customer_rating"] = score
 
         behavioral_analytics = calculate_behavioral_analytics(
-            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details
+            cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details, loan_type=cust.get("type", "W")
         )
 
         logger.info(f"Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}")
@@ -7632,8 +7665,8 @@ def update_customer_pg():
         if not name:
             return jsonify(success=False, error="Name is required"), 400
 
-        if loan_type not in ["W", "M"]:
-            return jsonify(success=False, error="Loan type must be W or M"), 400
+        if loan_type not in ["W", "M", "D"]:
+            return jsonify(success=False, error="Loan type must be W, M or D"), 400
 
         if period <= 0:
             return jsonify(success=False, error="Period must be greater than 0"), 400
@@ -7656,6 +7689,8 @@ def update_customer_pg():
         # ðŸ”¹ Recalculate derived fields
         if loan_type == "M":
             end_date = start_date + relativedelta(months=period)
+        elif loan_type == "D":
+            end_date = start_date + timedelta(days=period)
         else:
             end_date = start_date + timedelta(weeks=period)
 
@@ -8284,23 +8319,24 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
         end_dt = end_date.date() if isinstance(end_date, datetime) else end_date
         cust_list.append({
-    "cid": cid,
-    "name": name,
-    "ano": ano,
-    "start_dt": start_dt,
-    "end_dt": end_dt,
-    "total_amount": float(total_amount or 0.0),
-    "balance_amount": float(balance_amount or 0.0),
-    "installment_amount": float(installment_amount or 0.0),
-    "period": period,
-    "origin": origin,
-    "payments": payments_by_cid.get(cid, []),
-    "payment_dates": [p["payment_date"]
-        for p in payments_by_cid.get(cid, [])
-    ],
-    "cumulative_payments": cumulative_payments_by_cid.get(cid, []),
-    "status_orig": status
-})
+            "cid": cid,
+            "name": name,
+            "ano": ano,
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "total_amount": float(total_amount or 0.0),
+            "balance_amount": float(balance_amount or 0.0),
+            "installment_amount": float(installment_amount or 0.0),
+            "period": period,
+            "type": c_type,
+            "origin": origin,
+            "payments": payments_by_cid.get(cid, []),
+            "payment_dates": [p["payment_date"]
+                for p in payments_by_cid.get(cid, [])
+            ],
+            "cumulative_payments": cumulative_payments_by_cid.get(cid, []),
+            "status_orig": status
+        })
         
     def get_total_paid_until(cumulative_list, eval_date):
         if not cumulative_list:
@@ -8334,10 +8370,10 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             balance_by_date[d][c["cid"]] = bal_at_d
             # Run rating details
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, today=d
+                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, loan_type=c["type"], today=d
             )
             beh_h = calculate_behavioral_analytics(
-                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, wk_details_h, today=d
+                c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, wk_details_h, loan_type=c["type"], today=d
             )
             
             ratings_by_date[d][c["cid"]] = score_h
@@ -8820,10 +8856,10 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         eval_payments = [p for p in cust_payments if p["payment_date"] <= eval_today]
         
         score_t, risk_t, pen_t, wk_details_t = calculate_customer_rating_details(
-            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, today=eval_today
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, loan_type=c_type, today=eval_today
         )
         beh_t = calculate_behavioral_analytics(
-            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, today=eval_today
+            start_dt, end_dt, installment_amount, period, eval_payments, balance_amount, wk_details_t, loan_type=c_type, today=eval_today
         )
         
         last_pay_date = None
@@ -8870,10 +8906,10 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         else:
             sub_payments = [p for p in eval_payments if p["payment_date"] <= dt4]
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt4
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, loan_type=c_type, today=dt4
             )
             beh_h = calculate_behavioral_analytics(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, today=dt4
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, wk_details_h, loan_type=c_type, today=dt4
             )
             historical_ratings[4][cid] = score_h
             historical_status[4][cid] = beh_h["status"]
@@ -8887,7 +8923,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         else:
             sub_payments = [p for p in eval_payments if p["payment_date"] <= dt3]
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
-                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, today=dt3
+                start_dt, end_dt, installment_amount, period, sub_payments, balance_amount, loan_type=c_type, today=dt3
             )
             historical_ratings[3][cid] = score_h
             historical_status[3][cid] = "OnTrack"
