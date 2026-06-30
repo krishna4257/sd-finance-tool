@@ -38,6 +38,7 @@ window.tileSortStates = window.tileSortStates || {};
 const CUSTOMER_MAP = {};
 let expectedAccCount = 0;
 let expectedTotalAmount = 0;
+let activeCustomers = [];
 
 function initCustomerMapAndStats() {
     (window.CUSTOMERS || []).forEach(c => {
@@ -67,7 +68,7 @@ function initCustomerMapAndStats() {
     });
 
     // --- Expected Stats Calculations ---
-    const activeCustomers = window.CUSTOMERS.filter(c => (Number(c.balance_amount) || 0) > 0);
+    activeCustomers = window.CUSTOMERS.filter(c => (Number(c.balance_amount) || 0) > 0);
     expectedAccCount = activeCustomers.length;
     expectedTotalAmount = activeCustomers.reduce((sum, c) => sum + (Number(c.installment_amount) || 0), 0);
 }
@@ -2393,9 +2394,11 @@ function bindShortfallListeners() {
     const shortAmtEl = document.getElementById("shortAmt");
     if (shortAccsEl) {
         shortAccsEl.addEventListener("click", window.showShortfallModal);
+        shortAccsEl.addEventListener("dblclick", window.showShortfallModal);
     }
     if (shortAmtEl) {
         shortAmtEl.addEventListener("click", window.showShortfallModal);
+        shortAmtEl.addEventListener("dblclick", window.showShortfallModal);
     }
 }
 
