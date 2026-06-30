@@ -2095,7 +2095,7 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
 
         unpaid_equivalents = float(bal_amt / inst_amt) if inst_amt > 0 else 0.0
         if today < end_date:# type: ignore
-            scheduled_remaining_periods = (end_date - today).days / period_days
+            scheduled_remaining_periods = (end_date - today).days / period_days # type: ignore
             delay_periods = max(0.0, unpaid_equivalents - scheduled_remaining_periods)
             predicted_end = end_date + timedelta(days=int(round(delay_periods * period_days)))
         else:
@@ -10214,8 +10214,8 @@ def api_cashbag_breakdown():
         village_rows = cur.fetchall()
         vids = [r[0] for r in village_rows]
 
-        # Handle manual txn types: office_cash, expenses, adjustments
-        if breakdown_type in ('office_cash', 'expenses', 'adjustments'):
+        # Handle manual txn types: office_cash, expenses, adjustments, profit_loss
+        if breakdown_type in ('office_cash', 'expenses', 'adjustments', 'profit_loss'):
             txn_filter = ""
             if breakdown_type == 'office_cash':
                 txn_filter = "txn = 'OFFICE_CASH'"
@@ -10223,6 +10223,8 @@ def api_cashbag_breakdown():
                 txn_filter = "txn = 'EXPENSE'"
             elif breakdown_type == 'adjustments':
                 txn_filter = "txn = 'ADJUSTMENT'"
+            elif breakdown_type == 'profit_loss':
+                txn_filter = "txn = 'PROFIT_LOSS'"
 
             cur.execute(f"""
                 SELECT id, txn, txn_sub, txn_type, amount, notes, created_by, created_at
@@ -11733,7 +11735,15 @@ def cashbag():
                 
                 COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus,
                 COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_minus_cash,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_minus_upi
+                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_minus_upi,
+
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' THEN amount ELSE 0 END), 0) AS profit_val,
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS profit_cash,
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS profit_upi,
+                
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' THEN amount ELSE 0 END), 0) AS loss_val,
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS loss_cash,
+                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS loss_upi
             FROM cashbag_transactions
             WHERE {pair_filter}
         """, pair_params_single)
@@ -11750,6 +11760,13 @@ def cashbag():
         adjustments_minus = float(row_manual[9] or 0)
         adjustments_minus_cash = float(row_manual[10] or 0)
         adjustments_minus_upi = float(row_manual[11] or 0)
+        profit_val = float(row_manual[12] or 0)
+        profit_cash = float(row_manual[13] or 0)
+        profit_upi = float(row_manual[14] or 0)
+        loss_val = float(row_manual[15] or 0)
+        loss_cash = float(row_manual[16] or 0)
+        loss_upi = float(row_manual[17] or 0)
+        profit_loss_net = profit_val - loss_val
 
         # 2. Installments sum
         installments = 0.0
@@ -11841,18 +11858,22 @@ def cashbag():
             + installments_cash
             + loan_commission_cash
             + adjustments_add_cash
+            + profit_cash
             - loans_disbursed_cash
             - expenses_cash
             - adjustments_minus_cash
+            - loss_cash
         )
         cashbag_total_upi = (
             office_cash_upi
             + installments_upi
             + loan_commission_upi
             + adjustments_add_upi
+            + profit_upi
             - loans_disbursed_upi
             - expenses_upi
             - adjustments_minus_upi
+            - loss_upi
         )
         cashbag_total = cashbag_total_cash + cashbag_total_upi
 
@@ -11883,7 +11904,7 @@ def cashbag():
                         created_at
                     FROM cashbag_transactions
                     WHERE {pair_filter}
-                      AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
+                      AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS')
 
                     UNION ALL
 
@@ -11960,7 +11981,7 @@ def cashbag():
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
                 FROM cashbag_transactions
                 WHERE {pair_filter}
-                  AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
+                  AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS')
                 ORDER BY created_at DESC, id DESC
                 LIMIT 250
             """
@@ -12001,6 +12022,7 @@ def cashbag():
             expenses=expenses,
             adjustments_add=adjustments_add,
             adjustments_minus=adjustments_minus,
+            profit_loss_net=profit_loss_net,
 
             transactions=transactions
         )
@@ -12046,7 +12068,8 @@ def add_cashbag_transaction():
     allowed_txn = [
         "OFFICE_CASH",
         "EXPENSE",
-        "ADJUSTMENT"
+        "ADJUSTMENT",
+        "PROFIT_LOSS"
     ]
 
     # Valid expense sub-types
@@ -12057,6 +12080,9 @@ def add_cashbag_transaction():
 
     # Valid adjustment directions
     allowed_adj_sub = ["ADD", "MINUS"]
+
+    # Valid profit/loss sub-types
+    allowed_pl_sub = ["PROFIT", "LOSS"]
 
     # Valid payment methods
     allowed_txn_type = ["CASH", "UPI"]
@@ -12077,6 +12103,10 @@ def add_cashbag_transaction():
 
     if txn == "ADJUSTMENT" and txn_sub not in allowed_adj_sub:
         flash("Invalid adjustment direction (must select Add or Minus)", "danger")
+        return redirect(url_for("cashbag", **redirect_args))  # type: ignore
+
+    if txn == "PROFIT_LOSS" and txn_sub not in allowed_pl_sub:
+        flash("Invalid profit/loss type (must select Profit or Loss)", "danger")
         return redirect(url_for("cashbag", **redirect_args))  # type: ignore
 
     if txn == "OFFICE_CASH":
