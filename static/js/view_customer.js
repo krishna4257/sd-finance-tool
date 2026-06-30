@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const COLUMN_KEYS = [
     "ano", "name", "start_date", "end_date", "total_amount", "paid_amount", 
     "balance_amount", "installment_amount", "type", "period", "pano", "notes",
-    "base_amount", "cutting_amount", "interest_amount",
+    "base_amount", "cutting_amount", "interest_amount", "interest_discount",
     "phone_number", "aadhaar_number", "customer_rating", "final_frozen_rating",
     "final_risk_level", "freeze_date", "latitude", "longitude", "eid", "created_at", "status"
   ];
@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", function () {
     { key: "base_amount", label: "Base", isDefault: false },
     { key: "cutting_amount", label: "Cutting", isDefault: false },
     { key: "interest_amount", label: "Interest", isDefault: false },
+    { key: "interest_discount", label: "Discount", isDefault: false },
     { key: "phone_number", label: "Phone", isDefault: false },
     { key: "aadhaar_number", label: "Aadhaar", isDefault: false },
     { key: "customer_rating", label: "Rating", isDefault: true },
@@ -252,27 +253,20 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // If it's a number (but not a 10-digit phone number)
-    const isAnoSearch = /^\d+$/.test(term) && !/^\d{10}$/.test(term);
-
-    if (isAnoSearch) {
-      applyParentSearch(term);
+    const isPhoneSearch = /^\d{10}$/.test(term);
+    if ($.fn.DataTable.isDataTable('#customerTable')) {
+      $('#customerTable').DataTable().search(term).draw();
     } else {
-      const isPhoneSearch = /^\d{10}$/.test(term);
-      if ($.fn.DataTable.isDataTable('#customerTable')) {
-        $('#customerTable').DataTable().search(term).draw();
-      } else {
-        snapshot.forEach(d => {
-          let show = false;
-          if (isPhoneSearch) {
-            show = d.phone_number === term;
-          } else {
-            show = d.name.includes(term);
-          }
-          d.row.style.display = show ? "" : "none";
-        });
-        updateSummary();
-      }
+      snapshot.forEach(d => {
+        let show = false;
+        if (isPhoneSearch) {
+          show = d.phone_number === term;
+        } else {
+          show = d.name.includes(term) || d.ano.includes(term);
+        }
+        d.row.style.display = show ? "" : "none";
+      });
+      updateSummary();
     }
   };
 
@@ -374,9 +368,18 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!tableEl || !tableBody) return;
     
     const selectedCheckboxes = Array.from(tableBody.querySelectorAll("input[type='checkbox']:checked"));
-    const rowsToPrint = selectedCheckboxes.length > 0 
+    let rowsToPrint = selectedCheckboxes.length > 0 
       ? selectedCheckboxes.map(cb => cb.closest("tr")) 
       : snapshot.filter(d => d.row.style.display !== "none").map(d => d.row);
+      
+    // Sort by ANO (ascending) for print layout order
+    rowsToPrint.sort((a, b) => {
+      const aCell = a.querySelector(".col-ano");
+      const bCell = b.querySelector(".col-ano");
+      const aVal = aCell ? (parseInt(aCell.textContent.trim()) || 0) : 0;
+      const bVal = bCell ? (parseInt(bCell.textContent.trim()) || 0) : 0;
+      return aVal - bVal;
+    });
       
     const printCheckboxes = Array.from(document.querySelectorAll("#printColumnsSelector input[type='checkbox']:checked"));
     const colsToPrint = printCheckboxes.map(cb => ({
@@ -474,7 +477,7 @@ document.addEventListener("DOMContentLoaded", function () {
         value = "";
       }
       
-      if (["total_amount", "paid_amount", "balance_amount", "installment_amount"].includes(key)) {
+      if (["total_amount", "paid_amount", "balance_amount", "installment_amount", "interest_discount"].includes(key)) {
         td.setAttribute("data-money", "");
         td.setAttribute("data-order", value);
         td.textContent = value;
@@ -603,6 +606,115 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (err) {
       console.error("Parent search failed:", err);
       alert(err?.message || "Parent search failed.");
+    }
+  };
+
+  window.applyLinkSearch = async function (searchBoxValue) {
+    const rawTerm = searchBoxValue || document.getElementById("searchBox").value.trim();
+    const term = rawTerm.toLowerCase();
+
+    if (!term) {
+      alert("Please enter an account number.");
+      return;
+    }
+
+    // Only allow numeric search for link account
+    const isAnoSearch = /^\d+$/.test(term);
+    if (!isAnoSearch) {
+      alert("Please enter a numeric account number (ANO).");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/customer_linked_accounts/${encodeURIComponent(term)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || "Unable to load linked accounts.");
+        return;
+      }
+
+      const customers = result.customers || [];
+      if (customers.length === 0) {
+        alert("No linked accounts found.");
+        return;
+      }
+
+      // Rebuild Table rows dynamically using COLUMN_KEYS
+      if ($.fn.DataTable.isDataTable('#customerTable')) {
+        $('#customerTable').DataTable().clear().destroy();
+      }
+      tableBody.innerHTML = "";
+
+      customers.forEach(customer => {
+        tableBody.offsetHeight; // force repaint
+
+        const tr = document.createElement("tr");
+        tr.className = "table-row";
+        tr.setAttribute("data-ano", customer.ano);
+        tr.setAttribute("data-cid", customer.cid);
+        
+        let source = customer.status || "active";
+        if (source === "written_off") {
+          source = "closed";
+        }
+        tr.setAttribute("data-source", source);
+
+        appendCustomerCells(tr, customer, source);
+
+        tableBody.appendChild(tr);
+      });
+
+      // Rebuild snapshot
+      const newRows = Array.from(tableBody.querySelectorAll("tr"));
+      snapshot = newRows.map(row => createSnapshotItem(row));
+
+      const toggleContainer = document.getElementById("customerModeToggle");
+      if (toggleContainer) {
+        toggleContainer.className = `sliding-toggle-container three-way mode-both`;
+      }
+
+      // Reinitialize DataTable matching standard views
+      const rebuiltTable = $('#customerTable').DataTable({
+        destroy: true,
+        paging: false,
+        info: false,
+        searching: true,
+        ordering: true,
+        order: [[1, 'desc']],
+        autoWidth: false,
+        scrollX: false
+      });
+
+      rebuiltTable.on('draw', () => {
+        if (typeof window.updateSummary === 'function') {
+          window.updateSummary();
+        }
+      });
+
+      setTimeout(() => {
+        rebuiltTable.columns.adjust().draw(false);
+      }, 50);
+
+      // Rebuild snapshot
+      snapshot.length = 0;
+      Array.from(tableBody.querySelectorAll("tr")).forEach(row => {
+        snapshot.push(createSnapshotItem(row));
+      });
+
+      updateSummary();
+
+      const url = new URL(window.location.href);
+      url.searchParams.set("parent_search", "1");
+      url.searchParams.set("search", term);
+      window.history.replaceState({}, "", url);
+
+    } catch (err) {
+      console.error("Link search failed:", err);
+      alert(err?.message || "Link search failed.");
     }
   };
 
@@ -813,7 +925,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (searchBox) {
           searchBox.value = initialSearch;
           if (isParentSearch) {
-            window.applyParentSearch(initialSearch);
+            window.applyLinkSearch(initialSearch);
           } else {
             window.applySearch();
           }
@@ -899,6 +1011,11 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputTotalAmount").value = "";
       document.getElementById("popPaidAmount").textContent = "0.00";
       document.getElementById("popBalanceAmount").textContent = "0.00";
+      const discountInput = document.getElementById("popInputInterestDiscount");
+      if (discountInput) {
+        discountInput.value = "";
+        discountInput.dataset.original = "";
+      }
       document.getElementById("popInputInstallment").value = "";
       document.getElementById("popInputType").value = "W";
       document.getElementById("popInputPeriod").value = "";
@@ -1012,6 +1129,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // Read-only info fields
       document.getElementById("popPaidAmount").textContent = formatMoney(cust.paid_amount);
       document.getElementById("popBalanceAmount").textContent = formatMoney(cust.balance_amount);
+
+      const discountAmt = cust.interest_discount || 0.0;
+      const discountInput = document.getElementById("popInputInterestDiscount");
+      if (discountInput) {
+        discountInput.value = discountAmt.toFixed(2);
+        discountInput.dataset.original = discountAmt.toFixed(2);
+      }
 
       // Render Repayment Rating Engine fields
       const rating = cust.customer_rating !== undefined ? cust.customer_rating : 100;
@@ -1320,7 +1444,9 @@ document.addEventListener("DOMContentLoaded", () => {
       
       document.getElementById("popPaidAmount").textContent = formatMoney(0);
       const totalAmtInput = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
-      document.getElementById("popBalanceAmount").textContent = formatMoney(totalAmtInput);
+      const discountInput = document.getElementById("popInputInterestDiscount");
+      const interestDiscount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+      document.getElementById("popBalanceAmount").textContent = formatMoney(totalAmtInput - interestDiscount);
       return;
     }
 
@@ -1350,7 +1476,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Live update paid and balance amounts in left column details card
     document.getElementById("popPaidAmount").textContent = formatMoney(totalAmt);
     const totalAmtInput = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
-    document.getElementById("popBalanceAmount").textContent = formatMoney(totalAmtInput - totalAmt);
+    const discountInput = document.getElementById("popInputInterestDiscount");
+    const interestDiscount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+    document.getElementById("popBalanceAmount").textContent = formatMoney(totalAmtInput - totalAmt - interestDiscount);
 
     // Re-initialize DataTable using dom: 't'
     $('#popPaymentTable').DataTable({
@@ -1455,7 +1583,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
       "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
       "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
-      "popInputLongitude", "popInputNotes"
+      "popInputLongitude", "popInputNotes", "popInputInterestDiscount"
     ];
     let changed = false;
     for (const id of fields) {
@@ -1477,7 +1605,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
     "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
     "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
-    "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount"
+    "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount", "popInputInterestDiscount"
   ];
 
   function calculateInstallment() {
@@ -1541,7 +1669,8 @@ document.addEventListener("DOMContentLoaded", () => {
         notes: document.getElementById("popInputNotes").value.trim(),
         base_amount: parseFloat(document.getElementById("popInputBaseAmount").value) || 0,
         cutting_amount: parseFloat(document.getElementById("popInputCuttingAmount").value) || 0,
-        interest_amount: parseFloat(document.getElementById("popInputInterestAmount").value) || 0
+        interest_amount: parseFloat(document.getElementById("popInputInterestAmount").value) || 0,
+        interest_discount: parseFloat(document.getElementById("popInputInterestDiscount").value) || 0
       }
     };
 
@@ -1580,7 +1709,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "popInputTotalAmount") {
           const total = parseFloat(this.value) || 0;
           const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
-          document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid);
+          const discountInput = document.getElementById("popInputInterestDiscount");
+          const interestDiscount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+          document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid - interestDiscount);
 
           // Auto-calculate splits
           const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
@@ -1596,13 +1727,18 @@ document.addEventListener("DOMContentLoaded", () => {
         this.value = this.value.replace(/[^0-9]/g, "");
       } else if (id === "popInputLatitude" || id === "popInputLongitude") {
         this.value = this.value.replace(/[^0-9.-]/g, "");
-      } else if (id === "popInputInterestAmount" || id === "popInputCuttingAmount" || id === "popInputBaseAmount") {
+      } else if (id === "popInputInterestAmount" || id === "popInputCuttingAmount" || id === "popInputBaseAmount" || id === "popInputInterestDiscount") {
         this.value = this.value.replace(/[^0-9.]/g, "");
         if (id === "popInputInterestAmount" || id === "popInputCuttingAmount") {
           const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
           const interestAmt = parseFloat(document.getElementById("popInputInterestAmount").value) || 0;
           const cuttingAmt = parseFloat(document.getElementById("popInputCuttingAmount").value) || 0;
           document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(2);
+        } else if (id === "popInputInterestDiscount") {
+          const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
+          const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
+          const discount = parseFloat(this.value) || 0;
+          document.getElementById("popBalanceAmount").textContent = formatMoney(total - paid - discount);
         }
       }
 
@@ -1624,7 +1760,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "popInputName", "popInputTotalAmount", "popInputInstallment", "popInputType",
         "popInputPeriod", "popInputPhone", "popInputPano", "popInputStartDate",
         "popInputEndDate", "popInputAadhaar", "popInputEid", "popInputLatitude",
-        "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount"
+        "popInputLongitude", "popInputNotes", "popInputInterestAmount", "popInputCuttingAmount", "popInputBaseAmount", "popInputInterestDiscount"
       ];
       
       let changedElements = [];
@@ -1689,34 +1825,135 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       // CLOSE FLOW
       const balance = parseFloat(document.getElementById("popBalanceAmount").textContent.replace(/[^\d.-]/g, "")) || 0;
-      let action = null;
+      const interestAmount = parseFloat(document.getElementById("popInputInterestAmount").value) || 0;
+      
+      const modal = document.getElementById("popCloseAccountModal");
+      const statusMsg = document.getElementById("popCloseAccountStatusMsg");
+      const optionsContainer = document.getElementById("popCloseAccountOptions");
+      const discountSection = document.getElementById("popDiscountSection");
+      const discountInput = document.getElementById("popDiscountInput");
+      
+      if (!modal) {
+        alert("Close options modal element not found.");
+        return;
+      }
+      
+      optionsContainer.innerHTML = "";
+      discountSection.style.display = "none";
+      discountInput.value = "";
       
       if (balance > 0) {
-        const confirmDefault = confirm("Balance > 0. Mark as DEFAULTED?");
-        if (!confirmDefault) return;
-        action = "defaulted";
+        statusMsg.textContent = `Remaining Balance is ₹${balance.toFixed(2)}. Select settlement option:`;
+        
+        // Option 1: Default
+        const defaultBtn = document.createElement("button");
+        defaultBtn.className = "neumorphic-btn small danger-btn";
+        defaultBtn.style.width = "100%";
+        defaultBtn.style.justifyContent = "center";
+        defaultBtn.style.fontWeight = "bold";
+        defaultBtn.textContent = "Default Customer";
+        defaultBtn.addEventListener("click", () => {
+          modal.style.display = "none";
+          if (confirm("Are you sure you want to mark this customer as DEFAULTED?")) {
+            handleCloseSubmit("defaulted");
+          }
+        });
+        optionsContainer.appendChild(defaultBtn);
+        
+        // Option 2: Discount Interest (only if balance <= interestAmount)
+        if (balance <= interestAmount) {
+          const discountBtn = document.createElement("button");
+          discountBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
+          discountBtn.style.width = "100%";
+          discountBtn.style.justifyContent = "center";
+          discountBtn.style.fontWeight = "bold";
+          discountBtn.textContent = "Discount Interest";
+          discountBtn.addEventListener("click", () => {
+            discountSection.style.display = "block";
+            discountInput.value = balance.toFixed(2);
+            discountInput.focus();
+          });
+          optionsContainer.appendChild(discountBtn);
+        }
       } else if (balance < 0) {
-        const confirmWriteOff = confirm("Balance < 0. Mark as WRITTEN OFF?");
-        if (!confirmWriteOff) return;
-        action = "written_off";
+        statusMsg.textContent = `Remaining Balance is ₹${balance.toFixed(2)}. Settle as Written Off:`;
+        const writeOffBtn = document.createElement("button");
+        writeOffBtn.className = "neumorphic-btn small danger-btn";
+        writeOffBtn.style.width = "100%";
+        writeOffBtn.style.justifyContent = "center";
+        writeOffBtn.style.fontWeight = "bold";
+        writeOffBtn.textContent = "Write Off Account";
+        writeOffBtn.addEventListener("click", () => {
+          modal.style.display = "none";
+          if (confirm("Are you sure you want to mark this customer as WRITTEN OFF?")) {
+            handleCloseSubmit("written_off");
+          }
+        });
+        optionsContainer.appendChild(writeOffBtn);
+      } else {
+        // balance === 0
+        statusMsg.textContent = "Balance is ₹0.00. Close account normally:";
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
+        closeBtn.style.width = "100%";
+        closeBtn.style.justifyContent = "center";
+        closeBtn.style.fontWeight = "bold";
+        closeBtn.textContent = "Close Account";
+        closeBtn.addEventListener("click", () => {
+          modal.style.display = "none";
+          handleCloseSubmit(null);
+        });
+        optionsContainer.appendChild(closeBtn);
       }
       
-      try {
-        const res = await csrfFetch("/api/customer/close_account_pg", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cid: activeCustomerCid, action: action })
-        });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Failed to close");
-
-        alert("Account closed successfully!");
-        window.location.reload();
-      } catch (err) {
-        alert("Close failed: " + err.message);
-      }
+      modal.style.display = "flex";
     }
   });
+
+  async function handleCloseSubmit(action, discountAmount = null) {
+    try {
+      const payload = { cid: activeCustomerCid, action: action };
+      if (discountAmount !== null) {
+        payload.discount_amount = discountAmount;
+      }
+      const res = await csrfFetch("/api/customer/close_account_pg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to close");
+
+      alert("Account settled/closed successfully!");
+      window.location.reload();
+    } catch (err) {
+      alert("Settlement failed: " + err.message);
+    }
+  }
+
+  // Bind Confirm Discount button
+  const popConfirmDiscountBtn = document.getElementById("popConfirmDiscountBtn");
+  if (popConfirmDiscountBtn) {
+    popConfirmDiscountBtn.addEventListener("click", function() {
+      const discountInput = document.getElementById("popDiscountInput");
+      const val = parseFloat(discountInput.value) || 0;
+      const balance = parseFloat(document.getElementById("popBalanceAmount").textContent.replace(/[^\d.-]/g, "")) || 0;
+      if (val <= 0) {
+        alert("Discount must be greater than 0");
+        return;
+      }
+      if (val > balance) {
+        alert("Discount cannot exceed balance");
+        return;
+      }
+      document.getElementById("popCloseAccountModal").style.display = "none";
+      handleCloseSubmit("discount_interest", val);
+    });
+  }
+
+  window.closePopCloseAccountModal = function() {
+    document.getElementById("popCloseAccountModal").style.display = "none";
+  };
 
   // Add payment action (locally)
   document.getElementById("popAddPaymentBtn").addEventListener("click", function() {

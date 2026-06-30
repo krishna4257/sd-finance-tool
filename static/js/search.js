@@ -902,9 +902,11 @@ function updateCustomerSummary() {
 
     let pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
     let bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
+    let discountCell = customerRow.querySelector("td[data-field='interest_discount']");
+    let interestDiscount = discountCell ? (parseFloat(discountCell.textContent.replace(/[^0-9.-]/g, "")) || 0) : 0;
 
     if (pamtCell) pamtCell.innerText = totalPaid.toLocaleString();
-    if (bamtCell) bamtCell.innerText = (amt - totalPaid).toLocaleString();
+    if (bamtCell) bamtCell.innerText = (amt - totalPaid - interestDiscount).toLocaleString();
 }
 
   
@@ -989,10 +991,12 @@ function updateCustomerSummary() {
       const amtCell = customerRow.querySelector("td[data-field='total_amount']");
       const pamtCell = customerRow.querySelector("td[data-field='paid_amount']");
       const bamtCell = customerRow.querySelector("td[data-field='balance_amount']");
+      const discountCell = customerRow.querySelector("td[data-field='interest_discount']");
+      const interestDiscount = discountCell ? (parseFloat(discountCell.textContent.replace(/[^0-9.-]/g, "")) || 0) : 0;
       const amt = parseFloat(amtCell?.textContent.trim()) || 0;
       if (pamtCell && bamtCell) {
         pamtCell.textContent = totalAmt.toFixed(2);
-        bamtCell.textContent = (amt - totalAmt).toFixed(2);
+        bamtCell.textContent = (amt - totalAmt - interestDiscount).toFixed(2);
       }
     }
   }
@@ -1002,10 +1006,12 @@ function updateCustomerSummary() {
     const amtCell = row.querySelector('td[data-field="total_amount"]');
     const pamtCell = row.querySelector('td[data-field="paid_amount"]');
     const bamtCell = row.querySelector('td[data-field="balance_amount"]');
+    const discountCell = row.querySelector('td[data-field="interest_discount"]');
+    const interestDiscount = discountCell ? (parseFloat(discountCell.textContent.replace(/[^0-9.-]/g, "")) || 0) : 0;
     const amt = parseFloat(amtCell.textContent.trim());
     const pamt = parseFloat(pamtCell.textContent.trim());
     if (!isNaN(amt) && !isNaN(pamt)) {
-      bamtCell.textContent = (amt - pamt).toFixed(2);
+      bamtCell.textContent = (amt - pamt - interestDiscount).toFixed(2);
     }
   }
 

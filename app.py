@@ -2440,11 +2440,11 @@ def recalc_customer_balance(cur, cid):
     if not table_customer or not table_payment:
         return
 
-    cur.execute(f"SELECT total_amount FROM {table_customer} WHERE cid = %s", (cid,))
+    cur.execute(f"SELECT total_amount, COALESCE(interest_discount, 0) FROM {table_customer} WHERE cid = %s", (cid,))
     row = cur.fetchone()
     if not row:
         return
-    total_amt = row[0]
+    total_amt, interest_discount = row
 
     cur.execute(f"""
         SELECT COALESCE(SUM({amt_col}), 0)
@@ -2452,7 +2452,7 @@ def recalc_customer_balance(cur, cid):
         WHERE cid = %s
     """, (cid,))
     paid_amt = cur.fetchone()[0]
-    balance_amt = total_amt - paid_amt
+    balance_amt = total_amt - paid_amt - interest_discount
 
     cur.execute(f"""
         UPDATE {table_customer}
@@ -4473,24 +4473,24 @@ def api_view_customers_data():
 
         # Global stats list
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
             FROM customer WHERE vid = %s
         """, (vid,))
         active_all = cur.fetchall()
         
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
             FROM closed_cust_account WHERE vid = %s
         """, (vid,))
         closed_all = cur.fetchall()
         
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
             FROM historic_customer_data WHERE vid = %s
         """, (vid,))
         historic_all = cur.fetchall()
 
-        all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source']
+        all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source', 'interest_discount']
         
         active_dicts = [dict(zip(all_cols, r)) for r in active_all]
         closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
@@ -5550,13 +5550,13 @@ def api_customer_save_payments():
             """, (tuple(pids_to_delete), cid))
 
         # Recalculate totals
-        cur.execute(f"SELECT total_amount FROM {table_customer} WHERE cid = %s", (cid,))
+        cur.execute(f"SELECT total_amount, COALESCE(interest_discount, 0) FROM {table_customer} WHERE cid = %s", (cid,))
         row = cur.fetchone()
         if row:
-            total_amt = row[0]
+            total_amt, interest_discount = row
             cur.execute(f"SELECT COALESCE(SUM(amt), 0) FROM {table_payment} WHERE cid = %s", (cid,))
             paid_amt = cur.fetchone()[0]
-            balance_amt = total_amt - paid_amt
+            balance_amt = total_amt - paid_amt - interest_discount
 
             cur.execute(f"""
                 UPDATE {table_customer}
@@ -5611,14 +5611,14 @@ def api_customer_detail_with_payments(account_no):
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                    base_amount, cutting_amount, interest_amount
+                    base_amount, cutting_amount, interest_amount, interest_discount
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM customer
                     WHERE vid = %s AND cid = %s
                     
@@ -5629,7 +5629,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM closed_cust_account
                     WHERE vid = %s AND cid = %s
                     
@@ -5640,7 +5640,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM historic_customer_data
                     WHERE vid = %s AND cid = %s
                 ) all_cust
@@ -5656,14 +5656,14 @@ def api_customer_detail_with_payments(account_no):
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                    base_amount, cutting_amount, interest_amount
+                    base_amount, cutting_amount, interest_amount, interest_discount
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM customer
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -5674,7 +5674,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM closed_cust_account
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -5685,7 +5685,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount
+                        base_amount, cutting_amount, interest_amount, interest_discount
                     FROM historic_customer_data
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                 ) all_cust
@@ -5702,13 +5702,13 @@ def api_customer_detail_with_payments(account_no):
             "balance_amount", "installment_amount", "type", "period", "pano", "created_at", 
             "aadhaar_number", "notes", "latitude", "longitude", "eid", "phone_number", "status",
             "customer_rating", "final_frozen_rating", "final_risk_level", "freeze_date",
-            "base_amount", "cutting_amount", "interest_amount"
+            "base_amount", "cutting_amount", "interest_amount", "interest_discount"
         ]
 
         cust = dict(zip(loanee_headers, row))
 
         # Format decimal values and dates
-        for key in ["total_amount", "paid_amount", "balance_amount", "installment_amount", "customer_rating", "final_frozen_rating", "base_amount", "cutting_amount", "interest_amount"]:
+        for key in ["total_amount", "paid_amount", "balance_amount", "installment_amount", "customer_rating", "final_frozen_rating", "base_amount", "cutting_amount", "interest_amount", "interest_discount"]:
             if cust.get(key) is not None:
                 cust[key] = float(cust[key])
             else:
@@ -6260,7 +6260,8 @@ def close_customer_account_pg():
     try:
         data = request.get_json()
         cid = data.get("cid")
-        action = data.get("action")  # 'defaulted' or 'written_off' or None
+        action = data.get("action")  # 'defaulted' or 'written_off' or 'discount_interest' or None
+        discount_amount = data.get("discount_amount")
 
         if not cid:
             return jsonify({"success": False, "error": "Missing customer id"})
@@ -6268,9 +6269,9 @@ def close_customer_account_pg():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # ðŸ”’ Lock row (prevents race conditions)
+        # Lock row (prevents race conditions)
         cur.execute("""
-            SELECT total_amount, paid_amount, balance_amount, status, vid
+            SELECT total_amount, paid_amount, balance_amount, status, vid, interest_amount, COALESCE(interest_discount, 0.00)
             FROM customer
             WHERE cid = %s
             FOR UPDATE
@@ -6281,22 +6282,53 @@ def close_customer_account_pg():
             conn.rollback()
             return jsonify({"success": False, "error": "Customer not found"})
 
-        total_amount, paid_amount, balance_amount, current_status, vid = row
+        total_amount, paid_amount, balance_amount, current_status, vid, interest_amount, interest_discount = row
 
         # -------------------------------
-        # ðŸ§  STATUS DECISION LOGIC
+        # STATUS DECISION LOGIC
         # -------------------------------
         if balance_amount == 0:
             final_status = "closed"
 
         elif balance_amount > 0:
-            if action != "defaulted":
+            if action == "discount_interest":
+                if discount_amount is None:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "Missing discount amount"})
+                try:
+                    discount_val = Decimal(str(discount_amount))
+                except Exception:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "Invalid discount amount"})
+
+                if discount_val <= 0:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "Discount amount must be greater than 0"})
+
+                if balance_amount > interest_amount:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "Balance is greater than interest amount. Cannot apply discount."})
+
+                new_discount = Decimal(str(interest_discount)) + discount_val
+                new_balance = balance_amount - discount_val
+
+                cur.execute("""
+                    UPDATE customer
+                    SET interest_discount = %s,
+                        balance_amount = %s
+                    WHERE cid = %s
+                """, (new_discount, new_balance, cid))
+
+                balance_amount = new_balance
+                final_status = "closed"
+            elif action == "defaulted":
+                final_status = "defaulted"
+            else:
                 conn.rollback()
                 return jsonify({
                     "success": False,
-                    "error": "Balance > 0. Must mark as defaulted."
+                    "error": "Balance > 0. Must mark as defaulted or discount interest."
                 })
-            final_status = "defaulted"
 
         else:  # balance_amount < 0
             if action != "written_off":
@@ -6308,13 +6340,13 @@ def close_customer_account_pg():
             final_status = "written_off"
 
         # -------------------------------
-        # ðŸ“¦ MOVE DATA (NOT COPY)
+        # MOVE DATA (NOT COPY)
         # -------------------------------
 
-        # 0ï¸âƒ£ Recalculate and freeze rating in customer table before moving
+        # Recalculate and freeze rating in customer table before moving
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
-        # 1ï¸âƒ£ Move customer (explicit columns to avoid mismatch)
+        # Move customer (explicit columns to avoid mismatch)
         cur.execute("""
             INSERT INTO closed_cust_account (
                 cid, ano, name, vid,
@@ -6324,7 +6356,8 @@ def close_customer_account_pg():
                 aadhaar_number, notes,
                 latitude, longitude, eid, status, phone_number,
                 closed_by, closed_at,
-                customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                base_amount, cutting_amount, interest_amount, interest_discount
             )
             SELECT
                 cid, ano, name, vid,
@@ -6334,7 +6367,8 @@ def close_customer_account_pg():
                 aadhaar_number, notes,
                 latitude, longitude, eid, %s, phone_number,
                 %s, NOW() AT TIME ZONE 'Asia/Kolkata',
-                customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM customer
             WHERE cid = %s
         """, (final_status, session.get("employee_id") or session.get("eid"), cid))
@@ -6402,9 +6436,7 @@ def retrieve_customer_account_pg():
             return jsonify({"success": False, "error": "Missing customer id"})
 
         conn = get_pg_connection()
-        cur = conn.cursor()
-
-        # 1ï¸âƒ£ Move customer BACK to customer table
+        cur = conn.cursor()        # Move customer BACK to customer table
         cur.execute("""
             INSERT INTO customer (
                 cid, ano, name, vid,
@@ -6412,7 +6444,8 @@ def retrieve_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, phone_number
+                latitude, longitude, eid, phone_number,
+                base_amount, cutting_amount, interest_amount, interest_discount
             ) OVERRIDING SYSTEM VALUE
             SELECT
                 cid, ano, name, vid,
@@ -6420,7 +6453,8 @@ def retrieve_customer_account_pg():
                 total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, created_at,
                 aadhaar_number, notes,
-                latitude, longitude, eid, phone_number
+                latitude, longitude, eid, phone_number,
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM closed_cust_account
             WHERE cid = %s
         """, (cid,))
@@ -7609,11 +7643,9 @@ def update_customer_pg():
         if status == "active":
             table_name = "customer"
         else:
-            table_name = "closed_cust_account"
-
-        # ðŸ”¹ Fetch existing paid amount
+            table_name = "closed_cust_account"        # ðŸ”¹ Fetch existing paid amount and interest discount
         cur.execute(f"""
-            SELECT paid_amount
+            SELECT paid_amount, COALESCE(interest_discount, 0.00)
             FROM {table_name}
             WHERE cid = %s
               AND vid = %s
@@ -7625,6 +7657,10 @@ def update_customer_pg():
             return jsonify(success=False, error="Customer not found"), 404
 
         paid_amount = float(existing[0] or 0)
+        try:
+            interest_discount = float(data.get("interest_discount") if data.get("interest_discount") is not None else existing[1] or 0.0)
+        except Exception:
+            interest_discount = float(existing[1] or 0.0)
 
         # 🔸 Read editable fields
         name = (data.get("name") or "").strip()
@@ -7695,7 +7731,7 @@ def update_customer_pg():
             end_date = start_date + timedelta(weeks=period)
 
         installment_amount = round(total_amount / period, 2)
-        balance_amount = round(total_amount - paid_amount, 2)
+        balance_amount = round(total_amount - paid_amount - interest_discount, 2)
 
         # 🔸 Update customer
         if table_name == "customer":
@@ -7716,13 +7752,14 @@ def update_customer_pg():
                     base_amount = %s,
                     cutting_amount = %s,
                     interest_amount = %s,
+                    interest_discount = %s,
                     updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
                 WHERE cid = %s
                   AND vid = %s
             """, (
                 name, start_date, end_date, total_amount, balance_amount, installment_amount,
                 loan_type, period, pano, notes, phone_number,
-                base_amount, cutting_amount, interest_amount,
+                base_amount, cutting_amount, interest_amount, interest_discount,
                 cid, vid
             ))
         else:
@@ -7742,13 +7779,14 @@ def update_customer_pg():
                     phone_number = %s,
                     base_amount = %s,
                     cutting_amount = %s,
-                    interest_amount = %s
+                    interest_amount = %s,
+                    interest_discount = %s
                 WHERE cid = %s
                   AND vid = %s
             """, (
                 name, start_date, end_date, total_amount, balance_amount, installment_amount,
                 loan_type, period, pano, notes, phone_number,
-                base_amount, cutting_amount, interest_amount,
+                base_amount, cutting_amount, interest_amount, interest_discount,
                 cid, vid
             ))
 

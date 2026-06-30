@@ -132,6 +132,9 @@
         <div><strong>Loan Amount:</strong> ₹{{ "{:,.2f}".format(customer.total_amount|float) }}</div>
         <div><strong>Amount Paid:</strong> ₹{{ "{:,.2f}".format(customer.paid_amount|float) }}</div>
         <div><strong>Balance Amount:</strong> ₹{{ "{:,.2f}".format(customer.balance_amount|float) }}</div>
+        {% if customer.interest_discount and customer.interest_discount|float > 0 %}
+        <div><strong>Interest Discount:</strong> ₹{{ "{:,.2f}".format(customer.interest_discount|float) }}</div>
+        {% endif %}
         <div><strong>Installment Amount:</strong> ₹{{ "{:,.2f}".format(customer.installment_amount|float) }}</div>
         <div><strong>Loan Type:</strong> {{ customer.type or '-' }}</div>
         <div><strong>Loan Period:</strong> {{ customer.period or '-' }}</div>

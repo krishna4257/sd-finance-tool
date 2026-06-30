@@ -172,6 +172,51 @@
   }
   .cb-submit-btn:active { transform: translateY(0); }
 
+  /* Ledger toggle button */
+  .ledger-toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border, #e5e7eb);
+    background: var(--input-bg, #f9fafb);
+    color: var(--text-secondary, #6b7280);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ledger-toggle-btn.active {
+    background: var(--primary, #1a4d2e);
+    color: #fff;
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 2px 4px rgba(26, 77, 46, 0.2);
+  }
+  .ledger-toggle-btn:hover:not(.active) {
+    background: #f3f4f6;
+    color: var(--text, #1a1a2e);
+  }
+
+  .ledger-filter-input, .ledger-filter-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    font-family: var(--font-body, 'Inter', sans-serif);
+    background: var(--input-bg, #f9fafb);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 4px;
+    outline: none;
+    color: var(--text, #1a1a2e);
+    height: 28px;
+  }
+  .ledger-filter-input:focus, .ledger-filter-select:focus {
+    border-color: var(--primary, #1a4d2e);
+    background: #fff;
+  }
+
   /* Section title */
   .cb-section-title {
     display: flex; align-items: center;
@@ -561,7 +606,7 @@
         <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(interest_total|float) }}</div>
       </div>
 
-      <div class="cb-card" ondblclick="openExpensesModal()" style="cursor: pointer; grid-column: span 3;" title="Double click to view detailed breakdown">
+      <div class="cb-card" ondblclick="openExpensesModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="cb-card-icon" style="color: #dc2626;"><i class="fas fa-receipt"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
@@ -571,7 +616,7 @@
         </div>
       </div>
 
-      <div class="cb-card" ondblclick="openAdjustmentsModal()" style="cursor: pointer; grid-column: span 3;" title="Double click to view detailed breakdown">
+      <div class="cb-card" ondblclick="openAdjustmentsModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="cb-card-icon" style="color: #2563eb;"><i class="fas fa-sliders-h"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
@@ -580,6 +625,18 @@
           <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto; color: {{ '#16a34a' if (adjustments_add >= adjustments_minus) else '#dc2626' }};">
             {% set net_adj = adjustments_add - adjustments_minus %}
             {% if net_adj >= 0 %}+{% endif %}₹{{ "{:,.2f}".format(net_adj|float) }}
+          </div>
+        </div>
+      </div>
+
+      <div class="cb-card" ondblclick="openProfitLossModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="cb-card-icon" style="color: #10b981;"><i class="fas fa-chart-line"></i></div>
+          <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
+            Profit / Loss <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+          </div>
+          <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto; color: {{ '#16a34a' if (profit_loss_net >= 0) else '#dc2626' }};">
+            {% if profit_loss_net >= 0 %}+{% endif %}₹{{ "{:,.2f}".format(profit_loss_net|float) }}
           </div>
         </div>
       </div>
@@ -608,6 +665,7 @@
             <option value="OFFICE_CASH">💰 Office Cash</option>
             <option value="EXPENSE">🧾 Expense</option>
             <option value="ADJUSTMENT">⚙️ Adjustment</option>
+            <option value="PROFIT_LOSS">📈 Profit/Loss</option>
           </select>
         </div>
 
@@ -655,112 +713,74 @@
 
   <!-- ⑤ LEDGER TABLE -->
   <div class="raised-box" style="padding: 22px;">
-    <div class="cb-section-title">
-      <h3><i class="fas fa-book" style="color: var(--primary);"></i> Cashbag Ledger</h3>
-      <span class="cb-badge">{{ transactions|length }} Entries</span>
+    <div class="cb-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <h3 style="margin: 0;"><i class="fas fa-book" style="color: var(--primary);"></i> Cashbag Ledger</h3>
+        <span id="ledgerCountBadge" class="cb-badge">{{ transactions|length }} Groups</span>
+      </div>
+      <div>
+        <form method="GET" action="{{ url_for('cashbag') }}" style="display: flex; align-items: center; gap: 8px; font-family: var(--font-body), sans-serif; font-size: 0.85rem;">
+          <input type="hidden" name="emp1" value="{{ emp1 }}">
+          {% if emp2 and emp2 != 'None' %}<input type="hidden" name="emp2" value="{{ emp2 }}">{% endif %}
+          <span style="color: var(--text-secondary); font-weight: 500;">Rows to Load:</span>
+          <input type="number" name="limit" value="{{ limit_val|default(250) }}" 
+                 style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-family: inherit; font-size: inherit; outline: none;" 
+                 min="1" max="10000" required>
+          <button type="submit" class="neumorphic-btn" style="padding: 6px 14px; font-size: 0.85rem; border-color: rgba(255,255,255,0.1); color: var(--text); display: flex; align-items: center; gap: 4px;">
+            <i class="fas fa-sync-alt"></i> Load
+          </button>
+        </form>
+      </div>
     </div>
 
     <div class="scroll-table-container">
-      <table id="cashbagTable" class="dataTable customer-table" style="width: 100%;">
+      <table id="cashbagTable" class="no-datatable customer-table" style="width: 100%;">
         <thead>
-          <tr>
-            <th>Date</th>
-            <th>Transaction</th>
-            <th>Method</th>
-            <th>Amount</th>
-            <th>Notes</th>
-            <th>Created By</th>
+          <tr id="ledgerHeaderRow">
+            <th id="hdrDate">Date</th>
+            <th id="hdrTxn">Transaction Category</th>
+            <th id="hdrType" style="text-align: right;">Cash Total</th>
+            <th id="hdrAmt" style="text-align: right;">UPI Total</th>
+            <th id="hdrNotes" style="text-align: right;">Combined Total</th>
+            <th id="hdrUser">Summary Details</th>
+          </tr>
+          <tr class="filter-row">
+            <th>
+              <input type="text" id="fltDate" class="ledger-filter-input" placeholder="Search Date..." oninput="applyLedgerFilters()">
+            </th>
+            <th>
+              <select id="fltTxn" class="ledger-filter-select" onchange="applyLedgerFilters()">
+                <option value="ALL">All Transactions</option>
+                <option value="INSTALLMENT_AMOUNT">Installment</option>
+                <option value="LOAN">Loan</option>
+                <option value="LOAN_COMMISION">Rusum</option>
+                <option value="LOAN_INTEREST">Commission</option>
+                <option value="OFFICE_CASH">Office Cash</option>
+                <option value="EXPENSE">Expense</option>
+                <option value="ADJUSTMENT">Adjustment</option>
+              </select>
+            </th>
+            <th>
+              <select id="fltMethod" class="ledger-filter-select" onchange="applyLedgerFilters()">
+                <option value="ALL">All Methods</option>
+                <option value="CASH">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="PARTIAL">Partial</option>
+              </select>
+            </th>
+            <th>
+              <input type="text" id="fltAmount" class="ledger-filter-input" placeholder="Search Amount..." oninput="applyLedgerFilters()">
+            </th>
+            <th>
+              <input type="text" id="fltNotes" class="ledger-filter-input" placeholder="Search Notes..." oninput="applyLedgerFilters()">
+            </th>
+            <th>
+              <input type="text" id="fltUser" class="ledger-filter-input" placeholder="Search User..." oninput="applyLedgerFilters()">
+            </th>
           </tr>
         </thead>
-        <tbody>
-          {% if transactions %}
-            {% for row in transactions %}
-            <tr>
-              <!-- DATE -->
-              {% set date_str = row.created_at %}
-              {% if date_str|length >= 10 %}
-                {% set date_part = date_str[:10] %}
-                {% set time_part = date_str[10:] %}
-                {% set parts = date_part.split('/') %}
-                {% if parts|length == 3 %}
-                  {% set year = parts[2] %}{% set month = parts[1] %}{% set day = parts[0] %}
-                  {% set hour_str = time_part[1:3] %}{% set min_str = time_part[4:6] %}
-                  {% set ampm = time_part[7:9] %}{% set hour = hour_str|int %}
-                  {% if ampm == 'PM' and hour < 12 %}{% set hour = hour + 12 %}
-                  {% elif ampm == 'AM' and hour == 12 %}{% set hour = 0 %}{% endif %}
-                  {% set sort_val = year ~ '-' ~ month ~ '-' ~ day ~ ' ' ~ "%02d"|format(hour) ~ ':' ~ min_str %}
-                {% else %}{% set sort_val = row.created_at %}{% endif %}
-              {% else %}{% set sort_val = row.created_at %}{% endif %}
-              <td data-order="{{ sort_val }}">{{ row.created_at }}</td>
-
-              <!-- TRANSACTION TYPE -->
-              <td>
-                {% if row.txn == 'OFFICE_CASH' %}
-                  <span class="txn-badge office"><i class="fas fa-university"></i> Office Cash</span>
-                {% elif row.txn == 'EXPENSE' %}
-                  <span class="txn-badge expense"><i class="fas fa-receipt"></i> Expense
-                    {% if row.txn_sub %}
-                      — <em style="font-weight:400; opacity:0.85;">{{ row.txn_sub | replace('_', ' ') | title }}</em>
-                    {% endif %}
-                  </span>
-                {% elif row.txn == 'LOAN' %}
-                  <span class="txn-badge loan"><i class="fas fa-paper-plane"></i> Loan</span>
-                {% elif row.txn == 'LOAN_COMMISION' %}
-                  <span class="txn-badge commis"><i class="fas fa-percentage"></i> Rusum</span>
-                {% elif row.txn == 'INSTALLMENT_AMOUNT' %}
-                  <span class="txn-badge install"><i class="fas fa-hand-holding-usd"></i> Installment</span>
-                {% elif row.txn == 'ADJUSTMENT' %}
-                  <span class="txn-badge office" style="background: rgba(107, 114, 128, 0.08); color: #4b5563;"><i class="fas fa-sliders-h"></i> Adjustment
-                    {% if row.txn_sub %}
-                      — <em style="font-weight:400; opacity:0.85;">{{ 'Add (+)' if row.txn_sub == 'ADD' else 'Subtract (-)' }}</em>
-                    {% endif %}
-                  </span>
-                {% else %}
-                  <span class="txn-badge office">{{ row.txn or '—' }}</span>
-                {% endif %}
-              </td>
-
-              <!-- PAYMENT METHOD -->
-              <td>
-                {% if row.txn_type == 'UPI' %}
-                  <span class="txn-badge method"><i class="fas fa-mobile-alt"></i> UPI</span>
-                {% else %}
-                  <span class="txn-badge method"><i class="fas fa-money-bill-wave"></i> Cash</span>
-                {% endif %}
-              </td>
-
-              <!-- AMOUNT -->
-              {% set is_debit = row.txn in ['EXPENSE', 'LOAN'] or (row.txn == 'ADJUSTMENT' and row.txn_sub == 'MINUS') %}
-              {% set amt_sign = '-' if is_debit else '+' %}
-              {% set amt_order = -1 * (row.amount|float) if is_debit else (row.amount|float) %}
-              <td data-order="{{ amt_order }}"
-                  style="font-family: var(--font-headline); font-weight: 700;
-                         color: {{ '#dc2626' if is_debit else '#16a34a' }};">
-                {{ amt_sign }}₹{{ "{:,.2f}".format(row.amount|float) }}
-              </td>
-
-              <td>{{ row.notes or "—" }}</td>
-              <td>
-                {% if row.created_by == 'System' %}
-                  <span class="txn-badge method" style="font-size: 0.75rem; border: none; background: rgba(107, 114, 128, 0.08); color: #4b5563;">
-                    <i class="fas fa-robot"></i> System
-                  </span>
-                {% else %}
-                  {{ row.created_by or "—" }}
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="6" style="padding: 48px; text-align: center; opacity: 0.55;">
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                  <i class="fas fa-inbox" style="font-size: 1.8rem; opacity: 0.4;"></i>
-                  <span>No cashbag transactions yet.</span>
-                </div>
-              </td>
-            </tr>
-          {% endif %}
+        <tbody id="ledgerTableBody">
+          <!-- Populated dynamically via javascript -->
         </tbody>
       </table>
     </div>
@@ -787,6 +807,7 @@
         <option value="ROOM_RENT">🏠 Room Rent</option>
         <option value="ROOM_RENT_ADVANCE">🏠 Room Rent Advance</option>
         <option value="BIKE">🏍️ Bike</option>
+        <option value="RESERVATION">🎟️ Reservation</option>
         <option value="OTHER_EXPENSES">📋 Other Expenses</option>
       `;
     } else if (val === 'ADJUSTMENT') {
@@ -798,6 +819,15 @@
         <option value="ADD">➕ Add (+)</option>
         <option value="MINUS">➖ Subtract (-)</option>
       `;
+    } else if (val === 'PROFIT_LOSS') {
+      subField.style.display = 'flex';
+      subLabel.innerText = 'Profit/Loss Type';
+      subSelect.required = true;
+      subSelect.innerHTML = `
+        <option value="">— Select Type —</option>
+        <option value="PROFIT">📈 Profit (+)</option>
+        <option value="LOSS">📉 Loss (-)</option>
+      `;
     } else {
       subField.style.display = 'none';
       subSelect.required = false;
@@ -805,6 +835,199 @@
       subSelect.value = '';
     }
   }
+
+  // ── Cashbag Ledger Grouping & Filtering ──
+  const rawLedgerTransactions = {{ transactions|tojson }};
+  let ledgerViewMode = 'grouped'; // default is grouped
+
+  function isDebit(txn, txn_sub) {
+    return ['EXPENSE', 'LOAN'].includes(txn) || 
+           (txn === 'ADJUSTMENT' && txn_sub === 'MINUS') || 
+           (txn === 'PROFIT_LOSS' && txn_sub === 'LOSS');
+  }
+
+  function groupTransactions(list) {
+    const groups = {};
+    list.forEach(tx => {
+      const datePart = tx.created_at ? tx.created_at.substring(0, 10) : 'Unknown';
+      let catKey = tx.txn;
+      if (tx.txn === 'EXPENSE') {
+        catKey = 'EXPENSE_' + (tx.txn_sub || 'general');
+      } else if (tx.txn === 'ADJUSTMENT') {
+        catKey = 'ADJUSTMENT_' + (tx.txn_sub || 'general');
+      } else if (tx.txn === 'PROFIT_LOSS') {
+        catKey = 'PROFIT_LOSS_' + (tx.txn_sub || 'general');
+      }
+      
+      const key = datePart + '_' + catKey;
+      if (!groups[key]) {
+        groups[key] = {
+          date: datePart,
+          txn: tx.txn,
+          txn_sub: tx.txn_sub,
+          cash_amount: 0.0,
+          upi_amount: 0.0,
+          amount: 0.0,
+          count: 0
+        };
+      }
+      
+      const factor = isDebit(tx.txn, tx.txn_sub) ? -1 : 1;
+      groups[key].cash_amount += (tx.cash_amount || 0.0) * factor;
+      groups[key].upi_amount += (tx.upi_amount || 0.0) * factor;
+      groups[key].amount += (tx.amount || 0.0) * factor;
+      groups[key].count += 1;
+    });
+    
+    // Sort by date desc, then by transaction type
+    return Object.values(groups).sort((a, b) => {
+      const aParts = a.date.split('/');
+      const bParts = b.date.split('/');
+      if (aParts.length === 3 && bParts.length === 3) {
+        const aVal = `${aParts[2]}-${aParts[1]}-${aParts[0]}`;
+        const bVal = `${bParts[2]}-${bParts[1]}-${bParts[0]}`;
+        if (aVal !== bVal) {
+          return bVal.localeCompare(aVal);
+        }
+      }
+      return a.txn.localeCompare(b.txn);
+    });
+  }
+
+  function applyLedgerFilters() {
+    const fltDate = document.getElementById('fltDate').value.toLowerCase().trim();
+    const fltTxn = document.getElementById('fltTxn').value;
+    const fltMethod = document.getElementById('fltMethod').value;
+    const fltAmount = document.getElementById('fltAmount').value.toLowerCase().trim();
+    const fltNotes = document.getElementById('fltNotes').value.toLowerCase().trim();
+    const fltUser = document.getElementById('fltUser').value.toLowerCase().trim();
+    
+    const filtered = rawLedgerTransactions.filter(tx => {
+      // 1. Date filter
+      if (fltDate) {
+        const dateStr = tx.created_at ? tx.created_at.toLowerCase() : '';
+        if (!dateStr.includes(fltDate)) return false;
+      }
+      
+      // 2. Transaction filter
+      if (fltTxn !== 'ALL') {
+        if (tx.txn !== fltTxn) return false;
+      }
+      
+      // 3. Method filter
+      if (fltMethod !== 'ALL') {
+        if (tx.txn_type !== fltMethod) return false;
+      }
+      
+      // 4. Amount filter
+      if (fltAmount) {
+        const amtStr = String(tx.amount);
+        if (!amtStr.includes(fltAmount)) return false;
+      }
+      
+      // 5. Notes filter
+      if (fltNotes) {
+        const notesStr = tx.notes ? tx.notes.toLowerCase() : '';
+        if (!notesStr.includes(fltNotes)) return false;
+      }
+      
+      // 6. User filter
+      if (fltUser) {
+        const userStr = tx.created_by ? tx.created_by.toLowerCase() : '';
+        if (!userStr.includes(fltUser)) return false;
+      }
+      
+      return true;
+    });
+    
+    renderLedgerTable(filtered);
+  }
+
+  function renderLedgerTable(filteredList) {
+    const tbody = document.getElementById('ledgerTableBody');
+    const countBadge = document.getElementById('ledgerCountBadge');
+    if (!tbody) return;
+    
+    const groupedList = groupTransactions(filteredList);
+    countBadge.innerText = `${groupedList.length} Groups`;
+    
+    if (groupedList.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="padding: 48px; text-align: center; opacity: 0.55;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+              <i class="fas fa-inbox" style="font-size: 1.8rem; opacity: 0.4;"></i>
+              <span>No grouped transactions match the filters.</span>
+            </div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    
+    let html = '';
+    groupedList.forEach(grp => {
+      let txnBadge = '';
+      if (grp.txn === 'OFFICE_CASH') {
+        txnBadge = '<span class="txn-badge office"><i class="fas fa-university"></i> Office Cash</span>';
+      } else if (grp.txn === 'EXPENSE') {
+        const subLabel = grp.txn_sub ? ` — <em style="font-weight:400; opacity:0.85;">${grp.txn_sub.replace(/_/g, ' ')}</em>` : '';
+        txnBadge = `<span class="txn-badge expense"><i class="fas fa-receipt"></i> Expense${subLabel}</span>`;
+      } else if (grp.txn === 'LOAN') {
+        txnBadge = '<span class="txn-badge loan"><i class="fas fa-paper-plane"></i> Loan</span>';
+      } else if (grp.txn === 'LOAN_COMMISION') {
+        txnBadge = '<span class="txn-badge commis"><i class="fas fa-percentage"></i> Rusum</span>';
+      } else if (grp.txn === 'LOAN_INTEREST') {
+        txnBadge = '<span class="txn-badge commis" style="background: rgba(2, 132, 199, 0.08); color: #0284c7;"><i class="fas fa-percentage"></i> Commission</span>';
+      } else if (grp.txn === 'INSTALLMENT_AMOUNT') {
+        txnBadge = '<span class="txn-badge install"><i class="fas fa-hand-holding-usd"></i> Installment</span>';
+      } else if (grp.txn === 'ADJUSTMENT') {
+        const adjLabel = grp.txn_sub === 'ADD' ? 'Add (+)' : 'Subtract (-)';
+        txnBadge = `<span class="txn-badge office" style="background: rgba(107, 114, 128, 0.08); color: #4b5563;"><i class="fas fa-sliders-h"></i> Adjustment — <em style="font-weight:400; opacity:0.85;">${adjLabel}</em></span>`;
+      } else if (grp.txn === 'PROFIT_LOSS') {
+        const plLabel = grp.txn_sub === 'PROFIT' ? 'Profit (+)' : 'Loss (-)';
+        const plColor = grp.txn_sub === 'PROFIT' ? '#16a34a' : '#dc2626';
+        const plBg = grp.txn_sub === 'PROFIT' ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.08)';
+        txnBadge = `<span class="txn-badge office" style="background: ${plBg}; color: ${plColor};"><i class="fas fa-chart-line"></i> Profit/Loss — <em style="font-weight:400; opacity:0.85;">${plLabel}</em></span>`;
+      } else {
+        txnBadge = `<span class="txn-badge office">${grp.txn || '—'}</span>`;
+      }
+      
+      const cashColor = grp.cash_amount < 0 ? '#dc2626' : (grp.cash_amount > 0 ? '#16a34a' : 'inherit');
+      const upiColor = grp.upi_amount < 0 ? '#dc2626' : (grp.upi_amount > 0 ? '#16a34a' : 'inherit');
+      const totalColor = grp.amount < 0 ? '#dc2626' : (grp.amount > 0 ? '#16a34a' : 'inherit');
+      
+      const cashSign = grp.cash_amount > 0 ? '+' : '';
+      const upiSign = grp.upi_amount > 0 ? '+' : '';
+      const totalSign = grp.amount > 0 ? '+' : '';
+      
+      html += `
+        <tr>
+          <td>${grp.date}</td>
+          <td>${txnBadge}</td>
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600; color: ${cashColor};">
+            ${cashSign}₹${grp.cash_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600; color: ${upiColor};">
+            ${upiSign}₹${grp.upi_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 700; color: ${totalColor};">
+            ${totalSign}₹${grp.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+          <td>
+            <span class="cb-badge" style="background: rgba(26, 77, 46, 0.05); border: none; color: var(--primary);">
+              ${grp.count} ${grp.count === 1 ? 'entry' : 'entries'}
+            </span>
+          </td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    applyLedgerFilters();
+  });
 </script>
 
 <!-- LOANS BREAKDOWN MODAL -->
@@ -973,6 +1196,31 @@
 
     <!-- Modal Body (Scrollable) -->
     <div id="adjustmentsModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
+    </div>
+
+  </div>
+</dialog>
+
+<!-- PROFIT_LOSS BREAKDOWN MODAL -->
+<dialog id="profitLossModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
+  <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    
+    <!-- Modal Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
+        <i class="fas fa-chart-line" style="color: #10b981;"></i> Profit/Loss Breakdown
+      </h3>
+      <button onclick="closeProfitLossModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body (Scrollable) -->
+    <div id="profitLossModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
       <div style="text-align: center; padding: 40px; opacity: 0.5;">
         <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
         <p>Loading breakdown details...</p>
@@ -1570,6 +1818,34 @@
     }
   });
 
+  // --- Profit / Loss Modal ---
+  function openProfitLossModal() {
+    const modal = document.getElementById('profitLossModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+      loadBreakdownData('profit_loss', 'profitLossModalBody');
+    }
+  }
+  function closeProfitLossModal() {
+    const modal = document.getElementById('profitLossModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+  document.getElementById('profitLossModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeProfitLossModal();
+    }
+  });
+
   // --- Ledger Modal ---
   function openLedgerModal(emp1, emp2) {
     const modal = document.getElementById("ledgerOverlay");
@@ -1731,13 +2007,18 @@
         
         const adjustments_net_cash = adjustments_add_cash - adjustments_minus_cash;
         const adjustments_net_upi = adjustments_add_upi - adjustments_minus_upi;
+
+        const profits_cash = parseFloat(dayData.profits_cash_total || 0);
+        const profits_upi = parseFloat(dayData.profits_upi_total || 0);
+        const losses_cash = parseFloat(dayData.losses_cash_total || 0);
+        const losses_upi = parseFloat(dayData.losses_upi_total || 0);
         
-        const category_total_cash = collections_cash + commissions_cash + office_cash_cash + adjustments_add_cash - loans_cash - expenses_cash - adjustments_minus_cash;
-        const category_total_upi = collections_upi + commissions_upi + office_cash_upi + adjustments_add_upi - loans_upi - expenses_upi - adjustments_minus_upi;
+        const category_total_cash = collections_cash + commissions_cash + office_cash_cash + adjustments_add_cash + profits_cash - loans_cash - expenses_cash - adjustments_minus_cash - losses_cash;
+        const category_total_upi = collections_upi + commissions_upi + office_cash_upi + adjustments_add_upi + profits_upi - loans_upi - expenses_upi - adjustments_minus_upi - losses_upi;
         
         const net_total_change = category_total_cash + category_total_upi;
         
-        const closing = opening + collections + commissions + office_cash + adjustments_add - base_loans - expenses - adjustments_minus;
+        const closing = opening + collections + commissions + office_cash + adjustments_add + (parseFloat(dayData.profits_total || 0)) - base_loans - expenses - adjustments_minus - (parseFloat(dayData.losses_total || 0));
         runningBalance = closing;
         
         // Loans rows
@@ -1967,6 +2248,17 @@
                     </td>
                   </tr>
                   ` : ''}
+                  ${(dayData.profits_total > 0 || dayData.losses_total > 0) ? `
+                  <tr>
+                    <td style="padding: 4px 6px; text-align: left;">Profit / Loss (Net)</td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${profits_cash - losses_cash >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${profits_cash - losses_cash >= 0 ? '+' : ''}${formatNumber(profits_cash - losses_cash)}
+                    </td>
+                    <td style="padding: 4px 6px; text-align: right; color: ${profits_upi - losses_upi >= 0 ? '#16a34a' : '#dc2626'};">
+                      ${profits_upi - losses_upi >= 0 ? '+' : ''}${formatNumber(profits_upi - losses_upi)}
+                    </td>
+                  </tr>
+                  ` : ''}
                   <tr style="border-top: 1px solid #1c1917; font-weight: bold;">
                     <td style="padding: 4px 6px; text-align: left;">Total (Cat)</td>
                     <td style="padding: 4px 6px; text-align: right; color: ${category_total_cash >= 0 ? '#16a34a' : '#dc2626'};">
@@ -2009,6 +2301,8 @@
   window.closeLedgerModalOnOverlay = closeLedgerModalOnOverlay;
   window.setLedgerQuickRange = setLedgerQuickRange;
   window.generateLedgerData = generateLedgerData;
+  window.openProfitLossModal = openProfitLossModal;
+  window.closeProfitLossModal = closeProfitLossModal;
 </script>
 
 {% endblock %}

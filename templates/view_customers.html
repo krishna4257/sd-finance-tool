@@ -15,9 +15,10 @@
   <div class="control-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
     <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; flex: 1;">
       <label class="search-label" style="margin: 0; min-width: 250px; flex: 1; max-width: 400px;">
-        <input type="search" id="searchBox" placeholder="Type account number or name..." autocomplete="off" style="width: 100%;">
+        <input type="search" id="searchBox" placeholder="Type account number or name..." autocomplete="off" style="width: 100%;" autofocus>
       </label>
       <button onclick="applySearch()" class="neumorphic-btn" style="margin: 0;">Find</button>
+      <button onclick="applyLinkSearch()" class="neumorphic-btn" style="margin: 0;">Find Link Account</button>
       <button onclick="filterBalanceReport()" class="neumorphic-btn" style="margin: 0;">Report</button>
       <button onclick="activatePrintLayout()" class="neumorphic-btn" style="margin: 0;">Print</button>
       
@@ -143,8 +144,8 @@
 </div>
 
 <div class="raised-box">
-  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
-    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
+  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount hide-col-interest_discount">
+    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount hide-col-interest_discount">
       <thead>
         <tr>
           <th class="checkbox-column" style="width: 40px; text-align: center;"><input type="checkbox" onclick="toggleAll(this)" /></th>
@@ -165,6 +166,7 @@
           <th class="col-base_amount">Base</th>
           <th class="col-cutting_amount">Cutting</th>
           <th class="col-interest_amount">Interest</th>
+          <th class="col-interest_discount">Discount</th>
           <th class="col-phone_number">Phone</th>
           <th class="col-aadhaar_number">Aadhaar</th>
           <th class="col-customer_rating">Rating</th>
@@ -206,6 +208,11 @@ window.CURRENT_MODE = "{{ current_mode }}";
 <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const searchBox = document.getElementById("searchBox");
+  if (searchBox) {
+    searchBox.focus();
+  }
+
   const toggleContainer = document.getElementById("customerModeToggle");
   if (toggleContainer) {
     toggleContainer.addEventListener("click", function (e) {
