@@ -6668,9 +6668,9 @@ def api_recalculate_split():
         customers = cur.fetchall()
         for cid, total_amount in customers:
             total = float(total_amount or 0)
-            interest = round(total * (interest_rate / 100.0), 2)
-            cutting = round(total * (cutting_rate / 100.0), 2)
-            base = round(total - interest - cutting, 2)
+            interest = float(round(total * (interest_rate / 100.0)))
+            cutting = float(round(total * (cutting_rate / 100.0)))
+            base = float(total - interest - cutting)
             cur.execute("""
                 UPDATE customer
                 SET interest_amount = %s, cutting_amount = %s, base_amount = %s
@@ -6684,15 +6684,15 @@ def api_recalculate_split():
         closed_customers = cur.fetchall()
         for cid, total_amount in closed_customers:
             total = float(total_amount or 0)
-            interest = round(total * (interest_rate / 100.0), 2)
-            cutting = round(total * (cutting_rate / 100.0), 2)
-            base = round(total - interest - cutting, 2)
+            interest = float(round(total * (interest_rate / 100.0)))
+            cutting = float(round(total * (cutting_rate / 100.0)))
+            base = float(total - interest - cutting)
             cur.execute("""
                 UPDATE closed_cust_account
                 SET interest_amount = %s, cutting_amount = %s, base_amount = %s
                 WHERE cid = %s
             """, (interest, cutting, base, cid))
-
+                                            
         # Update historic_customer_data table (historic customers)
         cur.execute("""
             SELECT cid, total_amount FROM historic_customer_data WHERE vid = %s
@@ -6700,9 +6700,9 @@ def api_recalculate_split():
         historic_customers = cur.fetchall()
         for cid, total_amount in historic_customers:
             total = float(total_amount or 0)
-            interest = round(total * (interest_rate / 100.0), 2)
-            cutting = round(total * (cutting_rate / 100.0), 2)
-            base = round(total - interest - cutting, 2)
+            interest = float(round(total * (interest_rate / 100.0)))
+            cutting = float(round(total * (cutting_rate / 100.0)))
+            base = float(total - interest - cutting)
             cur.execute("""
                 UPDATE historic_customer_data
                 SET interest_amount = %s, cutting_amount = %s, base_amount = %s

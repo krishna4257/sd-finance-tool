@@ -477,7 +477,7 @@ document.addEventListener("DOMContentLoaded", function () {
         value = "";
       }
       
-      if (["total_amount", "paid_amount", "balance_amount", "installment_amount", "interest_discount"].includes(key)) {
+      if (["total_amount", "paid_amount", "balance_amount", "installment_amount", "interest_discount", "base_amount", "cutting_amount", "interest_amount"].includes(key)) {
         td.setAttribute("data-money", "");
         td.setAttribute("data-order", value);
         td.textContent = value;
@@ -1101,9 +1101,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const cuttingAmtVal = cust.cutting_amount !== null && cust.cutting_amount !== undefined ? cust.cutting_amount : 0.0;
       const interestAmtVal = cust.interest_amount !== null && cust.interest_amount !== undefined ? cust.interest_amount : 0.0;
 
-      document.getElementById("popInputBaseAmount").value = baseAmtVal.toFixed(2);
-      document.getElementById("popInputCuttingAmount").value = cuttingAmtVal.toFixed(2);
-      document.getElementById("popInputInterestAmount").value = interestAmtVal.toFixed(2);
+      document.getElementById("popInputBaseAmount").value = baseAmtVal.toFixed(0);
+      document.getElementById("popInputCuttingAmount").value = cuttingAmtVal.toFixed(0);
+      document.getElementById("popInputInterestAmount").value = interestAmtVal.toFixed(0);
 
       // Save dataset original snapshots for delta checks
       document.getElementById("popInputName").dataset.original = cust.name || "";
@@ -1120,9 +1120,9 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputLatitude").dataset.original = cust.latitude || "";
       document.getElementById("popInputLongitude").dataset.original = cust.longitude || "";
       document.getElementById("popInputNotes").dataset.original = cust.notes || "";
-      document.getElementById("popInputBaseAmount").dataset.original = baseAmtVal.toFixed(2);
-      document.getElementById("popInputCuttingAmount").dataset.original = cuttingAmtVal.toFixed(2);
-      document.getElementById("popInputInterestAmount").dataset.original = interestAmtVal.toFixed(2);
+      document.getElementById("popInputBaseAmount").dataset.original = baseAmtVal.toFixed(0);
+      document.getElementById("popInputCuttingAmount").dataset.original = cuttingAmtVal.toFixed(0);
+      document.getElementById("popInputInterestAmount").dataset.original = interestAmtVal.toFixed(0);
 
       document.getElementById("popSaveDetailsBtn").style.display = "none";
 
@@ -1716,12 +1716,12 @@ document.addEventListener("DOMContentLoaded", () => {
           // Auto-calculate splits
           const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
           const cuttingRate = parseFloat(window.VILLAGE_CUTTING_RATE) || 0.0;
-          const interestAmt = total * interestRate / 100.0;
-          const cuttingAmt = total * cuttingRate / 100.0;
+          const interestAmt = Math.round(total * interestRate / 100.0);
+          const cuttingAmt = Math.round(total * cuttingRate / 100.0);
           const baseAmt = total - interestAmt - cuttingAmt;
-          document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(2);
-          document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(2);
-          document.getElementById("popInputBaseAmount").value = baseAmt.toFixed(2);
+          document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(0);
+          document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(0);
+          document.getElementById("popInputBaseAmount").value = baseAmt.toFixed(0);
         }
       } else if (id === "popInputPeriod" || id === "popInputEid") {
         this.value = this.value.replace(/[^0-9]/g, "");
@@ -1733,7 +1733,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
           const interestAmt = parseFloat(document.getElementById("popInputInterestAmount").value) || 0;
           const cuttingAmt = parseFloat(document.getElementById("popInputCuttingAmount").value) || 0;
-          document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(2);
+          document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(0);
         } else if (id === "popInputInterestDiscount") {
           const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
           const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
