@@ -186,7 +186,7 @@ anoInput.addEventListener("change", checkAno);
         }
 
         if (!isNaN(amount) && !isNaN(period) && period > 0) {
-            installmentAmountInput.value = (amount / period).toFixed(2);
+            installmentAmountInput.value = (amount / period).toFixed(0);
         } else {
             installmentAmountInput.value = '';
         }
@@ -206,21 +206,21 @@ anoInput.addEventListener("change", checkAno);
             const cuttingRate = parseFloat(window.VILLAGE_CUTTING_RATE) || 0.0;
 
             if (e && e.target === totalAmountInput) {
-                if (interestInput) interestInput.value = (amount * interestRate / 100.0).toFixed(2);
-                if (cuttingInput) cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(2);
+                if (interestInput) interestInput.value = (amount * interestRate / 100.0).toFixed(0);
+                if (cuttingInput) cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(0);
             } else {
                 if (interestInput && interestInput.value === '') {
-                    interestInput.value = (amount * interestRate / 100.0).toFixed(2);
+                    interestInput.value = (amount * interestRate / 100.0).toFixed(0);
                 }
                 if (cuttingInput && cuttingInput.value === '') {
-                    cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(2);
+                    cuttingInput.value = (amount * cuttingRate / 100.0).toFixed(0);
                 }
             }
 
             const interestVal = parseFloat(interestInput?.value) || 0.0;
             const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
             if (baseInput) {
-                baseInput.value = (amount - interestVal - cuttingVal).toFixed(2);
+                baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
             }
         } else {
             if (splitFieldsContainer) splitFieldsContainer.style.display = 'none';
@@ -255,7 +255,7 @@ anoInput.addEventListener("change", checkAno);
         const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
         const baseInput = document.getElementById('base_amount');
         if (baseInput && !isNaN(amount)) {
-            baseInput.value = (amount - interestVal - cuttingVal).toFixed(2);
+            baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
         }
     }
 

@@ -268,8 +268,8 @@ function makeCellEditable(cell, index, field, currentValue) {
 
     if (field === 'amt') {
         input.type = "number";
-        input.step = "0.01";
-        input.value = Number(currentValue).toFixed(2);
+        input.step = "1";
+        input.value = Number(currentValue).toFixed(0);
     } else {
         input.type = "text";
         input.value = currentValue;
@@ -418,7 +418,7 @@ function updateTable() {
     amtCell.title = "Double-click to edit";
 
     const amtText = document.createElement("span");
-    amtText.textContent = row.amt?.toFixed(2) || "0.00";
+    amtText.textContent = row.amt?.toFixed(0) || "0";
     amtText.setAttribute('data-money', '');
     amtCell.appendChild(amtText);
 
@@ -457,19 +457,19 @@ function updateTable() {
   });
 
   document.getElementById("totalAnotop").textContent = uniqueAno.size;
-  document.getElementById("totalAmttop").textContent = totalAmt.toFixed(2);
+  document.getElementById("totalAmttop").textContent = totalAmt.toFixed(0);
   document.getElementById("totalAno").textContent = uniqueAno.size;
-  document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
+  document.getElementById("totalAmt").textContent = totalAmt.toFixed(0);
 
   // Update expected and short-by stats in summary card widgets
   document.getElementById("expectedAccs").textContent = expectedAccCount;
   document.getElementById("shortAccs").textContent = Math.max(0, expectedAccCount - uniqueAno.size);
 
-  document.getElementById("expectedAmt").textContent = expectedTotalAmount.toFixed(2);
+  document.getElementById("expectedAmt").textContent = expectedTotalAmount.toFixed(0);
   document.getElementById("expectedAmt").setAttribute("data-money", "");
   
   const shortAmtVal = Math.max(0, expectedTotalAmount - totalAmt);
-  document.getElementById("shortAmt").textContent = shortAmtVal.toFixed(2);
+  document.getElementById("shortAmt").textContent = shortAmtVal.toFixed(0);
   document.getElementById("shortAmt").setAttribute("data-money", "");
 
   persistTempPayments();
@@ -485,13 +485,13 @@ function updateTable() {
     if (amtSpan) {
         const amt = parseFloat(amtSpan.textContent.trim().replace(/[^\d.-]/g, '')) || 0;
         runningTotal += amt;
-        cumulativeCell.textContent = runningTotal.toFixed(2);
+        cumulativeCell.textContent = runningTotal.toFixed(0);
         cumulativeCell.setAttribute('data-money', '');
     } else {
         const input = row.querySelector("td.amount-paid input");
         const amt = parseFloat(input?.value) || 0;
         runningTotal += amt;
-        cumulativeCell.textContent = runningTotal.toFixed(2);
+        cumulativeCell.textContent = runningTotal.toFixed(0);
         cumulativeCell.setAttribute('data-money', '');
     }
   });
@@ -581,7 +581,7 @@ function printTemp() {
   printHTML += '<thead><tr><th>ANO</th><th>PDT</th><th>AMT</th></tr></thead><tbody>';
 
   tempTable.forEach(row => {
-    printHTML += `<tr><td>${row.ano}</td><td>${row.pdt}</td><td>${row.amt.toFixed(2)}</td></tr>`;
+    printHTML += `<tr><td>${row.ano}</td><td>${row.pdt}</td><td>${row.amt.toFixed(0)}</td></tr>`;
   });
 
   printHTML += '</tbody></table></body></html>';
@@ -1001,15 +1001,15 @@ function renderAnalyticsTable(weeks) {
     paidCell.textContent = w.paid_customers;
 
     const expectedCell = document.createElement("td");
-    expectedCell.textContent = w.expected_collection.toFixed(2);
+    expectedCell.textContent = w.expected_collection.toFixed(0);
     expectedCell.setAttribute("data-money", "");
 
     const actualCell = document.createElement("td");
-    actualCell.textContent = w.actual_collection.toFixed(2);
+    actualCell.textContent = w.actual_collection.toFixed(0);
     actualCell.setAttribute("data-money", "");
 
     const failedCell = document.createElement("td");
-    failedCell.textContent = w.failed_to_collect.toFixed(2);
+    failedCell.textContent = w.failed_to_collect.toFixed(0);
     failedCell.setAttribute("data-money", "");
     failedCell.style.color = "#ef4444"; // red text for unpaid
 
@@ -1035,7 +1035,7 @@ function updateComparativeStats() {
   
   if (lastAnoEl) lastAnoEl.textContent = lastWeekPaidCount;
   if (lastAmtEl) {
-    lastAmtEl.textContent = lastWeekCollection.toFixed(2);
+    lastAmtEl.textContent = lastWeekCollection.toFixed(0);
     lastAmtEl.setAttribute("data-money", "");
   }
 
@@ -1748,7 +1748,7 @@ function renderReportTable() {
         amtCell.title = "Double-click to edit";
         
         const amtText = document.createElement("span");
-        amtText.textContent = Number(p.amt).toFixed(2);
+        amtText.textContent = Number(p.amt).toFixed(0);
         amtText.setAttribute('data-money', '');
         amtCell.appendChild(amtText);
         
@@ -1779,7 +1779,7 @@ function renderReportTable() {
             <td colspan="7">
                 <div class="summary-row" style="display: flex; gap: 40px; font-weight: bold; padding: 10px 0;">
                     <div>Total Unique ANOs: <span id="reportTotalAno">${totalUniqueAnos.size}</span></div>
-                    <div>Total Amount: <span id="reportTotalAmt" data-money>${totalAmount.toFixed(2)}</span></div>
+                    <div>Total Amount: <span id="reportTotalAmt" data-money>${totalAmount.toFixed(0)}</span></div>
                 </div>
             </td>
         </tr>
@@ -1852,7 +1852,7 @@ function renderReportTileView() {
             </div>
             <div class="date-tile-right">
                 <span class="date-tile-badge badge-customers"><i class="fas fa-users"></i> ${uniqueCustomers} ${uniqueCustomers === 1 ? 'Customer' : 'Customers'}</span>
-                <span class="date-tile-badge badge-amount"><i class="fas fa-rupee-sign"></i> <span data-money>${groupTotal.toFixed(2)}</span></span>
+                <span class="date-tile-badge badge-amount"><i class="fas fa-rupee-sign"></i> <span data-money>${groupTotal.toFixed(0)}</span></span>
                 <i class="fas fa-chevron-down date-tile-chevron"></i>
             </div>
         `;
@@ -1973,7 +1973,7 @@ function renderTileDropdownTable(dateStr, dropdownDiv, groupPayments) {
         amtCell.style.cursor = "pointer";
         amtCell.title = "Double-click to edit";
         const amtText = document.createElement("span");
-        amtText.textContent = Number(p.amt).toFixed(2);
+        amtText.textContent = Number(p.amt).toFixed(0);
         amtText.setAttribute('data-money', '');
         amtCell.appendChild(amtText);
         amtCell.addEventListener("dblclick", (e) => {
@@ -1984,7 +1984,7 @@ function renderTileDropdownTable(dateStr, dropdownDiv, groupPayments) {
 
         cumulativeAmount += Number(p.amt);
         const cumCell = document.createElement("td");
-        cumCell.innerHTML = `<span data-money>${cumulativeAmount.toFixed(2)}</span>`;
+        cumCell.innerHTML = `<span data-money>${cumulativeAmount.toFixed(0)}</span>`;
         tr.appendChild(cumCell);
 
         const actionCell = document.createElement("td");
@@ -2044,8 +2044,8 @@ function makeReportCellEditable(cell, pid, field, currentValue) {
 
     if (field === 'amt') {
         input.type = "number";
-        input.step = "0.01";
-        input.value = Number(currentValue).toFixed(2);
+        input.step = "1";
+        input.value = Number(currentValue).toFixed(0);
     } else {
         input.type = "text";
         input.value = currentValue;
@@ -2114,7 +2114,7 @@ function makeReportCellEditable(cell, pid, field, currentValue) {
         toggleSaveReportButton(true);
 
         // Mark cell as changed visually
-        cell.textContent = field === 'amt' ? Number(parsedValue).toFixed(2) : parsedValue;
+        cell.textContent = field === 'amt' ? Number(parsedValue).toFixed(0) : parsedValue;
         cell.style.outline = '2px solid var(--accent-cyan, #22d3ee)';
         cell.style.borderRadius = '4px';
         cell.style.background = 'rgba(34, 211, 238, 0.06)';
@@ -2369,8 +2369,8 @@ window.showShortfallModal = function() {
             tr.innerHTML = `
                 <td style="padding: 10px; text-align: left;">${c.ano}</td>
                 <td style="padding: 10px; text-align: left;">${c.name || ""}</td>
-                <td style="padding: 10px; text-align: right;" data-money>${expectedAmt.toFixed(2)}</td>
-                <td style="padding: 10px; text-align: right;" data-money>${balanceAmt.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right;" data-money>${expectedAmt.toFixed(0)}</td>
+                <td style="padding: 10px; text-align: right;" data-money>${balanceAmt.toFixed(0)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -2407,3 +2407,658 @@ if (document.readyState === "loading") {
 } else {
     bindShortfallListeners();
 }
+
+// ============================================================
+// BULK ENTRY MODAL  (v2 – Ledger Layout)
+// ============================================================
+
+let _bulkPages = [];
+
+function openBulkEntryModal() {
+    document.getElementById('bulkEntryModal').style.display = 'flex';
+    document.getElementById('bulkStep1').style.display = 'flex';
+    document.getElementById('bulkStep2').style.display = 'none';
+    const bi = document.getElementById('bulkDate');
+    if (bi && !bi._calInit) {
+        window.initCustomCalendar(bi, { clickOpens: true });
+        bi._calInit = true;
+    }
+    bi.focus();
+}
+
+function closeBulkEntryModal() {
+    document.getElementById('bulkEntryModal').style.display = 'none';
+    document.getElementById('bulkStep1').style.display = 'flex';
+    document.getElementById('bulkStep2').style.display = 'none';
+    document.getElementById('bulkText').value = '';
+    document.getElementById('bulkDate').value = '';
+    document.getElementById('bulkModalError').style.display = 'none';
+    document.getElementById('bulkPreviewError').style.display = 'none';
+    document.getElementById('bulkLedgerContainer').innerHTML = '';
+    document.getElementById('bulkGrandTotal').textContent = '';
+    _bulkPages = [];
+    if (window._highlightedInput) {
+        window._highlightedInput.classList.remove('ledger-highlight-cell');
+        window._highlightedInput = null;
+    }
+}
+
+function showBulkStep1() {
+    document.getElementById('bulkStep2').style.display = 'none';
+    document.getElementById('bulkStep1').style.display = 'flex';
+}
+
+// ── Parse text → pages → sections → pairs ──
+function parseBulkInput(text) {
+    const pages = [];
+    let curPage = null;
+    let curSec = [];
+
+    function flushSec() {
+        if (curSec.length > 0) {
+            if (!curPage) {
+                curPage = { label: 'Page 1', sections: [] };
+                pages.push(curPage);
+            }
+            if (curPage.sections.length >= 3) {
+                const nextP = pages.length + 1;
+                curPage = { label: `Page ${nextP}`, sections: [] };
+                pages.push(curPage);
+            }
+            curPage.sections.push([...curSec]);
+            curSec = [];
+        }
+    }
+
+    const lines = text.split('\n');
+    for (let raw of lines) {
+        const line = raw.trim();
+
+        if (/^page\s*\d+/i.test(line)) {
+            flushSec();
+            const label = line.replace(/^page\s*/i, 'Page ');
+            curPage = { label: label, sections: [] };
+            pages.push(curPage);
+            continue;
+        }
+
+        if (!line || /^total\s*:/i.test(line)) {
+            flushSec();
+            continue;
+        }
+
+        // Match non-comma/parenthesis characters for both account number and amount to allow 'N' and '-'
+        const re = /\(\s*([^,)]+?)\s*,\s*([^)]+?)\s*\)/g;
+        let match;
+        const pairs = [];
+        while ((match = re.exec(line)) !== null) {
+            pairs.push({ ano: match[1].trim(), amt: match[2].trim() });
+        }
+
+        if (pairs.length > 0) {
+            curSec = curSec.concat(pairs);
+        }
+    }
+    flushSec();
+
+    // Pad each page to exactly 3 sections, and each section to exactly 20 cells
+    pages.forEach(page => {
+        while (page.sections.length < 3) {
+            page.sections.push([]);
+        }
+        page.sections.forEach(sec => {
+            while (sec.length < 20) {
+                sec.push({ ano: '', amt: '' });
+            }
+        });
+    });
+
+    return pages;
+}
+
+// ── Validate one (ano, amt, date) triple ──
+// Returns: null = OK | 'EMPTY' = skip silently | 'SKIP' = skip execute but valid | error string = show error
+function validateBulkRow(ano, amt, date) {
+    const anoStr = String(ano || '').trim();
+    const amtStr = String(amt === null || amt === undefined ? '' : amt).trim();
+
+    if (!anoStr && !amtStr) return 'EMPTY';
+
+    // Letters/words are NOT acceptable in A.No or Amount (excluding empty or literal "-")
+    const hasLettersAno = /[a-zA-Z]/.test(anoStr);
+    const hasLettersAmt = /[a-zA-Z]/.test(amtStr);
+
+    if (hasLettersAno || anoStr.toUpperCase() === 'N') {
+        return '❌ Invalid account number (letters/words not acceptable)';
+    }
+    if (hasLettersAmt || amtStr.toUpperCase() === 'N') {
+        return '❌ Invalid amount (letters/words not acceptable)';
+    }
+
+    if (!anoStr && amtStr) return '❌ Account number is missing';
+    if (anoStr && !amtStr) return '❌ Amount is missing';
+
+    // Dash is acceptable in both!
+    if (anoStr === '-' || amtStr === '-') {
+        // If A.No is a normal number, check if it exists in active customers
+        if (anoStr !== '-') {
+            const customer = CUSTOMER_MAP[anoStr];
+            if (!customer) {
+                return '❌ A.no not found in database!';
+            }
+        }
+        return 'SKIP';
+    }
+
+    const amtNum = parseFloat(amtStr);
+    if (isNaN(amtNum) || amtNum <= 0) {
+        return '❌ Amount must be > 0';
+    }
+
+    const customer = CUSTOMER_MAP[anoStr];
+    if (!customer) {
+        return '❌ A.no not found in database!';
+    }
+
+    const validation = isPostingDateValidForCustomer(anoStr, date);
+    if (!validation.valid) {
+        return validation.error;
+    }
+
+    const dup = tempTable.some(r => String(r.ano) === anoStr && r.pdt === date);
+    if (dup) {
+        return '❌ Duplicate A.no + Date combo exists.';
+    }
+
+    return null;
+}
+
+// ── Render the ledger table ──
+function renderBulkLedger(pages, date) {
+    const container = document.getElementById('bulkLedgerContainer');
+    container.innerHTML = '';
+    document.getElementById('bulkPreviewDateLabel').textContent = date;
+
+    pages.forEach((page, pi) => {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'ledger-page-card';
+
+        // Page label
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'font-weight:700; font-size:14px; color:var(--text); border-bottom:2px solid var(--border); padding-bottom:6px; margin-bottom:8px;';
+        lbl.textContent = page.label;
+        pageDiv.appendChild(lbl);
+
+        // Table
+        const table = document.createElement('table');
+        table.className = 'ledger-table';
+
+        // Column header row
+        const thead = document.createElement('thead');
+        const hr = document.createElement('tr');
+        [1, 2, 3].forEach(secNum => {
+            const th1 = document.createElement('th');
+            th1.textContent = 'A.No';
+            hr.appendChild(th1);
+
+            const th2 = document.createElement('th');
+            th2.textContent = 'Amount';
+            th2.style.textAlign = 'right';
+            if (secNum < 3) th2.className = 'ledger-divider';
+            hr.appendChild(th2);
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+
+        // Body rows (exactly 20 rows)
+        const tbody = document.createElement('tbody');
+        const secs = page.sections;
+
+        for (let ri = 0; ri < 20; ri++) {
+            const tr = document.createElement('tr');
+
+            [0, 1, 2].forEach((si) => {
+                const pair = secs[si][ri];
+                const anoValue = pair ? pair.ano : '';
+                const amtValue = pair ? pair.amt : '';
+
+                // A.No cell
+                const anoTd = document.createElement('td');
+                const anoInp = document.createElement('input');
+                anoInp.type = 'text';
+                anoInp.inputMode = 'numeric';
+                anoInp.value = anoValue.toUpperCase() === 'N' ? '' : anoValue;
+                anoInp.className = 'ledger-input';
+                anoInp.dataset.page = pi;
+                anoInp.dataset.sec = si;
+                anoInp.dataset.row = ri;
+                anoInp.dataset.field = 'ano';
+
+                anoInp.addEventListener('focus', () => {
+                    highlightInput(anoInp);
+                    anoInp._oldVal = pair.ano;
+                    anoInp.value = '';
+                    pair.ano = '';
+                    updateBulkState(pages, date);
+                });
+                anoInp.addEventListener('blur', () => {
+                    if (anoInp.value.trim() === '') {
+                        anoInp.value = anoInp._oldVal.toUpperCase() === 'N' ? '' : anoInp._oldVal;
+                        pair.ano = anoInp._oldVal;
+                    }
+                    updateBulkState(pages, date);
+                });
+                anoInp.addEventListener('input', () => {
+                    pair.ano = anoInp.value.trim();
+                    updateBulkState(pages, date);
+                });
+                anoInp.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        anoInp.blur();
+                    }
+                });
+                anoInp.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    highlightInput(anoInp);
+                });
+                anoTd.appendChild(anoInp);
+                tr.appendChild(anoTd);
+
+                // Amount cell
+                const amtTd = document.createElement('td');
+                if (si < 2) amtTd.className = 'ledger-divider';
+                const amtInp = document.createElement('input');
+                amtInp.type = 'text';
+                amtInp.value = amtValue.toUpperCase() === 'N' ? '' : amtValue;
+                amtInp.className = 'ledger-input';
+                amtInp.style.textAlign = 'right';
+                amtInp.dataset.page = pi;
+                amtInp.dataset.sec = si;
+                amtInp.dataset.row = ri;
+                amtInp.dataset.field = 'amt';
+
+                amtInp.addEventListener('focus', () => {
+                    highlightInput(amtInp);
+                    amtInp._oldVal = pair.amt;
+                    amtInp.value = '';
+                    pair.amt = '';
+                    updateBulkState(pages, date);
+                });
+                amtInp.addEventListener('blur', () => {
+                    if (amtInp.value.trim() === '') {
+                        amtInp.value = amtInp._oldVal.toUpperCase() === 'N' ? '' : amtInp._oldVal;
+                        pair.amt = amtInp._oldVal;
+                    }
+                    updateBulkState(pages, date);
+                });
+                amtInp.addEventListener('input', () => {
+                    pair.amt = amtInp.value.trim();
+                    updateBulkState(pages, date);
+                });
+                amtInp.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        amtInp.blur();
+                    }
+                });
+                amtInp.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    highlightInput(amtInp);
+                });
+                amtTd.appendChild(amtInp);
+                tr.appendChild(amtTd);
+            });
+
+            tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+
+        // Footer: section totals row
+        const tfoot = document.createElement('tfoot');
+        const fr = document.createElement('tr');
+        [0, 1, 2].forEach((si) => {
+            const cntTd = document.createElement('td');
+            cntTd.className = 'ledger-footer-cell';
+            cntTd.id = `bulk-cnt-${pi}-${si}`;
+            fr.appendChild(cntTd);
+
+            const totTd = document.createElement('td');
+            totTd.className = 'ledger-footer-cell';
+            if (si < 2) totTd.className += ' ledger-divider';
+            totTd.id = `bulk-stotal-${pi}-${si}`;
+            totTd.style.textAlign = 'right';
+            fr.appendChild(totTd);
+        });
+        tfoot.appendChild(fr);
+        table.appendChild(tfoot);
+        pageDiv.appendChild(table);
+
+        // Page total line
+        const ptDiv = document.createElement('div');
+        ptDiv.id = `bulk-ptotal-${pi}`;
+        ptDiv.style.cssText = 'align-self:flex-end; font-size:13px; font-weight:700; margin-top:12px; color:var(--text); background:rgba(59, 130, 246, 0.08); border:1px solid rgba(59, 130, 246, 0.2); padding:6px 16px; border-radius:20px;';
+        pageDiv.appendChild(ptDiv);
+
+        container.appendChild(pageDiv);
+    });
+
+    updateBulkState(pages, date);
+}
+
+function getAmountColor(val) {
+    if (isNaN(val) || val <= 0) return '';
+    if (val <= 200) return '#64748b'; // Slate gray for small amounts (<= 200)
+    if (val <= 500) return '#2563eb'; // Blue (201 - 500)
+    if (val <= 1000) return '#0891b2'; // Cyan/Teal (501 - 1000)
+    if (val <= 2000) return '#0d9488'; // Forest Teal (1001 - 2000)
+    if (val <= 5000) return '#d97706'; // Warm Amber/Orange (2001 - 5000)
+    return '#9333ea'; // Rich Purple for large amounts (5001+)
+}
+
+function getAmountFontWeight(val) {
+    if (isNaN(val) || val <= 0) return 'normal';
+    if (val > 2000) return '600'; // Semibold for larger payments (> 2000)
+    return 'normal';
+}
+
+// ── Re-validate all cells; refresh highlighting, totals, execute button ──
+function updateBulkState(pages, date) {
+    const seenKeys = {};
+    let totalErrors = 0;
+    let grandTotalAmount = 0;
+    let grandTotalCustomers = 0;
+
+    pages.forEach((page, pi) => {
+        let pageTotalAmount = 0;
+        let pageTotalCustomers = 0;
+
+        (page.sections || []).forEach((sec, si) => {
+            let sectionTotalAmount = 0;
+            let sectionTotalCustomers = 0;
+
+            sec.forEach((pair, ri) => {
+                const anoStr = String(pair.ano || '').trim();
+                const amtStr = String(pair.amt || '').trim();
+
+                let error = validateBulkRow(pair.ano, pair.amt, date);
+
+                if (anoStr && anoStr !== '-') {
+                    const key = `${anoStr}__${date}`;
+                    if (!error && seenKeys[key]) {
+                        error = '❌ Duplicate A.No within this bulk entry';
+                    }
+                    seenKeys[key] = true;
+                }
+
+                const isError = error && error !== 'EMPTY' && error !== 'SKIP';
+                const isSkip = error === 'SKIP';
+
+                const anoUpper = anoStr.toUpperCase();
+                const amtUpper = amtStr.toUpperCase();
+
+                // Highlight cell in red if it is a blocking error, or is "-" or "N" (representing unrecognized/skipped)
+                const highlightAno = isError || anoStr === '-' || anoUpper === 'N';
+                const highlightAmt = isError || amtStr === '-' || amtUpper === 'N';
+
+                const anoInp = document.querySelector(`input[data-page="${pi}"][data-sec="${si}"][data-row="${ri}"][data-field="ano"]`);
+                const amtInp = document.querySelector(`input[data-page="${pi}"][data-sec="${si}"][data-row="${ri}"][data-field="amt"]`);
+
+                const errBg = 'rgba(239, 68, 68, 0.22)';
+                const errTitle = isError ? error : 'Acceptable non-paying slot (-)';
+
+                if (anoInp) {
+                    if (highlightAno) {
+                        anoInp.style.backgroundColor = errBg;
+                        anoInp.title = errTitle;
+                        anoInp.style.color = '#b91c1c';
+                    } else {
+                        anoInp.style.backgroundColor = '';
+                        anoInp.title = '';
+                        anoInp.style.color = '';
+                    }
+                }
+                if (amtInp) {
+                    if (highlightAmt) {
+                        amtInp.style.backgroundColor = errBg;
+                        amtInp.title = errTitle;
+                        amtInp.style.color = '#b91c1c';
+                        amtInp.style.fontWeight = 'normal';
+                    } else {
+                        amtInp.style.backgroundColor = '';
+                        amtInp.title = '';
+
+                        const valNum = parseFloat(amtStr);
+                        amtInp.style.color = getAmountColor(valNum);
+                        amtInp.style.fontWeight = getAmountFontWeight(valNum);
+                    }
+                }
+
+                if (isError) {
+                    totalErrors++;
+                } else if (error !== 'EMPTY' && !isSkip) {
+                    if (anoStr && anoStr !== '-') {
+                        sectionTotalCustomers++;
+                        sectionTotalAmount += parseFloat(amtStr) || 0;
+                    }
+                }
+            });
+
+            const cntEl = document.getElementById(`bulk-cnt-${pi}-${si}`);
+            const stEl = document.getElementById(`bulk-stotal-${pi}-${si}`);
+            if (cntEl) {
+                cntEl.textContent = sectionTotalCustomers > 0 ? `${sectionTotalCustomers}` : '-';
+            }
+            if (stEl) {
+                stEl.textContent = sectionTotalAmount > 0 ? `₹${sectionTotalAmount.toLocaleString('en-IN')}` : '-';
+            }
+
+            pageTotalCustomers += sectionTotalCustomers;
+            pageTotalAmount += sectionTotalAmount;
+        });
+
+        const ptEl = document.getElementById(`bulk-ptotal-${pi}`);
+        if (ptEl) {
+            ptEl.textContent = `Page Total: ${pageTotalCustomers} customers | ₹${pageTotalAmount.toLocaleString('en-IN')}`;
+        }
+
+        grandTotalCustomers += pageTotalCustomers;
+        grandTotalAmount += pageTotalAmount;
+    });
+
+    const gtEl = document.getElementById('bulkGrandTotal');
+    if (gtEl) {
+        if (totalErrors > 0) {
+            gtEl.textContent = `Grand Total: ₹${grandTotalAmount.toLocaleString('en-IN')} · ${grandTotalCustomers} customers · ⚠ ${totalErrors} error(s)`;
+            gtEl.style.cssText = 'font-size:14px; font-weight:700; color:#dc2626; background:rgba(220, 38, 38, 0.08); border:1px solid rgba(220, 38, 38, 0.2); padding:6px 16px; border-radius:20px;';
+        } else {
+            gtEl.textContent = `Grand Total: ₹${grandTotalAmount.toLocaleString('en-IN')} · ${grandTotalCustomers} customers`;
+            gtEl.style.cssText = 'font-size:14px; font-weight:700; color:var(--text); background:rgba(22, 163, 74, 0.08); border:1px solid rgba(22, 163, 74, 0.25); padding:6px 16px; border-radius:20px;';
+        }
+    }
+
+    const execBtn = document.getElementById('bulkExecuteBtn');
+    if (execBtn) {
+        const canExecute = totalErrors === 0 && grandTotalCustomers > 0;
+        execBtn.disabled = !canExecute;
+        if (canExecute) {
+            execBtn.style.backgroundColor = '#16a34a';
+            execBtn.style.cursor = 'pointer';
+            execBtn.style.opacity = '1';
+        } else {
+            execBtn.style.backgroundColor = '#dc2626';
+            execBtn.style.cursor = 'not-allowed';
+            execBtn.style.opacity = '0.65';
+        }
+    }
+
+    const errEl = document.getElementById('bulkPreviewError');
+    if (errEl) {
+        if (totalErrors > 0) {
+            errEl.textContent = `⚠ ${totalErrors} cell(s) have errors (highlighted in red). Fix them — the Execute button will turn green when all errors are resolved.`;
+            errEl.style.display = 'block';
+        } else {
+            errEl.style.display = 'none';
+        }
+    }
+}
+
+// ── Parse button ──
+function parseBulkEntry() {
+    const date = document.getElementById('bulkDate').value.trim();
+    const text = document.getElementById('bulkText').value.trim();
+    const errEl = document.getElementById('bulkModalError');
+    errEl.style.display = 'none';
+
+    if (!date) {
+        errEl.textContent = '❌ Please enter a Payment Date first.';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (!text) {
+        errEl.textContent = '❌ Please paste entries in the text area.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const pages = parseBulkInput(text);
+    if (!pages.length || pages.every(p => !p.sections.length)) {
+        errEl.textContent = '❌ No valid (ano, amount) pairs found. Check your input format.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    _bulkPages = pages;
+    document.getElementById('bulkStep1').style.display = 'none';
+    const s2 = document.getElementById('bulkStep2');
+    s2.style.display = 'flex';
+    renderBulkLedger(_bulkPages, date);
+}
+
+// ── Execute button ──
+function executeBulkEntry() {
+    const execBtn = document.getElementById('bulkExecuteBtn');
+    if (execBtn && execBtn.disabled) return;
+
+    const date = document.getElementById('bulkDate').value.trim();
+    if (!date) return;
+
+    const seenKeys = {};
+    let added = 0;
+
+    _bulkPages.forEach(page => {
+        (page.sections || []).forEach(sec => {
+            sec.forEach(pair => {
+                const anoStr = String(pair.ano || '').trim();
+                const amtStr = String(pair.amt || '').trim();
+                if (!anoStr) return; // skip empty
+                const key = `${anoStr}__${date}`;
+                if (seenKeys[key]) return; // skip intra-bulk dup
+                const error = validateBulkRow(pair.ano, pair.amt, date);
+                if (error === 'SKIP' || error === 'EMPTY') return; // skip non-paying/empty entries
+                if (error) return; // skip invalid
+                seenKeys[key] = true;
+                tempTable.unshift({ ano: anoStr, pdt: date, amt: Number(amtStr) });
+                added++;
+            });
+        });
+    });
+
+    if (!added) {
+        const errEl = document.getElementById('bulkPreviewError');
+        if (errEl) { errEl.textContent = '❌ No valid rows to add.'; errEl.style.display = 'block'; }
+        return;
+    }
+
+    saveAndUpdate();
+    closeBulkEntryModal();
+
+    const firstRow = document.querySelector('#tempTable tbody tr');
+    if (firstRow) {
+        if (window.currentRow) window.currentRow.classList.remove('highlighted-row');
+        window.currentRow = firstRow;
+        firstRow.classList.add('highlighted-row');
+        firstRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+// Close on backdrop click
+document.getElementById('bulkEntryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeBulkEntryModal();
+});
+
+// ── Keyboard Navigation & Highlight Helpers ──
+window._highlightedInput = null;
+
+function highlightInput(inp) {
+    if (window._highlightedInput) {
+        window._highlightedInput.classList.remove('ledger-highlight-cell');
+    }
+    window._highlightedInput = inp;
+    if (inp) {
+        inp.classList.add('ledger-highlight-cell');
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    // Only intercept keys when Step 2 of Bulk Entry Modal (preview) is open and we have a highlight
+    const s2 = document.getElementById('bulkStep2');
+    if (s2 && s2.style.display === 'flex' && window._highlightedInput) {
+        // If an input is focused, we don't want arrow keys to move the highlight (user is editing text)
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+            return;
+        }
+
+        const inp = window._highlightedInput;
+        const page = parseInt(inp.dataset.page);
+        const sec = parseInt(inp.dataset.sec);
+        const row = parseInt(inp.dataset.row);
+        const field = inp.dataset.field; // 'ano' or 'amt'
+
+        let nextInp = null;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (row < 19) {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row + 1}"][data-field="${field}"]`);
+            } else {
+                const nextPage = page + 1;
+                nextInp = document.querySelector(`input[data-page="${nextPage}"][data-sec="${sec}"][data-row="0"][data-field="${field}"]`);
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (row > 0) {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row - 1}"][data-field="${field}"]`);
+            } else if (page > 0) {
+                const prevPage = page - 1;
+                nextInp = document.querySelector(`input[data-page="${prevPage}"][data-sec="${sec}"][data-row="19"][data-field="${field}"]`);
+            }
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            if (field === 'ano') {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row}"][data-field="amt"]`);
+            } else if (sec < 2) {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec + 1}"][data-row="${row}"][data-field="ano"]`);
+            }
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            if (field === 'amt') {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row}"][data-field="ano"]`);
+            } else if (sec > 0) {
+                nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec - 1}"][data-row="${row}"][data-field="amt"]`);
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            inp.focus();
+        }
+
+        if (nextInp) {
+            highlightInput(nextInp);
+            nextInp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+});
+// ============================================================
+// END BULK ENTRY MODAL
+// ============================================================
+
+
+

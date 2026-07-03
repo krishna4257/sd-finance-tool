@@ -9,6 +9,69 @@
 #customerTable.hide-col-interest_amount .col-interest_amount {
   display: none !important;
 }
+.customer-table-wrapper.bulk-close-mode-active .checkbox-column,
+#customerTable.bulk-close-mode-active .checkbox-column {
+  display: table-cell !important;
+}
+
+/* Premium Custom Checkbox styling */
+.checkbox-column input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.checkbox-column input[type="checkbox"]:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
+}
+
+.checkbox-column input[type="checkbox"]:checked {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+}
+
+.checkbox-column input[type="checkbox"]:checked::after {
+  content: "✓";
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Light red highlight and breathing effect for checked rows */
+table.customer-table tbody tr.checked-row td {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.2) !important;
+  animation: row-pulse-red 2s infinite ease-in-out;
+  transition: background-color 0.3s ease;
+}
+
+@keyframes row-pulse-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.06);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.12);
+  }
+  100% {
+    background-color: rgba(239, 68, 68, 0.06);
+  }
+}
 </style>
 <h2 class="page-title">Customers Table</h2>
 <div class="raised-box">
@@ -18,9 +81,9 @@
         <input type="search" id="searchBox" placeholder="Type account number or name..." autocomplete="off" style="width: 100%;" autofocus>
       </label>
       <button onclick="applySearch()" class="neumorphic-btn" style="margin: 0;">Find</button>
-      <button onclick="applyLinkSearch()" class="neumorphic-btn" style="margin: 0;">Find Link Account</button>
       <button onclick="filterBalanceReport()" class="neumorphic-btn" style="margin: 0;">Report</button>
       <button onclick="activatePrintLayout()" class="neumorphic-btn" style="margin: 0;">Print</button>
+      <button onclick="toggleBulkCloseMode()" class="neumorphic-btn" id="bulkCloseBtn" style="margin: 0; color: var(--danger); border-color: rgba(220, 38, 38, 0.35);">Close</button>
       
       <!-- Columns Config Dropdown -->
       <div class="dropdown" style="position: relative; display: inline-block;">
@@ -93,15 +156,27 @@
       <div class="card-header">
         <h3>Balance Amount</h3>
       </div>
-      <div class="card-stats">
-        <div class="stat-item align-center">
-          <span class="label">Active</span>
-          <span class="value" id="activeBalAmt" data-money>...</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item align-center">
-          <span class="label">Defaulted</span>
-          <span class="value" id="defaultedBalAmt" data-money>...</span>
+      <div class="card-stats" style="flex-direction: column; gap: 10px;">
+        <div style="display: flex; width: 100%; justify-content: space-between;">
+          <div class="stat-item align-center" style="flex: 1;">
+            <span class="label">Active</span>
+            <span class="value" id="activeBalAmt" data-money style="font-size: 1.15rem;">...</span>
+            <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px; display: flex; flex-direction: row; justify-content: center; gap: 6px; flex-wrap: wrap;">
+              <span>P:<strong id="lblActiveBalSplitP">₹0.00</strong></span>
+              <span>I:<strong id="lblActiveBalSplitI">₹0.00</strong></span>
+              <span>R:<strong id="lblActiveBalSplitR">₹0.00</strong></span>
+            </div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item align-center" style="flex: 1;">
+            <span class="label">Defaulted</span>
+            <span class="value" id="defaultedBalAmt" data-money style="font-size: 1.15rem;">...</span>
+            <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px; display: flex; flex-direction: row; justify-content: center; gap: 6px; flex-wrap: wrap;">
+              <span>P:<strong id="lblDefaultedBalSplitP">₹0.00</strong></span>
+              <span>I:<strong id="lblDefaultedBalSplitI">₹0.00</strong></span>
+              <span>R:<strong id="lblDefaultedBalSplitR">₹0.00</strong></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -190,6 +265,38 @@
         </tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Bulk Close Modal -->
+<div id="bulkCloseModal" class="modal pop-inner-modal" style="display: none;">
+  <div class="modal-content card-glass" style="max-width: 600px; border-radius: 16px; padding: 24px; box-shadow: var(--shadow-lg); max-height: 85vh; display: flex; flex-direction: column;">
+    <span class="close-btn" onclick="closeBulkCloseModal()">&times;</span>
+    <h3 id="bulkCloseModalTitle" style="margin-top: 0; margin-bottom: 12px; font-weight: 700; color: var(--text);">Confirm Bulk Close</h3>
+    <div id="bulkCloseModalMsg" style="margin-bottom: 16px; font-size: 0.9rem; color: var(--text-secondary);">
+      Review the selected customers to close below:
+    </div>
+    
+    <div style="flex: 1; overflow-y: auto; max-height: 45vh; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+        <thead>
+          <tr style="background: var(--surface); border-bottom: 1px solid var(--border);">
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">A/C No</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Name</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Balance</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Action</th>
+          </tr>
+        </thead>
+        <tbody id="bulkCloseModalTableBody">
+          <!-- Populated dynamically -->
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+      <button onclick="closeBulkCloseModal()" class="neumorphic-btn small" style="margin: 0;">Cancel</button>
+      <button id="bulkCloseConfirmBtn" class="neumorphic-btn small danger-btn" style="margin: 0; font-weight: bold;">Confirm Close</button>
+    </div>
   </div>
 </div>
 

@@ -11,6 +11,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const clean = v => v.replace(/[₹,]/g, "").trim();
 
+  function formatMoney(value) {
+    const num = Math.round(parseFloat(value) || 0);
+    return "₹" + num.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
   // Column keys in order of generation
   const COLUMN_KEYS = [
     "ano", "name", "start_date", "end_date", "total_amount", "paid_amount", 
@@ -118,6 +123,14 @@ document.addEventListener("DOMContentLoaded", function () {
     let activeBalSum = 0;
     let defaultedBalSum = 0;
 
+    let activeBalP = 0;
+    let activeBalI = 0;
+    let activeBalR = 0;
+
+    let defaultedBalP = 0;
+    let defaultedBalI = 0;
+    let defaultedBalR = 0;
+
     let activeScoreSum = 0;
     let activeScoreCount = 0;
     let activeScorePrevSum = 0;
@@ -134,10 +147,25 @@ document.addEventListener("DOMContentLoaded", function () {
       const rating = parseFloat(c.customer_rating_raw);
       const prevRating = parseFloat(c.customer_rating_prev_raw);
       const bal = parseFloat(c.balance_amount) || 0;
+      const tot = parseFloat(c.total_amount) || 0;
+      const interestRate = window.VILLAGE_INTEREST_RATE || 0;
+      const cuttingRate = window.VILLAGE_CUTTING_RATE || 0;
+
+      // Calculate splits (Principal, Interest, Rusum)
+      const i_orig = parseFloat(c.interest_amount) || (tot * (interestRate / 100.0));
+      const r_orig = parseFloat(c.cutting_amount) || (tot * (cuttingRate / 100.0));
+      const p_orig = parseFloat(c.base_amount) || (tot - i_orig - r_orig);
+
+      const p_rem = Math.max(0, bal - i_orig - r_orig);
+      const i_rem = Math.max(0, Math.min(i_orig, bal - r_orig));
+      const r_rem = Math.max(0, Math.min(r_orig, bal));
 
       if (c.source === 'active') {
         activeCount++;
         activeBalSum += bal;
+        activeBalP += p_rem;
+        activeBalI += i_rem;
+        activeBalR += r_rem;
 
         if (!isNaN(rating)) {
           activeScoreSum += rating;
@@ -156,6 +184,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (bal > 0) {
           defaultedCount++;
           defaultedBalSum += bal;
+          defaultedBalP += p_rem;
+          defaultedBalI += i_rem;
+          defaultedBalR += r_rem;
 
           if (!isNaN(rating)) {
             defaultedScoreSum += rating;
@@ -200,6 +231,30 @@ document.addEventListener("DOMContentLoaded", function () {
     const defaultedAvgScoreEl = document.getElementById("defaultedAvgScore");
     const completeAvgScoreEl = document.getElementById("completeAvgScore");
 
+    const lblActiveBalSplitP = document.getElementById("lblActiveBalSplitP");
+    const lblActiveBalSplitI = document.getElementById("lblActiveBalSplitI");
+    const lblActiveBalSplitR = document.getElementById("lblActiveBalSplitR");
+    const lblDefaultedBalSplitP = document.getElementById("lblDefaultedBalSplitP");
+    const lblDefaultedBalSplitI = document.getElementById("lblDefaultedBalSplitI");
+    const lblDefaultedBalSplitR = document.getElementById("lblDefaultedBalSplitR");
+
+    if (activeCountEl) activeCountEl.textContent = activeCount;
+    if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
+    if (closedCountEl) closedCountEl.textContent = closedCount;
+    if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(0);
+    if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(0);
+
+    if (lblActiveBalSplitP) lblActiveBalSplitP.textContent = formatMoney(activeBalP);
+    if (lblActiveBalSplitI) lblActiveBalSplitI.textContent = formatMoney(activeBalI);
+    if (lblActiveBalSplitR) lblActiveBalSplitR.textContent = formatMoney(activeBalR);
+    if (lblDefaultedBalSplitP) lblDefaultedBalSplitP.textContent = formatMoney(defaultedBalP);
+    if (lblDefaultedBalSplitI) lblDefaultedBalSplitI.textContent = formatMoney(defaultedBalI);
+    if (lblDefaultedBalSplitR) lblDefaultedBalSplitR.textContent = formatMoney(defaultedBalR);
+    
+    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
+    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
+    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
+
     const activeAvgScoreTrendEl = document.getElementById("activeAvgScoreTrend");
     const defaultedAvgScoreTrendEl = document.getElementById("defaultedAvgScoreTrend");
     const completeAvgScoreTrendEl = document.getElementById("completeAvgScoreTrend");
@@ -207,8 +262,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (activeCountEl) activeCountEl.textContent = activeCount;
     if (defaultedCountEl) defaultedCountEl.textContent = defaultedCount;
     if (closedCountEl) closedCountEl.textContent = closedCount;
-    if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(2);
-    if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(2);
+    if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(0);
+    if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(0);
     
     if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
     if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
@@ -254,6 +309,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const isPhoneSearch = /^\d{10}$/.test(term);
+    
+    // If it's a numeric account number search (digits, but not a 10-digit phone number)
+    if (/^\d+$/.test(term) && !isPhoneSearch) {
+      applyParentSearch(term);
+      return;
+    }
+
     if ($.fn.DataTable.isDataTable('#customerTable')) {
       $('#customerTable').DataTable().search(term).draw();
     } else {
@@ -271,7 +333,18 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   window.toggleAll = function (source) {
-    tableBody.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = source.checked);
+    const checkboxes = tableBody.querySelectorAll("input[type='checkbox']");
+    checkboxes.forEach(cb => {
+      cb.checked = source.checked;
+      const row = cb.closest("tr");
+      if (row) {
+        if (source.checked) {
+          row.classList.add("checked-row");
+        } else {
+          row.classList.remove("checked-row");
+        }
+      }
+    });
   };
 
   window.toggleColumnDropdown = function() {
@@ -552,9 +625,18 @@ document.addEventListener("DOMContentLoaded", function () {
         tr.className = "table-row";
         tr.setAttribute("data-ano", customer.ano);
         tr.setAttribute("data-cid", customer.cid);
-        tr.setAttribute("data-source", currentMode);
 
-        appendCustomerCells(tr, customer, currentMode);
+        let source = customer.status || "active";
+        if (["closed", "defaulted", "written_off", "written off"].includes(source.toLowerCase())) {
+          source = "closed";
+        } else if (source.toLowerCase() === "historic") {
+          source = "historic";
+        } else {
+          source = "active";
+        }
+        tr.setAttribute("data-source", source);
+
+        appendCustomerCells(tr, customer, source);
 
         tableBody.appendChild(tr);
       });
@@ -565,7 +647,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const toggleContainer = document.getElementById("customerModeToggle");
       if (toggleContainer) {
-        toggleContainer.className = `sliding-toggle-container three-way mode-${currentMode}`;
+        toggleContainer.className = `sliding-toggle-container three-way mode-both`;
       }
 
       // Reinitialize DataTable matching standard views
@@ -867,6 +949,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // 1. Update ALL_CUSTOMERS_STATS
       window.ALL_CUSTOMERS_STATS = result.all_customers_stats;
+      window.VILLAGE_INTEREST_RATE = result.interest_rate || 0.0;
+      window.VILLAGE_CUTTING_RATE = result.cutting_rate || 0.0;
 
       // 2. Clear table and populate rows
       if ($.fn.DataTable.isDataTable('#customerTable')) {
@@ -965,8 +1049,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Standard Money Formatter
   function formatMoney(value) {
-    const num = parseFloat(value) || 0;
-    return "₹" + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const num = Math.round(parseFloat(value) || 0);
+    return "₹" + num.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  // Handle checkbox clicks & state changes in the main table with zero lag
+  if (tableBody) {
+    // 1. Listen for checkbox state changes (add/remove checked-row highlight class)
+    tableBody.addEventListener("change", function(e) {
+      const cb = e.target.closest("input[type='checkbox']");
+      if (!cb) return;
+      
+      // Stop event propagation to prevent any outer click/change handlers from intercepting
+      e.stopPropagation();
+      
+      const row = cb.closest("tr");
+      if (!row) return;
+      
+      if (cb.checked) {
+        row.classList.add("checked-row");
+      } else {
+        row.classList.remove("checked-row");
+      }
+    });
+
+    // 2. Stop click propagation from the checkbox to prevent any row selection/blurs
+    tableBody.addEventListener("click", function(e) {
+      if (e.target.tagName === "INPUT" && e.target.type === "checkbox") {
+        e.stopPropagation();
+        return;
+      }
+      
+      // 3. Make clicking the cell td.checkbox-column toggle the checkbox inside it
+      const cell = e.target.closest("td.checkbox-column");
+      if (cell) {
+        e.stopPropagation();
+        e.preventDefault();
+        const cb = cell.querySelector("input[type='checkbox']");
+        if (cb) {
+          cb.checked = !cb.checked;
+          // Trigger change event programmatically so our listener runs
+          cb.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+    });
   }
 
   // Row double-click event delegation on the main Customer table
@@ -1082,8 +1208,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Load inputs (Auto-Edit defaults)
       document.getElementById("popInputName").value = cust.name || "";
-      document.getElementById("popInputTotalAmount").value = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
-      document.getElementById("popInputInstallment").value = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
+      document.getElementById("popInputTotalAmount").value = cust.total_amount ? cust.total_amount.toFixed(0) : "0";
+      document.getElementById("popInputInstallment").value = cust.installment_amount ? cust.installment_amount.toFixed(0) : "0";
       document.getElementById("popInputType").value = cust.type || "W";
       document.getElementById("popInputPeriod").value = cust.period || "";
       document.getElementById("popInputPhone").value = cust.phone_number || "";
@@ -1101,14 +1227,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const cuttingAmtVal = cust.cutting_amount !== null && cust.cutting_amount !== undefined ? cust.cutting_amount : 0.0;
       const interestAmtVal = cust.interest_amount !== null && cust.interest_amount !== undefined ? cust.interest_amount : 0.0;
 
-      document.getElementById("popInputBaseAmount").value = baseAmtVal.toFixed(2);
-      document.getElementById("popInputCuttingAmount").value = cuttingAmtVal.toFixed(2);
-      document.getElementById("popInputInterestAmount").value = interestAmtVal.toFixed(2);
+      document.getElementById("popInputBaseAmount").value = baseAmtVal.toFixed(0);
+      document.getElementById("popInputCuttingAmount").value = cuttingAmtVal.toFixed(0);
+      document.getElementById("popInputInterestAmount").value = interestAmtVal.toFixed(0);
 
       // Save dataset original snapshots for delta checks
       document.getElementById("popInputName").dataset.original = cust.name || "";
-      document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount ? cust.total_amount.toFixed(2) : "0.00";
-      document.getElementById("popInputInstallment").dataset.original = cust.installment_amount ? cust.installment_amount.toFixed(2) : "0.00";
+      document.getElementById("popInputTotalAmount").dataset.original = cust.total_amount ? cust.total_amount.toFixed(0) : "0";
+      document.getElementById("popInputInstallment").dataset.original = cust.installment_amount ? cust.installment_amount.toFixed(0) : "0";
       document.getElementById("popInputType").dataset.original = cust.type || "W";
       document.getElementById("popInputPeriod").dataset.original = cust.period || "";
       document.getElementById("popInputPhone").dataset.original = cust.phone_number || "";
@@ -1120,9 +1246,9 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popInputLatitude").dataset.original = cust.latitude || "";
       document.getElementById("popInputLongitude").dataset.original = cust.longitude || "";
       document.getElementById("popInputNotes").dataset.original = cust.notes || "";
-      document.getElementById("popInputBaseAmount").dataset.original = baseAmtVal.toFixed(2);
-      document.getElementById("popInputCuttingAmount").dataset.original = cuttingAmtVal.toFixed(2);
-      document.getElementById("popInputInterestAmount").dataset.original = interestAmtVal.toFixed(2);
+      document.getElementById("popInputBaseAmount").dataset.original = baseAmtVal.toFixed(0);
+      document.getElementById("popInputCuttingAmount").dataset.original = cuttingAmtVal.toFixed(0);
+      document.getElementById("popInputInterestAmount").dataset.original = interestAmtVal.toFixed(0);
 
       document.getElementById("popSaveDetailsBtn").style.display = "none";
 
@@ -1130,11 +1256,28 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popPaidAmount").textContent = formatMoney(cust.paid_amount);
       document.getElementById("popBalanceAmount").textContent = formatMoney(cust.balance_amount);
 
+      // Calculate remaining splits (clearing principal first)
+      const balVal = cust.balance_amount || 0.0;
+      const p_rem = Math.max(0, balVal - interestAmtVal - cuttingAmtVal);
+      const i_rem = Math.max(0, Math.min(interestAmtVal, balVal - cuttingAmtVal));
+      const r_rem = Math.max(0, Math.min(cuttingAmtVal, balVal));
+
+      // Populate elements
+      document.getElementById("popPopOriginalLoanVal").textContent = formatMoney(cust.total_amount);
+      document.getElementById("popPopLoanSplitP").textContent = formatMoney(baseAmtVal);
+      document.getElementById("popPopLoanSplitI").textContent = formatMoney(interestAmtVal);
+      document.getElementById("popPopLoanSplitR").textContent = formatMoney(cuttingAmtVal);
+
+      document.getElementById("popPopRemainingBalVal").textContent = formatMoney(balVal);
+      document.getElementById("popPopBalanceSplitP").textContent = formatMoney(p_rem);
+      document.getElementById("popPopBalanceSplitI").textContent = formatMoney(i_rem);
+      document.getElementById("popPopBalanceSplitR").textContent = formatMoney(r_rem);
+
       const discountAmt = cust.interest_discount || 0.0;
       const discountInput = document.getElementById("popInputInterestDiscount");
       if (discountInput) {
-        discountInput.value = discountAmt.toFixed(2);
-        discountInput.dataset.original = discountAmt.toFixed(2);
+        discountInput.value = discountAmt.toFixed(0);
+        discountInput.dataset.original = discountAmt.toFixed(0);
       }
 
       // Render Repayment Rating Engine fields
@@ -1324,7 +1467,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Format Allocated Paid Amt (Normal text color)
             const tdPaid = document.createElement("td");
-            tdPaid.textContent = "₹" + (wk.allocated || 0).toFixed(2);
+            tdPaid.textContent = "₹" + (wk.allocated || 0).toFixed(0);
             tdPaid.setAttribute("data-order", wk.allocated || 0);
             tr.appendChild(tdPaid);
             
@@ -1460,7 +1603,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tr.innerHTML = `
         <td>${p.ano}</td>
         <td data-field="payment_date" contenteditable="true" data-order="${p.payment_date}">${formatDate(p.payment_date)}</td>
-        <td data-field="amt" contenteditable="true" data-money="${p.amt}" data-order="${p.amt}">${p.amt.toFixed(2)}</td>
+        <td data-field="amt" contenteditable="true" data-money="${p.amt}" data-order="${p.amt}">${p.amt.toFixed(0)}</td>
         <td class="cumulative-amt" data-money="${cumulative}" data-order="${cumulative}">${formatMoney(cumulative)}</td>
         <td style="text-align:center;">
           <span class="delete-btn" style="cursor:pointer; font-weight:bold; font-size:1.15rem; color:#ef4444; padding: 2px 8px;" onclick="deletePopupPaymentLocal(${idx})">×</span>
@@ -1567,7 +1710,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const amt = parseFloat(value.replace(/[^\d.-]/g, "")) || 0;
       if (amt < 0) {
         alert("Amount cannot be negative.");
-        td.textContent = localPayments[index].amt.toFixed(2);
+        td.textContent = localPayments[index].amt.toFixed(0);
         return;
       }
       localPayments[index].amt = amt;
@@ -1613,9 +1756,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const period = parseInt(document.getElementById("popInputPeriod").value) || 0;
     if (period > 0) {
       const installment = totalAmount / period;
-      const roundedInstallment = Math.round(installment * 100) / 100;
+      const roundedInstallment = Math.round(installment);
       const instEl = document.getElementById("popInputInstallment");
-      instEl.value = roundedInstallment.toFixed(2);
+      instEl.value = roundedInstallment.toFixed(0);
     }
   }
 
@@ -1719,9 +1862,9 @@ document.addEventListener("DOMContentLoaded", () => {
           const interestAmt = total * interestRate / 100.0;
           const cuttingAmt = total * cuttingRate / 100.0;
           const baseAmt = total - interestAmt - cuttingAmt;
-          document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(2);
-          document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(2);
-          document.getElementById("popInputBaseAmount").value = baseAmt.toFixed(2);
+          document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(0);
+          document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(0);
+          document.getElementById("popInputBaseAmount").value = baseAmt.toFixed(0);
         }
       } else if (id === "popInputPeriod" || id === "popInputEid") {
         this.value = this.value.replace(/[^0-9]/g, "");
@@ -1733,7 +1876,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
           const interestAmt = parseFloat(document.getElementById("popInputInterestAmount").value) || 0;
           const cuttingAmt = parseFloat(document.getElementById("popInputCuttingAmount").value) || 0;
-          document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(2);
+          document.getElementById("popInputBaseAmount").value = (total - interestAmt - cuttingAmt).toFixed(0);
         } else if (id === "popInputInterestDiscount") {
           const total = parseFloat(document.getElementById("popInputTotalAmount").value) || 0;
           const paid = localPayments.reduce((sum, p) => sum + p.amt, 0);
@@ -1817,8 +1960,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await res.json();
         if (!data.success) throw new Error(data.error || "Failed to retrieve");
 
-        alert("Account retrieved successfully!");
-        window.location.reload();
+        showToast("Account retrieved successfully!");
+        closeCustomerPopup();
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } catch (err) {
         alert("Retrieve failed: " + err.message);
       }
@@ -1842,68 +1988,44 @@ document.addEventListener("DOMContentLoaded", () => {
       discountSection.style.display = "none";
       discountInput.value = "";
       
-      if (balance > 0) {
-        statusMsg.textContent = `Remaining Balance is ₹${balance.toFixed(2)}. Select settlement option:`;
-        
-        // Option 1: Default
-        const defaultBtn = document.createElement("button");
-        defaultBtn.className = "neumorphic-btn small danger-btn";
-        defaultBtn.style.width = "100%";
-        defaultBtn.style.justifyContent = "center";
-        defaultBtn.style.fontWeight = "bold";
-        defaultBtn.textContent = "Default Customer";
-        defaultBtn.addEventListener("click", () => {
-          modal.style.display = "none";
-          if (confirm("Are you sure you want to mark this customer as DEFAULTED?")) {
-            handleCloseSubmit("defaulted");
-          }
+      if (balance <= 0) {
+        // Automatically close without popup
+        const action = balance < 0 ? "written_off" : null;
+        handleCloseSubmit(action);
+        return;
+      }
+      
+      // Balance > 0
+      statusMsg.innerHTML = `Remaining Balance is <strong>₹${balance.toFixed(0)}</strong>.<br>This account will be closed and marked as <strong>Defaulted</strong>.`;
+      
+      // Option 1: Default
+      const defaultBtn = document.createElement("button");
+      defaultBtn.className = "neumorphic-btn small danger-btn";
+      defaultBtn.style.width = "100%";
+      defaultBtn.style.justifyContent = "center";
+      defaultBtn.style.fontWeight = "bold";
+      defaultBtn.textContent = "Close Account";
+      defaultBtn.addEventListener("click", () => {
+        modal.style.display = "none";
+        handleCloseSubmit("defaulted");
+      });
+      optionsContainer.appendChild(defaultBtn);
+      
+      // Option 2: Discount Interest (only if balance <= interestAmount)
+      if (balance <= interestAmount) {
+        const discountBtn = document.createElement("button");
+        discountBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
+        discountBtn.style.width = "100%";
+        discountBtn.style.justifyContent = "center";
+        discountBtn.style.fontWeight = "bold";
+        discountBtn.style.marginTop = "10px";
+        discountBtn.textContent = "Discount Interest";
+        discountBtn.addEventListener("click", () => {
+          discountSection.style.display = "block";
+          discountInput.value = balance.toFixed(0);
+          discountInput.focus();
         });
-        optionsContainer.appendChild(defaultBtn);
-        
-        // Option 2: Discount Interest (only if balance <= interestAmount)
-        if (balance <= interestAmount) {
-          const discountBtn = document.createElement("button");
-          discountBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
-          discountBtn.style.width = "100%";
-          discountBtn.style.justifyContent = "center";
-          discountBtn.style.fontWeight = "bold";
-          discountBtn.textContent = "Discount Interest";
-          discountBtn.addEventListener("click", () => {
-            discountSection.style.display = "block";
-            discountInput.value = balance.toFixed(2);
-            discountInput.focus();
-          });
-          optionsContainer.appendChild(discountBtn);
-        }
-      } else if (balance < 0) {
-        statusMsg.textContent = `Remaining Balance is ₹${balance.toFixed(2)}. Settle as Written Off:`;
-        const writeOffBtn = document.createElement("button");
-        writeOffBtn.className = "neumorphic-btn small danger-btn";
-        writeOffBtn.style.width = "100%";
-        writeOffBtn.style.justifyContent = "center";
-        writeOffBtn.style.fontWeight = "bold";
-        writeOffBtn.textContent = "Write Off Account";
-        writeOffBtn.addEventListener("click", () => {
-          modal.style.display = "none";
-          if (confirm("Are you sure you want to mark this customer as WRITTEN OFF?")) {
-            handleCloseSubmit("written_off");
-          }
-        });
-        optionsContainer.appendChild(writeOffBtn);
-      } else {
-        // balance === 0
-        statusMsg.textContent = "Balance is ₹0.00. Close account normally:";
-        const closeBtn = document.createElement("button");
-        closeBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
-        closeBtn.style.width = "100%";
-        closeBtn.style.justifyContent = "center";
-        closeBtn.style.fontWeight = "bold";
-        closeBtn.textContent = "Close Account";
-        closeBtn.addEventListener("click", () => {
-          modal.style.display = "none";
-          handleCloseSubmit(null);
-        });
-        optionsContainer.appendChild(closeBtn);
+        optionsContainer.appendChild(discountBtn);
       }
       
       modal.style.display = "flex";
@@ -1911,6 +2033,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   async function handleCloseSubmit(action, discountAmount = null) {
+    const btn = document.getElementById("popCloseAccountBtn");
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Processing...";
+    
     try {
       const payload = { cid: activeCustomerCid, action: action };
       if (discountAmount !== null) {
@@ -1924,10 +2051,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to close");
 
-      alert("Account settled/closed successfully!");
-      window.location.reload();
+      showToast("Account closed successfully!");
+      closeCustomerPopup();
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (err) {
       alert("Settlement failed: " + err.message);
+      btn.disabled = false;
+      btn.textContent = originalText;
     }
   }
 
@@ -2235,6 +2367,282 @@ document.addEventListener("DOMContentLoaded", () => {
       return `${y}-${m}-${d}`;
     }
     return dateStr;
+  }
+
+  // 🍞 Transient Success Toast
+  window.showToast = function(message, duration = 1500) {
+    let toast = document.getElementById("transient-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "transient-toast";
+      toast.style.position = "fixed";
+      toast.style.top = "24px";
+      toast.style.right = "24px";
+      toast.style.zIndex = "99999";
+      toast.style.background = "rgba(16, 185, 129, 0.95)"; // nice emerald green
+      toast.style.color = "#ffffff";
+      toast.style.padding = "14px 24px";
+      toast.style.borderRadius = "12px";
+      toast.style.boxShadow = "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)";
+      toast.style.fontFamily = "'Space Grotesk', sans-serif";
+      toast.style.fontWeight = "600";
+      toast.style.fontSize = "14px";
+      toast.style.pointerEvents = "none";
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(-20px)";
+      toast.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    
+    // trigger animation
+    requestAnimationFrame(() => {
+      toast.style.opacity = "1";
+      toast.style.transform = "translateY(0)";
+    });
+    
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(-20px)";
+    }, duration);
+  };
+
+  // 📦 Bulk Close Logic
+  let isBulkCloseMode = false;
+  let selectedCustomersForBulk = [];
+
+  window.toggleBulkCloseMode = function() {
+    const tableEl = document.getElementById("customerTable");
+    const wrapper = document.querySelector(".customer-table-wrapper");
+    const btn = document.getElementById("bulkCloseBtn");
+    
+    if (!tableEl) return;
+    
+    if (isBulkCloseMode) {
+      // If it's already active, clicking the button again means we want to EXECUTE/Confirm!
+      handleBulkCloseClick();
+      return;
+    }
+    
+    isBulkCloseMode = true;
+    tableEl.classList.add("bulk-close-mode-active");
+    if (wrapper) wrapper.classList.add("bulk-close-mode-active");
+    btn.textContent = "Confirm Bulk Close";
+    btn.className = "neumorphic-btn glow-red";
+    
+    // Add a cancel button if it doesn't exist
+    if (!document.getElementById("cancelBulkCloseBtn")) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.id = "cancelBulkCloseBtn";
+      cancelBtn.className = "neumorphic-btn";
+      cancelBtn.style.margin = "0";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.onclick = deactivateBulkCloseMode;
+      btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
+    }
+  };
+
+  function deactivateBulkCloseMode() {
+    const tableEl = document.getElementById("customerTable");
+    const wrapper = document.querySelector(".customer-table-wrapper");
+    const btn = document.getElementById("bulkCloseBtn");
+    
+    isBulkCloseMode = false;
+    if (tableEl) tableEl.classList.remove("bulk-close-mode-active");
+    if (wrapper) wrapper.classList.remove("bulk-close-mode-active");
+    if (btn) {
+      btn.textContent = "Close";
+      btn.className = "neumorphic-btn";
+    }
+    
+    const cancelBtn = document.getElementById("cancelBulkCloseBtn");
+    if (cancelBtn) cancelBtn.remove();
+    
+    // Uncheck all and remove checked classes
+    const checkboxes = document.querySelectorAll("#customerTable input[type='checkbox']");
+    checkboxes.forEach(cb => {
+      cb.checked = false;
+      const row = cb.closest("tr");
+      if (row) row.classList.remove("checked-row");
+    });
+  }
+
+  window.closeBulkCloseModal = function() {
+    const modal = document.getElementById("bulkCloseModal");
+    if (modal) modal.style.display = "none";
+  };
+
+  window.handleBulkCloseClick = function() {
+    const tableBody = document.getElementById("customerTableBody");
+    if (!tableBody) return;
+    
+    const checkedBoxes = Array.from(tableBody.querySelectorAll("input[type='checkbox']:checked"));
+    if (checkedBoxes.length === 0) {
+      alert("Please select at least one customer to close.");
+      return;
+    }
+    
+    selectedCustomersForBulk = checkedBoxes.map(cb => {
+      const row = cb.closest("tr");
+      const cid = row.getAttribute("data-cid");
+      const ano = row.querySelector(".col-ano")?.textContent.trim() || "";
+      const name = row.querySelector(".col-name")?.textContent.trim() || "";
+      const balText = row.querySelector(".col-balance_amount")?.textContent.replace(/[^\d.-]/g, "") || "0";
+      const balance = parseFloat(balText) || 0;
+      return { cid, ano, name, balance };
+    });
+    
+    openBulkCloseStage1();
+  };
+
+  function openBulkCloseStage1() {
+    const modal = document.getElementById("bulkCloseModal");
+    const modalTitle = document.getElementById("bulkCloseModalTitle");
+    const modalMsg = document.getElementById("bulkCloseModalMsg");
+    const tableBody = document.getElementById("bulkCloseModalTableBody");
+    const confirmBtn = document.getElementById("bulkCloseConfirmBtn");
+    
+    if (!modal || !tableBody || !confirmBtn) return;
+    
+    modalTitle.textContent = "Confirm Bulk Close (Stage 1)";
+    modalMsg.textContent = "Review the selected customers to close. Accounts with balance <= 0 will be closed directly. Accounts with balance > 0 will be processed in the next stage.";
+    
+    tableBody.innerHTML = "";
+    
+    selectedCustomersForBulk.forEach(cust => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid var(--border)";
+      
+      let actionText = "";
+      let actionColor = "";
+      if (cust.balance === 0) {
+        actionText = "Close Normally";
+        actionColor = "var(--success)";
+      } else if (cust.balance < 0) {
+        actionText = "Write Off (Settle)";
+        actionColor = "var(--warning)";
+      } else {
+        actionText = "Defer to Stage 2 (Default)";
+        actionColor = "var(--text-secondary)";
+      }
+      
+      tr.innerHTML = `
+        <td style="padding: 10px; color: var(--text);">${cust.ano}</td>
+        <td style="padding: 10px; color: var(--text); font-weight: 500;">${cust.name}</td>
+        <td style="padding: 10px; color: ${cust.balance > 0 ? "var(--danger)" : "var(--text)"}; font-weight: 600;">₹${cust.balance.toFixed(0)}</td>
+        <td style="padding: 10px; color: ${actionColor}; font-weight: 600;">${actionText}</td>
+      `;
+      tableBody.appendChild(tr);
+    });
+    
+    confirmBtn.textContent = "Confirm Close";
+    confirmBtn.onclick = processBulkCloseStage1;
+    
+    modal.style.display = "flex";
+  }
+
+  async function processBulkCloseStage1() {
+    const listA = selectedCustomersForBulk.filter(c => c.balance <= 0);
+    const listB = selectedCustomersForBulk.filter(c => c.balance > 0);
+    
+    if (listA.length > 0) {
+      const confirmBtn = document.getElementById("bulkCloseConfirmBtn");
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Processing...";
+      
+      try {
+        const promises = listA.map(cust => {
+          const action = cust.balance < 0 ? "written_off" : null;
+          return csrfFetch("/api/customer/close_account_pg", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cid: cust.cid, action: action })
+          }).then(res => res.json());
+        });
+        
+        const results = await Promise.all(promises);
+        const errors = results.filter(r => !r.success).map(r => r.error);
+        if (errors.length > 0) {
+          alert("Some accounts failed to close: " + errors.join(", "));
+        }
+      } catch (err) {
+        alert("Error closing accounts: " + err.message);
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    }
+    
+    if (listB.length === 0) {
+      closeBulkCloseModal();
+      deactivateBulkCloseMode();
+      showToast("Selected accounts closed successfully!");
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      selectedCustomersForBulk = listB;
+      openBulkCloseStage2();
+    }
+  }
+
+  function openBulkCloseStage2() {
+    const modal = document.getElementById("bulkCloseModal");
+    const modalTitle = document.getElementById("bulkCloseModalTitle");
+    const modalMsg = document.getElementById("bulkCloseModalMsg");
+    const tableBody = document.getElementById("bulkCloseModalTableBody");
+    const confirmBtn = document.getElementById("bulkCloseConfirmBtn");
+    
+    if (!modal || !tableBody || !confirmBtn) return;
+    
+    modalTitle.textContent = "Confirm Default Close (Stage 2)";
+    modalMsg.innerHTML = `<span style="color: var(--danger); font-weight: 700;">WARNING:</span> The following accounts have a remaining balance. Confirming will close these accounts and mark them as <strong>Defaulted</strong>.`;
+    
+    tableBody.innerHTML = "";
+    
+    selectedCustomersForBulk.forEach(cust => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid var(--border)";
+      
+      tr.innerHTML = `
+        <td style="padding: 10px; color: var(--text);">${cust.ano}</td>
+        <td style="padding: 10px; color: var(--text); font-weight: 500;">${cust.name}</td>
+        <td style="padding: 10px; color: var(--danger); font-weight: 600;">₹${cust.balance.toFixed(0)}</td>
+        <td style="padding: 10px; color: var(--danger); font-weight: bold;">Default Account</td>
+      `;
+      tableBody.appendChild(tr);
+    });
+    
+    confirmBtn.textContent = "Confirm Default Close";
+    confirmBtn.onclick = processBulkCloseStage2;
+  }
+
+  async function processBulkCloseStage2() {
+    const confirmBtn = document.getElementById("bulkCloseConfirmBtn");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Processing...";
+    
+    try {
+      const promises = selectedCustomersForBulk.map(cust => {
+        return csrfFetch("/api/customer/close_account_pg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cid: cust.cid, action: "defaulted" })
+        }).then(res => res.json());
+      });
+      
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => !r.success).map(r => r.error);
+      if (errors.length > 0) {
+        alert("Some defaulted accounts failed to close: " + errors.join(", "));
+      }
+    } catch (err) {
+      alert("Error closing accounts: " + err.message);
+    } finally {
+      confirmBtn.disabled = false;
+    }
+    
+    closeBulkCloseModal();
+    deactivateBulkCloseMode();
+    showToast("Selected accounts defaulted and closed successfully!");
+    setTimeout(() => window.location.reload(), 1000);
   }
 
 });

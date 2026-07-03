@@ -48,6 +48,11 @@
           <span class="legend-item"><span class="legend-dot dot-defaulted"></span> Def: <strong id="lblDefaultedLoanAmount">₹0</strong> <span class="legend-pct" id="pctDefaultedLoanAmount">(0%)</span></span>
           <span class="legend-item" id="legendClosedLoanAmount"><span class="legend-dot dot-closed"></span> Cls: <strong id="lblClosedLoanAmount">₹0</strong> <span class="legend-pct" id="pctClosedLoanAmount">(0%)</span></span>
         </div>
+        <div class="tile-bar-legend" style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 8px; padding-top: 8px; font-size: 0.72rem; justify-content: space-between; gap: 8px;">
+          <span style="color: var(--text-secondary);">Prn: <strong id="lblLoanSplitPrincipal" style="color: var(--text);">₹0</strong></span>
+          <span style="color: var(--text-secondary);">Int: <strong id="lblLoanSplitInterest" style="color: var(--text);">₹0</strong></span>
+          <span style="color: var(--text-secondary);">Rsm: <strong id="lblLoanSplitRusum" style="color: var(--text);">₹0</strong></span>
+        </div>
       </div>
     </div>
 
@@ -69,6 +74,11 @@
         <div class="tile-bar-legend">
           <span class="legend-item"><span class="legend-dot dot-active"></span> Act: <strong id="lblActiveBalance">₹0</strong> <span class="legend-pct" id="pctActiveBalance">(0%)</span></span>
           <span class="legend-item"><span class="legend-dot dot-defaulted"></span> Def: <strong id="lblDefaultedBalance">₹0</strong> <span class="legend-pct" id="pctDefaultedBalance">(0%)</span></span>
+        </div>
+        <div class="tile-bar-legend" style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 8px; padding-top: 8px; font-size: 0.72rem; justify-content: space-between; gap: 8px;">
+          <span style="color: var(--text-secondary);">Prn: <strong id="lblBalanceSplitPrincipal" style="color: var(--text);">₹0</strong></span>
+          <span style="color: var(--text-secondary);">Int: <strong id="lblBalanceSplitInterest" style="color: var(--text);">₹0</strong></span>
+          <span style="color: var(--text-secondary);">Rsm: <strong id="lblBalanceSplitRusum" style="color: var(--text);">₹0</strong></span>
         </div>
       </div>
     </div>
@@ -529,6 +539,7 @@
       </div>
     </div>
     {% include 'customer_popup.html' %}
+    {% include 'cluster_analytics_modal.html' %}
 
   {% else %}
     <!-- ======================================================== -->
@@ -1994,4 +2005,5 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ range(1, 10000) | random }}"></script>
+  <script src="{{ url_for('static', filename='js/cluster_analytics.js') }}?v={{ range(1, 10000) | random }}"></script>
 {% endblock %}

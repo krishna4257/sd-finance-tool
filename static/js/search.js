@@ -103,7 +103,7 @@ function recalculateCustomerLoanFields(row) {
 
   // Installment calculation
   if (!isNaN(period) && period > 0) {
-    installmentCell.textContent = (totalAmount / period).toFixed(2);
+    installmentCell.textContent = Math.round(totalAmount / period).toFixed(0);
   }
 
   // Balance recalculation
@@ -112,7 +112,7 @@ function recalculateCustomerLoanFields(row) {
       paidAmountCell.textContent.replace(/[^0-9.-]/g, "")
     ) || 0;
 
-    balanceAmountCell.textContent = (totalAmount - paidAmount).toFixed(2);
+    balanceAmountCell.textContent = Math.round(totalAmount - paidAmount).toFixed(0);
   }
 
   // End date calculation
@@ -651,8 +651,8 @@ function recalculateCustomerLoanFields(row) {
       });
 
       document.getElementById("postingEntryCount").textContent = rows.length;
-      document.getElementById("postingTotalAmt").setAttribute("data-money", totalAmt.toFixed(2));
-      document.getElementById("postingTotalAmt").textContent = totalAmt.toFixed(2);
+      document.getElementById("postingTotalAmt").setAttribute("data-money", totalAmt.toFixed(0));
+      document.getElementById("postingTotalAmt").textContent = totalAmt.toFixed(0);
       applyGlobalMoneyFormatting();
   }
 
@@ -854,8 +854,8 @@ function recalculatePayments() {
         let cumCell = row.querySelector(".cumulative-amt");
         if (cumCell) {
             // keep machine value in data-money and show formatted text
-            cumCell.setAttribute("data-money", cumulative.toFixed(2));
-            cumCell.innerText = "₹" + cumulative.toLocaleString();
+            cumCell.setAttribute("data-money", cumulative.toFixed(0));
+            cumCell.innerText = "₹" + Math.round(cumulative).toLocaleString();
         }
     });
 
@@ -872,8 +872,8 @@ function recalculatePayments() {
 
     const totalElem = document.getElementById("totalAmt");
     if (totalElem) {
-        totalElem.setAttribute("data-money", totalAmt.toFixed(2));
-        totalElem.innerText = "₹" + totalAmt.toLocaleString();
+        totalElem.setAttribute("data-money", totalAmt.toFixed(0));
+        totalElem.innerText = "₹" + Math.round(totalAmt).toLocaleString();
     }
 
     applyGlobalMoneyFormatting();
@@ -984,7 +984,7 @@ function updateCustomerSummary() {
 
         if (!isNaN(amt)) totalAmt += amt;
     });
-    document.getElementById("totalAmt").textContent = totalAmt.toFixed(2);
+    document.getElementById("totalAmt").textContent = totalAmt.toFixed(0);
     document.getElementById("anoCount").textContent = rows.length;
     applyGlobalMoneyFormatting();
     if (customerRow) {
@@ -995,8 +995,8 @@ function updateCustomerSummary() {
       const interestDiscount = discountCell ? (parseFloat(discountCell.textContent.replace(/[^0-9.-]/g, "")) || 0) : 0;
       const amt = parseFloat(amtCell?.textContent.trim()) || 0;
       if (pamtCell && bamtCell) {
-        pamtCell.textContent = totalAmt.toFixed(2);
-        bamtCell.textContent = (amt - totalAmt - interestDiscount).toFixed(2);
+        pamtCell.textContent = totalAmt.toFixed(0);
+        bamtCell.textContent = (amt - totalAmt - interestDiscount).toFixed(0);
       }
     }
   }
@@ -1011,7 +1011,7 @@ function updateCustomerSummary() {
     const amt = parseFloat(amtCell.textContent.trim());
     const pamt = parseFloat(pamtCell.textContent.trim());
     if (!isNaN(amt) && !isNaN(pamt)) {
-      bamtCell.textContent = (amt - pamt - interestDiscount).toFixed(2);
+      bamtCell.textContent = (amt - pamt - interestDiscount).toFixed(0);
     }
   }
 
