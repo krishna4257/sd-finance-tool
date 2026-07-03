@@ -1,0 +1,124 @@
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- CLUSTER ANALYTICS MODAL                                       -->
+<!-- Lazy-loaded: nothing here runs until the user clicks the btn  -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="clusterAnalyticsOverlay" class="ca-overlay">
+  <div class="ca-modal">
+
+    <!-- ── Loading State ── -->
+    <div id="caLoading" class="ca-loading" style="display: flex;">
+      <div class="ca-loading-spinner"></div>
+      <span id="caLoadingText">Loading customer data…</span>
+    </div>
+
+    <!-- ── Main Content (hidden until data loads) ── -->
+    <div id="caMainContent" class="ca-main" style="display: none;">
+
+      <!-- ── Header ── -->
+      <div class="ca-header">
+        <div class="ca-header-left">
+          <i class="fas fa-chart-pie ca-header-icon"></i>
+          <h3>Cluster Analytics</h3>
+        </div>
+        <button class="ca-close-btn" onclick="closeClusterAnalyticsModal()" title="Close">&times;</button>
+      </div>
+
+      <!-- ── Body: Sidebar + Canvas ── -->
+      <div class="ca-body">
+
+        <!-- LEFT: Control Sidebar -->
+        <div class="ca-sidebar">
+
+          <!-- Cluster Type Selector -->
+          <div class="ca-section-label">Cluster By</div>
+          <div class="ca-type-btns">
+            <button class="ca-type-btn active" data-type="batches" onclick="caChangeClusterType('batches')">
+              <i class="fas fa-calendar-alt"></i> Batches
+            </button>
+            <button class="ca-type-btn" data-type="loansize" onclick="caChangeClusterType('loansize')">
+              <i class="fas fa-coins"></i> Loan Size
+            </button>
+            <button class="ca-type-btn" data-type="duration" onclick="caChangeClusterType('duration')">
+              <i class="fas fa-clock"></i> Duration
+            </button>
+          </div>
+
+          <!-- ── Batch Sub-Mode Buttons (shown when Batches is active) ── -->
+          <div id="caBatchModePanel" class="ca-sub-panel" style="display: flex;">
+            <div class="ca-section-label" style="margin-bottom: 4px;">Period</div>
+            <div class="ca-batch-btns">
+              <button class="ca-batch-btn" data-mode="weekly" onclick="caChangeBatchMode('weekly')">Weekly</button>
+              <button class="ca-batch-btn" data-mode="monthly" onclick="caChangeBatchMode('monthly')">Monthly</button>
+              <button class="ca-batch-btn active" data-mode="quarterly" onclick="caChangeBatchMode('quarterly')">Quarterly</button>
+              <button class="ca-batch-btn" data-mode="halfyear" onclick="caChangeBatchMode('halfyear')">½ Year</button>
+              <button class="ca-batch-btn" data-mode="yearly" onclick="caChangeBatchMode('yearly')">Year</button>
+            </div>
+          </div>
+
+          <!-- ── Loan Size Range Slider (shown when Loan Size is active) ── -->
+          <div id="caRangePanel" class="ca-sub-panel" style="display: none;">
+            <div class="ca-section-label" style="margin-bottom: 6px;">Amount Range</div>
+            <div class="ca-range-container">
+              <div class="ca-range-track">
+                <div class="ca-range-fill" id="caRangeFill"></div>
+              </div>
+              <input type="range" id="caRangeMin" class="ca-range-input ca-range-min" min="0" max="100000" value="0" step="500" oninput="this._lastChanged=true;caUpdateLoanRange()" onchange="this._lastChanged=false">
+              <input type="range" id="caRangeMax" class="ca-range-input ca-range-max" min="0" max="100000" value="100000" step="500" oninput="this._lastChanged=true;caUpdateLoanRange()" onchange="this._lastChanged=false">
+            </div>
+            <div class="ca-range-labels">
+              <span id="caRangeMinLabel">₹0</span>
+              <span id="caRangeMaxLabel">₹1,00,000</span>
+            </div>
+          </div>
+
+          <!-- Legend -->
+          <div class="ca-legend">
+            <span class="ca-legend-item"><span class="ca-legend-dot ca-risk-low"></span> &lt;3% def</span>
+            <span class="ca-legend-item"><span class="ca-legend-dot ca-risk-mid"></span> 3-10% def</span>
+            <span class="ca-legend-item"><span class="ca-legend-dot ca-risk-high"></span> &gt;10% def</span>
+          </div>
+
+          <!-- Cluster List -->
+          <div class="ca-section-label">Clusters <span id="caClusterCount" class="ca-count-badge"></span></div>
+          <div id="caClusterList" class="ca-cluster-list">
+            <!-- dynamically populated -->
+          </div>
+
+          <!-- Actions -->
+          <div class="ca-actions">
+            <label class="ca-compare-label">
+              <input type="checkbox" id="caCompareToggle" onchange="caToggleCompare(this.checked)">
+              <span>Compare Mode</span>
+            </label>
+            <button class="ca-view-btn" onclick="caViewAnalytics()">
+              <i class="fas fa-chart-bar"></i> View Analytics
+            </button>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: Visualisation Canvas + Analytics -->
+        <div class="ca-right">
+
+          <!-- Particle Canvas -->
+          <div class="ca-canvas-wrapper">
+            <canvas id="caCanvas"></canvas>
+            <!-- Particle Legend -->
+            <div class="ca-particle-legend">
+              <span><span class="ca-pdot ca-pdot-active"></span> Active</span>
+              <span><span class="ca-pdot ca-pdot-def"></span> Defaulted</span>
+              <span><span class="ca-pdot ca-pdot-cls"></span> Closed</span>
+            </div>
+          </div>
+
+          <!-- Analytics Overlay (slides up) -->
+          <div id="caAnalyticsPanel" class="ca-analytics-panel">
+            <div id="caAnalyticsContent"></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

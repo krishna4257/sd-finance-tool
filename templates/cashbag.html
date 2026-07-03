@@ -1,5 +1,23 @@
 {% extends "base.html" %}
 
+{% block sidebar %}
+<a href="#" class="nav-link" onclick="openLedgerModal('{{ emp1 }}', '{{ emp2 if emp2 and emp2 != 'None' else '' }}')">
+  <i class="fas fa-book"></i> Daily Sheet
+</a>
+<a href="#" class="nav-link" onclick="openAddEntryModal('OFFICE_CASH')">
+  <i class="fas fa-university"></i> Office Cash
+</a>
+<a href="#" class="nav-link" onclick="openAddEntryModal('EXPENSE')">
+  <i class="fas fa-receipt"></i> Expense
+</a>
+<a href="#" class="nav-link" onclick="openAddEntryModal('ADJUSTMENT')">
+  <i class="fas fa-sliders-h"></i> Adjustment
+</a>
+<a href="#" class="nav-link" onclick="openAddEntryModal('PROFIT_LOSS')">
+  <i class="fas fa-chart-line"></i> Profit / Loss
+</a>
+{% endblock %}
+
 {% block content %}
 
 <style>
@@ -493,53 +511,10 @@
 
   <!-- ① PAGE HEADER -->
   <div style="display: flex; align-items: center; gap: 14px;">
-    <a href="/village" class="neumorphic-btn small"
-       style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px;
-              font-size: 0.82rem; text-decoration: none; color: var(--text-secondary); flex-shrink: 0;">
-      <i class="fas fa-arrow-left"></i> Back to Villages
-    </a>
     <h2 class="page-title" style="margin: 0;">💼 Cash Bag Management</h2>
   </div>
 
-  <!-- ② CONTEXT BANNER -->
-  <div class="raised-box" style="padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-    <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
-
-      <!-- Employee Group -->
-      <div class="ctx-row">
-        <span class="ctx-section-label"><i class="fas fa-users"></i> Employee Group</span>
-        <div class="ctx-divider-v"></div>
-        <span class="ctx-chip"><i class="fas fa-user-tie"></i> {{ emp1_name }}</span>
-        {% if emp2_name %}
-        <span class="ctx-separator">+</span>
-        <span class="ctx-chip"><i class="fas fa-user-tie"></i> {{ emp2_name }}</span>
-        {% endif %}
-      </div>
-
-      <!-- Village Group -->
-      {% if group_villages %}
-      <div class="ctx-row">
-        <span class="ctx-section-label"><i class="fas fa-map-marker-alt"></i> Village Group</span>
-        <div class="ctx-divider-v"></div>
-        {% for v in group_villages %}
-        <span class="ctx-village-chip">
-          <i class="fas fa-map-pin"></i> {{ v.name }} ({{ v.code }})
-        </span>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-    </div>
-    <div style="flex-shrink: 0;">
-      <button class="neumorphic-btn"
-              style="border-color: rgba(180, 83, 9, 0.4); color: #b45309; padding: 10px 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;"
-              onclick="openLedgerModal('{{ emp1 }}', '{{ emp2 if emp2 and emp2 != 'None' else '' }}')">
-        <i class="fas fa-book"></i> Daily Sheet
-      </button>
-    </div>
-  </div>
-
-  <!-- ③ SUMMARY CARDS -->
+  <!-- ② SUMMARY CARDS (Now first row) -->
   <div class="raised-box" style="padding: 22px;">
     <div class="cashbag-summary-grid">
 
@@ -644,79 +619,15 @@
     </div>
   </div>
 
-  <!-- ④ ADD ENTRY -->
-  <div class="raised-box" style="padding: 22px;">
-    <div class="cb-section-title">
-      <h3><i class="fas fa-plus-circle" style="color: var(--primary);"></i> Add Cashbag Entry</h3>
-    </div>
-
-    <form method="POST" action="{{ url_for('add_cashbag_transaction') }}">
-      <input type="hidden" name="emp1" value="{{ emp1 }}">
-      <input type="hidden" name="emp2" value="{{ emp2 or '' }}">
-
-      <div class="cb-form-grid">
-
-        <!-- Transaction Category -->
-        <div class="cb-field-group">
-          <label class="cb-field-label">Transaction</label>
-          <select name="txn" id="txnSelect" class="cb-select" required
-                  onchange="handleTxnChange(this.value)">
-            <option value="">— Select —</option>
-            <option value="OFFICE_CASH">💰 Office Cash</option>
-            <option value="EXPENSE">🧾 Expense</option>
-            <option value="ADJUSTMENT">⚙️ Adjustment</option>
-            <option value="PROFIT_LOSS">📈 Profit/Loss</option>
-          </select>
-        </div>
-
-        <!-- Dynamic Sub-type Field -->
-        <div class="cb-field-group" id="txnSubField" style="display: none;">
-          <label class="cb-field-label" id="txnSubLabel">Type</label>
-          <select name="txn_sub" id="txnSubSelect" class="cb-select">
-            <option value="">— Select Type —</option>
-          </select>
-        </div>
-
-        <!-- Payment Method -->
-        <div class="cb-field-group">
-          <label class="cb-field-label">Payment Method</label>
-          <select name="txn_type" class="cb-select">
-            <option value="CASH">💵 Cash</option>
-            <option value="UPI">📱 UPI</option>
-          </select>
-        </div>
-
-        <!-- Amount -->
-        <div class="cb-field-group">
-          <label class="cb-field-label">Amount (₹)</label>
-          <input type="number" step="0.01" name="amount"
-                 placeholder="0.00" required class="cb-input">
-        </div>
-
-        <!-- Notes -->
-        <div class="cb-field-group">
-          <label class="cb-field-label">Notes</label>
-          <input type="text" name="notes"
-                 placeholder="E.g. Room Rent – Anantpur" class="cb-input">
-        </div>
-
-        <!-- Submit -->
-        <div style="display: flex; align-items: flex-end;">
-          <button type="submit" class="cb-submit-btn">
-            <i class="fas fa-plus"></i> Add Entry
-          </button>
-        </div>
-
-      </div>
-    </form>
-  </div>
-
-  <!-- ⑤ LEDGER TABLE -->
+  <!-- ③ LEDGER TABLE -->
   <div class="raised-box" style="padding: 22px;">
     <div class="cb-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
         <h3 style="margin: 0;"><i class="fas fa-book" style="color: var(--primary);"></i> Cashbag Ledger</h3>
         <span id="ledgerCountBadge" class="cb-badge">{{ transactions|length }} Groups</span>
+        <button type="button" class="neumorphic-btn" id="toggleFiltersBtn" onclick="toggleFiltersBox()" style="padding: 6px 14px; font-size: 0.82rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <i class="fas fa-filter"></i> Filters
+        </button>
       </div>
       <div>
         <form method="GET" action="{{ url_for('cashbag') }}" style="display: flex; align-items: center; gap: 8px; font-family: var(--font-body), sans-serif; font-size: 0.85rem;">
@@ -733,6 +644,50 @@
       </div>
     </div>
 
+    <!-- Collapsable Filters Box -->
+    <div id="ledgerFiltersBox" style="display: none; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+        <div class="cb-field-group">
+          <label class="cb-field-label">Date</label>
+          <input type="text" id="fltDate" class="cb-input" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" placeholder="Search Date..." oninput="applyLedgerFilters()">
+        </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Transaction Category</label>
+          <select id="fltTxn" class="cb-select" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" onchange="applyLedgerFilters()">
+            <option value="ALL">All Transactions</option>
+            <option value="INSTALLMENT_AMOUNT">Installment</option>
+            <option value="LOAN">Loan</option>
+            <option value="LOAN_COMMISION">Rusum</option>
+            <option value="LOAN_INTEREST">Commission</option>
+            <option value="OFFICE_CASH">Office Cash</option>
+            <option value="EXPENSE">Expense</option>
+            <option value="ADJUSTMENT">Adjustment</option>
+          </select>
+        </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Payment Method</label>
+          <select id="fltMethod" class="cb-select" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" onchange="applyLedgerFilters()">
+            <option value="ALL">All Methods</option>
+            <option value="CASH">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="PARTIAL">Partial</option>
+          </select>
+        </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Amount</label>
+          <input type="text" id="fltAmount" class="cb-input" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" placeholder="Search Amount..." oninput="applyLedgerFilters()">
+        </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">Notes</label>
+          <input type="text" id="fltNotes" class="cb-input" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" placeholder="Search Notes..." oninput="applyLedgerFilters()">
+        </div>
+        <div class="cb-field-group">
+          <label class="cb-field-label">User</label>
+          <input type="text" id="fltUser" class="cb-input" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" placeholder="Search User..." oninput="applyLedgerFilters()">
+        </div>
+      </div>
+    </div>
+
     <div class="scroll-table-container">
       <table id="cashbagTable" class="no-datatable customer-table" style="width: 100%;">
         <thead>
@@ -743,40 +698,6 @@
             <th id="hdrAmt" style="text-align: right;">UPI Total</th>
             <th id="hdrNotes" style="text-align: right;">Combined Total</th>
             <th id="hdrUser">Summary Details</th>
-          </tr>
-          <tr class="filter-row">
-            <th>
-              <input type="text" id="fltDate" class="ledger-filter-input" placeholder="Search Date..." oninput="applyLedgerFilters()">
-            </th>
-            <th>
-              <select id="fltTxn" class="ledger-filter-select" onchange="applyLedgerFilters()">
-                <option value="ALL">All Transactions</option>
-                <option value="INSTALLMENT_AMOUNT">Installment</option>
-                <option value="LOAN">Loan</option>
-                <option value="LOAN_COMMISION">Rusum</option>
-                <option value="LOAN_INTEREST">Commission</option>
-                <option value="OFFICE_CASH">Office Cash</option>
-                <option value="EXPENSE">Expense</option>
-                <option value="ADJUSTMENT">Adjustment</option>
-              </select>
-            </th>
-            <th>
-              <select id="fltMethod" class="ledger-filter-select" onchange="applyLedgerFilters()">
-                <option value="ALL">All Methods</option>
-                <option value="CASH">Cash</option>
-                <option value="UPI">UPI</option>
-                <option value="PARTIAL">Partial</option>
-              </select>
-            </th>
-            <th>
-              <input type="text" id="fltAmount" class="ledger-filter-input" placeholder="Search Amount..." oninput="applyLedgerFilters()">
-            </th>
-            <th>
-              <input type="text" id="fltNotes" class="ledger-filter-input" placeholder="Search Notes..." oninput="applyLedgerFilters()">
-            </th>
-            <th>
-              <input type="text" id="fltUser" class="ledger-filter-input" placeholder="Search User..." oninput="applyLedgerFilters()">
-            </th>
           </tr>
         </thead>
         <tbody id="ledgerTableBody">
@@ -1227,6 +1148,100 @@
       </div>
     </div>
 
+  </div>
+</dialog>
+
+<!-- ADD CASHBAG ENTRY DIALOG MODAL -->
+<dialog id="addEntryModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 500px; width: 90%;">
+  <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    <!-- Modal Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <h3 id="modalTxnTitle" style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
+        <!-- Filled dynamically -->
+      </h3>
+      <button type="button" onclick="closeAddEntryModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <form method="POST" action="{{ url_for('add_cashbag_transaction') }}" style="display: flex; flex-direction: column; gap: 16px;">
+      <input type="hidden" name="emp1" value="{{ emp1 }}">
+      <input type="hidden" name="emp2" value="{{ emp2 or '' }}">
+      <input type="hidden" name="txn" id="modalTxnTypeInput" value="">
+      <input type="hidden" name="txn_sub" id="modalTxnSubHiddenInput" value="">
+
+      <!-- Date Field -->
+      <div class="cb-field-group">
+        <label class="cb-field-label">Transaction Date</label>
+        <input type="date" name="txn_date" id="modalTxnDateInput" required class="cb-input" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;">
+      </div>
+
+      <!-- Toggle: Cash vs UPI -->
+      <div class="cb-field-group">
+        <label class="cb-field-label">Payment Method</label>
+        <div style="display: flex; background: rgba(0,0,0,0.25); border-radius: 20px; padding: 3px; position: relative; width: 100%;">
+          <input type="hidden" name="txn_type" id="modalPaymentMethodInput" value="CASH">
+          <button type="button" id="toggleCashBtn" style="flex: 1; border: none; background: var(--primary, #1a4d2e); color: #fff; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalPaymentMethod('CASH')">
+            <i class="fas fa-money-bill-wave"></i> Cash
+          </button>
+          <button type="button" id="toggleUpiBtn" style="flex: 1; border: none; background: transparent; color: #9ca3af; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalPaymentMethod('UPI')">
+            <i class="fas fa-mobile-alt"></i> UPI
+          </button>
+        </div>
+      </div>
+
+      <!-- Expense dropdown (only shown/used for EXPENSE) -->
+      <div class="cb-field-group" id="modalTxnSubField" style="display: none;">
+        <label class="cb-field-label" id="modalTxnSubLabel">Expense Type</label>
+        <select id="modalTxnSubSelect" class="cb-select" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" onchange="document.getElementById('modalTxnSubHiddenInput').value = this.value;">
+          <option value="">— Select Type —</option>
+        </select>
+      </div>
+
+      <!-- Adjustment Toggle Pill Container -->
+      <div id="modalAdjustmentToggle" class="cb-field-group" style="display: none;">
+        <label class="cb-field-label">Adjustment Type</label>
+        <div style="display: flex; background: rgba(0,0,0,0.25); border-radius: 20px; padding: 3px; position: relative; width: 100%;">
+          <button type="button" id="toggleAdjAddBtn" style="flex: 1; border: none; background: var(--primary, #1a4d2e); color: #fff; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalSubValue('ADD')">
+            <i class="fas fa-plus"></i> Add (+)
+          </button>
+          <button type="button" id="toggleAdjMinusBtn" style="flex: 1; border: none; background: transparent; color: #9ca3af; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalSubValue('MINUS')">
+            <i class="fas fa-minus"></i> Subtract (-)
+          </button>
+        </div>
+      </div>
+
+      <!-- Profit/Loss Toggle Pill Container -->
+      <div id="modalProfitLossToggle" class="cb-field-group" style="display: none;">
+        <label class="cb-field-label">Profit/Loss Type</label>
+        <div style="display: flex; background: rgba(0,0,0,0.25); border-radius: 20px; padding: 3px; position: relative; width: 100%;">
+          <button type="button" id="togglePlProfitBtn" style="flex: 1; border: none; background: var(--primary, #1a4d2e); color: #fff; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalSubValue('PROFIT')">
+            <i class="fas fa-chart-line"></i> Profit (+)
+          </button>
+          <button type="button" id="togglePlLossBtn" style="flex: 1; border: none; background: transparent; color: #9ca3af; padding: 8px; border-radius: 18px; font-weight: 600; cursor: pointer; font-size: 0.82rem; transition: background 0.2s;" onclick="setModalSubValue('LOSS')">
+            <i class="fas fa-chart-line"></i> Loss (-)
+          </button>
+        </div>
+      </div>
+
+      <!-- Amount -->
+      <div class="cb-field-group">
+        <label class="cb-field-label">Amount (₹)</label>
+        <input type="number" step="0.01" name="amount" placeholder="0.00" required class="cb-input" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;">
+      </div>
+
+      <!-- Notes -->
+      <div class="cb-field-group">
+        <label class="cb-field-label">Notes</label>
+        <input type="text" name="notes" placeholder="E.g. Room Rent – Anantpur" class="cb-input" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;">
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" class="cb-submit-btn" style="width: 100%; justify-content: center; height: 44px; margin-top: 8px;">
+        <i class="fas fa-check"></i> Submit
+      </button>
+    </form>
   </div>
 </dialog>
 
@@ -2303,6 +2318,152 @@
   window.generateLedgerData = generateLedgerData;
   window.openProfitLossModal = openProfitLossModal;
   window.closeProfitLossModal = closeProfitLossModal;
+
+  // Add Entry Modal & Filtering Functions
+  function openAddEntryModal(txnType) {
+    const modal = document.getElementById('addEntryModal');
+    const title = document.getElementById('modalTxnTitle');
+    const typeInput = document.getElementById('modalTxnTypeInput');
+    const subHiddenInput = document.getElementById('modalTxnSubHiddenInput');
+    const subField = document.getElementById('modalTxnSubField');
+    const subSelect = document.getElementById('modalTxnSubSelect');
+    const adjToggle = document.getElementById('modalAdjustmentToggle');
+    const plToggle = document.getElementById('modalProfitLossToggle');
+
+    typeInput.value = txnType;
+    subHiddenInput.value = '';
+    setModalPaymentMethod('CASH'); // default
+
+    // Set default date to today
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    document.getElementById('modalTxnDateInput').value = `${year}-${month}-${day}`;
+    
+    // Hide all sub-type options by default
+    subField.style.display = 'none';
+    adjToggle.style.display = 'none';
+    plToggle.style.display = 'none';
+
+    subSelect.required = false;
+    subSelect.value = '';
+
+    // Clear fields
+    modal.querySelector('input[name="amount"]').value = '';
+    modal.querySelector('input[name="notes"]').value = '';
+    
+    if (txnType === 'OFFICE_CASH') {
+        title.innerHTML = '<i class="fas fa-university" style="color: var(--primary);"></i> Add Office Cash';
+    } else if (txnType === 'EXPENSE') {
+        title.innerHTML = '<i class="fas fa-receipt" style="color: #dc2626;"></i> Add Expense';
+        subField.style.display = 'flex';
+        subSelect.required = true;
+        subSelect.innerHTML = `
+            <option value="">— Select Type —</option>
+            <option value="PETROL">⛽ Petrol</option>
+            <option value="SADAR">🧳 Sadar</option>
+            <option value="SALARY">💵 Salary</option>
+            <option value="ARA">🪑 ARA</option>
+            <option value="ROOM_RENT">🏠 Room Rent</option>
+            <option value="ROOM_RENT_ADVANCE">🏠 Room Rent Advance</option>
+            <option value="BIKE">🏍️ Bike</option>
+            <option value="RESERVATION">🎟️ Reservation</option>
+            <option value="OTHER_EXPENSES">📋 Other Expenses</option>
+        `;
+    } else if (txnType === 'ADJUSTMENT') {
+        title.innerHTML = '<i class="fas fa-sliders-h" style="color: #2563eb;"></i> Add Adjustment';
+        adjToggle.style.display = 'flex';
+        setModalSubValue('ADD'); // default to ADD
+    } else if (txnType === 'PROFIT_LOSS') {
+        title.innerHTML = '<i class="fas fa-chart-line" style="color: #10b981;"></i> Add Profit/Loss';
+        plToggle.style.display = 'flex';
+        setModalSubValue('PROFIT'); // default to PROFIT
+    }
+
+    modal.showModal();
+    modal.classList.add('dialog-open');
+  }
+
+  function setModalSubValue(val) {
+    document.getElementById('modalTxnSubHiddenInput').value = val;
+
+    // Update Adjustment toggle buttons
+    const adjAdd = document.getElementById('toggleAdjAddBtn');
+    const adjMinus = document.getElementById('toggleAdjMinusBtn');
+    if (val === 'ADD') {
+        adjAdd.style.background = 'var(--primary, #1a4d2e)';
+        adjAdd.style.color = '#fff';
+        adjMinus.style.background = 'transparent';
+        adjMinus.style.color = '#9ca3af';
+    } else if (val === 'MINUS') {
+        adjMinus.style.background = 'var(--primary, #1a4d2e)';
+        adjMinus.style.color = '#fff';
+        adjAdd.style.background = 'transparent';
+        adjAdd.style.color = '#9ca3af';
+    }
+
+    // Update Profit/Loss toggle buttons
+    const plProfit = document.getElementById('togglePlProfitBtn');
+    const plLoss = document.getElementById('togglePlLossBtn');
+    if (val === 'PROFIT') {
+        plProfit.style.background = 'var(--primary, #1a4d2e)';
+        plProfit.style.color = '#fff';
+        plLoss.style.background = 'transparent';
+        plLoss.style.color = '#9ca3af';
+    } else if (val === 'LOSS') {
+        plLoss.style.background = 'var(--primary, #1a4d2e)';
+        plLoss.style.color = '#fff';
+        plProfit.style.background = 'transparent';
+        plProfit.style.color = '#9ca3af';
+    }
+  }
+
+  function closeAddEntryModal() {
+    const modal = document.getElementById('addEntryModal');
+    modal.classList.remove('dialog-open');
+    setTimeout(() => { modal.close(); }, 250);
+  }
+
+  function setModalPaymentMethod(method) {
+    const cashBtn = document.getElementById('toggleCashBtn');
+    const upiBtn = document.getElementById('toggleUpiBtn');
+    const input = document.getElementById('modalPaymentMethodInput');
+    
+    input.value = method;
+    if (method === 'CASH') {
+        cashBtn.style.background = 'var(--primary, #1a4d2e)';
+        cashBtn.style.color = '#fff';
+        upiBtn.style.background = 'transparent';
+        upiBtn.style.color = '#9ca3af';
+    } else {
+        upiBtn.style.background = 'var(--primary, #1a4d2e)';
+        upiBtn.style.color = '#fff';
+        cashBtn.style.background = 'transparent';
+        cashBtn.style.color = '#9ca3af';
+    }
+  }
+
+  function toggleFiltersBox() {
+    const box = document.getElementById('ledgerFiltersBox');
+    const btn = document.getElementById('toggleFiltersBtn');
+    if (box.style.display === 'none') {
+        box.style.display = 'block';
+        btn.classList.add('active');
+        btn.style.backgroundColor = 'var(--primary)';
+        btn.style.color = '#fff';
+    } else {
+        box.style.display = 'none';
+        btn.classList.remove('active');
+        btn.style.backgroundColor = '';
+        btn.style.color = '';
+    }
+  }
+
+  window.openAddEntryModal = openAddEntryModal;
+  window.closeAddEntryModal = closeAddEntryModal;
+  window.setModalPaymentMethod = setModalPaymentMethod;
+  window.toggleFiltersBox = toggleFiltersBox;
 </script>
 
 {% endblock %}

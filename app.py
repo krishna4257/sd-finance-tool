@@ -603,7 +603,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Always enforce Secure cookie — the site is always served over HTTPS at
 # sivadurga.in. ProxyFix above ensures Flask sees the correct protocol.
 # Set DISABLE_SECURE_COOKIE=1 only for local http:// development.
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("DISABLE_SECURE_COOKIE") != "1"
+is_local_run = (__name__ == "__main__")
+app.config["SESSION_COOKIE_SECURE"] = (os.environ.get("DISABLE_SECURE_COOKIE") != "1") and not is_local_run
 app.config["SESSION_COOKIE_NAME"] = "sivadurga_session"
 app.config["SESSION_COOKIE_DOMAIN"] = None
 
@@ -706,7 +707,7 @@ def redirect_www_and_force_https():
 
     # Force HTTPS in production to prevent Secure cookies from being blocked/discarded
     is_https = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
-    if not is_https and os.environ.get("DISABLE_SECURE_COOKIE") != "1":
+    if not is_https and os.environ.get("DISABLE_SECURE_COOKIE") != "1" and not is_local_run:
         url = request.url.replace("http://", "https://", 1)
         return redirect(url, code=301)
 
@@ -4146,7 +4147,11 @@ def get_customer_analytics(vid):
                 COALESCE(SUM(total_amount) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 8), 0) as week_sum,
                 COUNT(*) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 31) as month_count,
                 COALESCE(SUM(total_amount) FILTER (WHERE CURRENT_DATE - start_date >= 0 AND CURRENT_DATE - start_date < 31), 0) as month_sum
-            FROM customer
+            FROM (
+                SELECT start_date, total_amount, vid FROM customer
+                UNION ALL
+                SELECT start_date, total_amount, vid FROM closed_cust_account
+            ) c
             WHERE vid = %s
         """, (vid,))
         row = cur.fetchone()
@@ -4343,6 +4348,11 @@ def api_view_customers_data():
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
+        # Fetch village rates
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        rates_row = cur.fetchone()
+        interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
+        cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
         # Active Stats
         cur.execute("""
             SELECT 
@@ -4473,24 +4483,27 @@ def api_view_customers_data():
 
         # Global stats list
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
+                   COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
             FROM customer WHERE vid = %s
         """, (vid,))
         active_all = cur.fetchall()
         
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
+                   COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
             FROM closed_cust_account WHERE vid = %s
         """, (vid,))
         closed_all = cur.fetchall()
         
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source, COALESCE(interest_discount, 0.00) AS interest_discount
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
+                   COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
             FROM historic_customer_data WHERE vid = %s
         """, (vid,))
         historic_all = cur.fetchall()
 
-        all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source', 'interest_discount']
+        all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source', 'interest_discount', 'base_amount', 'cutting_amount', 'interest_amount']
         
         active_dicts = [dict(zip(all_cols, r)) for r in active_all]
         closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
@@ -4520,6 +4533,8 @@ def api_view_customers_data():
             success=True,
             data=serializable_data,
             all_customers_stats=serializable_stats,
+            interest_rate=interest_rate,
+            cutting_rate=cutting_rate,
             summary={
                 "active_customers": active_count,
                 "defaulted_customers": defaulted_count,
@@ -4986,75 +5001,66 @@ def payment_day_stats():
     try:
 
         cur.execute("""
-
             WITH village_collection_day AS (
-
                 SELECT DISTINCT ON (p.vid)
-
                     p.vid,
-
                     TRIM(TO_CHAR(p.payment_date, 'Day'))
                         AS collection_day,
-
                     COUNT(*) AS payment_count
-
-                FROM payment p
-
+                FROM (
+                    SELECT payment_date, vid FROM payment
+                    UNION ALL
+                    SELECT payment_date, vid FROM closed_cust_payment
+                ) p
                 WHERE p.vid = %s
-
                 GROUP BY
                     p.vid,
                     collection_day
-
                 ORDER BY
                     p.vid,
                     payment_count DESC
             ),
-
             eligible_customers AS (
-
                 SELECT
                     COUNT(*) AS expected_accounts
-
-                FROM customer c
+                FROM (
+                    SELECT type, start_date, closed_at, vid FROM customer
+                    UNION ALL
+                    SELECT type, start_date, closed_at, vid FROM closed_cust_account
+                ) c
                 JOIN village_collection_day vcd
                     ON vcd.vid = c.vid
-
                 WHERE c.vid = %s
                   AND c.type = 'W'
-
+                  AND (c.closed_at IS NULL OR c.closed_at::date > %s::date)
                   AND (
                         c.start_date + INTERVAL '7 days'
                       )::date <= %s
-
                   AND TRIM(TO_CHAR(%s::date, 'Day'))
                       = vcd.collection_day
             ),
-
             actual_payments AS (
-
                 SELECT
                     COUNT(DISTINCT ano) AS paid_accounts
-
-                FROM payment
-
+                FROM (
+                    SELECT ano, vid, payment_date FROM payment
+                    UNION ALL
+                    SELECT ano, vid, payment_date FROM closed_cust_payment
+                ) all_p
                 WHERE vid = %s
                   AND payment_date = %s
             )
-
             SELECT
                 COALESCE(ec.expected_accounts, 0)
                     AS expected_accounts,
-
                 COALESCE(ap.paid_accounts, 0)
                     AS already_paid
-
             FROM eligible_customers ec
             CROSS JOIN actual_payments ap
-
         """, (
             vid,
             vid,
+            payment_date,
             payment_date,
             payment_date,
             vid,
@@ -5104,11 +5110,15 @@ def post_payment_analytics():
             days_ago = (datetime.now(KOLKATA).date() - last_date).days
             last_date_str = format_date_display(last_date) + f" ({days_ago} days ago)"
 
-        # 2. Get all active or historically active customers for this village from the customer table, ignoring closed ones
+        # 2. Get all active or historically active customers for this village (both open and closed)
         cur.execute("""
-            SELECT cid, ano, name, total_amount, installment_amount, start_date
-            FROM customer
-            WHERE vid = %s AND (status IS NULL OR status != 'closed')
+            SELECT cid, ano, name, total_amount, installment_amount, start_date, closed_at
+            FROM (
+                SELECT cid, ano, name, total_amount, installment_amount, start_date, NULL::timestamp AS closed_at, vid FROM customer
+                UNION ALL
+                SELECT cid, ano, name, total_amount, installment_amount, start_date, closed_at, vid FROM closed_cust_account
+            ) all_c
+            WHERE vid = %s
         """, (vid,))
         customers = []
         for r in cur.fetchall():
@@ -5118,12 +5128,19 @@ def post_payment_analytics():
                 "name": r[2],
                 "total_amount": float(r[3] or 0),
                 "installment_amount": float(r[4] or 0),
-                "start_date": r[5]
+                "start_date": r[5],
+                "closed_at": r[6]
             })
 
-        # 3. Get all payments for this village
+        # 3. Get all payments (both active and closed) for this village
         cur.execute("""
-            SELECT cid, amt, payment_date FROM payment WHERE vid = %s
+            SELECT cid, amt, payment_date
+            FROM (
+                SELECT cid, amt, payment_date, vid FROM payment
+                UNION ALL
+                SELECT cid, amt, payment_date, vid FROM closed_cust_payment
+            ) all_p
+            WHERE vid = %s
         """, (vid,))
         payments = []
         payments_by_cid = {}
@@ -5172,6 +5189,11 @@ def post_payment_analytics():
             for c in customers:
                 # Check if customer loan started on or before the end of the week
                 if c["start_date"] and c["start_date"] <= end_dt:
+                    # If customer was closed before start_dt, they are not active in this week
+                    if c["closed_at"]:
+                        cl_dt = c["closed_at"].date() if isinstance(c["closed_at"], datetime) else c["closed_at"]
+                        if cl_dt < start_dt:
+                            continue
                     cust_payments = payments_by_cid.get(c["cid"], [])
                     # Calculate total paid before this week
                     paid_before = sum(p["amt"] for p in cust_payments if p["payment_date"] < start_dt)
@@ -5759,6 +5781,12 @@ def api_customer_detail_with_payments(account_no):
             cust["start_date"], cust["end_date"], cust["installment_amount"], cust["period"], payments, cust["balance_amount"], week_details, loan_type=cust.get("type", "W")
         )
 
+        # Fetch village rates
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        rates_row = cur.fetchone()
+        interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
+        cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
+
         logger.info(f"Success: Found customer cid={cust['cid']}, name={cust['name']}, vid={cust['vid']}, status={cust['status']}")
 
         return jsonify(
@@ -5766,7 +5794,9 @@ def api_customer_detail_with_payments(account_no):
             customer=cust,
             payments=payments,
             week_details=week_details,
-            behavioral_analytics=behavioral_analytics
+            behavioral_analytics=behavioral_analytics,
+            interest_rate=interest_rate,
+            cutting_rate=cutting_rate
         )
 
     except Exception as e:
@@ -5864,82 +5894,52 @@ def api_customer_family_full(account_no):
 
         account_no = str(normalized)
 
-        mode = request.args.get("mode", "active")
-        
-        if mode == "closed":
-            query = """
+        # Query all tables (active, closed, historic) to trace the full hierarchy
+        query = """
+            SELECT
+                cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date
+            FROM (
+                SELECT
+                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
+                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                FROM customer
+                WHERE vid = %s
+
+                UNION ALL
+
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date
                 FROM closed_cust_account
                 WHERE vid = %s
-            """
-            params = (vid,)
-        elif mode == "historic":
-            query = """
+                
+                UNION ALL
+
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date
                 FROM historic_customer_data
                 WHERE vid = %s
-            """
-            params = (vid,)
-        elif mode == "yearly":
-            query = """
-                SELECT
-                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
-                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
-                FROM (
-                    SELECT
-                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
-                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
-                    FROM customer
-                    WHERE vid = %s
-
-                    UNION ALL
-
-                    SELECT
-                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
-                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
-                    FROM closed_cust_account
-                    WHERE vid = %s
-                    
-                    UNION ALL
-
-                    SELECT
-                        cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
-                        type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                        customer_rating, final_frozen_rating, final_risk_level, freeze_date
-                    FROM historic_customer_data
-                    WHERE vid = %s
-                ) all_customers
-            """
-            params = (vid, vid, vid)
-        else: # active
-            query = """
-                SELECT
-                    cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
-                    type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' as status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
-                FROM customer
-                WHERE vid = %s
-            """
-            params = (vid,)
+            ) all_customers
+        """
+        params = (vid, vid, vid)
 
         cur.execute(query, params)
-
         rows = cur.fetchall()
 
-        family_map = {}
-        customer_map = {}
-
+        # Build adjacency list for the undirected graph of family relationships
+        adj = {}  # map: account_no -> set of connected account_nos
+        
+        # An account_no could have multiple historical/closed/active records.
+        # Store a list of customer dicts for each account_no.
+        ano_to_customers = {} # map: account_no -> list of customer dicts
+        
         for row in rows:
-
             customer = {
                 "cid": row[0],
                 "ano": str(row[1]).strip() if row[1] is not None else "",
@@ -5967,7 +5967,7 @@ def api_customer_family_full(account_no):
                 "final_risk_level": row[23],
                 "freeze_date": row[24].isoformat() if row[24] else None
             }
-
+            
             ano = customer["ano"]
             pano = customer["pano"]
 
@@ -5982,39 +5982,44 @@ def api_customer_family_full(account_no):
             if not ano:
                 continue
 
-            customer_map[ano] = customer
-            if customer.get("cid"):
-                customer_map[str(customer["cid"])] = customer
+            if ano not in ano_to_customers:
+                ano_to_customers[ano] = []
+            ano_to_customers[ano].append(customer)
+            
+            # Add to adjacency list for BFS/undirected traversal
+            if ano not in adj:
+                adj[ano] = set()
+            
+            if pano and pano.lower() != 'nan' and pano != '':
+                if pano not in adj:
+                    adj[pano] = set()
+                adj[ano].add(pano)
+                adj[pano].add(ano)
 
-        # Trace parent chain starting from account_no
-        visited = []
-        current = account_no
-        if current.endswith(".0"):
-            current = current[:-2]
-
-        while current:
-            if current in visited:
-                break # Avoid loop
-
-            cust = customer_map.get(current)
-            if cust:
-                visited.append(current)
-                pano = cust.get("pano", "").strip()
-                if pano.endswith(".0"):
-                    pano = pano[:-2]
-
-                if pano and pano.lower() != 'nan' and pano != '':
-                    current = pano
-                else:
-                    break
-            else:
-                break
-
+        # BFS to find all reachable nodes from the search target (account_no)
+        visited_nodes = set()
+        queue = []
+        
+        start_node = account_no
+        if start_node.endswith(".0"):
+            start_node = start_node[:-2]
+            
+        if start_node in adj:
+            queue.append(start_node)
+            visited_nodes.add(start_node)
+            
+        while queue:
+            current = queue.pop(0)
+            for neighbor in adj.get(current, []):
+                if neighbor not in visited_nodes:
+                    visited_nodes.add(neighbor)
+                    queue.append(neighbor)
+                    
         customers = []
-        for acc in visited:
-            customer = customer_map.get(str(acc).strip())
-            if customer:
-                customers.append(customer)
+        for node in visited_nodes:
+            cust_list = ano_to_customers.get(node, [])
+            for cust in cust_list:
+                customers.append(cust)
 
         customers = format_customer_ratings_with_trends(cur, customers)
 
@@ -9273,9 +9278,15 @@ def api_dashboard_analytics(vid):
     try:
         view = request.args.get("view", "active")
 
+        # Fetch village rates
+        cur.execute("SELECT interest_rate, cutting_rate FROM village WHERE vid = %s", (vid,))
+        rates_row = cur.fetchone()
+        interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
+        cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
+
         # 1. Fetch active customers
         cur.execute("""
-            SELECT cid, start_date, total_amount, balance_amount, paid_amount
+            SELECT cid, start_date, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
             FROM customer
             WHERE vid = %s
         """, (vid,))
@@ -9284,13 +9295,13 @@ def api_dashboard_analytics(vid):
         # 2. Fetch closed customers
         if view == "active":
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
                 FROM closed_cust_account
                 WHERE vid = %s AND balance_amount > 0
             """, (vid,))
         else:
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
                 FROM closed_cust_account
                 WHERE vid = %s
             """, (vid,))
@@ -9299,13 +9310,13 @@ def api_dashboard_analytics(vid):
         # 2b. Fetch historic customers
         if view == "active":
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
                 FROM historic_customer_data
                 WHERE vid = %s AND balance_amount > 0
             """, (vid,))
         else:
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
                 FROM historic_customer_data
                 WHERE vid = %s
             """, (vid,))
@@ -9351,8 +9362,28 @@ def api_dashboard_analytics(vid):
                 active_bal = 0.0
                 defaulted_bal = 0.0
 
+                active_loan_p = 0.0
+                active_loan_i = 0.0
+                active_loan_r = 0.0
+
+                active_bal_p = 0.0
+                active_bal_i = 0.0
+                active_bal_r = 0.0
+
+                defaulted_loan_p = 0.0
+                defaulted_loan_i = 0.0
+                defaulted_loan_r = 0.0
+
+                defaulted_bal_p = 0.0
+                defaulted_bal_i = 0.0
+                defaulted_bal_r = 0.0
+
+                closed_loan_p = 0.0
+                closed_loan_i = 0.0
+                closed_loan_r = 0.0
+
                 # Process currently active customers
-                for cid, start_date, total_amount, balance_amount, paid_amount in active_rows:
+                for cid, start_date, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount in active_rows:
                     if not start_date:
                         continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
@@ -9367,8 +9398,24 @@ def api_dashboard_analytics(vid):
                     active_loan += float(total_amount)
                     active_bal += bal_at_T
 
+                    # calculate splits
+                    i_orig = float(interest_amount if interest_amount is not None and interest_amount > 0 else (float(total_amount) * (interest_rate / 100.0)))
+                    r_orig = float(cutting_amount if cutting_amount is not None and cutting_amount > 0 else (float(total_amount) * (cutting_rate / 100.0)))
+                    p_orig = float(base_amount if base_amount is not None and base_amount > 0 else (float(total_amount) - i_orig - r_orig))
+
+                    p_rem = max(0.0, bal_at_T - i_orig - r_orig)
+                    i_rem = max(0.0, min(i_orig, bal_at_T - r_orig))
+                    r_rem = max(0.0, min(r_orig, bal_at_T))
+
+                    active_loan_p += p_orig
+                    active_loan_i += i_orig
+                    active_loan_r += r_orig
+                    active_bal_p += p_rem
+                    active_bal_i += i_rem
+                    active_bal_r += r_rem
+
                 # Process currently closed and historic customers
-                for cid, start_date, closed_at, total_amount, balance_amount, paid_amount in closed_rows + historic_rows:
+                for cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount in closed_rows + historic_rows:
                     if not start_date:
                         continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
@@ -9382,18 +9429,45 @@ def api_dashboard_analytics(vid):
                     paid_at_T = sum(p["amt"] for p in pmts if p["date"] <= dt)
                     bal_at_T = max(0.0, float(total_amount) - paid_at_T)
 
+                    # calculate splits
+                    i_orig = float(interest_amount if interest_amount is not None and interest_amount > 0 else (float(total_amount) * (interest_rate / 100.0)))
+                    r_orig = float(cutting_amount if cutting_amount is not None and cutting_amount > 0 else (float(total_amount) * (cutting_rate / 100.0)))
+                    p_orig = float(base_amount if base_amount is not None and base_amount > 0 else (float(total_amount) - i_orig - r_orig))
+
+                    p_rem = max(0.0, bal_at_T - i_orig - r_orig)
+                    i_rem = max(0.0, min(i_orig, bal_at_T - r_orig))
+                    r_rem = max(0.0, min(r_orig, bal_at_T))
+
                     if is_active_at_T:
                         active_count += 1
                         active_loan += float(total_amount)
                         active_bal += bal_at_T
+
+                        active_loan_p += p_orig
+                        active_loan_i += i_orig
+                        active_loan_r += r_orig
+                        active_bal_p += p_rem
+                        active_bal_i += i_rem
+                        active_bal_r += r_rem
                     else:
                         if bal_at_T > 0:
                             defaulted_count += 1
                             defaulted_loan += float(total_amount)
                             defaulted_bal += bal_at_T
+
+                            defaulted_loan_p += p_orig
+                            defaulted_loan_i += i_orig
+                            defaulted_loan_r += r_orig
+                            defaulted_bal_p += p_rem
+                            defaulted_bal_i += i_rem
+                            defaulted_bal_r += r_rem
                         else:
                             closed_count += 1
                             closed_loan += float(total_amount)
+
+                            closed_loan_p += p_orig
+                            closed_loan_i += i_orig
+                            closed_loan_r += r_orig
 
                 h_list.append({
                     "date": dt.strftime(label_format),
@@ -9407,12 +9481,31 @@ def api_dashboard_analytics(vid):
                         "active": active_loan,
                         "defaulted": defaulted_loan,
                         "closed": closed_loan,
-                        "total": active_loan + defaulted_loan + closed_loan
+                        "total": active_loan + defaulted_loan + closed_loan,
+                        "split": {
+                            "active": {"p": active_loan_p, "i": active_loan_i, "r": active_loan_r},
+                            "defaulted": {"p": defaulted_loan_p, "i": defaulted_loan_i, "r": defaulted_loan_r},
+                            "closed": {"p": closed_loan_p, "i": closed_loan_i, "r": closed_loan_r},
+                            "total": {
+                                "p": active_loan_p + defaulted_loan_p + closed_loan_p,
+                                "i": active_loan_i + defaulted_loan_i + closed_loan_i,
+                                "r": active_loan_r + defaulted_loan_r + closed_loan_r
+                            }
+                        }
                     },
                     "balance": {
                         "active": active_bal,
                         "defaulted": defaulted_bal,
-                        "total": active_bal + defaulted_bal
+                        "total": active_bal + defaulted_bal,
+                        "split": {
+                            "active": {"p": active_bal_p, "i": active_bal_i, "r": active_bal_r},
+                            "defaulted": {"p": defaulted_bal_p, "i": defaulted_bal_i, "r": defaulted_bal_r},
+                            "total": {
+                                "p": active_bal_p + defaulted_bal_p,
+                                "i": active_bal_i + defaulted_bal_i,
+                                "r": active_bal_r + defaulted_bal_r
+                            }
+                        }
                     }
                 })
             return h_list
@@ -10255,9 +10348,9 @@ def api_cashbag_breakdown():
                 else:
                     w_day = 29
                 week_start_date = created_at.replace(day=w_day)
-                week_key = week_start_date.strftime("%-d/%-m/%Y")
+                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
 
-                day_key = created_at.strftime("%-d/%-m/%Y")
+                day_key = f"{created_at.day}/{created_at.month}/{created_at.year}"
 
                 signed_amt = amt
                 if txn == 'ADJUSTMENT' and txn_sub == 'MINUS':
@@ -10326,7 +10419,11 @@ def api_cashbag_breakdown():
             cur.execute("""
                 SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
                        v.interest_rate, v.cutting_rate, c.interest_amount
-                FROM customer c
+                FROM (
+                    SELECT cid, ano, name, base_amount, cutting_amount, total_amount, start_date, interest_amount, status, vid FROM customer
+                    UNION ALL
+                    SELECT cid, ano, name, base_amount, cutting_amount, total_amount, start_date, interest_amount, status, vid FROM closed_cust_account
+                ) c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
                 ORDER BY c.start_date DESC, c.cid DESC
@@ -10374,9 +10471,9 @@ def api_cashbag_breakdown():
                 else:
                     w_day = 29
                 week_start_date = start_date.replace(day=w_day)
-                week_key = week_start_date.strftime("%-d/%-m/%Y")
+                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
 
-                day_key = start_date.strftime("%-d/%-m/%Y")
+                day_key = f"{start_date.day}/{start_date.month}/{start_date.year}"
 
                 if month_key not in grouped:
                     grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
@@ -10434,9 +10531,17 @@ def api_cashbag_breakdown():
 
             cur.execute("""
                 SELECT p.pid, c.ano, c.name, p.amt, p.payment_date
-                FROM payment p
-                JOIN customer c ON p.cid = c.cid
-                WHERE c.vid = ANY(%s)
+                FROM (
+                    SELECT pid, cid, amt, payment_date, vid FROM payment
+                    UNION ALL
+                    SELECT pid, cid, amt, payment_date, vid FROM closed_cust_payment
+                ) p
+                JOIN (
+                    SELECT cid, ano, name FROM customer
+                    UNION ALL
+                    SELECT cid, ano, name FROM closed_cust_account
+                ) c ON p.cid = c.cid
+                WHERE p.vid = ANY(%s)
                 ORDER BY p.payment_date DESC, p.pid DESC
             """, (vids,))
             pay_rows = cur.fetchall()
@@ -10461,9 +10566,9 @@ def api_cashbag_breakdown():
                 else:
                     w_day = 29
                 week_start_date = payment_date.replace(day=w_day)
-                week_key = week_start_date.strftime("%-d/%-m/%Y")
+                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
 
-                day_key = payment_date.strftime("%-d/%-m/%Y")
+                day_key = f"{payment_date.day}/{payment_date.month}/{payment_date.year}"
 
                 val = float(amt or 0)
 
@@ -11787,9 +11892,12 @@ def cashbag():
                         WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.upi_amount, 0)
                         ELSE 0 
                     END), 0) AS upi
-                FROM payment p
-                JOIN customer c ON p.cid = c.cid
-                WHERE c.vid = ANY(%s)
+                FROM (
+                    SELECT amt, payment_type, cash_amount, upi_amount, vid FROM payment
+                    UNION ALL
+                    SELECT amt, payment_type, cash_amount, upi_amount, vid FROM closed_cust_payment
+                ) p
+                WHERE p.vid = ANY(%s)
             """, (vids,))
             row_inst = cur.fetchone()
             installments = float(row_inst[0] or 0)
@@ -11837,7 +11945,11 @@ def cashbag():
                         WHEN c.interest_amount > 0 THEN c.interest_amount 
                         ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
                     END), 0) AS interest_total
-                FROM customer c
+                FROM (
+                    SELECT base_amount, total_amount, cutting_amount, interest_amount, payment_type, status, vid FROM customer
+                    UNION ALL
+                    SELECT base_amount, total_amount, cutting_amount, interest_amount, payment_type, status, vid FROM closed_cust_account
+                ) c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
             """, (vids,))
@@ -11921,7 +12033,11 @@ def cashbag():
                         'Loan issued to ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
-                    FROM customer c
+                    FROM (
+                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM customer
+                        UNION ALL
+                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM closed_cust_account
+                    ) c
                     JOIN village v ON c.vid = v.vid
                     WHERE c.vid = ANY(%s) AND c.status != 'deleted'
 
@@ -11940,7 +12056,11 @@ def cashbag():
                         'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         c.start_date::timestamp WITH time zone AS created_at
-                    FROM customer c
+                    FROM (
+                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM customer
+                        UNION ALL
+                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM closed_cust_account
+                    ) c
                     JOIN village v ON c.vid = v.vid
                     WHERE c.vid = ANY(%s) AND c.status != 'deleted'
 
@@ -11956,9 +12076,17 @@ def cashbag():
                         'Collection from ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         p.created_at AS created_at
-                    FROM payment p
-                    JOIN customer c ON p.cid = c.cid
-                    WHERE c.vid = ANY(%s)
+                    FROM (
+                        SELECT pid, cid, payment_type, amt, created_at, vid FROM payment
+                        UNION ALL
+                        SELECT pid, cid, payment_type, amt, created_at, vid FROM closed_cust_payment
+                    ) p
+                    JOIN (
+                        SELECT cid, name, ano FROM customer
+                        UNION ALL
+                        SELECT cid, name, ano FROM closed_cust_account
+                    ) c ON p.cid = c.cid
+                    WHERE p.vid = ANY(%s)
                 ) AS combined
                 ORDER BY combined.created_at DESC, id DESC
                 LIMIT 250
@@ -12124,35 +12252,73 @@ def add_cashbag_transaction():
         flash("Invalid amount", "danger")
         return redirect(url_for("cashbag", **redirect_args))  # type: ignore
 
+    txn_date_str = request.form.get("txn_date")
+    created_at_val = None
+    if txn_date_str:
+        try:
+            now = datetime.now()
+            parsed_date = datetime.strptime(txn_date_str, "%Y-%m-%d")
+            created_at_val = parsed_date.replace(hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond)
+        except Exception:
+            pass
+
     conn = get_pg_connection()
     cur = conn.cursor()
 
     try:
 
-        cur.execute("""
-            INSERT INTO cashbag_transactions (
+        if created_at_val:
+            cur.execute("""
+                INSERT INTO cashbag_transactions (
+                    emp1,
+                    emp2,
+                    eid,
+                    txn,
+                    txn_sub,
+                    txn_type,
+                    amount,
+                    notes,
+                    created_by,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
                 emp1,
                 emp2,
-                eid,
+                session.get("eid"),
                 txn,
-                txn_sub,
+                txn_sub or None,
                 txn_type,
                 amount,
-                notes,
-                created_by
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            emp1,
-            emp2,
-            session.get("eid"),
-            txn,
-            txn_sub or None,
-            txn_type,
-            amount,
-            notes or None,
-            username
-        ))
+                notes or None,
+                username,
+                created_at_val
+            ))
+        else:
+            cur.execute("""
+                INSERT INTO cashbag_transactions (
+                    emp1,
+                    emp2,
+                    eid,
+                    txn,
+                    txn_sub,
+                    txn_type,
+                    amount,
+                    notes,
+                    created_by
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                emp1,
+                emp2,
+                session.get("eid"),
+                txn,
+                txn_sub or None,
+                txn_type,
+                amount,
+                notes or None,
+                username
+            ))
 
         conn.commit()
 
@@ -12300,4 +12466,4 @@ def b64encode_filter(data):
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)

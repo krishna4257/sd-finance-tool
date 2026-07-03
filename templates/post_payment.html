@@ -41,7 +41,9 @@
 
             <button class="neumorphic-btn small" type="submit" id="submitBtn" style="margin-bottom: 12px;">Add</button>
             <button class="neumorphic-btn small submit-btn" style="margin-bottom: 12px; gap: 6px; color: #16521e;"
-              onclick="submitAllPayments()"><i class="fas fa-check-circle"></i> Submit All</button>
+              onclick="submitAllPayments()"><i class="fas fa-check-circle"></i> Submit</button>
+            <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px; color: #1d4ed8;"
+              onclick="openBulkEntryModal()"><i class="fas fa-list-ol"></i> Bulk</button>
             <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px;" onclick="printTemp()"><i
                 class="fas fa-print"></i> Print</button>
             <button class="neumorphic-btn small danger-btn" style="margin-bottom: 12px; gap: 6px; color: #dc3545;"
@@ -106,7 +108,8 @@
 
         <!-- Toggle Switch for Current vs Historic -->
         <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 15px;">
-          <div class="sliding-toggle-container mode-current" id="postingReportToggle" onclick="togglePostingReportView()">
+          <div class="sliding-toggle-container mode-current" id="postingReportToggle"
+            onclick="togglePostingReportView()">
             <div class="sliding-toggle-pill"></div>
             <span class="toggle-label current-label">Current</span>
             <span class="toggle-label historic-label">Historic</span>
@@ -132,7 +135,8 @@
             style="margin-left: auto; color: #b45309; margin-bottom: 2px;"><i class="fas fa-calendar-alt"></i> Date
             Change</button>
           <button class="neumorphic-btn small primary-save-btn glow-cyan" id="btnSaveReportChanges"
-            style="display: none; margin-bottom: 2px;" onclick="saveAllReportChanges()"><i class="fas fa-save"></i> Save Changes</button>
+            style="display: none; margin-bottom: 2px;" onclick="saveAllReportChanges()"><i class="fas fa-save"></i> Save
+            Changes</button>
         </div>
 
         <!-- Bulk Date Change Tool Panel (Initially Hidden) -->
@@ -219,7 +223,8 @@
             <span class="analytics-value" id="totalAnotop" style="font-size: 24px;">0</span>
             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
               Expected: <strong id="expectedAccs">0</strong> | Short: <strong id="shortAccs"
-                style="color: #dc3545; cursor: pointer; text-decoration: underline;" title="Click to view non-paying customers">0</strong>
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;"
+                title="Click to view non-paying customers">0</strong>
             </div>
           </div>
         </div>
@@ -244,7 +249,8 @@
             <span class="analytics-value" id="totalAmttop" data-money style="font-size: 24px;">0.00</span>
             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap;">
               Expected: <strong id="expectedAmt" data-money>0.00</strong> | Short: <strong id="shortAmt"
-                style="color: #dc3545; cursor: pointer; text-decoration: underline;" data-money title="Click to view non-paying customers">0.00</strong>
+                style="color: #dc3545; cursor: pointer; text-decoration: underline;" data-money
+                title="Click to view non-paying customers">0.00</strong>
             </div>
           </div>
         </div>
@@ -341,7 +347,8 @@
     <div class="modal-content" style="max-width: 600px; width: 90%;">
       <span class="close-btn" onclick="closeShortfallModal()">&times;</span>
       <h3>Non-Paying Customers (Shortfall)</h3>
-      <div style="margin: 16px 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+      <div
+        style="margin: 16px 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
         <table class="no-datatable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <thead>
             <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border);">
@@ -362,6 +369,153 @@
     </div>
   </div>
 </div>
+
+<!-- ===================== BULK ENTRY MODAL ===================== -->
+<div id="bulkEntryModal"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9000; justify-content:center; align-items:center;">
+  <style>
+    .ledger-page-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ledger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      font-family: inherit;
+      table-layout: fixed;
+    }
+
+    .ledger-table th {
+      padding: 6px 8px !important;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-bottom: 2px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: var(--bg-body);
+    }
+
+    .ledger-table td {
+      height: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ledger-input {
+      width: 100%;
+      height: 100%;
+      border: none !important;
+      background: transparent;
+      padding: 6px 10px !important;
+      font-size: 13px;
+      color: var(--text);
+      box-sizing: border-box;
+      outline: none;
+      transition: background-color 0.15s;
+    }
+
+    .ledger-input:hover {
+      background-color: rgba(0, 0, 0, 0.02);
+    }
+
+    .ledger-input:focus {
+      background-color: rgba(59, 130, 246, 0.06) !important;
+    }
+
+    .ledger-divider {
+      border-right: 2px solid var(--border) !important;
+    }
+
+    .ledger-footer-cell {
+      padding: 8px 10px !important;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      background: rgba(59, 130, 246, 0.08) !important;
+      border-top: 2px solid var(--border);
+    }
+
+    .ledger-highlight-cell {
+      outline: 2px solid #2563eb !important;
+      outline-offset: -2px;
+      background-color: rgba(37, 99, 235, 0.08) !important;
+    }
+  </style>
+  <div
+    style="background:var(--surface); border-radius:14px; width:min(950px,96vw); height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,0.22); overflow:hidden;">
+
+    <!-- STEP 1: Input -->
+    <div id="bulkStep1"
+      style="display:flex; flex-direction:column; gap:14px; padding:24px; height:100%; box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+        <h3 style="margin:0; font-size:17px; color:var(--text);"><i class="fas fa-list-ol" style="color:#1d4ed8;"></i>
+          Bulk Entry</h3>
+        <button onclick="closeBulkEntryModal()"
+          style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary);line-height:1;">&times;</button>
+      </div>
+      <label style="margin:0; flex-shrink:0; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:13px; white-space:nowrap; font-weight:500;">Payment Date</span>
+        <input type="text" id="bulkDate" placeholder="dd-mm-yyyy" style="width:160px;">
+      </label>
+      <textarea id="bulkText"
+        placeholder="Paste entries here, e.g.&#10;Page 1&#10;&#10;(1,500), (2,500), (3,300)&#10;&#10;(21,400), (22,10000)&#10;&#10;(41,300), (42,100)&#10;&#10;Page 2&#10;&#10;(61,150), (62,100)"
+        style="flex:1; resize:none; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; font-family:monospace; background:var(--bg-body); color:var(--text); box-sizing:border-box; min-height:0;"></textarea>
+      <div id="bulkModalError"
+        style="display:none; background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; border-radius:8px; padding:10px 14px; font-size:13px; flex-shrink:0;">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; flex-shrink:0;">
+        <button class="neumorphic-btn small" onclick="closeBulkEntryModal()"
+          style="color:var(--text-secondary);">Cancel</button>
+        <button class="neumorphic-btn small" style="color:#1d4ed8;" onclick="parseBulkEntry()"><i
+            class="fas fa-eye"></i> Parse &amp; Preview</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Ledger Preview -->
+    <div id="bulkStep2" style="display:none; flex-direction:column; height:100%; box-sizing:border-box;">
+      <!-- Header -->
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; padding:14px 24px; border-bottom:1px solid var(--border); flex-shrink:0;">
+        <button class="neumorphic-btn small" onclick="showBulkStep1()" style="color:var(--text-secondary);"><i
+            class="fas fa-arrow-left"></i> Back</button>
+        <h3 style="margin:0; font-size:15px; color:var(--text);">Preview &mdash; <span id="bulkPreviewDateLabel"
+            style="color:var(--text-secondary); font-weight:400;"></span></h3>
+        <button onclick="closeBulkEntryModal()"
+          style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary);line-height:1;">&times;</button>
+      </div>
+      <!-- Scrollable ledger -->
+      <div id="bulkLedgerContainer" style="flex:1; overflow-y:auto; padding:20px 24px; min-height:0;"></div>
+      <!-- Error banner -->
+      <div id="bulkPreviewError"
+        style="display:none; background:#fef2f2; color:#b91c1c; padding:8px 24px; font-size:13px; border-top:1px solid #fca5a5; flex-shrink:0;">
+      </div>
+      <!-- Footer -->
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; padding:12px 24px; border-top:1px solid var(--border); flex-shrink:0;">
+        <div id="bulkGrandTotal" style="font-size:13px; font-weight:600; color:var(--text);"></div>
+        <div style="display:flex; gap:10px;">
+          <button class="neumorphic-btn small" onclick="closeBulkEntryModal()"
+            style="color:var(--text-secondary);">Cancel</button>
+          <button id="bulkExecuteBtn"
+            style="padding:7px 18px; border-radius:8px; border:none; font-size:13px; font-weight:600; cursor:not-allowed; color:#fff; background:#dc2626; opacity:0.65; transition:background .2s, opacity .2s;"
+            onclick="executeBulkEntry()" disabled><i class="fas fa-check-circle"></i> Execute</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ==================== END BULK ENTRY MODAL =================== -->
+
 
 
 {% include 'customer_popup.html' %}

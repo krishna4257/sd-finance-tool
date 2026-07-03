@@ -186,7 +186,7 @@ anoInput.addEventListener("change", checkAno);
         }
 
         if (!isNaN(amount) && !isNaN(period) && period > 0) {
-            installmentAmountInput.value = (amount / period).toFixed(2);
+            installmentAmountInput.value = (amount / period).toFixed(0);
         } else {
             installmentAmountInput.value = '';
         }

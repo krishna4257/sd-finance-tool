@@ -125,7 +125,7 @@ window.formatDateToISO = formatDateToISO;
  * @returns {string} The formatted string prefixed with ₹.
  */
 function formatWithRupeeAndCommas(amount) {
-  const number = parseFloat(amount);
+  const number = Math.round(parseFloat(amount));
   if (Number.isNaN(number)) return '';
   return `₹${number.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }

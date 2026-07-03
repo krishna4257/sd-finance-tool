@@ -227,7 +227,7 @@ async function loadDashboardData(vid, forceRecalc = false) {
           contribStr = mData.contribution >= 0 ? `+${mData.contribution} pts` : `${mData.contribution} pts`;
           contribColor = mData.contribution >= 0 ? "#10b981" : "#ef4444";
         } else if (m.key === "portfolio_size_factor") {
-          valStr = `₹${(mData.loan_sum / 100000).toFixed(1)}L sum`;
+          valStr = `₹${Math.round(mData.loan_sum / 100000).toFixed(0)}L sum`;
           contribStr = mData.contribution >= 0 ? `+${mData.contribution} pts` : `${mData.contribution} pts`;
           contribColor = mData.contribution >= 0 ? "#10b981" : "#ef4444";
         } else {
@@ -748,6 +748,18 @@ function populateDashboardTiles(dbData) {
   document.getElementById("pctDefaultedBalance").textContent = `(${pctDefaultedBalVal}%)`;
   document.getElementById("barDefaultedBalance").style.width = pctDefaultedBalVal + "%";
 
+  // Render splits
+  const loanSplit = current.loan_amount.split || { total: { p: 0, i: 0, r: 0 } };
+  const balSplit = current.balance.split || { total: { p: 0, i: 0, r: 0 } };
+
+  document.getElementById("lblLoanSplitPrincipal").textContent = formatRupee(loanSplit.total.p);
+  document.getElementById("lblLoanSplitInterest").textContent = formatRupee(loanSplit.total.i);
+  document.getElementById("lblLoanSplitRusum").textContent = formatRupee(loanSplit.total.r);
+
+  document.getElementById("lblBalanceSplitPrincipal").textContent = formatRupee(balSplit.total.p);
+  document.getElementById("lblBalanceSplitInterest").textContent = formatRupee(balSplit.total.i);
+  document.getElementById("lblBalanceSplitRusum").textContent = formatRupee(balSplit.total.r);
+
   // Hide/Show Closed legends based on selected dashboard view
   const currentView = localStorage.getItem("dashboardView") || "active";
   const legendClosedCust = document.getElementById("legendClosedCustomers");
@@ -1101,11 +1113,11 @@ function renderHistoryChart(category, range) {
                 return value;
               } else {
                 if (value >= 100000) {
-                  return '₹' + (value / 100000).toFixed(1) + 'L';
+                  return '₹' + Math.round(value / 100000).toFixed(0) + 'L';
                 } else if (value >= 1000) {
-                  return '₹' + (value / 1000).toFixed(0) + 'K';
+                  return '₹' + Math.round(value / 1000).toFixed(0) + 'K';
                 }
-                return '₹' + value;
+                return '₹' + Math.round(value).toFixed(0);
               }
             }
           }
@@ -1117,8 +1129,8 @@ function renderHistoryChart(category, range) {
 
 function formatRupee(num) {
   if (num === null || num === undefined) return "₹0";
-  const val = parseFloat(num);
-  return "₹" + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  const val = Math.round(parseFloat(num));
+  return "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 // ------------------ NEW: Village Health Sub-View & Modal Controllers ------------------

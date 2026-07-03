@@ -149,6 +149,7 @@
 
     <div class="nav-section-label">MENU</div>
 
+    {% block sidebar %}
     {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'users_page', 'admin_control'] %}
     <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
@@ -169,6 +170,7 @@
     <a href="/feed"                           class="nav-link {% if request.endpoint == 'feed' %}active{% endif %}"><i class="fas fa-inbox"></i> Feed</a>
     <a href="/search"                         class="nav-link {% if request.endpoint == 'search_customer' %}active{% endif %}"><i class="fas fa-search"></i> Search | Edit</a>
     {% endif %}
+    {% endblock %}
 
     <div class="nav-section-label">GENERAL</div>
     <a href="/village" class="nav-link"><i class="fas fa-home"></i> Home</a>
@@ -205,6 +207,27 @@
           <div class="header-tile header-tile-pairs" title="Employee Pairs">
             <i class="fas fa-link"></i>
             <span>Pairs: <strong id="headerEmployeePairs">0</strong></span>
+          </div>
+        </div>
+        {% elif request.endpoint == 'cashbag' %}
+        <div class="header-context-tiles">
+          <div class="header-tile header-tile-employee" title="Active Primary Employee">
+            <i class="fas fa-user-tie"></i>
+            <span>{{ emp1_name }}</span>
+          </div>
+          {% if emp2_name %}
+          <div class="header-tile header-tile-employee" title="Active Secondary Employee">
+            <i class="fas fa-user-tie"></i>
+            <span>{{ emp2_name }}</span>
+          </div>
+          {% endif %}
+          <div class="header-tile header-tile-village" title="Active Villages" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>
+              {% for v in group_villages %}
+                {{ v.name }}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </span>
           </div>
         </div>
         {% elif session.get("vid") %}
@@ -244,6 +267,10 @@
 
         <button id="vpopRecalcBtn" class="icon-btn" title="Refresh Dashboard Data" onclick="refreshDashboardData()">
           <i class="fas fa-sync-alt"></i>
+        </button>
+
+        <button id="clusterAnalyticsBtn" class="icon-btn" title="Cluster Analytics" onclick="openClusterAnalyticsModal()">
+          <i class="fas fa-chart-pie"></i>
         </button>
         {% endif %}
 
