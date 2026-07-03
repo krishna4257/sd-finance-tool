@@ -550,7 +550,7 @@ document.addEventListener("DOMContentLoaded", function () {
         value = "";
       }
       
-      if (["total_amount", "paid_amount", "balance_amount", "installment_amount", "interest_discount"].includes(key)) {
+      if (["total_amount", "paid_amount", "balance_amount", "installment_amount", "interest_discount", "base_amount", "cutting_amount", "interest_amount"].includes(key)) {
         td.setAttribute("data-money", "");
         td.setAttribute("data-order", value);
         td.textContent = value;
@@ -1859,8 +1859,8 @@ document.addEventListener("DOMContentLoaded", () => {
           // Auto-calculate splits
           const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
           const cuttingRate = parseFloat(window.VILLAGE_CUTTING_RATE) || 0.0;
-          const interestAmt = total * interestRate / 100.0;
-          const cuttingAmt = total * cuttingRate / 100.0;
+          const interestAmt = Math.round(total * interestRate / 100.0);
+          const cuttingAmt = Math.round(total * cuttingRate / 100.0);
           const baseAmt = total - interestAmt - cuttingAmt;
           document.getElementById("popInputInterestAmount").value = interestAmt.toFixed(0);
           document.getElementById("popInputCuttingAmount").value = cuttingAmt.toFixed(0);

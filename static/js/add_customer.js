@@ -12,11 +12,11 @@
  * @param {number} delay - The delay in milliseconds.
  */
 function debounce(func, delay) {
-  let timeout;
-  return function(...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), delay);
-  };
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), delay);
+    };
 }
 
 
@@ -43,14 +43,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // List of all form fields (excluding readonly) for focus management and state control.
     const fields = [
-      anoInput,
-      nameInput,
-      panoInput,
-      phoneNumberInput,
-      typeInput,
-      periodInput,
-      startDateInput,
-      totalAmountInput
+        anoInput,
+        nameInput,
+        panoInput,
+        phoneNumberInput,
+        typeInput,
+        periodInput,
+        startDateInput,
+        totalAmountInput
     ];
 
     // State variable to track if loan fields have been set,
@@ -93,35 +93,35 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById("ano").addEventListener("input", function () {
         this.value = this.value.replace(/[^0-9]/g, "");
     });
-   
-    function checkAno() {
-    const ano = anoInput.value.trim();
-    if (!ano) return;
 
-    fetch(`/check_ano_exists?ano=${ano}`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.exists) {
-                message.textContent = "❌ Account number already exists";
+    function checkAno() {
+        const ano = anoInput.value.trim();
+        if (!ano) return;
+
+        fetch(`/check_ano_exists?ano=${ano}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.exists) {
+                    message.textContent = "❌ Account number already exists";
+                    message.className = "message-box error";
+                    message.style.display = "block";
+                    setFormFieldsEnabled(false);
+                    anoInput.focus();
+                } else {
+                    message.style.display = "none";
+                    setFormFieldsEnabled(true);   // ✅ THIS IS THE KEY LINE
+                    nameInput.focus();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                message.textContent = "Error checking account number";
                 message.className = "message-box error";
                 message.style.display = "block";
-                setFormFieldsEnabled(false);
-                anoInput.focus();
-            } else {
-                message.style.display = "none";
-                setFormFieldsEnabled(true);   // ✅ THIS IS THE KEY LINE
-                nameInput.focus();
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            message.textContent = "Error checking account number";
-            message.className = "message-box error";
-            message.style.display = "block";
-        });
-}
-anoInput.addEventListener("blur", checkAno);
-anoInput.addEventListener("change", checkAno);
+            });
+    }
+    anoInput.addEventListener("blur", checkAno);
+    anoInput.addEventListener("change", checkAno);
     // --- Dynamic Enter Key Loop ---
     function handleEnterKeyLoop(e) {
         if (e.key === 'Enter') {
@@ -138,7 +138,7 @@ anoInput.addEventListener("change", checkAno);
 
             const nextIndex = currentTabOrder.indexOf(e.target) + 1;
             nextInput = currentTabOrder[nextIndex];
-            
+
             if (e.target === anoInput) {
                 checkAno();
                 return;
@@ -152,7 +152,7 @@ anoInput.addEventListener("change", checkAno);
             if (e.target === startDateInput) {
                 loanFieldsSet = true;
             }
-            
+
             nextInput.focus();
         }
     }
@@ -199,7 +199,7 @@ anoInput.addEventListener("change", checkAno);
 
         if (!isNaN(amount) && amount > 0) {
             if (splitFieldsContainer) splitFieldsContainer.style.display = 'block';
-            
+
             // Only auto-calculate interest and cutting if this was triggered by total_amount change
             // or if the fields are empty
             const interestRate = parseFloat(window.VILLAGE_INTEREST_RATE) || 0.0;
@@ -217,9 +217,10 @@ anoInput.addEventListener("change", checkAno);
                 }
             }
 
-            const interestVal = parseFloat(interestInput?.value) || 0.0;
-            const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
+            const interestVal = Math.round(parseFloat(interestInput?.value) || 0.0);
+            const cuttingVal = Math.round(parseFloat(cuttingInput?.value) || 0.0);
             if (baseInput) {
+                baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
                 baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
             }
         } else {
@@ -229,9 +230,9 @@ anoInput.addEventListener("change", checkAno);
             if (baseInput) baseInput.value = '';
         }
     }
-    
+
     [typeInput, periodInput, startDateInput, totalAmountInput]
-  .forEach(el => el.addEventListener('input', calculateLoanFields));
+        .forEach(el => el.addEventListener('input', calculateLoanFields));
 
     function updatePeriodPlaceholder() {
         const type = typeInput.value;
@@ -248,13 +249,14 @@ anoInput.addEventListener("change", checkAno);
 
     const interestInput = document.getElementById('interest_amount');
     const cuttingInput = document.getElementById('cutting_amount');
-    
+
     function updateBaseAmount() {
         const amount = parseFloat(totalAmountInput.value);
-        const interestVal = parseFloat(interestInput?.value) || 0.0;
-        const cuttingVal = parseFloat(cuttingInput?.value) || 0.0;
+        const interestVal = Math.round(parseFloat(interestInput?.value) || 0.0);
+        const cuttingVal = Math.round(parseFloat(cuttingInput?.value) || 0.0);
         const baseInput = document.getElementById('base_amount');
         if (baseInput && !isNaN(amount)) {
+            baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
             baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
         }
     }
@@ -281,15 +283,15 @@ anoInput.addEventListener("change", checkAno);
                     if (data.found && data.accounts && data.accounts.length > 0) {
                         const accountsString = data.accounts.join(', ');
                         parentInfoText.textContent = `ℹ️ Linked with account(s): ${accountsString}.`;
-                        
+
                         const panoRect = panoInput.getBoundingClientRect();
                         const formGlassRect = form.closest('.form-glass').getBoundingClientRect();
-                        
+
                         parentInfoTooltip.style.top = `${panoRect.bottom - formGlassRect.top + window.scrollY + 5}px`;
                         parentInfoTooltip.style.left = `${panoRect.left - formGlassRect.left + window.scrollX}px`;
-                        
+
                         parentInfoTooltip.style.display = 'block';
-                        
+
                         tooltipTimeout = setTimeout(() => {
                             parentInfoTooltip.style.display = 'none';
                         }, 5000);
@@ -302,14 +304,14 @@ anoInput.addEventListener("change", checkAno);
                     parentInfoTooltip.style.display = 'none';
                 });
         };
-        
+
         panoInput.addEventListener('input', debounce(checkParentLink, 400));
-        
+
         panoInput.addEventListener('blur', () => {
             clearTimeout(tooltipTimeout);
             parentInfoTooltip.style.display = 'none';
         });
-        
+
         panoInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 clearTimeout(tooltipTimeout);
@@ -327,7 +329,7 @@ anoInput.addEventListener("change", checkAno);
         }
 
         isSubmitting = true; // ✅ Set the flag to true
-        
+
         const formData = new FormData(form);
 
         // Customer name validation
@@ -352,7 +354,7 @@ anoInput.addEventListener("change", checkAno);
             isSubmitting = false;
             return;
         }
-        
+
         message.textContent = "Saving...";
         message.className = "message-box";
         message.style.display = 'block';
@@ -361,71 +363,71 @@ anoInput.addEventListener("change", checkAno);
             method: "POST",
             body: formData
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                message.textContent = `Error: ${data.error}`;
-                message.className = "message-box error";
-            } else {
-                // Show success BEFORE clearing form
-                message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
-                message.className = "message-box success success-highlight";
-                document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
-                
-                // Update analytics in real-time
-                if (data.analytics) {
-                    document.getElementById('countToday').textContent = data.analytics.today;
-                    document.getElementById('countWeek').textContent = data.analytics.week;
-                    document.getElementById('countMonth').textContent = data.analytics.month;
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    message.textContent = `Error: ${data.error}`;
+                    message.className = "message-box error";
+                } else {
+                    // Show success BEFORE clearing form
+                    message.textContent = `✔️ Customer ${data.new_ano} added successfully`;
+                    message.className = "message-box success success-highlight";
+                    document.getElementById('highestAnoDisplay').textContent = data.highest_ano;
+
+                    // Update analytics in real-time
+                    if (data.analytics) {
+                        document.getElementById('countToday').textContent = data.analytics.today;
+                        document.getElementById('countWeek').textContent = data.analytics.week;
+                        document.getElementById('countMonth').textContent = data.analytics.month;
+                    }
+
+                    anoInput.value = data.highest_ano + 1;
+                    // Clear all dynamic fields to prepare for a new entry
+                    document.getElementById('name').value = '';
+                    document.getElementById('aadhaar_number').value = '';
+                    document.getElementById('pano').value = '';
+                    document.getElementById('phone_number').value = '';
+
+                    document.getElementById('total_amount').value = '';
+
+                    // Keep these fields persistent for repeated customer entry
+                    // type
+                    // period
+                    // start_date
+
+                    // Recalculate derived fields using preserved values
+                    calculateLoanFields();
+
+                    document.getElementById('longitude').value = '';
+                    document.getElementById('latitude').value = '';
+
+
+                    if (parentInfoTooltip) parentInfoTooltip.style.display = 'none';
+
+                    setFormFieldsEnabled(false); // Disable form again
+
+                    anoInput.focus(); // Move cursor back to the A.no field
+
+                    // Keep simplified fast-entry workflow active
+                    loanFieldsSet = true;
                 }
-                
-                anoInput.value = data.highest_ano + 1;
-                // Clear all dynamic fields to prepare for a new entry
-                document.getElementById('name').value = '';
-                document.getElementById('aadhaar_number').value = '';
-                document.getElementById('pano').value = '';
-                document.getElementById('phone_number').value = '';
-
-                document.getElementById('total_amount').value = '';
-
-                // Keep these fields persistent for repeated customer entry
-                // type
-                // period
-                // start_date
-
-                // Recalculate derived fields using preserved values
-                calculateLoanFields();
-
-                document.getElementById('longitude').value = '';
-                document.getElementById('latitude').value = '';
-                
-                
-                if (parentInfoTooltip) parentInfoTooltip.style.display = 'none';
-
-                setFormFieldsEnabled(false); // Disable form again
-
-                anoInput.focus(); // Move cursor back to the A.no field
-                
-                // Keep simplified fast-entry workflow active
-                loanFieldsSet = true;
-            }
-        })
-        .catch(err => {
-            message.textContent = `A network error occurred: ${err.message}`;
-            message.className = "message-box error";
-        })
-        .finally(() => {
-            isSubmitting = false; // ✅ Reset the flag regardless of outcome
-        });
+            })
+            .catch(err => {
+                message.textContent = `A network error occurred: ${err.message}`;
+                message.className = "message-box error";
+            })
+            .finally(() => {
+                isSubmitting = false; // ✅ Reset the flag regardless of outcome
+            });
 
     }
 
     // --- Event Listeners for Submission ---
-    form.addEventListener("submit", function(e) {
+    form.addEventListener("submit", function (e) {
         e.preventDefault();
         submitForm();
     });
-    
+
     // --- Initial State ---
     setFormFieldsEnabled(true);
     anoInput.focus();
