@@ -271,13 +271,24 @@
 
         <div class="feed-docs-grid">
           <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
-            {% if row.aadhaar_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            <div class="feed-status-pill">Aadhaar Front</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
+            {% if row.aadhaar_front_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
             {% else %}
-              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
+            {% endif %}
+          </div>
+
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Back</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
+            {% if row.aadhaar_back_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
             {% endif %}
           </div>
 
@@ -333,7 +344,8 @@
             <div class="feed-payload-group">
               <strong>Customer Docs</strong>
               <pre>{{ {
-                'aadhaar_photo': 'available' if row.aadhaar_photo else 'missing',
+                'aadhaar_front_pic': 'available' if row.aadhaar_front_pic else 'missing',
+                'aadhaar_back_pic': 'available' if row.aadhaar_back_pic else 'missing',
                 'house_photo': 'available' if row.house_photo else 'missing'
               } | tojson(indent=2) }}</pre>
             </div>
@@ -407,13 +419,24 @@
 
         <div class="feed-docs-grid">
           <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
-            {% if row.aadhaar_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            <div class="feed-status-pill">Aadhaar Front</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
+            {% if row.aadhaar_front_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
             {% else %}
-              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
+            {% endif %}
+          </div>
+
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Back</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
+            {% if row.aadhaar_back_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
             {% endif %}
           </div>
 
@@ -469,7 +492,8 @@
             <div class="feed-payload-group">
               <strong>Customer Docs</strong>
               <pre>{{ {
-                'aadhaar_photo': 'available' if row.aadhaar_photo else 'missing',
+                'aadhaar_front_pic': 'available' if row.aadhaar_front_pic else 'missing',
+                'aadhaar_back_pic': 'available' if row.aadhaar_back_pic else 'missing',
                 'house_photo': 'available' if row.house_photo else 'missing'
               } | tojson(indent=2) }}</pre>
             </div>
@@ -520,13 +544,24 @@
 
         <div class="feed-docs-grid">
           <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
-            {% if row.aadhaar_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            <div class="feed-status-pill">Aadhaar Front</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
+            {% if row.aadhaar_front_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
             {% else %}
-              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
+            {% endif %}
+          </div>
+
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Back</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
+            {% if row.aadhaar_back_pic %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
             {% endif %}
           </div>
 

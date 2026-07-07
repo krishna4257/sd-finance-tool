@@ -122,6 +122,83 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     anoInput.addEventListener("blur", checkAno);
     anoInput.addEventListener("change", checkAno);
+
+    let isFetchingPano = false;
+    let lastFetchedPano = "";
+
+    function fetchParentDetails(goToNext = false) {
+        const panoValue = panoInput.value.trim();
+        if (!panoValue) {
+            if (goToNext) {
+                if (phoneNumberInput) phoneNumberInput.focus();
+            }
+            return;
+        }
+
+        if (isFetchingPano || lastFetchedPano === panoValue) {
+            if (goToNext) {
+                if (totalAmountInput) totalAmountInput.focus();
+            }
+            return;
+        }
+
+        isFetchingPano = true;
+        message.textContent = "Loading customer details...";
+        message.className = "message-box info";
+        message.style.display = "block";
+
+        fetch(`/get_parent_details?pano=${panoValue}`)
+            .then(res => res.json())
+            .then(data => {
+                isFetchingPano = false;
+                if (data.found) {
+                    lastFetchedPano = panoValue;
+                    if (data.name) nameInput.value = data.name;
+                    if (data.phone_number) phoneNumberInput.value = data.phone_number;
+                    const aadhaarInput = document.getElementById('aadhaar_number');
+                    if (data.aadhaar_number && aadhaarInput) aadhaarInput.value = data.aadhaar_number;
+                    const latInput = document.getElementById('latitude');
+                    if (data.latitude && latInput) latInput.value = data.latitude;
+                    const lonInput = document.getElementById('longitude');
+                    if (data.longitude && lonInput) lonInput.value = data.longitude;
+
+                    message.textContent = `✔️ Details populated from Parent Account ${panoValue}`;
+                    message.className = "message-box success";
+                    message.style.display = "block";
+
+                    setFormFieldsEnabled(true);
+
+                    if (goToNext) {
+                        if (totalAmountInput) totalAmountInput.focus();
+                    }
+                } else {
+                    message.textContent = `❌ Parent Account ${panoValue} not found`;
+                    message.className = "message-box error";
+                    message.style.display = "block";
+                    if (goToNext) {
+                        nameInput.focus();
+                    }
+                }
+            })
+            .catch(err => {
+                isFetchingPano = false;
+                console.error("Error fetching parent details:", err);
+                message.textContent = "Error loading customer details";
+                message.className = "message-box error";
+                if (goToNext) {
+                    if (phoneNumberInput) phoneNumberInput.focus();
+                }
+            });
+    }
+
+    if (panoInput) {
+        panoInput.addEventListener('input', () => {
+            lastFetchedPano = "";
+        });
+        panoInput.addEventListener("change", () => fetchParentDetails(false));
+        panoInput.addEventListener("blur", () => fetchParentDetails(false));
+    }
+
     // --- Dynamic Enter Key Loop ---
     function handleEnterKeyLoop(e) {
         if (e.key === 'Enter') {
@@ -141,6 +218,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (e.target === anoInput) {
                 checkAno();
+                return;
+            }
+
+            if (e.target === panoInput) {
+                fetchParentDetails(true);
                 return;
             }
 

@@ -650,7 +650,8 @@ def ensure_customer_docs_feed_table():
                 vid INTEGER NOT NULL,
                 ano INTEGER NOT NULL,
                 cid INTEGER,
-                aadhaar_photo BYTEA,
+                aadhaar_front_pic BYTEA,
+                aadhaar_back_pic BYTEA,
                 house_photo BYTEA,
                 status TEXT NOT NULL DEFAULT 'pending',
                 reviewed_by INTEGER,
@@ -1619,6 +1620,63 @@ def check_parent_link():
     finally:
         cur.close()
         conn.close()
+
+
+@app.route("/get_parent_details")
+@login_required
+def get_parent_details():
+    pano = request.args.get("pano", "").strip()
+    vid = session.get("vid")
+
+    if not pano or not vid:
+        return jsonify({"found": False, "error": "Missing pano or village context"})
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT name, phone_number, aadhaar_number, latitude, longitude, status
+            FROM (
+                SELECT name, phone_number, aadhaar_number, latitude, longitude, 'active' AS status
+                FROM customer
+                WHERE vid = %s AND CAST(ano AS TEXT) = %s
+
+                UNION ALL
+
+                SELECT name, phone_number, aadhaar_number, latitude, longitude, 'closed' AS status
+                FROM closed_cust_account
+                WHERE vid = %s AND CAST(ano AS TEXT) = %s
+
+                UNION ALL
+
+                SELECT name, phone_number, aadhaar_number, latitude, longitude, 'historic' AS status
+                FROM historic_customer_data
+                WHERE vid = %s AND CAST(ano AS TEXT) = %s
+            ) all_cust
+            ORDER BY CASE WHEN status = 'active' THEN 0 WHEN status = 'closed' THEN 1 ELSE 2 END
+            LIMIT 1
+        """, (vid, pano, vid, pano, vid, pano))
+
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"found": False})
+
+        return jsonify({
+            "found": True,
+            "name": row[0] or "",
+            "phone_number": row[1] or "",
+            "aadhaar_number": row[2] or "",
+            "latitude": float(row[3]) if row[3] is not None else "",
+            "longitude": float(row[4]) if row[4] is not None else "",
+        })
+    except Exception as e:
+        logger.error(f"Error in get_parent_details: {e}")
+        return jsonify({"found": False, "error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 
 def get_highest_ano_by_vid(vid):
     conn = get_pg_connection()
@@ -3697,25 +3755,29 @@ def customer_feed():
         ))
 
         # 2️⃣ Read images
-        aadhaar_file = request.files.get("aadhaar_photo")
+        aadhaar_front_file = request.files.get("aadhaar_front_pic")
+        aadhaar_back_file = request.files.get("aadhaar_back_pic")
         house_file = request.files.get("house_photo")
 
-        aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
+        aadhaar_front_bytes = aadhaar_front_file.read() if aadhaar_front_file else None
+        aadhaar_back_bytes = aadhaar_back_file.read() if aadhaar_back_file else None
         house_bytes = house_file.read() if house_file else None
 
         # 3️⃣ Insert into customer_docs
-        if aadhaar_bytes or house_bytes:
+        if aadhaar_front_bytes or aadhaar_back_bytes or house_bytes:
             cur.execute("""
-                INSERT INTO customer_docs (vid, ano, aadhaar_photo, house_photo)
-                VALUES (%s,%s,%s,%s)
+                INSERT INTO customer_docs (vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo)
+                VALUES (%s,%s,%s,%s,%s)
                 ON CONFLICT (vid, ano)
                 DO UPDATE SET
-                    aadhaar_photo = EXCLUDED.aadhaar_photo,
-                    house_photo = EXCLUDED.house_photo
+                    aadhaar_front_pic = COALESCE(EXCLUDED.aadhaar_front_pic, customer_docs.aadhaar_front_pic),
+                    aadhaar_back_pic = COALESCE(EXCLUDED.aadhaar_back_pic, customer_docs.aadhaar_back_pic),
+                    house_photo = COALESCE(EXCLUDED.house_photo, customer_docs.house_photo)
             """, (
                 vid,
                 ano,
-                aadhaar_bytes,
+                aadhaar_front_bytes,
+                aadhaar_back_bytes,
                 house_bytes
             ))
 
@@ -3795,22 +3857,25 @@ def customer_docs_update():
         if not ano or not vid or not eid:
             return jsonify({"error": "ano, vid and eid are required"}), 400
 
-        aadhaar_file = request.files.get("aadhaar_photo")
+        aadhaar_front_file = request.files.get("aadhaar_front_pic")
+        aadhaar_back_file = request.files.get("aadhaar_back_pic")
         house_file = request.files.get("house_photo")
         logger.info(
-            "customer_docs_update request: local_uuid=%s vid=%s ano=%s eid=%s has_aadhaar=%s has_house=%s",
+            "customer_docs_update request: local_uuid=%s vid=%s ano=%s eid=%s has_aadhaar_front=%s has_aadhaar_back=%s has_house=%s",
             local_uuid,
             vid,
             ano,
             eid,
-            bool(aadhaar_file),
+            bool(aadhaar_front_file),
+            bool(aadhaar_back_file),
             bool(house_file),
         )
 
-        aadhaar_bytes = aadhaar_file.read() if aadhaar_file else None
+        aadhaar_front_bytes = aadhaar_front_file.read() if aadhaar_front_file else None
+        aadhaar_back_bytes = aadhaar_back_file.read() if aadhaar_back_file else None
         house_bytes = house_file.read() if house_file else None
 
-        if not aadhaar_bytes and not house_bytes:
+        if not aadhaar_front_bytes and not aadhaar_back_bytes and not house_bytes:
             logger.warning(
                 "customer_docs_update no documents provided: local_uuid=%s vid=%s ano=%s",
                 local_uuid,
@@ -3911,18 +3976,20 @@ def customer_docs_update():
                 vid,
                 ano,
                 cid,
-                aadhaar_photo,
+                aadhaar_front_pic,
+                aadhaar_back_pic,
                 house_photo,
                 status
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'pending')
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending')
             ON CONFLICT (local_uuid) DO UPDATE SET
                 device_id = EXCLUDED.device_id,
                 eid = EXCLUDED.eid,
                 vid = EXCLUDED.vid,
                 ano = EXCLUDED.ano,
                 cid = EXCLUDED.cid,
-                aadhaar_photo = COALESCE(EXCLUDED.aadhaar_photo, customer_docs_feed.aadhaar_photo),
+                aadhaar_front_pic = COALESCE(EXCLUDED.aadhaar_front_pic, customer_docs_feed.aadhaar_front_pic),
+                aadhaar_back_pic = COALESCE(EXCLUDED.aadhaar_back_pic, customer_docs_feed.aadhaar_back_pic),
                 house_photo = COALESCE(EXCLUDED.house_photo, customer_docs_feed.house_photo),
                 status = 'pending',
                 reviewed_by = NULL,
@@ -3935,7 +4002,8 @@ def customer_docs_update():
             vid,
             ano,
             resolved_cid,
-            aadhaar_bytes,
+            aadhaar_front_bytes,
+            aadhaar_back_bytes,
             house_bytes
         ))
 
@@ -3952,7 +4020,7 @@ def customer_docs_update():
                 "vid": vid,
                 "device_id": device_id,
                 "local_uuid": local_uuid,
-                "aadhaar_uploaded": aadhaar_bytes is not None,
+                "aadhaar_uploaded": aadhaar_bytes is not None, # type: ignore
                 "house_uploaded": house_bytes is not None
             }
         )
@@ -7128,12 +7196,14 @@ def feed():
                     cf.payload->'payload'->>'type',
                     cf.payload->>'type'
                 ) AS type,
-                COALESCE(feed_docs.aadhaar_photo, docs.aadhaar_photo) AS aadhaar_photo,
+                COALESCE(feed_docs.aadhaar_front_pic, docs.aadhaar_front_pic) AS aadhaar_front_pic,
+                COALESCE(feed_docs.aadhaar_back_pic, docs.aadhaar_back_pic) AS aadhaar_back_pic,
                 COALESCE(feed_docs.house_photo, docs.house_photo) AS house_photo
             FROM customer_feed cf
             LEFT JOIN LATERAL (
                 SELECT
-                    cdf.aadhaar_photo,
+                    cdf.aadhaar_front_pic,
+                    cdf.aadhaar_back_pic,
                     cdf.house_photo
                 FROM customer_docs_feed cdf
                 WHERE cdf.vid = cf.vid
@@ -7147,7 +7217,8 @@ def feed():
             ) AS feed_docs ON TRUE
             LEFT JOIN LATERAL (
                 SELECT
-                    cd.aadhaar_photo,
+                    cd.aadhaar_front_pic,
+                    cd.aadhaar_back_pic,
                     cd.house_photo
                 FROM customer_docs cd
                 WHERE cd.vid = cf.vid
@@ -7246,7 +7317,8 @@ def feed():
                 cdf.ano,
                 cdf.eid,
                 cdf.cid,
-                cdf.aadhaar_photo,
+                cdf.aadhaar_front_pic,
+                cdf.aadhaar_back_pic,
                 cdf.house_photo,
                 cdf.status,
                 cdf.created_at,
@@ -7448,7 +7520,7 @@ def accept_customer(feed_id):
     recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
     cur.execute("""
-        SELECT docs_feed_id, aadhaar_photo, house_photo
+        SELECT docs_feed_id, aadhaar_front_pic, aadhaar_back_pic, house_photo
         FROM customer_docs_feed
         WHERE vid = %s AND ano = %s AND status = 'pending'
         ORDER BY created_at DESC NULLS LAST, docs_feed_id DESC
@@ -7457,41 +7529,46 @@ def accept_customer(feed_id):
     pending_docs_row = cur.fetchone()
 
     if pending_docs_row:
-        docs_feed_id, aadhaar_photo, house_photo = pending_docs_row
+        docs_feed_id, aadhaar_front_pic, aadhaar_back_pic, house_photo = pending_docs_row
 
         cur.execute("""
-            SELECT aadhaar_photo, house_photo
+            SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
             FROM customer_docs
             WHERE vid = %s AND ano = %s
             LIMIT 1
         """, (data.get("vid"), data.get("ano"))) # type: ignore
         existing_docs = cur.fetchone()
 
-        existing_aadhaar = existing_docs[0] if existing_docs else None
-        existing_house = existing_docs[1] if existing_docs else None
+        existing_aadhaar_front = existing_docs[0] if existing_docs else None
+        existing_aadhaar_back = existing_docs[1] if existing_docs else None
+        existing_house = existing_docs[2] if existing_docs else None
 
-        final_aadhaar = aadhaar_photo if aadhaar_photo is not None else existing_aadhaar
+        final_aadhaar_front = aadhaar_front_pic if aadhaar_front_pic is not None else existing_aadhaar_front
+        final_aadhaar_back = aadhaar_back_pic if aadhaar_back_pic is not None else existing_aadhaar_back
         final_house = house_photo if house_photo is not None else existing_house
 
-        if final_aadhaar is not None or final_house is not None:
+        if final_aadhaar_front is not None or final_aadhaar_back is not None or final_house is not None:
             cur.execute("""
                 INSERT INTO customer_docs (
                     vid,
                     ano,
-                    aadhaar_photo,
+                    aadhaar_front_pic,
+                    aadhaar_back_pic,
                     house_photo,
                     uploaded_at
                 )
-                VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
                 ON CONFLICT (vid, ano)
                 DO UPDATE SET
-                    aadhaar_photo = EXCLUDED.aadhaar_photo,
+                    aadhaar_front_pic = EXCLUDED.aadhaar_front_pic,
+                    aadhaar_back_pic = EXCLUDED.aadhaar_back_pic,
                     house_photo = EXCLUDED.house_photo,
                     uploaded_at = CURRENT_TIMESTAMP
             """, (
                 data.get("vid"), # type: ignore
                 data.get("ano"), # type: ignore
-                final_aadhaar,
+                final_aadhaar_front,
+                final_aadhaar_back,
                 final_house
             ))
 
@@ -7571,14 +7648,14 @@ def accept_customer_feed_docs(feed_id):
         return {"success": False, "error": "Missing ano or vid in customer feed"}
 
     cur.execute("""
-        SELECT aadhaar_photo, house_photo
+        SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
         FROM customer_docs
         WHERE vid = %s AND ano = %s
         LIMIT 1
     """, (vid, ano))
     docs = cur.fetchone()
 
-    if not docs or (not docs[0] and not docs[1]):
+    if not docs or (not docs[0] and not docs[1] and not docs[2]):
         cur.close()
         conn.close()
         return {"success": False, "error": "No customer documents found for this feed item"}
@@ -7610,7 +7687,7 @@ def accept_existing_customer_docs(docs_feed_id):
         return {"success": False, "error": "User not logged properly"}
 
     cur.execute("""
-        SELECT vid, ano, aadhaar_photo, house_photo, status
+        SELECT vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status
         FROM customer_docs_feed
         WHERE docs_feed_id = %s
     """, (docs_feed_id,))
@@ -7621,49 +7698,54 @@ def accept_existing_customer_docs(docs_feed_id):
         conn.close()
         return {"success": False, "error": "Docs feed item not found"}
 
-    vid, ano, aadhaar_photo, house_photo, status = row
+    vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status = row
     if status != "pending":
         cur.close()
         conn.close()
         return {"success": False, "error": "Docs feed item is not pending"}
 
-    if not aadhaar_photo and not house_photo:
+    if not aadhaar_front_pic and not aadhaar_back_pic and not house_photo:
         cur.close()
         conn.close()
         return {"success": False, "error": "No documents attached"}
 
     cur.execute("""
-        SELECT aadhaar_photo, house_photo
+        SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
         FROM customer_docs
         WHERE vid = %s AND ano = %s
         LIMIT 1
     """, (vid, ano))
     existing_docs = cur.fetchone()
 
-    existing_aadhaar = existing_docs[0] if existing_docs else None
-    existing_house = existing_docs[1] if existing_docs else None
+    existing_aadhaar_front = existing_docs[0] if existing_docs else None
+    existing_aadhaar_back = existing_docs[1] if existing_docs else None
+    existing_house = existing_docs[2] if existing_docs else None
 
-    final_aadhaar = aadhaar_photo if aadhaar_photo is not None else existing_aadhaar
+    final_aadhaar_front = aadhaar_front_pic if aadhaar_front_pic is not None else existing_aadhaar_front
+    final_aadhaar_back = aadhaar_back_pic if aadhaar_back_pic is not None else existing_aadhaar_back
     final_house = house_photo if house_photo is not None else existing_house
 
     cur.execute("""
         INSERT INTO customer_docs (
             vid,
             ano,
-            aadhaar_photo,
+            aadhaar_front_pic,
+            aadhaar_back_pic,
             house_photo,
             uploaded_at
         )
-        VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP)
+        VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
         ON CONFLICT (vid, ano)
         DO UPDATE SET
-            aadhaar_photo = EXCLUDED.aadhaar_photo,
+            aadhaar_front_pic = EXCLUDED.aadhaar_front_pic,
+            aadhaar_back_pic = EXCLUDED.aadhaar_back_pic,
             house_photo = EXCLUDED.house_photo,
             uploaded_at = CURRENT_TIMESTAMP
     """, (
         vid,
         ano,
-        final_aadhaar,
+        final_aadhaar_front,
+        final_aadhaar_back,
         final_house
     ))
 
