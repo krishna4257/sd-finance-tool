@@ -132,8 +132,222 @@
   margin-bottom: 12px;
 }
 
-.payment-feed-table {
-  width: 100%;
+.feed-edit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.18);
+  color: #F59E0B;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: 8px;
+}
+
+.feed-edit-diff {
+  margin-top: 10px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.feed-edit-diff h6 {
+  color: #F59E0B;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.feed-edit-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 1fr;
+  gap: 6px 12px;
+  font-size: 13px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+
+.feed-edit-label {
+  color: var(--text);
+  opacity: 0.6;
+  font-weight: 600;
+}
+
+.feed-edit-original {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.feed-edit-new {
+  color: #F59E0B;
+  font-weight: 600;
+}
+</style>
+
+<div class="raised-box">
+  <h3>Customer Feed</h3>
+
+  <div class="feed-stack">
+    {% for row in cust_list %}
+    <div class="feed-card">
+      <div class="feed-card-header">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+            {% if row.edit %}
+              <div class="feed-edit-badge">✏️ Edited by Employee</div>
+            {% endif %}
+          </div>
+          <h4 style="margin-top:8px;">{{ row.name or 'Unnamed Customer' }}</h4>
+          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
+        </div>
+        <div class="feed-actions">
+          <button class="neumorphic-btn ultrasmall" onclick="accept('{{ row.feed_id }}')">✅ Accept Customer</button>
+          <button class="neumorphic-btn ultrasmall" onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
+          <button class="neumorphic-btn ultrasmall" onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
+        </div>
+      </div>
+
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Customer Section</h5>
+        </div>
+        <div class="feed-meta-grid">
+          <div class="feed-meta-item"><strong>Name</strong>
+            {% if row.edit and row.edit.name and row.edit.name != row.name %}
+              <span class="feed-edit-original">{{ row.name or '-' }}</span>
+              <span class="feed-edit-new"> → {{ row.edit.name }}</span>
+            {% else %}{{ row.name or '-' }}{% endif %}
+          </div>
+          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
+          <div class="feed-meta-item"><strong>Parent Account</strong>{{ row.pano or '-' }}</div>
+          <div class="feed-meta-item"><strong>Village</strong>{{ row.vid or '-' }}</div>
+          <div class="feed-meta-item"><strong>Loan Type</strong>{{ row.type or '-' }}</div>
+          <div class="feed-meta-item"><strong>Period</strong>{{ row.period or '-' }}</div>
+          <div class="feed-meta-item"><strong>Start Date</strong>{{ row.start_date or '-' }}</div>
+          <div class="feed-meta-item"><strong>End Date</strong>{{ row.end_date or '-' }}</div>
+          <div class="feed-meta-item"><strong>Total Amount</strong>
+            {% if row.edit and row.edit.total_amount and row.edit.total_amount|string != row.total_amount|string %}
+              <span class="feed-edit-original feed-amount">₹{{ row.total_amount or 0 }}</span>
+              <span class="feed-edit-new"> → ₹{{ row.edit.total_amount }}</span>
+            {% else %}<span class="feed-amount">₹{{ row.total_amount or 0 }}</span>{% endif %}
+          </div>
+          <div class="feed-meta-item"><strong>Installment</strong><span class="feed-amount">₹{{ row.installment_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Aadhaar Number</strong>
+            {% if row.edit and row.edit.aadhaar_number and row.edit.aadhaar_number != row.aadhaar_number %}
+              <span class="feed-edit-original">{{ row.aadhaar_number or '-' }}</span>
+              <span class="feed-edit-new"> → {{ row.edit.aadhaar_number }}</span>
+            {% else %}{{ row.aadhaar_number or '-' }}{% endif %}
+          </div>
+          <div class="feed-meta-item"><strong>Phone</strong>
+            {% if row.edit and row.edit.phone_number %}
+              {% if row.edit.phone_number != (row.phone_number or '') %}
+                <span class="feed-edit-original">{{ row.phone_number or '-' }}</span>
+                <span class="feed-edit-new"> → {{ row.edit.phone_number }}</span>
+              {% else %}{{ row.phone_number or '-' }}{% endif %}
+            {% else %}{{ row.phone_number or '-' }}{% endif %}
+          </div>
+          <div class="feed-meta-item"><strong>Latitude</strong>{{ row.latitude or '-' }}</div>
+          <div class="feed-meta-item"><strong>Longitude</strong>{{ row.longitude or '-' }}</div>
+          <div class="feed-meta-item" style="grid-column: 1 / -1;"><strong>Notes</strong>
+            {% if row.edit and row.edit.notes and row.edit.notes != row.notes %}
+              <span class="feed-edit-original">{{ row.notes or '-' }}</span>
+              <span class="feed-edit-new"> → {{ row.edit.notes }}</span>
+            {% else %}{{ row.notes or '-' }}{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Customer Docs</h5>
+          <button class="neumorphic-btn ultrasmall" onclick="acceptDocs('{{ row.feed_id }}')">📄 Accept Docs</button>
+        </div>
+
+        <div class="feed-docs-grid">
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">Aadhaar Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_photo else 'Missing' }}</div>
+            {% if row.aadhaar_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar','{{ row.aadhaar_photo|b64encode }}')">🪪 Preview Aadhaar</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_photo|b64encode }}" alt="Aadhaar preview">
+            {% else %}
+              <div class="feed-doc-empty">No Aadhaar photo received.</div>
+            {% endif %}
+          </div>
+
+          <div class="feed-doc-card">
+            <div class="feed-status-pill">House Photo</div>
+            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
+            {% if row.house_photo %}
+              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
+              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
+            {% else %}
+              <div class="feed-doc-empty">No house photo received.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Full Payload</h5>
+          <button
+            class="neumorphic-btn ultrasmall"
+            type="button"
+            data-target="payload-{{ loop.index }}"
+            aria-expanded="false"
+            onclick="togglePayload(this)">
+            📦 View Payload
+          </button>
+        </div>
+
+        <div id="payload-{{ loop.index }}" class="feed-payload" hidden>
+          <div class="feed-payload-grid">
+            <div class="feed-payload-group">
+              <strong>Customer</strong>
+              <pre>{{ {
+                'feed_id': row.feed_id,
+                'ano': row.ano,
+                'name': row.name,
+                'pano': row.pano,
+                'vid': row.vid,
+                'type': row.type,
+                'period': row.period,
+                'start_date': row.start_date,
+                'end_date': row.end_date,
+                'total_amount': row.total_amount,
+                'installment_amount': row.installment_amount,
+                'aadhaar_number': row.aadhaar_number,
+                'latitude': row.latitude,
+                'longitude': row.longitude,
+                'notes': row.notes,
+                'status': row.status
+              } | tojson(indent=2) }}</pre>
+            </div>
+            <div class="feed-payload-group">
+              <strong>Customer Docs</strong>
+              <pre>{{ {
+                'aadhaar_photo': 'available' if row.aadhaar_photo else 'missing',
+                'house_photo': 'available' if row.house_photo else 'missing'
+              } | tojson(indent=2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not cust_list %}
+    <div class="feed-card" style="text-align:center;">No customer feed items available.</div>
+    {% endif %}
+  </div>
+</div>
 }
 
 @media (max-width: 768px) {
