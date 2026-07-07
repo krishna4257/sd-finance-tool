@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", function () {
     { key: "base_amount", label: "Base", isDefault: false },
     { key: "cutting_amount", label: "Cutting", isDefault: false },
     { key: "interest_amount", label: "Interest", isDefault: false },
-    { key: "interest_discount", label: "Discount", isDefault: false },
+    { key: "interest_discount", label: "Discount", isDefault: true },
     { key: "phone_number", label: "Phone", isDefault: false },
     { key: "aadhaar_number", label: "Aadhaar", isDefault: false },
     { key: "customer_rating", label: "Rating", isDefault: true },
@@ -1009,7 +1009,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (searchBox) {
           searchBox.value = initialSearch;
           if (isParentSearch) {
-            window.applyLinkSearch(initialSearch);
+            window.applyParentSearch(initialSearch);
           } else {
             window.applySearch();
           }

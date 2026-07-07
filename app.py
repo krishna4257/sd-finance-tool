@@ -687,11 +687,12 @@ def set_security_headers(response):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     # Prevent caching of dynamic resources (HTML and API responses)
-    # to avoid stale session/village context on navigation
-    if app.debug or response.mimetype in ["text/html", "application/json"]:
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+    # to avoid stale session/village context on navigation, unless a custom Cache-Control is set.
+    if response.mimetype in ["text/html", "application/json"]:
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
 
     return response
 
@@ -4483,7 +4484,8 @@ def api_view_customers_data():
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount,
+                    interest_discount
                 FROM closed_cust_account
                 WHERE vid = %s
                 ORDER BY ano DESC
@@ -4493,7 +4495,8 @@ def api_view_customers_data():
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount,
+                    interest_discount
                 FROM historic_customer_data
                 WHERE vid = %s
                 ORDER BY ano DESC
@@ -4503,21 +4506,21 @@ def api_view_customers_data():
             SELECT
                 cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                base_amount, cutting_amount, interest_amount
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM customer
             WHERE vid = %s
             UNION ALL
             SELECT
                 cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                base_amount, cutting_amount, interest_amount
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM closed_cust_account
             WHERE vid = %s AND LOWER(TRIM(status)) != 'written_off' AND LOWER(TRIM(status)) != 'closed'
             UNION ALL
             SELECT
                 cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                base_amount, cutting_amount, interest_amount
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM historic_customer_data
             WHERE vid = %s AND LOWER(TRIM(status)) != 'written_off' AND LOWER(TRIM(status)) != 'closed' AND balance_amount > 0
             ORDER BY ano DESC
@@ -4527,7 +4530,8 @@ def api_view_customers_data():
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date, base_amount, cutting_amount, interest_amount,
+                    interest_discount
                 FROM customer
                 WHERE vid = %s
                 ORDER BY ano DESC
@@ -4663,7 +4667,11 @@ def api_balance_report():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount,
+                interest_discount
             FROM customer
             WHERE vid = %s AND balance_amount > 0
             
@@ -4694,7 +4702,11 @@ def api_balance_report():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount,
+                interest_discount
             FROM closed_cust_account
             WHERE vid = %s AND balance_amount > 0
             
@@ -4725,7 +4737,11 @@ def api_balance_report():
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
-                freeze_date
+                freeze_date,
+                base_amount,
+                cutting_amount,
+                interest_amount,
+                interest_discount
             FROM historic_customer_data
             WHERE vid = %s AND balance_amount > 0
             
@@ -4765,7 +4781,11 @@ def api_balance_report():
                 "customer_rating": c.get("customer_rating"),
                 "final_frozen_rating": float(c.get("final_frozen_rating")) if c.get("final_frozen_rating") is not None else None,
                 "final_risk_level": c.get("final_risk_level"),
-                "freeze_date": c.get("freeze_date").isoformat() if hasattr(c.get("freeze_date"), "isoformat") else str(c.get("freeze_date")) if c.get("freeze_date") else None
+                "freeze_date": c.get("freeze_date").isoformat() if hasattr(c.get("freeze_date"), "isoformat") else str(c.get("freeze_date")) if c.get("freeze_date") else None,
+                "base_amount": float(c.get("base_amount") or 0.0),
+                "cutting_amount": float(c.get("cutting_amount") or 0.0),
+                "interest_amount": float(c.get("interest_amount") or 0.0),
+                "interest_discount": float(c.get("interest_discount") or 0.0)
             })
             
         return jsonify({"success": True, "customers": serialized})
@@ -5960,6 +5980,7 @@ def api_recalculate_customer_rating(account_no):
 
 
 @app.route("/api/customer_family_full/<account_no>")
+@app.route("/api/customer_linked_accounts/<account_no>")
 @login_required
 def api_customer_family_full(account_no):
     vid = session.get("vid")
@@ -5986,12 +6007,14 @@ def api_customer_family_full(account_no):
             SELECT
                 cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                 type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                base_amount, cutting_amount, interest_amount, interest_discount
             FROM (
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                    base_amount, cutting_amount, interest_amount, interest_discount
                 FROM customer
                 WHERE vid = %s
 
@@ -6000,7 +6023,8 @@ def api_customer_family_full(account_no):
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                    base_amount, cutting_amount, interest_amount, interest_discount
                 FROM closed_cust_account
                 WHERE vid = %s
                 
@@ -6009,7 +6033,8 @@ def api_customer_family_full(account_no):
                 SELECT
                     cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount,
                     type, period, pano, created_at, aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
-                    customer_rating, final_frozen_rating, final_risk_level, freeze_date
+                    customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                    base_amount, cutting_amount, interest_amount, interest_discount
                 FROM historic_customer_data
                 WHERE vid = %s
             ) all_customers
@@ -6052,7 +6077,11 @@ def api_customer_family_full(account_no):
                 "customer_rating": float(row[21]) if row[21] is not None else None,
                 "final_frozen_rating": float(row[22]) if row[22] is not None else None,
                 "final_risk_level": row[23],
-                "freeze_date": row[24].isoformat() if row[24] else None
+                "freeze_date": row[24].isoformat() if row[24] else None,
+                "base_amount": float(row[25] or 0.0),
+                "cutting_amount": float(row[26] or 0.0),
+                "interest_amount": float(row[27] or 0.0),
+                "interest_discount": float(row[28] or 0.0)
             }
             
             ano = customer["ano"]
@@ -8339,9 +8368,17 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
     for d_key, h_score, cached_metrics in cache_rows:
         if isinstance(d_key, datetime):
             d_key = d_key.date()
+        
+        parsed_metrics = cached_metrics
+        if isinstance(parsed_metrics, str):
+            try:
+                parsed_metrics = json.loads(parsed_metrics)
+            except Exception:
+                pass
+                
         cache_by_date[d_key] = {
             "health_score": float(h_score),
-            "metrics": cached_metrics
+            "metrics": parsed_metrics
         }
 
     # Identify missing/uncached dates
@@ -8896,6 +8933,11 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         cached_row = cur.fetchone()
         if cached_row:
             cached_metrics = cached_row[0]
+            if isinstance(cached_metrics, str):
+                try:
+                    cached_metrics = json.loads(cached_metrics)
+                except Exception:
+                    pass
             # Safety: the dashboard cache stores the entire payload as metrics.
             # Only return it if it actually has village_name (full payload) — not a metrics_breakdown blob.
             if isinstance(cached_metrics, dict) and "village_name" in cached_metrics:
