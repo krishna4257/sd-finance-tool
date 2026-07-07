@@ -4330,6 +4330,37 @@ def payment_feed_edit():
         if conn:
             conn.close()
 
+# ----------------------------------------------------
+# /api/mobile/payment_feed_edits_debug  (temp debug)
+# ----------------------------------------------------
+@csrf.exempt
+@app.route("/api/mobile/payment_feed_edits_debug", methods=["GET"])
+def payment_feed_edits_debug():
+    """Temporary debug endpoint — returns all rows in payment_feed_edits."""
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return jsonify({"error": "missing token"}), 401
+    data_token = verify_mobile_token(token)
+    if not data_token:
+        return jsonify({"error": "invalid token"}), 401
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT edit_id, local_uuid, edited_payload, eid, vid, edit_status, created_at::text
+            FROM payment_feed_edits
+            ORDER BY edit_id DESC
+            LIMIT 20
+        """)
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        return jsonify({"edits": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 
 # ----------------------------------------------------
 # /api/mobile/parent_customer_info
@@ -7287,6 +7318,7 @@ def feed():
         cur.execute("""
         SELECT
             feed_payment_id,
+            local_uuid,
             payload->>'ano' AS ano,
             payload->>'amt' AS amt,
             COALESCE(payload->>'payment_date', payload->>'pdate') AS pdt,
