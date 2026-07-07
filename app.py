@@ -11993,7 +11993,7 @@ def cashbag():
                 FROM (
                     SELECT amt, payment_type, cash_amount, upi_amount, vid FROM payment
                     UNION ALL
-                    SELECT amt, payment_type, cash_amount, upi_amount, vid FROM closed_cust_payment
+                    SELECT amt, 'cash' AS payment_type, amt AS cash_amount, 0 AS upi_amount, vid FROM closed_cust_payment
                 ) p
                 WHERE p.vid = ANY(%s)
             """, (vids,))
@@ -12177,7 +12177,7 @@ def cashbag():
                     FROM (
                         SELECT pid, cid, payment_type, amt, created_at, vid FROM payment
                         UNION ALL
-                        SELECT pid, cid, payment_type, amt, created_at, vid FROM closed_cust_payment
+                        SELECT pid, cid, 'cash' AS payment_type, amt, created_at, vid FROM closed_cust_payment
                     ) p
                     JOIN (
                         SELECT cid, name, ano FROM customer
