@@ -827,6 +827,79 @@ def admin_required(f):
     return wrapper
 
 
+import threading
+
+class TTLMemoryCache:
+    def __init__(self):
+        self._cache = {}
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            if key in self._cache:
+                val, expires_at = self._cache[key]
+                if pytime.time() < expires_at:
+                    return val
+                else:
+                    del self._cache[key]
+            return None
+
+    def set(self, key, val, ttl_seconds):
+        with self._lock:
+            self._cache[key] = (val, pytime.time() + ttl_seconds)
+
+    def clear(self):
+        with self._lock:
+            self._cache.clear()
+
+global_ttl_cache = TTLMemoryCache()
+
+def ttl_cache(ttl_seconds=300):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                body_data = request.get_json(silent=True)
+                if body_data:
+                    body_key = json.dumps(body_data, sort_keys=True)
+                else:
+                    body_key = ""
+            except Exception:
+                body_key = ""
+
+            query_key = tuple(sorted(request.args.items()))
+            session_vid = session.get("vid")
+            session_uid = session.get("user_id")
+            
+            cache_key = (
+                f.__name__,
+                args,
+                tuple(sorted(kwargs.items())),
+                query_key,
+                body_key,
+                session_vid,
+                session_uid
+            )
+
+            cached_val = global_ttl_cache.get(cache_key)
+            if cached_val is not None:
+                return cached_val
+
+            response = f(*args, **kwargs)
+
+            is_cacheable = True
+            if isinstance(response, tuple):
+                if len(response) > 1 and isinstance(response[1], int) and response[1] != 200:
+                    is_cacheable = False
+            
+            if is_cacheable:
+                global_ttl_cache.set(cache_key, response, ttl_seconds)
+
+            return response
+        return wrapper
+    return decorator
+
+
 # ----------------------------------------------------
 # CONTEXT SELECTION APIs (Postgres) - top bar dropdowns
 # ----------------------------------------------------
@@ -4714,18 +4787,26 @@ def check_ano_exists():
     exists = customer_exists_by_ano_and_vid(ano, vid)
     return jsonify({"exists": exists})
 
-@app.route("/api/posting_report", methods=["GET"])
+@app.route("/api/posting_report", methods=["GET", "QUERY"])
 @login_required
+@ttl_cache(ttl_seconds=300)
 def api_posting_report():
     vid = session.get("vid")
 
     if not vid:
         return jsonify(success=False, error="Please select Village first"), 400
 
-    view = request.args.get("view", "current")
-    start_date_str = request.args.get("start_date")
-    end_date_str = request.args.get("end_date")
-    ano_val = request.args.get("ano", "").strip()
+    if request.method == "QUERY" or request.is_json:
+        data = request.get_json(silent=True) or {}
+        view = data.get("view", "current")
+        start_date_str = data.get("start_date")
+        end_date_str = data.get("end_date")
+        ano_val = str(data.get("ano", "")).strip()
+    else:
+        view = request.args.get("view", "current")
+        start_date_str = request.args.get("start_date")
+        end_date_str = request.args.get("end_date")
+        ano_val = request.args.get("ano", "").strip()
 
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -4869,7 +4950,11 @@ def api_posting_report():
                 row_dict["amt"] = float(row_dict["amt"])
             payments.append(row_dict)
 
-        return jsonify(success=True, headers=headers, payments=payments)
+        resp_headers = {
+            "Accept-Query": "application/json",
+            "Cache-Control": "public, max-age=300"
+        }
+        return jsonify(success=True, headers=headers, payments=payments), 200, resp_headers
 
     except Exception as e:
         traceback.print_exc()
@@ -5299,6 +5384,7 @@ def submit_post_payment():
                 pass
         invalidate_village_health_cache(cur, vid, min_pdt)
 
+        global_ttl_cache.clear()
         conn.commit()
 
         audit_log(
@@ -5590,6 +5676,7 @@ def api_customer_save_payments():
             force_recalc = (balance_amt > 0) or (old_balance is not None and old_balance > 0 and balance_amt <= 0)
             recalc_customer_repayment_score(cur, cid, force_recalc=force_recalc)
 
+        global_ttl_cache.clear()
         conn.commit()
         return jsonify(success=True)
 
@@ -6195,8 +6282,9 @@ def print_customer(ano):
         conn.close()
 
 
-@app.route("/search_postings", methods=["POST"])
+@app.route("/search_postings", methods=["POST", "QUERY"])
 @login_required
+@ttl_cache(ttl_seconds=300)
 def search_postings():
     vid = session.get("vid")
 
@@ -6246,7 +6334,11 @@ def search_postings():
 
         results = [dict(zip(columns, row)) for row in rows]
 
-        return jsonify(success=True, data=results)
+        headers = {
+            "Accept-Query": "application/json",
+            "Cache-Control": "public, max-age=300"
+        }
+        return jsonify(success=True, data=results), 200, headers
 
     except Exception as e:
         traceback.print_exc()
@@ -8051,6 +8143,7 @@ def add_payment():
     # Invalidate cache for this village
     invalidate_village_health_cache(cur, vid, pdt)
 
+    global_ttl_cache.clear()
     conn.commit()
     cur.close()
     conn.close()
@@ -8117,6 +8210,7 @@ def delete_payment():
         # Invalidate cache for this village
         invalidate_village_health_cache(cur, vid, pdt)
 
+        global_ttl_cache.clear()
         conn.commit()
         return jsonify(success=True)
 
@@ -9228,8 +9322,9 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     return payload
 
 
-@app.route("/api/village/behavioral_analytics/<int:vid>")
+@app.route("/api/village/behavioral_analytics/<int:vid>", methods=["GET", "QUERY"])
 @login_required
+@ttl_cache(ttl_seconds=300)
 def api_village_behavioral_analytics(vid):
     user_level = session.get("level")
     allowed_villages = session.get("villages", [])
@@ -9262,8 +9357,9 @@ def api_village_behavioral_analytics(vid):
         cur.close()
         conn.close()
 
-@app.route("/api/dashboard/analytics/<int:vid>")
+@app.route("/api/dashboard/analytics/<int:vid>", methods=["GET", "QUERY"])
 @login_required
+@ttl_cache(ttl_seconds=300)
 def api_dashboard_analytics(vid):
     user_level = session.get("level")
     allowed_villages = session.get("villages", [])
@@ -9586,8 +9682,9 @@ def api_dashboard_analytics(vid):
         cur.close()
         conn.close()
 
-@app.route("/api/dashboard/posting_analytics/<int:vid>", methods=["GET"])
+@app.route("/api/dashboard/posting_analytics/<int:vid>", methods=["GET", "QUERY"])
 @login_required
+@ttl_cache(ttl_seconds=300)
 def api_dashboard_posting_analytics(vid):
     user_level = session.get("level")
     allowed_villages = session.get("villages", [])
@@ -11743,6 +11840,7 @@ def update_payment_date_bulk():
         min_pdt = min(old_iso, new_iso)
         invalidate_village_health_cache(cur, vid, min_pdt)
 
+        global_ttl_cache.clear()
         conn.commit()
         return jsonify(success=True, message="Payment dates updated")
 
