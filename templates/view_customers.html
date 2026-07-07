@@ -6,7 +6,9 @@
 .customer-table-wrapper.hide-col-cutting_amount .col-cutting_amount,
 #customerTable.hide-col-cutting_amount .col-cutting_amount,
 .customer-table-wrapper.hide-col-interest_amount .col-interest_amount,
-#customerTable.hide-col-interest_amount .col-interest_amount {
+#customerTable.hide-col-interest_amount .col-interest_amount,
+.customer-table-wrapper.hide-col-interest_discount .col-interest_discount,
+#customerTable.hide-col-interest_discount .col-interest_discount {
   display: none !important;
 }
 .customer-table-wrapper.bulk-close-mode-active .checkbox-column,
@@ -218,8 +220,8 @@ table.customer-table tbody tr.checked-row td {
   </div>
 
 <div class="raised-box">
-  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount hide-col-interest_discount">
-    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount hide-col-interest_discount">
+  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
+    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
       <thead>
         <tr>
           <th class="checkbox-column" style="width: 40px; text-align: center;"><input type="checkbox" onclick="toggleAll(this)" /></th>
