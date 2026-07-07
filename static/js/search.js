@@ -574,7 +574,7 @@ function recalculateCustomerLoanFields(row) {
           const date = document.getElementById("searchPostingDate").value;
 
           csrfFetch("/search_postings", {
-              method: "POST",
+              method: "QUERY",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ano, date }),
           })

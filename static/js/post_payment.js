@@ -1325,26 +1325,30 @@ function formatDateToYYYYMMDD(dateObj) {
     const dd = String(dateObj.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
 }
-
 function fetchReportData() {
     const view = window.currentReportView;
     const dateRangeVal = document.getElementById("filterDateRange")?.value?.trim() || "";
     const filterAnoVal = document.getElementById("filterAno")?.value?.trim() || "";
     
-    let url = `/api/posting_report?view=${view}`;
+    const payload = { view: view };
     if (dateRangeVal) {
         const dates = dateRangeVal.split(" to ");
         const startDate = parseISOorDDMMYYYY(dates[0]);
         const endDate = (dates.length === 2 && dates[1].trim()) ? parseISOorDDMMYYYY(dates[1]) : startDate;
         if (startDate && endDate) {
-            url += `&start_date=${formatDateToYYYYMMDD(startDate)}&end_date=${formatDateToYYYYMMDD(endDate)}`;
+            payload.start_date = formatDateToYYYYMMDD(startDate);
+            payload.end_date = formatDateToYYYYMMDD(endDate);
         }
     }
     if (filterAnoVal) {
-        url += `&ano=${encodeURIComponent(filterAnoVal)}`;
+        payload.ano = filterAnoVal;
     }
 
-    fetch(url)
+    csrfFetch("/api/posting_report", {
+        method: "QUERY",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
     .then(res => res.json())
     .then(data => {
         if (data.success) {
@@ -1365,20 +1369,25 @@ function fetchReportDataSilently(updatedPid) {
     const dateRangeVal = document.getElementById("filterDateRange")?.value?.trim() || "";
     const filterAnoVal = document.getElementById("filterAno")?.value?.trim() || "";
     
-    let url = `/api/posting_report?view=${view}`;
+    const payload = { view: view };
     if (dateRangeVal) {
         const dates = dateRangeVal.split(" to ");
         const startDate = parseISOorDDMMYYYY(dates[0]);
         const endDate = (dates.length === 2 && dates[1].trim()) ? parseISOorDDMMYYYY(dates[1]) : startDate;
         if (startDate && endDate) {
-            url += `&start_date=${formatDateToYYYYMMDD(startDate)}&end_date=${formatDateToYYYYMMDD(endDate)}`;
+            payload.start_date = formatDateToYYYYMMDD(startDate);
+            payload.end_date = formatDateToYYYYMMDD(endDate);
         }
     }
     if (filterAnoVal) {
-        url += `&ano=${encodeURIComponent(filterAnoVal)}`;
+        payload.ano = filterAnoVal;
     }
 
-    fetch(url)
+    csrfFetch("/api/posting_report", {
+        method: "QUERY",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
     .then(res => res.json())
     .then(data => {
         if (data.success) {
@@ -1388,6 +1397,7 @@ function fetchReportDataSilently(updatedPid) {
     })
     .catch(err => console.error("Silent refresh failed:", err));
 }
+
 
 window.applyReportFilters = function() {
     fetchReportData();
