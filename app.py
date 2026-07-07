@@ -2629,9 +2629,9 @@ def mobile_villages():
         emp_row = cur.fetchone()
         employee_name = emp_row[0] if emp_row else ""
 
-        # ðŸ”¹ Fetch villages from user_village_access
+        # 🔹 Fetch villages from user_village_access
         cur.execute("""
-            SELECT v.vid, v.village_name, v.district
+            SELECT v.vid, v.village_name, v.village_code, v.district, v.interest_rate, v.cutting_rate
             FROM user_village_access uva
             JOIN village v ON v.vid = uva.village_id
             WHERE uva.user_id = %s
@@ -2645,7 +2645,10 @@ def mobile_villages():
                 {
                     "vid": v[0],
                     "village_name": v[1],
-                    "district": v[2],
+                    "village_code": v[2] or "",
+                    "district": v[3],
+                    "interest_rate": float(v[4]) if v[4] is not None else 0.0,
+                    "cutting_rate": float(v[5]) if v[5] is not None else 0.0,
                     "employee_name": employee_name
                 }
                 for v in villages
@@ -4071,6 +4074,256 @@ def payment_feed_batch():
 
         if conn:
             conn.close()
+
+# ----------------------------------------------------
+# /api/mobile/customer_feed_edit
+# ----------------------------------------------------
+@csrf.exempt
+@limiter.limit("60 per minute")
+@app.route("/api/mobile/customer_feed_edit", methods=["POST"])
+def customer_feed_edit():
+    """Receive an edit request for a pending customer feed item from mobile.
+    Stores the edited payload alongside the original in customer_feed_edits table.
+    The /feed page shows original (strikethrough) + edited data.
+    """
+    conn = None
+    cur = None
+    try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return jsonify({"error": "missing token"}), 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return jsonify({"error": "invalid token"}), 401
+
+        data = request.json
+        if not data:
+            return jsonify({"error": "missing body"}), 400
+
+        local_uuid = (data.get("local_uuid") or "").strip()
+        edited_payload = data.get("edited_payload")
+        eid = data.get("eid")
+        vid = data.get("vid")
+
+        if not local_uuid:
+            return jsonify({"error": "missing local_uuid"}), 400
+        if not edited_payload or not isinstance(edited_payload, dict):
+            return jsonify({"error": "missing or invalid edited_payload"}), 400
+
+        token_eid = int(data_token.get("eid", 0))
+        req_eid = int(eid or 0)
+        if req_eid and req_eid != token_eid:
+            return jsonify({"error": "eid mismatch"}), 403
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS customer_feed_edits (
+                edit_id SERIAL PRIMARY KEY,
+                local_uuid TEXT NOT NULL,
+                edited_payload JSONB NOT NULL,
+                eid INTEGER,
+                vid INTEGER,
+                edit_status TEXT DEFAULT 'pending',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
+        cur.execute("""
+            SELECT edit_id FROM customer_feed_edits WHERE local_uuid = %s LIMIT 1
+        """, (local_uuid,))
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute("""
+                UPDATE customer_feed_edits
+                SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                WHERE local_uuid = %s
+            """, (json.dumps(edited_payload), local_uuid))
+        else:
+            cur.execute("""
+                INSERT INTO customer_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                VALUES (%s, %s, %s, %s, 'pending', NOW())
+            """, (local_uuid, json.dumps(edited_payload), token_eid, vid))
+
+        conn.commit()
+        audit_log(
+            action="mobile_customer_feed_edit",
+            entity_type="customer_feed_edit",
+            entity_id=local_uuid,
+            details={"eid": token_eid, "vid": vid, "local_uuid": local_uuid}
+        )
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.exception("Customer feed edit failed")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+# ----------------------------------------------------
+# /api/mobile/payment_feed_edit
+# ----------------------------------------------------
+@csrf.exempt
+@limiter.limit("60 per minute")
+@app.route("/api/mobile/payment_feed_edit", methods=["POST"])
+def payment_feed_edit():
+    """Receive an edit request for a pending payment feed item from mobile.
+    Stores the edited payload in payment_feed_edits table.
+    The /feed page shows original (strikethrough) + edited data.
+    """
+    conn = None
+    cur = None
+    try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return jsonify({"error": "missing token"}), 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return jsonify({"error": "invalid token"}), 401
+
+        data = request.json
+        if not data:
+            return jsonify({"error": "missing body"}), 400
+
+        local_uuid = (data.get("local_uuid") or "").strip()
+        edited_payload = data.get("edited_payload")
+        eid = data.get("eid")
+        vid = data.get("vid")
+
+        if not local_uuid:
+            return jsonify({"error": "missing local_uuid"}), 400
+        if not edited_payload or not isinstance(edited_payload, dict):
+            return jsonify({"error": "missing or invalid edited_payload"}), 400
+
+        token_eid = int(data_token.get("eid", 0))
+        req_eid = int(eid or 0)
+        if req_eid and req_eid != token_eid:
+            return jsonify({"error": "eid mismatch"}), 403
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS payment_feed_edits (
+                edit_id SERIAL PRIMARY KEY,
+                local_uuid TEXT NOT NULL,
+                edited_payload JSONB NOT NULL,
+                eid INTEGER,
+                vid INTEGER,
+                edit_status TEXT DEFAULT 'pending',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
+        cur.execute("""
+            SELECT edit_id FROM payment_feed_edits WHERE local_uuid = %s LIMIT 1
+        """, (local_uuid,))
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute("""
+                UPDATE payment_feed_edits
+                SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                WHERE local_uuid = %s
+            """, (json.dumps(edited_payload), local_uuid))
+        else:
+            cur.execute("""
+                INSERT INTO payment_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                VALUES (%s, %s, %s, %s, 'pending', NOW())
+            """, (local_uuid, json.dumps(edited_payload), token_eid, vid))
+
+        conn.commit()
+        audit_log(
+            action="mobile_payment_feed_edit",
+            entity_type="payment_feed_edit",
+            entity_id=local_uuid,
+            details={"eid": token_eid, "vid": vid, "local_uuid": local_uuid}
+        )
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.exception("Payment feed edit failed")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+# ----------------------------------------------------
+# /api/mobile/parent_customer_info
+# ----------------------------------------------------
+@csrf.exempt
+@app.route("/api/mobile/parent_customer_info")
+def mobile_parent_customer_info():
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return jsonify({"error": "missing token"}), 401
+
+    data = verify_mobile_token(token)
+    if not data:
+        return jsonify({"error": "invalid token"}), 401
+
+    pano = request.args.get("pano")
+    vid = request.args.get("vid")
+
+    if not pano or not vid:
+        return jsonify({"error": "Missing pano or vid"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name, phone_number, aadhaar_number, notes, type, period, total_amount, base_amount, cutting_amount, interest_amount
+            FROM customer
+            WHERE vid = %s AND ano = %s
+            UNION ALL
+            SELECT name, phone_number, aadhaar_number, notes, type, period, total_amount, base_amount, cutting_amount, interest_amount
+            FROM closed_cust_account
+            WHERE vid = %s AND ano = %s
+            UNION ALL
+            SELECT name, phone_number, aadhaar_number, notes, type, period, total_amount, base_amount, cutting_amount, interest_amount
+            FROM historic_customer_data
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (int(vid), int(pano), int(vid), int(pano), int(vid), int(pano)))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"found": False})
+        
+        return jsonify({
+            "found": True,
+            "name": row[0] or "",
+            "phone_number": row[1] or "",
+            "aadhaar_number": row[2] or "",
+            "notes": row[3] or "",
+            "type": row[4] or "",
+            "period": row[5] or 0,
+            "total_amount": row[6] or 0.0,
+            "base_amount": row[7] or 0.0,
+            "cutting_amount": row[8] or 0.0,
+            "interest_amount": row[9] or 0.0,
+        })
+    except Exception as e:
+        logger.error(f"Error in mobile_parent_customer_info: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 
 # ----------------------------------------------------
 # /api/mobile/reset_database
@@ -7024,6 +7277,61 @@ def feed():
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description] # type: ignore
         existing_customer_docs = [dict(zip(columns, r)) for r in rows]
+
+        # Fetch customer edits submitted from mobile (customer_feed_edits)
+        customer_edit_map = {}
+        try:
+            cur.execute("""
+                SELECT local_uuid, edited_payload
+                FROM customer_feed_edits
+                WHERE edit_status = 'pending'
+            """)
+            for edit_row in cur.fetchall():
+                ep = edit_row[1]
+                if isinstance(ep, str):
+                    try:
+                        ep = json.loads(ep)
+                    except Exception:
+                        ep = {}
+                customer_edit_map[edit_row[0]] = ep
+        except Exception:
+            pass  # Table may not exist yet on first run
+
+        # Attach edits to customers (match by local_uuid stored in customer_feed)
+        for c in customers:
+            local_uuid = None
+            raw = c.get("raw_payload") or {}
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except Exception:
+                    raw = {}
+            local_uuid = raw.get("local_uuid") or c.get("local_uuid")
+            c["edit"] = customer_edit_map.get(local_uuid) if local_uuid else None
+
+        # Fetch payment edits submitted from mobile (payment_feed_edits)
+        payment_edit_map = {}
+        try:
+            cur.execute("""
+                SELECT local_uuid, edited_payload
+                FROM payment_feed_edits
+                WHERE edit_status = 'pending'
+            """)
+            for edit_row in cur.fetchall():
+                ep = edit_row[1]
+                if isinstance(ep, str):
+                    try:
+                        ep = json.loads(ep)
+                    except Exception:
+                        ep = {}
+                payment_edit_map[edit_row[0]] = ep
+        except Exception:
+            pass  # Table may not exist yet on first run
+
+        # Attach edits to payments
+        for p in payments:
+            local_uuid = p.get("local_uuid")
+            p["edit"] = payment_edit_map.get(local_uuid) if local_uuid else None
 
         return render_template(
             "feed.html",
