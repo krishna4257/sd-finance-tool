@@ -340,6 +340,19 @@ def normalize_account_number(value):
         return None
 
 
+def merge_edit_payload(original, edited):
+    """Helper to merge edited fields into original payload."""
+    if not isinstance(original, dict) or not isinstance(edited, dict):
+        return original
+    res = dict(original)
+    if "payload" in res and isinstance(res["payload"], dict):
+        res["payload"] = dict(res["payload"])
+        res["payload"].update(edited)
+    else:
+        res.update(edited)
+    return res
+
+
 def normalize_mobile_customer_payload(payload):
     """Normalize customer payload from mobile app to match DB column names."""
     if not isinstance(payload, dict):
@@ -7465,7 +7478,7 @@ def accept_customer(feed_id):
         return {"success": False, "error": "User not logged properly"}
 
     cur.execute("""
-        SELECT payload
+        SELECT local_uuid, payload
         FROM customer_feed
         WHERE feed_id = %s
     """, (feed_id,))
@@ -7475,13 +7488,39 @@ def accept_customer(feed_id):
     if not row:
         return {"success": False, "error": "Feed not found"}
     
-    data = row[0]     # type: ignore # JSON payload
+    local_uuid = row[0]
+    data = row[1]     # type: ignore # JSON payload
     # Ensure payload is dict
     if isinstance(data, str):
         try:
             data = json.loads(data)
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
+
+    # Merge pending edit if any
+    if local_uuid:
+        cur.execute("""
+            SELECT edited_payload
+            FROM customer_feed_edits
+            WHERE local_uuid = %s AND edit_status = 'pending'
+            LIMIT 1
+        """, (local_uuid,))
+        edit_row = cur.fetchone()
+        if edit_row:
+            ep = edit_row[0]
+            if isinstance(ep, str):
+                try:
+                    ep = json.loads(ep)
+                except Exception:
+                    ep = {}
+            data = merge_edit_payload(data, ep)
+
+        # Mark edit as accepted
+        cur.execute("""
+            UPDATE customer_feed_edits
+            SET edit_status = 'accepted'
+            WHERE local_uuid = %s AND edit_status = 'pending'
+        """, (local_uuid,))
 
     try:
         data = normalize_mobile_customer_payload(data)
@@ -7858,9 +7897,9 @@ def accept_payment(feed_payment_id):
     if not logged_user:
         return {"success": False, "error": "User not logged properly"}
 
-    # 1ï¸âƒ£ Get payload
+    # 1ï¸ âƒ£ Get payload
     cur.execute("""
-        SELECT payload
+        SELECT local_uuid, payload
         FROM payment_feed_items
         WHERE feed_payment_id = %s
     """, (feed_payment_id,))
@@ -7870,12 +7909,38 @@ def accept_payment(feed_payment_id):
     if not row:
         return {"success": False, "error": "Feed not found"}
 
-    data = row[0]
+    local_uuid = row[0]
+    data = row[1]
     if isinstance(data, str):
         try:
             data = json.loads(data)
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
+
+    # Merge pending edit if any
+    if local_uuid:
+        cur.execute("""
+            SELECT edited_payload
+            FROM payment_feed_edits
+            WHERE local_uuid = %s AND edit_status = 'pending'
+            LIMIT 1
+        """, (local_uuid,))
+        edit_row = cur.fetchone()
+        if edit_row:
+            ep = edit_row[0]
+            if isinstance(ep, str):
+                try:
+                    ep = json.loads(ep)
+                except Exception:
+                    ep = {}
+            data = merge_edit_payload(data, ep)
+
+        # Mark edit as accepted
+        cur.execute("""
+            UPDATE payment_feed_edits
+            SET edit_status = 'accepted'
+            WHERE local_uuid = %s AND edit_status = 'pending'
+        """, (local_uuid,))
 
     try:
         data = normalize_mobile_payment_payload(data)
@@ -7967,7 +8032,7 @@ def accept_payment_batch():
 
     data = request.get_json()
     ids = data.get("ids", [])
-    # âœ… Ensure IDs are integers (fix bigint = text error)
+    # ✅ Ensure IDs are integers (fix bigint = text error)
     try:
         ids = [int(i) for i in ids]
     except Exception:
@@ -7986,9 +8051,9 @@ def accept_payment_batch():
         return {"success": False, "error": "User not logged properly"}
 
     try:
-        # 1ï¸âƒ£ Fetch all selected payloads
+        # 1️⃣ Fetch all selected payloads
         cur.execute("""
-            SELECT payload
+            SELECT local_uuid, payload
             FROM payment_feed_items
             WHERE feed_payment_id = ANY(%s::bigint[])
         """, (ids,))
@@ -7998,15 +8063,41 @@ def accept_payment_batch():
         if not rows:
             return {"success": False, "error": "No valid payments found"}
 
+        # Fetch pending edits if any for these local_uuids
+        local_uuids = [r[0] for r in rows if r[0]]
+        payment_edit_map = {}
+        if local_uuids:
+            cur.execute("""
+                SELECT local_uuid, edited_payload
+                FROM payment_feed_edits
+                WHERE local_uuid = ANY(%s) AND edit_status = 'pending'
+            """, (local_uuids,))
+            for edit_row in cur.fetchall():
+                ep = edit_row[1]
+                if isinstance(ep, str):
+                    try:
+                        ep = json.loads(ep)
+                    except Exception:
+                        ep = {}
+                payment_edit_map[edit_row[0]] = ep
+
         # -------------------------------------------------
         # Batch prefetch customers
         # -------------------------------------------------
         anos = []
 
         for r in rows:
-            payload = r[0]
+            local_uuid = r[0]
+            payload = r[1]
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            if local_uuid and local_uuid in payment_edit_map:
+                payload = merge_edit_payload(payload, payment_edit_map[local_uuid])
+            
             ano = payload.get("ano")
-
             if ano is not None:
                 try:
                     anos.append(int(ano))
@@ -8020,7 +8111,16 @@ def accept_payment_batch():
         if anos:
 
             # Use vid from first payload (all selected payments belong to same village)
-            first_payload = rows[0][0]
+            first_payload = rows[0][1]
+            if isinstance(first_payload, str):
+                try:
+                    first_payload = json.loads(first_payload)
+                except Exception:
+                    first_payload = {}
+            first_local_uuid = rows[0][0]
+            if first_local_uuid and first_local_uuid in payment_edit_map:
+                first_payload = merge_edit_payload(first_payload, payment_edit_map[first_local_uuid])
+
             batch_vid = first_payload.get("vid")
 
             cur.execute("""
@@ -8045,11 +8145,14 @@ def accept_payment_batch():
 
         insert_values = []
 
-        # 2ï¸âƒ£ Prepare bulk insert
+        # 2️⃣ Prepare bulk insert
         for r in rows:
-            p = r[0]
+            local_uuid = r[0]
+            p = r[1]
             if isinstance(p, str):
                 p = json.loads(p)
+            if local_uuid and local_uuid in payment_edit_map:
+                p = merge_edit_payload(p, payment_edit_map[local_uuid])
 
             try:
                 p = normalize_mobile_payment_payload(p)
@@ -8097,7 +8200,7 @@ def accept_payment_batch():
         if not insert_values:
             return {"success": False, "error": "No valid payments to insert"}
 
-        # 3ï¸âƒ£ BULK INSERT (safe + parameterized)
+        # 3️⃣ BULK INSERT (safe + parameterized)
         execute_values(
             cur,
             """
@@ -8130,6 +8233,13 @@ def accept_payment_batch():
                 review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
             WHERE feed_payment_id = ANY(%s::bigint[])
         """, (logged_user, ids))
+
+        if local_uuids:
+            cur.execute("""
+                UPDATE payment_feed_edits
+                SET edit_status = 'accepted'
+                WHERE local_uuid = ANY(%s) AND edit_status = 'pending'
+            """, (local_uuids,))
 
         # Invalidate cache for this village
         if insert_values:
