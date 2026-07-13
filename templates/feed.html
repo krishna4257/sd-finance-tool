@@ -627,7 +627,19 @@
           <td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
           <td data-order="{{ row.ano }}">{{ row.ano }}</td>
           <td data-order="{{ iso_date }}">{{ row.pdt }}</td>
-          <td data-money="{{ row.amt }}" data-order="{{ row.amt }}">₹{{ row.amt }}</td>
+          <td data-money="{{ row.amt }}" data-order="{{ row.amt }}">
+            {% if row.edit and row.edit.amt and row.edit.amt|string != row.amt|string %}
+              <span class="feed-edit-badge" style="display:inline-block; margin-bottom:4px;">✏️ Edited</span><br>
+              <span class="feed-edit-original">₹{{ row.amt }}</span>
+              <span class="feed-edit-new"> → ₹{{ row.edit.amt }}</span>
+            {% else %}
+              ₹{{ row.amt }}
+            {% endif %}
+            {% if row.edit and row.edit.payment_type and row.edit.payment_type != row.payment_type %}
+              <br><small class="feed-edit-original">{{ row.payment_type }}</small>
+              <small class="feed-edit-new"> → {{ row.edit.payment_type }}</small>
+            {% endif %}
+          </td>
           <td>{{ row.status }}</td>
           <td>{{ row.ano }}</td>
           <td>
