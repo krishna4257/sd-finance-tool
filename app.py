@@ -13024,8 +13024,350 @@ def b64encode_filter(data):
         return ""
     return base64.b64encode(data).decode('utf-8')
 
+# ====================================================
+# SELF-HOSTED APK DISTRIBUTION
+# ====================================================
+# APK files live in  <WorkingDirectory>/apk_releases/
+# version.json  is the single source of truth.
+# All download routes require a valid X-Mobile-Token —
+# never exposed directly by Nginx.
+# ====================================================
+
+APK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk_releases")
+VERSION_JSON_PATH = os.path.join(APK_DIR, "version.json")
+
+
+def _read_version_json():
+    """Read version.json from disk. Returns dict or None."""
+    try:
+        with open(VERSION_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _write_version_json_atomic(data: dict):
+    """Write version.json atomically (temp-file + os.replace) so gunicorn
+    workers never read a half-written file."""
+    os.makedirs(APK_DIR, exist_ok=True)
+    tmp_path = VERSION_JSON_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_path, VERSION_JSON_PATH)
+
+
+def _sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ── Mobile: check for update ─────────────────────────────────────────────────
+
+@app.route("/api/mobile/app/version", methods=["GET"])
+@limiter.limit("60 per hour")
+def mobile_app_version():
+    """
+    GET /api/mobile/app/version
+    Header: X-Mobile-Token: <token>
+    Query:  current_version_code=<int>   (optional — used to compute upgrade_required)
+
+    Returns version.json enriched with `upgrade_required` and `force_update_required`.
+    Public metadata only — no APK binary.
+    """
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return jsonify({"error": "missing token"}), 401
+
+    token_data = verify_mobile_token(token)
+    if not token_data:
+        return jsonify({"error": "invalid or expired token"}), 401
+
+    # Optional: verify the employee is still active
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status FROM employees WHERE eid = %s",
+            (token_data.get("eid"),)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row or row[0] != "active":
+            return jsonify({"error": "employee account inactive"}), 403
+    except Exception as e:
+        logger.warning("version check: employee lookup failed: %s", e)
+        # non-fatal — proceed
+
+    version_data = _read_version_json()
+    if not version_data:
+        return jsonify({"error": "no release published yet"}), 404
+
+    # Determine if client needs to upgrade
+    try:
+        current_code = int(request.args.get("current_version_code", 0))
+    except (ValueError, TypeError):
+        current_code = 0
+
+    latest_code = int(version_data.get("latest_version_code", 0))
+    min_code    = int(version_data.get("min_supported_version_code", 0))
+
+    upgrade_required     = latest_code > current_code
+    force_update_required = (
+        version_data.get("force_update", False)
+        or current_code < min_code
+    )
+
+    return jsonify({
+        **version_data,
+        "upgrade_required": upgrade_required,
+        "force_update_required": force_update_required,
+    }), 200
+
+
+# ── Mobile: authenticated APK download ───────────────────────────────────────
+
+@app.route("/api/mobile/app/download/<version>", methods=["GET"])
+@limiter.limit("10 per hour")
+def mobile_app_download(version):
+    """
+    GET /api/mobile/app/download/<version>
+    Header: X-Mobile-Token: <token>
+
+    Streams the signed release APK after verifying:
+      1. Valid active-employee token
+      2. Requested version matches the latest published version
+         (prevents re-downloading old/arbitrary versions)
+    """
+    token = request.headers.get("X-Mobile-Token")
+    if not token:
+        return jsonify({"error": "missing token"}), 401
+
+    token_data = verify_mobile_token(token)
+    if not token_data:
+        return jsonify({"error": "invalid or expired token"}), 401
+
+    # Verify employee still active
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT eid, status FROM employees WHERE eid = %s",
+            (token_data.get("eid"),)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row or row[1] != "active":
+            return jsonify({"error": "employee account inactive"}), 403
+        eid = row[0]
+    except Exception as e:
+        logger.error("download: employee lookup failed: %s", e)
+        return jsonify({"error": "server error"}), 500
+
+    # Validate requested version against published version.json
+    version_data = _read_version_json()
+    if not version_data:
+        return jsonify({"error": "no release published"}), 404
+
+    published_version = version_data.get("latest_version", "")
+    if version != published_version:
+        return jsonify({
+            "error": "version not found",
+            "latest_version": published_version
+        }), 404
+
+    # Locate the APK on disk
+    apk_filename = f"sdfin-{version}.apk"
+    apk_path = os.path.join(APK_DIR, apk_filename)
+
+    if not os.path.isfile(apk_path):
+        logger.error("download: APK file not found: %s", apk_path)
+        return jsonify({"error": "APK file not found on server"}), 404
+
+    # Audit log
+    audit_log(
+        action="apk_download",
+        entity_type="apk_release",
+        entity_id=version,
+        details={
+            "eid": eid,
+            "version": version,
+            "filename": apk_filename,
+            "ip": request.remote_addr,
+        },
+        status="success"
+    )
+
+    from flask import send_file
+    return send_file(
+        apk_path,
+        mimetype="application/vnd.android.package-archive",
+        as_attachment=True,
+        download_name=apk_filename,
+    )
+
+
+# ── Admin: publish a new APK release ─────────────────────────────────────────
+
+@app.route("/api/admin/app/publish", methods=["POST"])
+def admin_app_publish():
+    """
+    POST /api/admin/app/publish
+    Requires active admin web session (session['role'] == 'admin').
+    Multipart body:
+      - apk_file        : the signed release APK
+      - version         : e.g. "1.1.0"
+      - version_code    : integer, e.g. 5
+      - min_version_code: integer — oldest version still allowed to run
+      - force_update    : "true" / "false"
+      - release_notes   : plain text
+
+    Workflow:
+      1. Validate session and inputs
+      2. Compute SHA-256 server-side
+      3. Save APK as sdfin-<version>.apk in apk_releases/
+      4. Atomically write version.json
+      5. Audit log
+    """
+    # Auth: must be admin web session
+    if session.get("role") not in ("admin", "superadmin"):
+        return jsonify({"error": "admin access required"}), 403
+
+    # --- Input validation ---
+    version = (request.form.get("version") or "").strip()
+    if not version or not all(c.isdigit() or c == "." for c in version):
+        return jsonify({"error": "invalid version string"}), 400
+
+    try:
+        version_code = int(request.form.get("version_code", 0))
+        if version_code <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({"error": "version_code must be a positive integer"}), 400
+
+    try:
+        min_version_code = int(request.form.get("min_version_code", version_code))
+    except (ValueError, TypeError):
+        min_version_code = version_code
+
+    force_update = request.form.get("force_update", "false").lower() == "true"
+    release_notes = (request.form.get("release_notes") or "").strip()
+
+    apk_file = request.files.get("apk_file")
+    if not apk_file:
+        return jsonify({"error": "apk_file is required"}), 400
+
+    original_filename = apk_file.filename or ""
+    if not original_filename.lower().endswith(".apk"):
+        return jsonify({"error": "file must be an APK (.apk)"}), 400
+
+    # --- Save APK ---
+    os.makedirs(APK_DIR, exist_ok=True)
+    apk_filename = f"sdfin-{version}.apk"
+    apk_path = os.path.join(APK_DIR, apk_filename)
+
+    try:
+        apk_file.save(apk_path)
+    except Exception as e:
+        logger.error("admin_app_publish: save failed: %s", e)
+        return jsonify({"error": "failed to save APK"}), 500
+
+    # --- Compute SHA-256 ---
+    try:
+        sha256_hex = _sha256_file(apk_path)
+    except Exception as e:
+        logger.error("admin_app_publish: sha256 failed: %s", e)
+        return jsonify({"error": "failed to compute checksum"}), 500
+
+    # --- Write version.json atomically ---
+    download_url = f"https://sivadurga.in/api/mobile/app/download/{version}"
+    version_payload = {
+        "latest_version": version,
+        "latest_version_code": version_code,
+        "min_supported_version_code": min_version_code,
+        "force_update": force_update,
+        "sha256": sha256_hex,
+        "url": download_url,
+        "release_notes": release_notes,
+        "released_at": datetime.now(timezone.utc).isoformat(),
+        "published_by": session.get("username", "unknown"),
+    }
+
+    try:
+        _write_version_json_atomic(version_payload)
+    except Exception as e:
+        logger.error("admin_app_publish: version.json write failed: %s", e)
+        return jsonify({"error": "failed to update version manifest"}), 500
+
+    # --- Audit ---
+    audit_log(
+        action="apk_published",
+        entity_type="apk_release",
+        entity_id=version,
+        details={
+            "version": version,
+            "version_code": version_code,
+            "sha256": sha256_hex,
+            "force_update": force_update,
+            "release_notes": release_notes,
+        },
+        status="success"
+    )
+
+    logger.info(
+        "APK published: %s (versionCode=%s, sha256=%s, force=%s)",
+        version, version_code, sha256_hex[:16] + "…", force_update
+    )
+
+    return jsonify({
+        "success": True,
+        "version": version,
+        "version_code": version_code,
+        "sha256": sha256_hex,
+        "url": download_url,
+        "force_update": force_update,
+    }), 201
+
+
+# ── Admin: list published releases ───────────────────────────────────────────
+
+@app.route("/api/admin/app/releases", methods=["GET"])
+def admin_app_releases():
+    """
+    GET /api/admin/app/releases
+    Admin session only. Returns current version.json and list of APK files on disk.
+    """
+    if session.get("role") not in ("admin", "superadmin"):
+        return jsonify({"error": "admin access required"}), 403
+
+    version_data = _read_version_json()
+
+    apk_files = []
+    if os.path.isdir(APK_DIR):
+        for fname in sorted(os.listdir(APK_DIR)):
+            if fname.endswith(".apk"):
+                fpath = os.path.join(APK_DIR, fname)
+                apk_files.append({
+                    "filename": fname,
+                    "size_bytes": os.path.getsize(fpath),
+                    "modified_at": datetime.fromtimestamp(
+                        os.path.getmtime(fpath), tz=timezone.utc
+                    ).isoformat(),
+                })
+
+    return jsonify({
+        "current_version": version_data,
+        "apk_files": apk_files,
+    }), 200
+
+
 # ----------------------------------------------------
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
+

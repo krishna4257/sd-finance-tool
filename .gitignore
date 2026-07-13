@@ -224,3 +224,6 @@ testing/*
 # own python files folder
 python_files/*
 .npm-cache/
+# Self-hosted APK releases — binaries are never committed to git
+apk_releases/*.apk
+apk_releases/*.tmp
