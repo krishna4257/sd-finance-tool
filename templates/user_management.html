@@ -354,9 +354,9 @@
 
             // Generate clean badges for mobile app installation status
             let lastActiveHtml = '';
-            if (!u.device_id || u.device_id === '-') {
+            if (!u.device_id || u.device_id === '-' || u.device_id === 'Not Installed') {
                 lastActiveHtml = `<span style="background-color: #f3f4f6 !important; color: #6b7280 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Not Installed</span>`;
-            } else if (u.last_active === 'Never') {
+            } else if (u.device_id === 'Pending Bind' || u.last_active === 'Never') {
                 lastActiveHtml = `<span style="background-color: #fffbeb !important; color: #b45309 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Registered</span>`;
             } else {
                 lastActiveHtml = `<span style="background-color: #e1efe6 !important; color: #1a4d2e !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
