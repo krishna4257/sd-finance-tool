@@ -7791,7 +7791,7 @@ def accept_closure_request(feed_id):
 
         # Find the customer
         cur.execute("""
-            SELECT cid, total_amount, paid_amount, balance_amount, status, interest_amount, COALESCE(interest_discount, 0.00)
+            SELECT cid, total_amount, paid_amount, balance_amount, interest_amount, COALESCE(interest_discount, 0.00)
             FROM customer
             WHERE ano = %s AND vid = %s
             FOR UPDATE
@@ -7800,7 +7800,7 @@ def accept_closure_request(feed_id):
         if not cust_row:
             return jsonify({"success": False, "error": f"Customer with Account Number {ano} not found in this village"}), 404
 
-        cid, total_amount, paid_amount, balance_amount, current_status, interest_amount, interest_discount = cust_row
+        cid, total_amount, paid_amount, balance_amount, interest_amount, interest_discount = cust_row
 
         # status decision logic (identical to close_customer_account_pg)
         if balance_amount == 0:
