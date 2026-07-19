@@ -2683,6 +2683,47 @@ def mobile_login():
         if not result:
             return {"error":"employee not found"},401
         eid = result[0]
+
+        # ---------------------------
+        # Device Locking & Binding (Admins are exempt)
+        # ---------------------------
+        device_id = data.get("device_id")
+        if level and level.strip().lower() in ("j", "m", "s"):
+            if not device_id:
+                return {"error": "device_id required"}, 400
+
+            cur.execute("""
+                SELECT device_id, is_active 
+                FROM user_devices 
+                WHERE user_id = %s
+            """, (user_id,))
+            dev_row = cur.fetchone()
+
+            if not dev_row:
+                return {"error": "Device not registered. Use the installation link first."}, 403
+
+            saved_device_id, device_active = dev_row
+            if not device_active:
+                return {"error": "Device disabled. Contact administrator."}, 403
+
+            if saved_device_id == 'PENDING':
+                # Bind this device to the user
+                cur.execute("""
+                    UPDATE user_devices
+                    SET device_id = %s, last_active = NOW()
+                    WHERE user_id = %s AND device_id = 'PENDING'
+                """, (device_id, user_id))
+                conn.commit()
+            elif saved_device_id != device_id:
+                return {"error": "Login not allowed from this device. Bound to another device."}, 403
+            else:
+                cur.execute("""
+                    UPDATE user_devices
+                    SET last_active = NOW()
+                    WHERE user_id = %s AND device_id = %s
+                """, (user_id, device_id))
+                conn.commit()
+
         token = generate_mobile_token(user_id, eid)
 
         audit_log(
@@ -11850,49 +11891,30 @@ def login():
         )
 
         # ---------------------------
-        # 2ï¸âƒ£ Check password
+        # 2️⃣ Check password
         # ---------------------------
         if not check_password_hash(password_hash, password):
             flash("Incorrect password. Please contact admin to reset credentials")
             return redirect("/login")
 
         # ---------------------------
-        # 3ï¸âƒ£ Device lock logic
+        # 3️⃣ Device registration initialization (Web only)
         # ---------------------------
-        # ðŸ”“ Admin users are NOT device locked
-        if not level or level.strip().lower() != "admin":
-
-            cur.execute("""
-                SELECT device_id, is_active
-                FROM user_devices
-                WHERE user_id = %s AND is_active = TRUE
-            """, (user_id,))
-            device = cur.fetchone()
-
-            if not device:
-                # First login or after reset → clear old devices and register new
+        # Web logins do not require device lock. We only initialize the user_devices record
+        # with 'PENDING' if it doesn't exist, which signifies they are registered but haven't
+        # bound a physical mobile device yet.
+        if level and level.strip().lower() in ("j", "m", "s"):
+            cur.execute("SELECT device_id FROM user_devices WHERE user_id = %s", (user_id,))
+            dev_row = cur.fetchone()
+            if not dev_row:
                 cur.execute("""
-                    DELETE FROM user_devices
-                    WHERE user_id = %s
+                    DELETE FROM user_devices WHERE user_id = %s
                 """, (user_id,))
-
                 cur.execute("""
                     INSERT INTO user_devices (user_id, device_id, is_active, last_active)
-                    VALUES (%s, %s, TRUE, NOW())
-                """, (user_id, device_id))
-
+                    VALUES (%s, 'PENDING', TRUE, NULL)
+                """, (user_id,))
                 conn.commit()
-
-            else:
-                saved_device_id, device_active = device
-
-                if not device_active:
-                    flash("Device disabled. Contact admin.")
-                    return redirect("/login")
-
-                if saved_device_id != device_id:
-                    flash("Login not allowed from this device.")
-                    return redirect("/login")
 
         # ---------------------------
         # 4ï¸âƒ£ Load village access
@@ -12066,9 +12088,10 @@ def list_users():
         """, (user_ids,))
 
         for uid, device_id, last_active in cur.fetchall():
+            is_pending = (device_id == 'PENDING')
             devices_by_user[uid] = {
-                "device_id": device_id,
-                "last_active": last_active.strftime("%d/%m/%Y %I:%M %p") if last_active else "Registered"
+                "device_id": "Pending Bind" if is_pending else device_id,
+                "last_active": "Never" if (is_pending or not last_active) else last_active.strftime("%d/%m/%Y %I:%M %p")
             }
 
         # Batch fetch village access
@@ -12280,7 +12303,7 @@ def reset_user_device():
         # Disable existing device so next login re-registers
         cur.execute("""
             UPDATE user_devices
-            SET is_active = FALSE
+            SET device_id = 'PENDING', last_active = NULL, is_active = TRUE
             WHERE user_id = %s
         """, (user_id,))
 
@@ -13315,24 +13338,39 @@ def mobile_app_version():
         user_row = cur.fetchone()
         user_active = user_row[0] if user_row else False
 
-        # Check device activity
+        # Check device activity and enforce hardware matching (Admins are exempt)
         device_active = True
-        if device_id:
-            cur.execute(
-                """
-                UPDATE user_devices
-                SET last_active = NOW()
-                WHERE user_id = %s AND device_id = %s
-                """,
-                (token_data.get("user_id"), device_id)
-            )
-            cur.execute(
-                "SELECT is_active FROM user_devices WHERE user_id = %s AND device_id = %s",
-                (token_data.get("user_id"), device_id)
-            )
-            dev_row = cur.fetchone()
-            if dev_row:
-                device_active = dev_row[0]
+        if token_data.get("level") and token_data.get("level").strip().lower() in ("j", "m", "s"):
+            if device_id:
+                cur.execute(
+                    "SELECT device_id, is_active FROM user_devices WHERE user_id = %s",
+                    (token_data.get("user_id"),)
+                )
+                dev_row = cur.fetchone()
+                if not dev_row:
+                    device_active = False  # Not registered
+                else:
+                    saved_device_id, dev_is_active = dev_row
+                    if not dev_is_active:
+                        device_active = False
+                    elif saved_device_id == 'PENDING':
+                        # First check-in, bind this device
+                        cur.execute(
+                            "UPDATE user_devices SET device_id = %s, last_active = NOW() WHERE user_id = %s AND device_id = 'PENDING'",
+                            (device_id, token_data.get("user_id"))
+                        )
+                        conn.commit()
+                    elif saved_device_id != device_id:
+                        device_active = False  # Device mismatch!
+                    else:
+                        # Device matches, update last active
+                        cur.execute(
+                            "UPDATE user_devices SET last_active = NOW() WHERE user_id = %s AND device_id = %s",
+                            (token_data.get("user_id"), device_id)
+                        )
+                        conn.commit()
+            else:
+                device_active = False  # device_id is required
 
         if not emp_active or not user_active or not device_active:
             # Log the trigger event
