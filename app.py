@@ -701,9 +701,36 @@ def ensure_device_wipe_audit_table():
         conn.close()
 
 
+def ensure_account_closure_feed_table():
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS account_closure_feed (
+                feed_id BIGSERIAL PRIMARY KEY,
+                local_uuid TEXT UNIQUE,
+                device_id TEXT,
+                eid INTEGER,
+                vid INTEGER NOT NULL,
+                ano INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_account_closure_feed_vid_status
+            ON account_closure_feed (vid, status)
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
 try:
     ensure_customer_docs_feed_table()
     ensure_device_wipe_audit_table()
+    ensure_account_closure_feed_table()
 except Exception as exc:
     logger.warning("Could not ensure startup tables: %s", exc)
 
@@ -3910,6 +3937,155 @@ def customer_feed():
         if cur:
             cur.close()
 
+        if conn:
+            conn.close()
+
+
+# ----------------------------------------------------
+# /api/mobile/close_account_feed
+# ----------------------------------------------------
+@csrf.exempt
+@limiter.limit("200 per minute")
+@app.route("/api/mobile/close_account_feed", methods=["POST"])
+@app.route("/close_account_feed", methods=["POST"])
+def close_account_feed():
+    conn = None
+    cur = None
+    try:
+        token = request.headers.get("X-Mobile-Token")
+        if not token:
+            return {"error": "missing token"}, 401
+
+        data_token = verify_mobile_token(token)
+        if not data_token:
+            return {"error": "invalid token"}, 401
+
+        payload_json = request.form.get("payload")
+        if not payload_json:
+            return jsonify({"error": "missing payload"}), 400
+
+        try:
+            data = json.loads(payload_json)  # queue envelope from mobile
+        except Exception:
+            return jsonify({"error": "invalid payload json"}), 400
+
+        if not isinstance(data, dict):
+            return jsonify({"error": "invalid envelope"}), 400
+
+        required_fields = [
+            "type",
+            "eid",
+            "vid",
+            "nonce",
+            "timestamp",
+            "idempotency_key",
+            "payload",
+            "signature",
+        ]
+        missing = [field for field in required_fields if data.get(field) in (None, "")]
+        if missing:
+            return jsonify({
+                "error": f"missing integrity fields: {', '.join(missing)}"
+            }), 400
+
+        def _canonical_json(value):
+            return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+        try:
+            envelope_eid = int(data.get("eid", 0))
+            envelope_vid = int(data.get("vid", 0))
+            token_eid = int(data_token.get("eid", 0))
+        except Exception:
+            return jsonify({"error": "invalid identity fields"}), 400
+
+        if envelope_eid != token_eid:
+            return jsonify({"error": "eid mismatch"}), 403
+
+        parsed_ts = parse_mobile_timestamp(data.get("timestamp"))
+        if parsed_ts is None:
+            return jsonify({"error": "invalid timestamp"}), 400
+
+        age_seconds = abs((datetime.now(timezone.utc) - parsed_ts).total_seconds())
+        if age_seconds > 900:
+            return jsonify({"error": "stale timestamp"}), 400
+
+        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+
+        signed_payload = {
+            "type": data.get("type"),
+            "eid": envelope_eid,
+            "vid": envelope_vid,
+            "nonce": data.get("nonce"),
+            "timestamp": data.get("timestamp"),
+            "idempotency_key": data.get("idempotency_key"),
+            "payload": data.get("payload"),
+        }
+
+        expected_signature = hmac.new(
+            signing_secret.encode("utf-8"),
+            _canonical_json(signed_payload).encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        provided_signature = str(data.get("signature") or "")
+        if not hmac.compare_digest(provided_signature, expected_signature):
+            return jsonify({"error": "invalid signature"}), 400
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute("SET TIME ZONE 'UTC'")
+
+        local_uuid = data.get("local_uuid")
+        device_id = data.get("device_id", "mobile")
+        eid = envelope_eid
+        vid = envelope_vid
+
+        ok, reason = register_mobile_request_integrity(
+            cur,
+            endpoint="/api/mobile/close_account_feed",
+            eid=eid,
+            vid=vid,
+            local_uuid=local_uuid,
+            idempotency_key=data.get("idempotency_key"),
+            nonce=data.get("nonce"),
+            request_signature=provided_signature,
+            request_timestamp=parsed_ts,
+        )
+        if not ok:
+            conn.rollback()
+            return jsonify({"error": reason}), 409
+
+        closure_payload = data.get("payload")
+        if isinstance(closure_payload, str):
+            closure_payload = json.loads(closure_payload)
+
+        ano = int(closure_payload.get("ano", 0))
+
+        cur.execute("""
+            INSERT INTO account_closure_feed
+            (
+                local_uuid,
+                device_id,
+                eid,
+                vid,
+                ano,
+                status
+            )
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (local_uuid) DO NOTHING
+        """, (local_uuid, device_id, eid, vid, ano, 'pending'))
+
+        conn.commit()
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.exception("Account closure feed processing failed")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
         if conn:
             conn.close()
 
@@ -7507,7 +7683,7 @@ def feed():
                         ep = {}
                 customer_edit_map[edit_row[0]] = ep
         except Exception:
-            pass  # Table may not exist yet on first run
+            conn.rollback()  # Table may not exist yet on first run; rollback aborted transaction
 
         # Attach edits to customers (match by local_uuid stored in customer_feed)
         for c in customers:
@@ -7538,23 +7714,257 @@ def feed():
                         ep = {}
                 payment_edit_map[edit_row[0]] = ep
         except Exception:
-            pass  # Table may not exist yet on first run
+            conn.rollback()  # Table may not exist yet on first run; rollback aborted transaction
 
         # Attach edits to payments
         for p in payments:
             local_uuid = p.get("local_uuid")
             p["edit"] = payment_edit_map.get(local_uuid) if local_uuid else None
 
+        # ACCOUNT CLOSURE FEED
+        cur.execute("""
+            SELECT
+                acf.feed_id,
+                acf.local_uuid,
+                acf.device_id,
+                acf.eid,
+                acf.vid,
+                acf.ano,
+                acf.status,
+                acf.created_at,
+                c.name,
+                c.cid,
+                c.total_amount,
+                c.paid_amount,
+                c.balance_amount,
+                c.interest_amount
+            FROM account_closure_feed acf
+            LEFT JOIN customer c
+              ON c.vid = acf.vid
+             AND c.ano = acf.ano
+            WHERE acf.vid = %s AND acf.status = 'pending'
+            ORDER BY acf.feed_id DESC
+        """, (vid,))
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] # type: ignore
+        closure_requests = [dict(zip(columns, r)) for r in rows]
+
         return render_template(
             "feed.html",
             customers=customers,
             payments=payments,
-            existing_customer_docs=existing_customer_docs
+            existing_customer_docs=existing_customer_docs,
+            closure_requests=closure_requests
         )
 
     finally:
         cur.close()
         conn.close()
+
+
+@app.post("/feed/closure/accept/<feed_id>")
+@login_required
+def accept_closure_request(feed_id):
+    conn = None
+    cur = None
+    try:
+        data = request.get_json() or {}
+        action = data.get("action")  # 'defaulted' or 'written_off' or 'discount_interest' or None
+        discount_amount = data.get("discount_amount")
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # Get the feed item
+        cur.execute("""
+            SELECT ano, vid, status
+            FROM account_closure_feed
+            WHERE feed_id = %s
+        """, (feed_id,))
+        feed_row = cur.fetchone()
+        if not feed_row:
+            return jsonify({"success": False, "error": "Closure request not found"}), 404
+
+        ano, vid, status = feed_row
+        if status != 'pending':
+            return jsonify({"success": False, "error": "Closure request already processed"}), 400
+
+        # Find the customer
+        cur.execute("""
+            SELECT cid, total_amount, paid_amount, balance_amount, status, interest_amount, COALESCE(interest_discount, 0.00)
+            FROM customer
+            WHERE ano = %s AND vid = %s
+            FOR UPDATE
+        """, (ano, vid))
+        cust_row = cur.fetchone()
+        if not cust_row:
+            return jsonify({"success": False, "error": f"Customer with Account Number {ano} not found in this village"}), 404
+
+        cid, total_amount, paid_amount, balance_amount, current_status, interest_amount, interest_discount = cust_row
+
+        # status decision logic (identical to close_customer_account_pg)
+        if balance_amount == 0:
+            final_status = "closed"
+        elif balance_amount > 0:
+            if action == "discount_interest":
+                if discount_amount is None:
+                    return jsonify({"success": False, "error": "Missing discount amount"}), 400
+                try:
+                    discount_val = Decimal(str(discount_amount))
+                except Exception:
+                    return jsonify({"success": False, "error": "Invalid discount amount"}), 400
+
+                if discount_val <= 0:
+                    return jsonify({"success": False, "error": "Discount amount must be greater than 0"}), 400
+
+                if balance_amount > interest_amount:
+                    return jsonify({"success": False, "error": "Balance is greater than interest amount. Cannot apply discount."}), 400
+
+                new_discount = Decimal(str(interest_discount)) + discount_val
+                new_balance = balance_amount - discount_val
+
+                cur.execute("""
+                    UPDATE customer
+                    SET interest_discount = %s,
+                        balance_amount = %s
+                    WHERE cid = %s
+                """, (new_discount, new_balance, cid))
+
+                balance_amount = new_balance
+                final_status = "closed"
+            elif action == "defaulted":
+                final_status = "defaulted"
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "Balance > 0. Must mark as defaulted or discount interest."
+                }), 400
+        else: # balance_amount < 0
+            if action != "written_off":
+                return jsonify({
+                    "success": False,
+                    "error": "Balance < 0. Must mark as written_off."
+                }), 400
+            final_status = "written_off"
+
+        # Recalculate and freeze rating in customer table before moving
+        recalc_customer_repayment_score(cur, cid, force_recalc=True)
+
+        # Move customer
+        cur.execute("""
+            INSERT INTO closed_cust_account (
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid, status, phone_number,
+                closed_by, closed_at,
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                base_amount, cutting_amount, interest_amount, interest_discount
+            )
+            SELECT
+                cid, ano, name, vid,
+                start_date, end_date,
+                total_amount, paid_amount, balance_amount, installment_amount,
+                type, period, created_at,
+                aadhaar_number, notes,
+                latitude, longitude, eid, %s, phone_number,
+                %s, NOW() AT TIME ZONE 'Asia/Kolkata',
+                customer_rating, final_frozen_rating, final_risk_level, freeze_date,
+                base_amount, cutting_amount, interest_amount, interest_discount
+            FROM customer
+            WHERE cid = %s
+        """, (final_status, session.get("employee_id") or session.get("eid"), cid))
+
+        # Move payments
+        cur.execute("""
+            INSERT INTO closed_cust_payment (
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            )
+            SELECT
+                pid, ano, payment_date, amt,
+                created_at, eid, cid, vid
+            FROM payment
+            WHERE cid = %s
+        """, (cid,))
+
+        # Delete from active tables
+        cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
+        cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
+
+        # Mark closure request as accepted
+        cur.execute("""
+            UPDATE account_closure_feed
+            SET status = 'accepted'
+            WHERE feed_id = %s
+        """, (feed_id,))
+
+        audit_log(
+            action="close_customer_account_via_feed",
+            entity_type="account_closure_feed",
+            entity_id=feed_id,
+            details={
+                "ano": ano,
+                "vid": vid,
+                "cid": cid,
+                "final_status": final_status,
+                "action": action,
+                "discount_amount": str(discount_amount) if discount_amount else None
+            },
+            status="success"
+        )
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error accepting closure request: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/closure/reject/<feed_id>")
+@login_required
+def reject_closure_request(feed_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # Update status to rejected
+        cur.execute("""
+            UPDATE account_closure_feed
+            SET status = 'rejected'
+            WHERE feed_id = %s AND status = 'pending'
+            RETURNING ano, vid
+        """, (feed_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Pending closure request not found"}), 404
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error rejecting closure request: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.post("/feed/customer/accept/<feed_id>")
