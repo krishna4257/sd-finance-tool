@@ -190,6 +190,60 @@
 </style>
 
 <div class="raised-box">
+  <h3>Account Closure Requests</h3>
+  <div class="feed-stack">
+    {% for row in closure_requests %}
+    <div class="feed-card">
+      <div class="feed-card-header">
+        <div>
+          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+          <h4 style="margin-top:8px;">{{ row.name or 'Customer Not Found' }}</h4>
+          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
+        </div>
+        <div class="feed-actions">
+          {% if row.cid %}
+            {% if row.balance_amount == 0 %}
+              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', null)">✅ Accept & Close</button>
+            {% elif row.balance_amount < 0 %}
+              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'written_off')">✅ Accept & Write Off</button>
+            {% else %}
+              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'defaulted')">⚠️ Accept & Mark Defaulted</button>
+              {% if row.balance_amount <= row.interest_amount %}
+                <div style="display: inline-flex; align-items: center; gap: 6px;">
+                  <input type="number" id="discount-{{ row.feed_id }}" class="neumorphic-input ultrasmall" placeholder="Discount" style="width:90px;" value="{{ row.balance_amount|int }}" max="{{ row.balance_amount|int }}" min="1">
+                  <button class="neumorphic-btn ultrasmall" onclick="acceptClosureWithDiscount('{{ row.feed_id }}', '{{ row.cid }}')">💸 Accept with Discount</button>
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endif %}
+          <button class="neumorphic-btn ultrasmall" onclick="rejectClosure('{{ row.feed_id }}')">❌ Reject Request</button>
+        </div>
+      </div>
+
+      <div class="feed-subsection">
+        <div class="feed-subsection-header">
+          <h5>Details</h5>
+        </div>
+        <div class="feed-meta-grid">
+          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
+          <div class="feed-meta-item"><strong>Customer ID</strong>{{ row.cid or '-' }}</div>
+          <div class="feed-meta-item"><strong>Village ID</strong>{{ row.vid or '-' }}</div>
+          <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Paid Amount</strong><span class="feed-amount">₹{{ row.paid_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Balance Amount</strong><span class="feed-amount" style="color: {% if row.balance_amount > 0 %}var(--danger){% elif row.balance_amount < 0 %}var(--success){% else %}var(--text){% endif %};">₹{{ row.balance_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Interest Amount</strong><span class="feed-amount">₹{{ row.interest_amount or 0 }}</span></div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not closure_requests %}
+    <div class="feed-card" style="text-align:center;">No account closure requests available.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="raised-box">
   <h3>Customer Feed</h3>
 
   <div class="feed-stack">

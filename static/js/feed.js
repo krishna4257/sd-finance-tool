@@ -189,6 +189,89 @@ function acceptSelected() {
     });
 }
 
+function acceptClosure(feed_id, cid, action) {
+  if (action === "defaulted" && !confirm("Are you sure you want to close this account and mark it as Defaulted?")) {
+    return;
+  }
+  if (action === "written_off" && !confirm("Are you sure you want to close this account and mark it as Written Off?")) {
+    return;
+  }
+  
+  return csrfFetch(`/feed/closure/accept/${feed_id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: action })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert("Account closed and moved to closed customers!");
+        location.reload();
+      } else {
+        alert(data.error || "Failed to close account");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Server error");
+    });
+}
+
+function acceptClosureWithDiscount(feed_id, cid) {
+  const discountInput = document.getElementById(`discount-${feed_id}`);
+  const val = parseFloat(discountInput.value) || 0;
+  if (val <= 0) {
+    alert("Discount must be greater than 0");
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to close this account with a discount of ₹${val}?`)) {
+    return;
+  }
+
+  return csrfFetch(`/feed/closure/accept/${feed_id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "discount_interest", discount_amount: val })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert("Account closed with discount successfully!");
+        location.reload();
+      } else {
+        alert(data.error || "Failed to close account");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Server error");
+    });
+}
+
+function rejectClosure(feed_id) {
+  if (!confirm("Reject this account closure request?")) {
+    return;
+  }
+
+  return csrfFetch(`/feed/closure/reject/${feed_id}`, {
+    method: "POST"
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert("Closure request rejected.");
+        location.reload();
+      } else {
+        alert(data.error || "Failed to reject closure request");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Server error");
+    });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   updateTotalPayment();
 
