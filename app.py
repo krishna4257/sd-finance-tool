@@ -696,6 +696,7 @@ def ensure_device_wipe_audit_table():
                 ip_address TEXT
             )
         """)
+        
         conn.commit()
     finally:
         cur.close()
@@ -4605,7 +4606,29 @@ def get_dashboard_totals(vid):
 @login_required
 @admin_required
 def admin_control():
-    return render_template("admin_control.html")
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT e.eid, e.name, u.username, e.level
+            FROM employee e
+            LEFT JOIN users u ON u.employee_id = e.eid
+            WHERE e.is_active = TRUE
+            ORDER BY e.name
+        """)
+        employees = [
+            {
+                "eid": row[0],
+                "name": row[1],
+                "username": row[2] or "N/A",
+                "level": row[3] or "N/A"
+            }
+            for row in cur.fetchall()
+        ]
+        return render_template("admin_control.html", employees=employees)
+    finally:
+        cur.close()
+        conn.close()
 
 def get_customer_analytics(vid):
     conn = get_pg_connection()
@@ -11856,8 +11879,8 @@ def login():
                 """, (user_id,))
 
                 cur.execute("""
-                    INSERT INTO user_devices (user_id, device_id, is_active)
-                    VALUES (%s, %s, TRUE)
+                    INSERT INTO user_devices (user_id, device_id, is_active, last_active)
+                    VALUES (%s, %s, TRUE, NOW())
                 """, (user_id, device_id))
 
                 conn.commit()
@@ -12016,14 +12039,17 @@ def list_users():
 
         # Batch fetch active devices
         cur.execute("""
-            SELECT user_id, device_id
+            SELECT user_id, device_id, last_active
             FROM user_devices
             WHERE user_id = ANY(%s)
               AND is_active = TRUE
         """, (user_ids,))
 
-        for uid, device_id in cur.fetchall():
-            devices_by_user[uid] = device_id
+        for uid, device_id, last_active in cur.fetchall():
+            devices_by_user[uid] = {
+                "device_id": device_id,
+                "last_active": last_active.strftime("%d/%m/%Y %I:%M %p") if last_active else "Registered"
+            }
 
         # Batch fetch village access
         cur.execute("""
@@ -12047,6 +12073,7 @@ def list_users():
 
     for row in rows:
         user_id, username, employee_id, is_active, emp_name, level = row
+        dev_info = devices_by_user.get(user_id, {"device_id": "-", "last_active": "Never"})
 
         users.append({
             "id": user_id,
@@ -12054,7 +12081,8 @@ def list_users():
             "employee_id": employee_id,
             "employee_name": emp_name,
             "role": level,
-            "device_id": devices_by_user.get(user_id, ""),
+            "device_id": dev_info["device_id"],
+            "last_active": dev_info["last_active"],
             "is_active": is_active,
             "villages": villages_by_user.get(user_id, [])
         })
@@ -13271,6 +13299,14 @@ def mobile_app_version():
         device_active = True
         if device_id:
             cur.execute(
+                """
+                UPDATE user_devices
+                SET last_active = NOW()
+                WHERE user_id = %s AND device_id = %s
+                """,
+                (token_data.get("user_id"), device_id)
+            )
+            cur.execute(
                 "SELECT is_active FROM user_devices WHERE user_id = %s AND device_id = %s",
                 (token_data.get("user_id"), device_id)
             )
@@ -13595,7 +13631,7 @@ def generate_download_link():
     cur = conn.cursor()
     try:
         # Verify employee exists and is active
-        cur.execute("SELECT name, is_active FROM employee WHERE eid = %s", (employee_id,))
+        cur.execute("SELECT name, is_active, phone_number FROM employee WHERE eid = %s", (employee_id,))
         emp = cur.fetchone()
         if not emp:
             return jsonify({"error": "employee not found"}), 404
@@ -13635,7 +13671,8 @@ def generate_download_link():
         return jsonify({
             "success": True,
             "url": portal_url,
-            "expires_at": expiry
+            "expires_at": expiry,
+            "phone": emp[2] or ""
         }), 200
 
     except Exception as e:
