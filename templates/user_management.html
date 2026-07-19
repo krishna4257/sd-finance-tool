@@ -156,6 +156,7 @@
                     <th class="table-header">Username</th>
                     <th class="table-header">Employee</th>
                     <th class="table-header">Device ID</th>
+                    <th class="table-header">App Status / Active</th>
                     <th class="table-header">Role</th>
                     <th class="table-header">Assigned Villages</th>
                     <th class="table-header">Status</th>
@@ -351,10 +352,24 @@
             tr.dataset.id = u.id;
             tr.dataset.employeeId = u.employee_id;
 
+            // Generate clean badges for mobile app installation status
+            let lastActiveHtml = '';
+            if (!u.device_id || u.device_id === '-') {
+                lastActiveHtml = `<span style="background-color: #f3f4f6 !important; color: #6b7280 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Not Installed</span>`;
+            } else if (u.last_active === 'Never') {
+                lastActiveHtml = `<span style="background-color: #fffbeb !important; color: #b45309 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Registered</span>`;
+            } else {
+                lastActiveHtml = `<span style="background-color: #e1efe6 !important; color: #1a4d2e !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                    <span style="width: 6px; height: 6px; background-color: #10b981; border-radius: 50%; display: inline-block;"></span>
+                    ${u.last_active}
+                </span>`;
+            }
+
             tr.innerHTML = `
             <td data-field="username">${u.username}</td>
             <td data-field="employee_name">${u.employee_name || '-'}</td>
-            <td data-field="device_id">${u.device_id || '-'}</td>
+            <td data-field="device_id"><code style="font-size: 11px; color: #6b7280;">${u.device_id || '-'}</code></td>
+            <td data-field="last_active">${lastActiveHtml}</td>
             <td data-field="role">${u.role}</td>
             <td data-field="villages" class="left-align">
               ${(u.villages || []).map(v => `${v.vid} - ${v.name} - ${v.district}`).join('<br>') || '-'}
@@ -368,7 +383,7 @@
                 <button class="neumorphic-btn small table-btn toggle-status-btn" data-id="${u.id}" data-active="${u.is_active}" style="padding: 4px 8px; font-size:0.75rem;">
                     ${u.is_active ? 'Deactivate' : 'Activate'}
                 </button>
-                ${u.role === 'mgmt' ? `
+                ${(u.device_id && u.device_id !== '-') ? `
                     <button class="neumorphic-btn small table-btn reset-device-btn" data-id="${u.id}" style="padding: 4px 8px; font-size:0.75rem;">
                         Reset Device
                     </button>
@@ -392,7 +407,7 @@
             ordering: true,
             autoWidth: false,
             columnDefs: [
-                { targets: 6, orderable: false }
+                { targets: 7, orderable: false }
             ]
         });
 

@@ -1,9 +1,206 @@
 {% extends "base.html" %}
 
 {% block content %}
-
 <div class="container mt-4">
-    <h3 class="mb-4">Admin Control Panel</h3>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Admin Control Panel</h2>
+        <a href="/village" class="btn btn-outline-secondary btn-sm">Back to Villages</a>
+    </div>
+
+    <!-- App Private Distribution Card -->
+    <div class="card mb-4 shadow-sm" style="border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div class="card-header bg-light" style="border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: 1px solid #e5e7eb; padding: 16px 20px;">
+            <h5 class="m-0" style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; color: #111827;">
+                <i class="bi bi-shield-lock-fill me-2" style="color: #1a4d2e;"></i>
+                Mobile App Security & Distribution
+            </h5>
+        </div>
+        <div class="card-body" style="padding: 24px;">
+            <p class="text-muted" style="font-size: 14px; margin-bottom: 20px;">
+                Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. For security, links are cryptographically signed, bound to the selected employee, and expire in <strong>exactly 2 minutes</strong>.
+            </p>
+
+            <div class="table-responsive">
+                <table class="table align-middle" style="font-size: 14px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>EID</th>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Role Level</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td class="text-muted">{{ emp.eid }}</td>
+                            <td><strong>{{ emp.name }}</strong></td>
+                            <td><code class="text-muted" style="font-size: 12px;">{{ emp.username }}</code></td>
+                            <td>
+                                {% if emp.level in ("admin", "superadmin", "mgmt") %}
+                                <span class="badge bg-secondary" style="font-size: 11px; font-weight: 500;">{{ emp.level }}</span>
+                                {% else %}
+                                <span class="badge bg-success" style="background-color: #e1efe6 !important; color: #1a4d2e !important; font-size: 11px; font-weight: 600;">{{ emp.level }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if emp.level in ("j", "m", "s") %}
+                                <button class="btn btn-sm btn-success" style="background-color: #1a4d2e; border-color: #1a4d2e; font-weight: 500;" onclick="generateLink({{ emp.eid }}, '{{ emp.name }}')">
+                                    Generate Install Link
+                                </button>
+                                {% else %}
+                                <span class="text-muted" style="font-size: 12px; font-style: italic;">Admins have regular access</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
+<!-- Custom Modal for displaying generated links -->
+<div id="linkModal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; transition: opacity 0.2s ease;">
+    <div style="background: #ffffff; border-radius: 16px; width: 90%; max-width: 440px; padding: 28px 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; border: 1px solid #e5e7eb;">
+        <span onclick="closeModal()" style="position: absolute; right: 18px; top: 12px; font-size: 22px; cursor: pointer; color: #9ca3af; transition: color 0.15s ease;" onmouseover="this.style.color='#4b5563'" onmouseout="this.style.color='#9ca3af'">&times;</span>
+        <h5 style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; margin: 0 0 12px 0; font-size: 18px; color: #111827;">Installation Link Generated</h5>
+        <div style="font-size: 13px; color: #4b5563; margin-bottom: 18px; line-height: 1.4;">
+            Temporary link generated for <strong id="modalEmpName" style="color: #111827;"></strong>. Send this link to the employee.
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 18px;">
+            <input type="text" id="installUrlInput" readonly style="flex: 1; padding: 10px 12px; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; font-family: monospace; color: #374151;" onclick="this.select()">
+            <button id="copyBtn" onclick="copyLink()" style="padding: 10px 16px; background: #1a4d2e; color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; transition: background 0.15s ease;" onmouseover="this.style.background='#143b23'" onmouseout="this.style.background='#1a4d2e'">Copy</button>
+        </div>
+
+        <!-- Direct Share Actions -->
+        <div style="display: flex; gap: 10px; margin-bottom: 18px;">
+            <a id="whatsappShareBtn" target="_blank" style="display: none; flex: 1; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #25d366; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; text-align: center; transition: background 0.15s ease;" onmouseover="this.style.background='#1eb855'" onmouseout="this.style.background='#25d366'">
+                <i class="fab fa-whatsapp" style="font-size: 14px;"></i> WhatsApp
+            </a>
+            <a id="smsShareBtn" style="display: none; flex: 1; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #007bff; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; text-align: center; transition: background 0.15s ease;" onmouseover="this.style.background='#0069d9'" onmouseout="this.style.background='#007bff'">
+                <i class="fas fa-comment-sms" style="font-size: 14px;"></i> SMS
+            </a>
+        </div>
+
+        <div style="background-color: #fffbeb; border: 1px solid #fef3c7; color: #b45309; border-radius: 8px; font-size: 12px; padding: 10px; text-align: center; font-weight: 600; letter-spacing: 0.02em;">
+            <i class="fas fa-clock me-1"></i>
+            Expires in <strong id="countdownTimer">02:00</strong>
+        </div>
+    </div>
+</div>
+
+<script>
+let timerInterval;
+
+function generateLink(eid, name) {
+    // Clear any active timers
+    clearInterval(timerInterval);
+    
+    // Call server using global csrfFetch helper from base.html
+    window.csrfFetch("/admin/generate_download_link", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ employee_id: eid })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("HTTP error " + response.status);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            document.getElementById("modalEmpName").innerText = name;
+            document.getElementById("installUrlInput").value = data.url;
+            
+            // Reset copy button styling
+            const copyBtn = document.getElementById("copyBtn");
+            copyBtn.innerText = "Copy";
+            copyBtn.style.background = "#1a4d2e";
+
+            // Configure Quick Share Buttons
+            let rawPhone = (data.phone || "").replace(/\D/g, ""); // extract numbers only
+            if (rawPhone) {
+                // If it is 10 digits without country code, prefix with 91 (India)
+                if (rawPhone.length === 10) {
+                    rawPhone = "91" + rawPhone;
+                }
+
+                const msg = `Siva Durga App Install Link:\n\n${data.url}\n\nNote: This link will expire in 2 minutes.`;
+                const encodedMsg = encodeURIComponent(msg);
+
+                // Setup WhatsApp Link
+                const waBtn = document.getElementById("whatsappShareBtn");
+                waBtn.href = `https://api.whatsapp.com/send?phone=${rawPhone}&text=${encodedMsg}`;
+                waBtn.style.display = "flex";
+
+                // Setup SMS Link
+                const smsBtn = document.getElementById("smsShareBtn");
+                smsBtn.href = `sms:+${rawPhone}?body=${encodedMsg}`;
+                smsBtn.style.display = "flex";
+            } else {
+                document.getElementById("whatsappShareBtn").style.display = "none";
+                document.getElementById("smsShareBtn").style.display = "none";
+            }
+
+            // Open Custom Modal
+            document.getElementById("linkModal").style.display = "flex";
+
+            // Set countdown timer
+            startCountdown(120);
+        } else {
+            alert("Error: " + (data.error || "Failed to generate link."));
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("Failed to generate link.");
+    });
+}
+
+function closeModal() {
+    document.getElementById("linkModal").style.display = "none";
+    clearInterval(timerInterval);
+}
+
+function startCountdown(duration) {
+    let timer = duration, minutes, seconds;
+    const timerDisplay = document.getElementById("countdownTimer");
+    
+    timerInterval = setInterval(function () {
+        minutes = parseInt(timer / 60, 10);
+        seconds = parseInt(timer % 60, 10);
+
+        minutes = minutes < 10 ? "0" + minutes : minutes;
+        seconds = seconds < 10 ? "0" + seconds : seconds;
+
+        timerDisplay.textContent = minutes + ":" + seconds;
+
+        if (--timer < 0) {
+            clearInterval(timerInterval);
+            timerDisplay.textContent = "EXPIRED";
+            document.getElementById("installUrlInput").value = "Link Expired";
+        }
+    }, 1000);
+}
+
+function copyLink() {
+    const copyText = document.getElementById("installUrlInput");
+    if (copyText.value === "Link Expired") return;
+    
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); // For mobile devices
+    navigator.clipboard.writeText(copyText.value);
+
+    const copyBtn = document.getElementById("copyBtn");
+    copyBtn.innerText = "Copied!";
+    copyBtn.style.background = "#28a745";
+}
+</script>
 {% endblock %}
