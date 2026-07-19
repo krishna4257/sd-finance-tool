@@ -107,9 +107,7 @@ def audit_log(
             conn.close()
 
 # Helper: Log DB pool stats
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CENTRALIZED DATE UTILITIES
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def parse_date_input(value):
     """Parse a date from any common format into a Python date object.
     Accepts: 'yyyy-mm-dd' (ISO), 'dd-mm-yyyy', 'dd/mm/yyyy', date, datetime.
@@ -11934,9 +11932,22 @@ def login():
         if user_level in ("j", "m", "s"):
             # Check if this user has a valid active temporary download token session
             allowed = False
-            token_eid = session.get("download_token_eid")
-            token_exp = session.get("download_token_expiry")
+            token = request.form.get("token") or request.args.get("token")
+            token_eid = None
+            token_exp = None
+
+            if token:
+                try:
+                    payload = serializer.loads(token)
+                    token_eid = payload.get("eid")
+                    token_exp = payload.get("exp")
+                except Exception as e:
+                    logger.warning("login token signature load failed: %s", e)
             
+            if not token_eid or not token_exp:
+                token_eid = session.get("download_token_eid")
+                token_exp = session.get("download_token_expiry")
+
             if token_eid and token_exp:
                 try:
                     exp_dt = datetime.fromisoformat(token_exp)
@@ -11947,6 +11958,15 @@ def login():
 
             if allowed:
                 session["download_authorized"] = True
+                # If we parsed a token from inputs, store it in the session to authorize the subsequent landing page view
+                if token:
+                    try:
+                        payload = serializer.loads(token)
+                        session["download_token_eid"] = int(payload.get("eid"))
+                        session["download_token_uid"] = int(payload.get("uid"))
+                        session["download_token_expiry"] = payload.get("exp")
+                    except Exception:
+                        pass
                 return redirect("/app/portal")
             else:
                 session.clear()
@@ -13726,9 +13746,10 @@ def app_portal():
     if not user_id:
         if token:
             flash("Please log in to complete your app installation.", "info")
+            return redirect(url_for("login", token=token))
         else:
             flash("Web access denied.", "danger")
-        return redirect(url_for("login"))
+            return redirect(url_for("login"))
 
     # 3. Check access rights
     # Admins and Mgmt can ALWAYS access the download portal
