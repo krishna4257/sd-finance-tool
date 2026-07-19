@@ -4059,7 +4059,7 @@ def close_account_feed():
         if isinstance(closure_payload, str):
             closure_payload = json.loads(closure_payload)
 
-        ano = int(closure_payload.get("ano", 0))
+        ano = int(closure_payload.get("ano", 0)) # type: ignore
 
         cur.execute("""
             INSERT INTO account_closure_feed
@@ -14215,7 +14215,7 @@ def app_portal():
         if token_eid and token_exp:
             try:
                 exp_dt = datetime.fromisoformat(token_exp)
-                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(employee_id):
+                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(eid):
                     allowed = True
             except Exception as e:
                 logger.error("app_portal verification exception: %s", e)
