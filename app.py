@@ -11900,21 +11900,24 @@ def login():
         # ---------------------------
         # 3️⃣ Device registration initialization (Web only)
         # ---------------------------
-        # Web logins do not require device lock. We only initialize the user_devices record
-        # with 'PENDING' if it doesn't exist, which signifies they are registered but haven't
-        # bound a physical mobile device yet.
+        # Web logins do not require device lock. We only initialize/reset the user_devices record
+        # to 'PENDING' and is_active = TRUE when they log in to download the app. This ensures
+        # deactivated or old physical bindings are reset correctly.
         if level and level.strip().lower() in ("j", "m", "s"):
-            cur.execute("SELECT device_id FROM user_devices WHERE user_id = %s", (user_id,))
+            cur.execute("SELECT id FROM user_devices WHERE user_id = %s", (user_id,))
             dev_row = cur.fetchone()
             if not dev_row:
-                cur.execute("""
-                    DELETE FROM user_devices WHERE user_id = %s
-                """, (user_id,))
                 cur.execute("""
                     INSERT INTO user_devices (user_id, device_id, is_active, last_active)
                     VALUES (%s, 'PENDING', TRUE, NULL)
                 """, (user_id,))
-                conn.commit()
+            else:
+                cur.execute("""
+                    UPDATE user_devices
+                    SET device_id = 'PENDING', is_active = TRUE, last_active = NULL
+                    WHERE user_id = %s
+                """, (user_id,))
+            conn.commit()
 
         # ---------------------------
         # 4ï¸âƒ£ Load village access
