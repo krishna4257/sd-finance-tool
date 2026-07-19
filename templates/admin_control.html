@@ -17,7 +17,7 @@
         </div>
         <div class="card-body" style="padding: 24px;">
             <p class="text-muted" style="font-size: 14px; margin-bottom: 20px;">
-                Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. For security, links are cryptographically signed, bound to the selected employee, and expire in <strong>exactly 2 minutes</strong>.
+                Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. For security, links are cryptographically signed, bound to the selected employee, and expire in <strong>exactly 15 minutes</strong>.
             </p>
 
             <div class="table-responsive">
@@ -88,7 +88,7 @@
 
         <div style="background-color: #fffbeb; border: 1px solid #fef3c7; color: #b45309; border-radius: 8px; font-size: 12px; padding: 10px; text-align: center; font-weight: 600; letter-spacing: 0.02em;">
             <i class="fas fa-clock me-1"></i>
-            Expires in <strong id="countdownTimer">02:00</strong>
+            Expires in <strong id="countdownTimer">15:00</strong>
         </div>
     </div>
 </div>
@@ -132,7 +132,7 @@ function generateLink(eid, name) {
                     rawPhone = "91" + rawPhone;
                 }
 
-                const msg = `Siva Durga App Install Link:\n\n${data.url}\n\nNote: This link will expire in 2 minutes.`;
+                const msg = `Siva Durga App Install Link:\n\n${data.url}\n\nNote: This link will expire in 15 minutes.`;
                 const encodedMsg = encodeURIComponent(msg);
 
                 // Setup WhatsApp Link
@@ -152,8 +152,8 @@ function generateLink(eid, name) {
             // Open Custom Modal
             document.getElementById("linkModal").style.display = "flex";
 
-            // Set countdown timer
-            startCountdown(120);
+            // Set countdown timer to 15 minutes (900 seconds)
+            startCountdown(900);
         } else {
             alert("Error: " + (data.error || "Failed to generate link."));
         }

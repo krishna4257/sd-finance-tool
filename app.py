@@ -13665,8 +13665,8 @@ def generate_download_link():
             return jsonify({"error": "user account not associated with this employee"}), 404
         user_id = user_row[0]
 
-        # Generate signed token with 2-minute expiration
-        expiry = (datetime.now(timezone.utc) + timedelta(seconds=120)).isoformat()
+        # Generate signed token with 15-minute expiration
+        expiry = (datetime.now(timezone.utc) + timedelta(seconds=900)).isoformat()
         token_payload = {
             "eid": int(employee_id),
             "uid": int(user_id),
