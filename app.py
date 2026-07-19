@@ -7739,7 +7739,7 @@ def feed():
                 c.balance_amount,
                 c.interest_amount
             FROM account_closure_feed acf
-            LEFT JOIN customer c
+            INNER JOIN customer c
               ON c.vid = acf.vid
              AND c.ano = acf.ano
             WHERE acf.vid = %s AND acf.status = 'pending'
@@ -7894,12 +7894,12 @@ def accept_closure_request(feed_id):
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
 
-        # Mark closure request as accepted
+        # Mark all pending closure requests for this customer in this village as accepted
         cur.execute("""
             UPDATE account_closure_feed
             SET status = 'accepted'
-            WHERE feed_id = %s
-        """, (feed_id,))
+            WHERE ano = %s AND vid = %s AND status = 'pending'
+        """, (ano, vid))
 
         audit_log(
             action="close_customer_account_via_feed",
