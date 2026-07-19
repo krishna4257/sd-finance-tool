@@ -230,7 +230,7 @@
           <div class="feed-meta-item"><strong>Village ID</strong>{{ row.vid or '-' }}</div>
           <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
           <div class="feed-meta-item"><strong>Paid Amount</strong><span class="feed-amount">₹{{ row.paid_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Balance Amount</strong><span class="feed-amount" style="color: {% if row.balance_amount > 0 %}var(--danger){% elif row.balance_amount < 0 %}var(--success){% else %}var(--text){% endif %};">₹{{ row.balance_amount or 0 }}</span></div>
+          <div class="feed-meta-item"><strong>Balance Amount</strong><span class="feed-amount" style="color: {% if (row.balance_amount or 0) > 0 %}var(--danger){% elif (row.balance_amount or 0) < 0 %}var(--success){% else %}var(--text){% endif %};">₹{{ row.balance_amount or 0 }}</span></div>
           <div class="feed-meta-item"><strong>Interest Amount</strong><span class="feed-amount">₹{{ row.interest_amount or 0 }}</span></div>
         </div>
       </div>
