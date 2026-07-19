@@ -13764,10 +13764,10 @@ def app_portal():
         if token_eid and token_exp:
             try:
                 exp_dt = datetime.fromisoformat(token_exp)
-                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(eid):
+                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(employee_id):
                     allowed = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("app_portal verification exception: %s", e)
         
         if not allowed:
             session.clear()
