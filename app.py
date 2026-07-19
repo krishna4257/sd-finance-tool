@@ -13418,13 +13418,13 @@ def mobile_app_download(version):
         conn = get_pg_connection()
         cur = conn.cursor()
         cur.execute(
-            "SELECT eid, status FROM employees WHERE eid = %s",
+            "SELECT eid, is_active FROM employee WHERE eid = %s",
             (token_data.get("eid"),)
         )
         row = cur.fetchone()
         cur.close()
         conn.close()
-        if not row or row[1] != "active":
+        if not row or not row[1]:
             return jsonify({"error": "employee account inactive"}), 403
         eid = row[0]
     except Exception as e:
