@@ -682,10 +682,31 @@ def ensure_customer_docs_feed_table():
         conn.close()
 
 
+def ensure_device_wipe_audit_table():
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS device_wipe_audit (
+                id SERIAL PRIMARY KEY,
+                user_id INT,
+                device_id TEXT NOT NULL,
+                triggered_at TIMESTAMPTZ DEFAULT NOW(),
+                reason TEXT,
+                ip_address TEXT
+            )
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
 try:
     ensure_customer_docs_feed_table()
+    ensure_device_wipe_audit_table()
 except Exception as exc:
-    logger.warning("Could not ensure customer_docs_feed table: %s", exc)
+    logger.warning("Could not ensure startup tables: %s", exc)
 
 
 # Set security headers after each request
@@ -815,6 +836,18 @@ def login_required(f):
                 return jsonify(success=False, error="Session expired. Please login again.", session_expired=True), 401
 
             return redirect("/login")
+
+        user_level = session.get("level")
+        if user_level in ("j", "m", "s"):
+            allowed_paths = ("/app/portal", "/app/download-action", "/logout")
+            if request.path not in allowed_paths:
+                if session.get("download_authorized") == True:
+                    return redirect("/app/portal")
+                else:
+                    session.clear()
+                    flash("Access denied.")
+                    return redirect("/login")
+
         return f(*args, **kwargs)
     return wrapper
 
@@ -11874,6 +11907,29 @@ def login():
             }
         )
 
+        user_level = level.strip().lower() if level else ""
+        if user_level in ("j", "m", "s"):
+            # Check if this user has a valid active temporary download token session
+            allowed = False
+            token_eid = session.get("download_token_eid")
+            token_exp = session.get("download_token_expiry")
+            
+            if token_eid and token_exp:
+                try:
+                    exp_dt = datetime.fromisoformat(token_exp)
+                    if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(employee_id):
+                        allowed = True
+                except Exception:
+                    pass
+
+            if allowed:
+                session["download_authorized"] = True
+                return redirect("/app/portal")
+            else:
+                session.clear()
+                flash("Web access denied. If you need to install the mobile app, request a temporary installation link from your administrator.")
+                return redirect("/login")
+
         return redirect("/village")
 
     finally:
@@ -13195,22 +13251,63 @@ def mobile_app_version():
     if not token_data:
         return jsonify({"error": "invalid or expired token"}), 401
 
-    # Optional: verify the employee is still active
+    # Verify the employee, user, and device are still active
+    device_id = request.args.get("device_id")
     try:
         conn = get_pg_connection()
         cur = conn.cursor()
-        cur.execute(
-            "SELECT status FROM employees WHERE eid = %s",
-            (token_data.get("eid"),)
-        )
-        row = cur.fetchone()
+
+        # Check employee activity
+        cur.execute("SELECT is_active FROM employee WHERE eid = %s", (token_data.get("eid"),))
+        emp_row = cur.fetchone()
+        emp_active = emp_row[0] if emp_row else False
+
+        # Check user account activity
+        cur.execute("SELECT is_active FROM users WHERE id = %s", (token_data.get("user_id"),))
+        user_row = cur.fetchone()
+        user_active = user_row[0] if user_row else False
+
+        # Check device activity
+        device_active = True
+        if device_id:
+            cur.execute(
+                "SELECT is_active FROM user_devices WHERE user_id = %s AND device_id = %s",
+                (token_data.get("user_id"), device_id)
+            )
+            dev_row = cur.fetchone()
+            if dev_row:
+                device_active = dev_row[0]
+
+        if not emp_active or not user_active or not device_active:
+            # Log the trigger event
+            cur.execute(
+                """
+                INSERT INTO device_wipe_audit (user_id, device_id, reason, ip_address)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    token_data.get("user_id"),
+                    device_id or "unknown",
+                    f"Revoked status: emp={emp_active}, user={user_active}, dev={device_active}",
+                    request.remote_addr
+                )
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            # Return 403 Forbidden with wipe action
+            return jsonify({
+                "status": "revoked",
+                "action": "wipe_and_lock",
+                "message": "Access to this device has been revoked by administration. All data has been wiped."
+            }), 403
+
         cur.close()
         conn.close()
-        if not row or row[0] != "active":
-            return jsonify({"error": "employee account inactive"}), 403
     except Exception as e:
-        logger.warning("version check: employee lookup failed: %s", e)
-        # non-fatal — proceed
+        logger.error("version check: security validation failed: %s", e)
+        # non-fatal on transient DB issues, but log it
 
     version_data = _read_version_json()
     if not version_data:
@@ -13473,6 +13570,222 @@ def admin_app_releases():
         "current_version": version_data,
         "apk_files": apk_files,
     }), 200
+
+
+# ── Admin: generate private download link ────────────────────────────────────
+
+@app.route("/admin/generate_download_link", methods=["POST"])
+def generate_download_link():
+    """
+    POST /admin/generate_download_link
+    Requires admin web session (level: admin/mgmt/superadmin).
+    Expects JSON body:
+      - employee_id: int
+    Generates a cryptographically signed token valid for 2 minutes.
+    """
+    if session.get("level") not in ("admin", "mgmt", "superadmin"):
+        return jsonify({"error": "admin access required"}), 403
+
+    data = request.json or {}
+    employee_id = data.get("employee_id")
+    if not employee_id:
+        return jsonify({"error": "employee_id is required"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Verify employee exists and is active
+        cur.execute("SELECT name, is_active FROM employee WHERE eid = %s", (employee_id,))
+        emp = cur.fetchone()
+        if not emp:
+            return jsonify({"error": "employee not found"}), 404
+        if not emp[1]:
+            return jsonify({"error": "employee account is disabled"}), 400
+
+        # Find corresponding user account id
+        cur.execute("SELECT id FROM users WHERE employee_id = %s", (employee_id,))
+        user_row = cur.fetchone()
+        if not user_row:
+            return jsonify({"error": "user account not associated with this employee"}), 404
+        user_id = user_row[0]
+
+        # Generate signed token with 2-minute expiration
+        expiry = (datetime.now(timezone.utc) + timedelta(seconds=120)).isoformat()
+        token_payload = {
+            "eid": int(employee_id),
+            "uid": int(user_id),
+            "exp": expiry
+        }
+        signed_token = serializer.dumps(token_payload)
+
+        # Make the full portal URL
+        portal_url = url_for("app_portal", token=signed_token, _external=True)
+
+        audit_log(
+            action="app_download_link_generated",
+            entity_type="employee",
+            entity_id=employee_id,
+            details={
+                "target_employee": emp[0],
+                "expiry": expiry
+            },
+            status="success"
+        )
+
+        return jsonify({
+            "success": True,
+            "url": portal_url,
+            "expires_at": expiry
+        }), 200
+
+    except Exception as e:
+        logger.error("generate_download_link error: %s", e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ── App Download Portal landing page ──────────────────────────────────────────
+
+@app.route("/app/portal", methods=["GET"])
+def app_portal():
+    """
+    GET /app/portal?token=<signed_token> (or session fallback)
+    Secured landing page that allows download of the APK.
+    """
+    token = request.args.get("token")
+    
+    # 1. Parse token if present
+    if token:
+        try:
+            payload = serializer.loads(token)
+            eid = int(payload.get("eid"))
+            uid = int(payload.get("uid"))
+            exp_str = payload.get("exp")
+            
+            # Check expiration
+            exp_dt = datetime.fromisoformat(exp_str)
+            if datetime.now(timezone.utc) > exp_dt:
+                flash("This installation link has expired. Request a new link from your administrator.", "danger")
+                return redirect(url_for("login"))
+                
+            # If valid, cache in session
+            session["download_token_eid"] = eid
+            session["download_token_uid"] = uid
+            session["download_token_expiry"] = exp_str
+            
+        except Exception as e:
+            logger.warning("app_portal: invalid token signature: %s", e)
+            flash("Invalid link. Please contact your administrator.", "danger")
+            return redirect(url_for("login"))
+
+    # 2. Authenticate the session
+    user_id = session.get("user_id")
+    user_level = session.get("level")
+    employee_id = session.get("employee_id")
+
+    # If not logged in, redirect to login page, preserving link validation state
+    if not user_id:
+        if token:
+            flash("Please log in to complete your app installation.", "info")
+        else:
+            flash("Web access denied.", "danger")
+        return redirect(url_for("login"))
+
+    # 3. Check access rights
+    # Admins and Mgmt can ALWAYS access the download portal
+    if user_level in ("admin", "mgmt", "superadmin"):
+        session["download_authorized"] = True
+    else:
+        # For J, m, s, verify their current session matches the token context
+        allowed = False
+        token_eid = session.get("download_token_eid")
+        token_exp = session.get("download_token_expiry")
+        
+        if token_eid and token_exp:
+            try:
+                exp_dt = datetime.fromisoformat(token_exp)
+                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(eid):
+                    allowed = True
+            except Exception:
+                pass
+        
+        if not allowed:
+            session.clear()
+            flash("Web access denied. Request a temporary installation link from your administrator.", "danger")
+            return redirect(url_for("login"))
+            
+        session["download_authorized"] = True
+
+    # 4. Fetch the latest release info
+    version_data = _read_version_json() or {}
+    apk_size = "Unknown"
+    if version_data:
+        version = version_data.get("latest_version")
+        apk_path = os.path.join(APK_DIR, f"sdfin-{version}.apk")
+        if os.path.isfile(apk_path):
+            size_mb = os.path.getsize(apk_path) / (1024 * 1024)
+            apk_size = f"{size_mb:.1f} MB"
+
+    return render_template(
+        "portal.html",
+        version=version_data.get("latest_version", "N/A"),
+        size=apk_size,
+        notes=version_data.get("release_notes", "No release notes available."),
+        released_at=version_data.get("released_at", ""),
+        force_update=version_data.get("force_update", False)
+    )
+
+
+# ── Secure download stream endpoint ──────────────────────────────────────────
+
+@app.route("/app/download-action", methods=["GET"])
+@login_required
+def app_download_action():
+    """
+    GET /app/download-action
+    Requires login session.
+    Verifies that the session is either an admin/mgmt or explicitly download_authorized.
+    """
+    user_level = session.get("level")
+    is_authorized = session.get("download_authorized") == True
+
+    if user_level not in ("admin", "mgmt", "superadmin") and not is_authorized:
+        return "Access denied", 403
+
+    version_data = _read_version_json()
+    if not version_data:
+        return "No release published", 404
+
+    version = version_data.get("latest_version")
+    apk_filename = f"sdfin-{version}.apk"
+    apk_path = os.path.join(APK_DIR, apk_filename)
+
+    if not os.path.isfile(apk_path):
+        return "APK file not found on server", 404
+
+    # Log the download event
+    audit_log(
+        action="web_apk_download",
+        entity_type="apk_release",
+        entity_id=version,
+        details={
+            "employee_id": session.get("employee_id"),
+            "username": session.get("username"),
+            "level": user_level,
+            "ip": request.remote_addr,
+        },
+        status="success"
+    )
+
+    from flask import send_file
+    return send_file(
+        apk_path,
+        mimetype="application/vnd.android.package-archive",
+        as_attachment=True,
+        download_name=apk_filename,
+    )
 
 
 # ----------------------------------------------------

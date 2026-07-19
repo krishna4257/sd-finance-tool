@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siva Durga App Installation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f0;
+            font-family: "Inter", sans-serif;
+            color: #111827;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .portal-card {
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            background: #ffffff;
+            border-radius: 20px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            text-align: center;
+        }
+        .logo-wrap {
+            margin-bottom: 24px;
+        }
+        .logo-wrap img {
+            max-width: 160px;
+            height: auto;
+        }
+        h2 {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: #111827;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            color: #4b5563;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .app-meta {
+            background: #f9fafb;
+            border: 1px solid #f3f4f6;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 28px;
+            text-align: left;
+        }
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        .meta-row:last-child {
+            margin-bottom: 0;
+        }
+        .meta-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .meta-value {
+            color: #111827;
+            font-weight: 600;
+        }
+        .notes-box {
+            font-size: 12px;
+            color: #4b5563;
+            border-top: 1px dashed #e5e7eb;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 14px 24px;
+            background: #1a4d2e;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: background 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 12px rgba(26, 77, 46, 0.15);
+            border: none;
+            cursor: pointer;
+        }
+        .download-btn:hover {
+            background: #143b23;
+        }
+        .download-btn:active {
+            transform: scale(0.98);
+        }
+        .instructions {
+            margin-top: 32px;
+            text-align: left;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 24px;
+        }
+        .instructions h3 {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 14px 0;
+            color: #111827;
+        }
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 14px;
+            font-size: 13px;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+        .step-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            background: #e1efe6;
+            color: #1a4d2e;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            margin-right: 10px;
+            margin-top: 2px;
+        }
+        .security-alert {
+            margin-top: 24px;
+            font-size: 11px;
+            color: #b45309;
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: left;
+            line-height: 1.4;
+        }
+        .logout-link {
+            display: inline-block;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #9ca3af;
+            text-decoration: none;
+        }
+        .logout-link:hover {
+            color: #4b5563;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="portal-card">
+        <div class="logo-wrap">
+            <img src="{{ url_for("static", filename="images/logo.svg") }}" alt="Siva Durga Finance Logo">
+        </div>
+        
+        <h2>Siva Durga Mobile App</h2>
+        <div class="subtitle">Secure Internal Distribution Portal</div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="security-alert" style="margin-bottom: 20px; background: #fee2e2; border-color: #fecaca; color: #991b1b;">
+                  {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="app-meta">
+            <div class="meta-row">
+                <span class="meta-label">Version</span>
+                <span class="meta-value">v{{ version }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">File Size</span>
+                <span class="meta-value">{{ size }}</span>
+            </div>
+            {% if notes %}
+            <div class="notes-box">
+                <strong>Release Notes:</strong><br>
+                {{ notes }}
+            </div>
+            {% endif %}
+        </div>
+
+        <a href="{{ url_for("app_download_action") }}" class="download-btn">
+            Download Installation Package (APK)
+        </a>
+
+        <div class="instructions">
+            <h3>How to Install the App</h3>
+            
+            <div class="step">
+                <span class="step-num">1</span>
+                <span>Click the **Download** button above to save the installation file (`.apk`) to your device.</span>
+            </div>
+            <div class="step">
+                <span class="step-num">2</span>
+                <span>Open your browser\s download folder and tap the downloaded file.</span>
+            </div>
+            <div class="step">
+                <span class="step-num">3</span>
+                <span>If prompted, enable **"Allow installation of unknown apps"** in your phone settings. This is a normal security prompt for private internal apps.</span>
+            </div>
+            <div class="step">
+                <span class="step-num">4</span>
+                <span>Tap **Install** and log in using your employee username and password. Your hardware details will automatically bind on first login.</span>
+            </div>
+        </div>
+
+        <div class="security-alert">
+            <strong>Security Notice:</strong> This installation link is temporary and signed specifically for your account. Please complete your download within 2 minutes. Do not share or forward this page.
+        </div>
+
+        <a href="{{ url_for("logout") }}" class="logout-link">Log out from session</a>
+    </div>
+</body>
+</html>
