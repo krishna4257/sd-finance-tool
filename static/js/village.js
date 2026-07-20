@@ -271,10 +271,39 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     employeeTilesContainer.innerHTML = "";
 
-    // Sort: selected group goes first
+    // Calculate waiting priorities for groups and sort villages inside each group
+    Object.values(grouped).forEach(group => {
+      group.max_wait_seconds = group.villages.length > 0 
+        ? Math.max(...group.villages.map(v => parseInt(v.waiting_seconds) || 0)) 
+        : 0;
+      group.total_pending_feed = group.villages.reduce((sum, v) => sum + (parseInt(v.pending_feed_count) || 0), 0);
+      
+      // Sort villages inside this group by waiting_seconds descending, then pending_feed_count descending
+      group.villages.sort((va, vb) => {
+        const wa = parseInt(va.waiting_seconds) || 0;
+        const wb = parseInt(vb.waiting_seconds) || 0;
+        if (wa !== wb) return wb - wa; // longest waiting first
+        const pa = parseInt(va.pending_feed_count) || 0;
+        const pb = parseInt(vb.pending_feed_count) || 0;
+        return pb - pa; // most pending items first
+      });
+    });
+
+    // Sort: selected group goes first, then sorted by max_wait_seconds desc, then total_pending_feed desc
     const groups = Object.values(grouped).sort((a, b) => {
       if (a.selected && !b.selected) return -1;
       if (!a.selected && b.selected) return 1;
+      
+      // Sort by maximum waiting seconds
+      if (b.max_wait_seconds !== a.max_wait_seconds) {
+        return b.max_wait_seconds - a.max_wait_seconds;
+      }
+      
+      // Sort by total pending feed items
+      if (b.total_pending_feed !== a.total_pending_feed) {
+        return b.total_pending_feed - a.total_pending_feed;
+      }
+      
       return 0;
     });
 
@@ -348,16 +377,23 @@ document.addEventListener("DOMContentLoaded", async function () {
         <div class="employee-tile-body">
           ${group.villages.map(v => {
             const isChipSelected = selectedVid && String(v.vid) === String(selectedVid);
+            const hasPendingFeed = v.pending_feed_count && parseInt(v.pending_feed_count) > 0;
             return `
               <span
-                class="village-chip draggable-village ${isChipSelected ? 'selected-village-chip' : ''}"
+                class="village-chip draggable-village ${isChipSelected ? 'selected-village-chip' : ''} ${hasPendingFeed ? 'has-pending-feed' : ''}"
                 draggable="true"
                 data-vid="${v.vid}"
                 data-village-code="${v.village_code}"
                 data-village-name="${v.village_name}"
                 data-emp1="${group.emp1}"
                 data-emp2="${group.emp2}">
-                <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code}) <span style="font-size:0.75rem; opacity:0.85; margin-left: 5px;">I:${v.interest_rate || 0}% C:${v.cutting_rate || 0}%</span>
+                <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code})
+                ${hasPendingFeed ? `
+                  <span class="chip-feed-badge" title="${v.pending_feed_count} pending items, oldest waiting for ${v.waiting_duration_str}">
+                    <i class="fas fa-clock"></i> ${v.waiting_duration_str}
+                  </span>
+                ` : ''}
+                <span style="font-size:0.75rem; opacity:0.85; margin-left: 5px;">I:${v.interest_rate || 0}% C:${v.cutting_rate || 0}%</span>
               </span>
             `;
           }).join("")}

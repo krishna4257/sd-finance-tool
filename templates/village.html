@@ -512,6 +512,35 @@
   .tile-cashbag-btn:active {
     transform: translateY(0);
   }
+
+  /* ── Pending Feed indicators ── */
+  .village-chip.has-pending-feed {
+    border-color: var(--warning, #f59e0b) !important;
+    background: var(--warning-light, #fffbeb) !important;
+    color: var(--warning, #f59e0b) !important;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.12);
+  }
+  .village-chip.has-pending-feed:hover {
+    background: var(--warning, #f59e0b) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25) !important;
+  }
+  .chip-feed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--warning, #f59e0b);
+    color: #ffffff;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 6px;
+    line-height: 1;
+  }
+  [data-theme="dark"] .chip-feed-badge {
+    color: #0f172a !important;
+  }
 </style>
 
 <h2 class="page-title">Villages</h2>
@@ -561,6 +590,10 @@
               Employee 1 Name
             {% elif header == 'emp2_name' %}
               Employee 2 Name
+            {% elif header == 'pending_feed_count' %}
+              Pending Feed
+            {% elif header == 'waiting_duration_str' %}
+              Waiting Period
             {% else %}
               {{ header.replace('_', ' ').title() }}
             {% endif %}
@@ -580,8 +613,10 @@
               </td>
             {% else %}
               <td class="table-cell" data-field="{{ col }}"
-                {% if col in ['customer_count', 'latitude', 'longitude', 'pincode', 'vid'] %}
+                {% if col in ['customer_count', 'latitude', 'longitude', 'pincode', 'vid', 'pending_feed_count'] %}
                   data-order="{{ row[col] if row[col] is not none else 0 }}"
+                {% elif col == 'waiting_duration_str' %}
+                  data-order="{{ row['waiting_seconds'] if row['waiting_seconds'] is not none else 0 }}"
                 {% endif %}>
                 {{ row[col] if row[col] is not none else '' }}
               </td>
