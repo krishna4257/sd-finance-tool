@@ -9288,6 +9288,20 @@ def delete_payment():
         cur.close()
         conn.close()
 
+def format_waiting_duration(seconds):
+    if seconds <= 0:
+        return ""
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    minutes = int((seconds % 3600) // 60)
+    
+    if days > 0:
+        return f"{days}d {hours}h"
+    elif hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
+
 @app.route("/village")
 @login_required
 def village_page():
@@ -9300,26 +9314,66 @@ def village_page():
     cur.execute("SELECT COUNT(*) FROM employee WHERE is_active = TRUE")
     total_employees = cur.fetchone()[0]
 
+    sql_fields = """
+        v.vid,
+        v.village_code,
+        v.village_name,
+        v.district,
+        v.pincode,
+        v.state,
+        v.emp1,
+        e1.name AS emp1_name,
+        v.emp2,
+        e2.name AS emp2_name,
+        v.interest_rate,
+        v.cutting_rate,
+        v.created_at,
+        v.status,
+        v.latitude,
+        v.longitude,
+        (SELECT COUNT(*) FROM customer WHERE vid = v.vid AND status = 'open') AS customer_count,
+        COALESCE(
+            (SELECT COUNT(*) FROM customer_feed WHERE vid = v.vid AND status = 'pending'), 0
+        ) + COALESCE(
+            (SELECT COUNT(*) FROM payment_feed_items WHERE (payload->>'vid')::INT = v.vid AND status = 'pending'), 0
+        ) + COALESCE(
+            (
+                SELECT COUNT(*) 
+                FROM customer_docs_feed cdf
+                INNER JOIN customer c ON c.vid = cdf.vid AND c.ano = cdf.ano
+                WHERE cdf.vid = v.vid AND cdf.status = 'pending'
+            ), 0
+        ) + COALESCE(
+            (
+                SELECT COUNT(*) 
+                FROM account_closure_feed acf
+                INNER JOIN customer c ON c.vid = acf.vid AND c.ano = acf.ano
+                WHERE acf.vid = v.vid AND acf.status = 'pending'
+            ), 0
+        ) AS pending_feed_count,
+        (
+            SELECT MIN(t)
+            FROM (
+                SELECT MIN(submitted_at) AS t FROM customer_feed WHERE vid = v.vid AND status = 'pending'
+                UNION ALL
+                SELECT MIN(created_at) AS t FROM payment_feed_items WHERE (payload->>'vid')::INT = v.vid AND status = 'pending'
+                UNION ALL
+                SELECT MIN(cdf.created_at) AS t 
+                FROM customer_docs_feed cdf
+                INNER JOIN customer c ON c.vid = cdf.vid AND c.ano = cdf.ano
+                WHERE cdf.vid = v.vid AND cdf.status = 'pending'
+                UNION ALL
+                SELECT MIN(acf.created_at) AS t 
+                FROM account_closure_feed acf
+                INNER JOIN customer c ON c.vid = acf.vid AND c.ano = acf.ano
+                WHERE acf.vid = v.vid AND acf.status = 'pending'
+            ) q
+        ) AS oldest_pending_time
+    """
+
     if user_level in ["admin", "mgmt"]:
-        cur.execute("""
-        SELECT
-            v.vid,
-            v.village_code,
-            v.village_name,
-            v.district,
-            v.pincode,
-            v.state,
-            v.emp1,
-            e1.name AS emp1_name,
-            v.emp2,
-            e2.name AS emp2_name,
-            v.interest_rate,
-            v.cutting_rate,
-            v.created_at,
-            v.status,
-            v.latitude,
-            v.longitude,
-            (SELECT COUNT(*) FROM customer WHERE vid = v.vid AND status = 'open') AS customer_count
+        cur.execute(f"""
+        SELECT {sql_fields}
         FROM village v
         LEFT JOIN employee e1 ON e1.eid = v.emp1
         LEFT JOIN employee e2 ON e2.eid = v.emp2
@@ -9338,25 +9392,8 @@ def village_page():
                 selected_vid=session.get("vid")
             )
 
-        cur.execute("""
-        SELECT
-            v.vid,
-            v.village_code,
-            v.village_name,
-            v.district,
-            v.pincode,
-            v.state,
-            v.emp1,
-            e1.name AS emp1_name,
-            v.emp2,
-            e2.name AS emp2_name,
-            v.interest_rate,
-            v.cutting_rate,
-            v.created_at,
-            v.status,
-            v.latitude,
-            v.longitude,
-            (SELECT COUNT(*) FROM customer WHERE vid = v.vid AND status = 'open') AS customer_count
+        cur.execute(f"""
+        SELECT {sql_fields}
         FROM village v
         LEFT JOIN employee e1 ON e1.eid = v.emp1
         LEFT JOIN employee e2 ON e2.eid = v.emp2
@@ -9367,14 +9404,45 @@ def village_page():
     rows = cur.fetchall()
 
     headers = [desc[0] for desc in cur.description] # type: ignore
-    data = [dict(zip(headers, r)) for r in rows]
+    data = []
+    
+    # Process calculations per row
+    now_utc = datetime.now(timezone.utc)
+    for r in rows:
+        row_dict = dict(zip(headers, r))
+        oldest_time = row_dict.get("oldest_pending_time")
+        
+        # Calculate duration
+        waiting_seconds = 0
+        waiting_duration_str = ""
+        if oldest_time:
+            # Handle timezone safety
+            if oldest_time.tzinfo is None:
+                oldest_time = oldest_time.replace(tzinfo=timezone.utc)
+            delta = now_utc - oldest_time
+            waiting_seconds = max(0, int(delta.total_seconds()))
+            waiting_duration_str = format_waiting_duration(waiting_seconds)
+            
+        row_dict["waiting_seconds"] = waiting_seconds
+        row_dict["waiting_duration_str"] = waiting_duration_str
+        
+        # Formatted fields for display
+        if row_dict.get("oldest_pending_time"):
+            row_dict["oldest_pending_time"] = row_dict["oldest_pending_time"].isoformat()
+            
+        data.append(row_dict)
 
     cur.close()
     conn.close()
 
+    # Filter out columns that we want in JSON data but don't want displayed as raw table columns
+    hidden_cols = {"oldest_pending_time", "waiting_seconds"}
+    headers.append("waiting_duration_str")
+    display_headers = [h for h in headers if h not in hidden_cols]
+
     return render_template(
         "village.html",
-        headers=headers,
+        headers=display_headers,
         data=data,
         total_villages=len(data),
         total_employees=total_employees,

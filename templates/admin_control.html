@@ -1,56 +1,517 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Admin Control Panel</h2>
-        <a href="/village" class="btn btn-outline-secondary btn-sm">Back to Villages</a>
+<style>
+    /* Admin Control Custom Styling */
+    .admin-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 8px 4px;
+    }
+
+    .page-header-flex {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .page-header-flex h2 {
+        font-family: var(--font-headline);
+        font-weight: 700;
+        font-size: 1.85rem;
+        margin: 0;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .admin-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 32px;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .admin-card:hover {
+        box-shadow: var(--shadow-md);
+    }
+
+    .admin-card-header {
+        border-bottom: 1px solid var(--border);
+        padding: 20px 24px;
+        background: var(--border-light);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .admin-card-title {
+        font-family: var(--font-headline);
+        font-weight: 600;
+        font-size: 1.15rem;
+        margin: 0;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .admin-card-body {
+        padding: 24px;
+    }
+
+    .info-intro {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+        line-height: 1.6;
+        background: var(--primary-lighter);
+        padding: 16px 20px;
+        border-radius: var(--radius);
+        border-left: 4px solid var(--primary);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .info-intro i {
+        color: var(--primary);
+        font-size: 1.2rem;
+        margin-top: 2px;
+    }
+
+    /* Table Filters & Controls */
+    .table-controls-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .search-input-wrapper {
+        position: relative;
+        max-width: 380px;
+        width: 100%;
+    }
+
+    .search-input-wrapper i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 10px 14px 10px 38px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--input-bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .search-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    /* Modern Table Style */
+    .admin-table-wrapper {
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--surface);
+    }
+
+    .admin-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+    }
+
+    .admin-table th {
+        background: var(--border-light);
+        color: var(--text-secondary);
+        font-weight: 600;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        font-size: 0.825rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .admin-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        transition: background-color 0.15s ease;
+    }
+
+    .admin-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .admin-table tbody tr:hover td {
+        background-color: var(--border-light);
+    }
+
+    .emp-eid {
+        font-family: monospace;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .emp-name-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .emp-avatar-small {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--primary-lighter);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        box-shadow: inset 0 0 6px rgba(26, 77, 46, 0.1);
+    }
+
+    [data-theme="dark"] .emp-avatar-small {
+        background: var(--primary-light);
+        color: var(--text);
+    }
+
+    .emp-username {
+        font-family: monospace;
+        background: var(--input-bg);
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        font-size: 0.825rem;
+    }
+
+    .badge-role {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
+
+    .badge-role.role-admin {
+        background: var(--danger-light);
+        color: var(--danger);
+        border: 1px solid var(--danger-border);
+    }
+
+    .badge-role.role-staff {
+        background: var(--success-light);
+        color: var(--success);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .badge-role.role-mgmt {
+        background: var(--info-light);
+        color: var(--info);
+        border: 1px solid rgba(96, 165, 250, 0.2);
+    }
+
+    /* Modal Styling */
+    .modal-backdrop-blur {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        background: rgba(15, 17, 23, 0.6) !important;
+        align-items: center !important;
+        padding-top: 0 !important;
+    }
+
+    .modal-content-styled {
+        border-radius: 20px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border);
+        padding: 28px 24px;
+        overflow: hidden;
+        position: relative;
+        background: var(--surface);
+        max-width: 450px;
+        width: 90%;
+        animation: modalScaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes modalScaleIn {
+        from {
+            transform: scale(0.9);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .modal-header-styled {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .modal-title-styled {
+        font-family: var(--font-headline);
+        font-weight: 700;
+        font-size: 1.25rem;
+        margin: 0;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .modal-close-styled {
+        background: none;
+        border: none;
+        font-size: 26px;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: color 0.15s ease;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .modal-close-styled:hover {
+        color: var(--text);
+    }
+
+    .url-input-group {
+        display: flex;
+        gap: 8px;
+        margin: 20px 0 16px;
+    }
+
+    .url-input {
+        flex: 1;
+        padding: 12px 14px;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 12.5px;
+        font-family: monospace;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.2s ease;
+    }
+
+    .url-input:focus {
+        border-color: var(--primary);
+    }
+
+    .btn-copy {
+        padding: 12px 18px;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 13.5px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.15s ease, transform 0.1s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-copy:hover {
+        background: var(--primary-hover);
+    }
+
+    .btn-copy:active {
+        transform: scale(0.97);
+    }
+
+    /* Share Buttons styles */
+    .share-grid {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .btn-share {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 11px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        text-align: center;
+        border: none;
+        color: white;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn-share:hover {
+        transform: translateY(-2px);
+        opacity: 0.95;
+    }
+
+    .btn-share.whatsapp {
+        background: #25d366;
+        box-shadow: 0 4px 12px rgba(37, 211, 102, 0.15);
+    }
+
+    .btn-share.sms {
+        background: #3b82f6;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Timer card */
+    .timer-alert-card {
+        background-color: var(--warning-light);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        color: var(--warning);
+        border-radius: 10px;
+        font-size: 12.5px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+
+    .timer-alert-card.expired {
+        background-color: var(--danger-light);
+        border-color: rgba(220, 38, 38, 0.2);
+        color: var(--danger);
+    }
+
+    .no-results {
+        padding: 32px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+    }
+
+    /* Pulsing security icon animation */
+    @keyframes pulse-dot {
+        0% { transform: scale(0.95); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.5; }
+    }
+    .pulse-security-badge {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--success);
+        box-shadow: 0 0 8px var(--success);
+        animation: pulse-dot 2s infinite ease-in-out;
+    }
+</style>
+
+<div class="admin-container">
+    <div class="page-header-flex">
+        <h2><i class="fas fa-cogs" style="color: var(--primary);"></i> Admin Control Panel</h2>
+        <a href="/village" class="btn btn-outline btn-sm"><i class="fas fa-arrow-left me-1"></i> Back to Villages</a>
     </div>
 
     <!-- App Private Distribution Card -->
-    <div class="card mb-4 shadow-sm" style="border-radius: 12px; border: 1px solid #e5e7eb;">
-        <div class="card-header bg-light" style="border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: 1px solid #e5e7eb; padding: 16px 20px;">
-            <h5 class="m-0" style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; color: #111827;">
-                <i class="bi bi-shield-lock-fill me-2" style="color: #1a4d2e;"></i>
+    <div class="admin-card">
+        <div class="admin-card-header">
+            <h5 class="admin-card-title">
+                <i class="bi bi-shield-lock-fill me-1" style="color: var(--primary);"></i>
                 Mobile App Security & Distribution
             </h5>
+            <span class="pulse-security-badge" title="Security Protocols Active"></span>
         </div>
-        <div class="card-body" style="padding: 24px;">
-            <p class="text-muted" style="font-size: 14px; margin-bottom: 20px;">
-                Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. For security, links are cryptographically signed, bound to the selected employee, and expire in <strong>exactly 15 minutes</strong>.
-            </p>
+        <div class="admin-card-body">
+            <div class="info-intro">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. 
+                    For security, links are cryptographically signed, bound to the selected employee, and expire in 
+                    <strong>exactly 15 minutes</strong>.
+                </div>
+            </div>
 
-            <div class="table-responsive">
-                <table class="table align-middle" style="font-size: 14px;">
-                    <thead class="table-light">
+            <!-- Table Controls -->
+            <div class="table-controls-row">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="employeeSearch" class="search-input" placeholder="Search employee by name, EID or username..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="admin-table-wrapper table-responsive">
+                <table class="admin-table table align-middle">
+                    <thead>
                         <tr>
-                            <th>EID</th>
-                            <th>Name</th>
-                            <th>Username</th>
-                            <th>Role Level</th>
-                            <th class="text-end">Actions</th>
+                            <th style="width: 10%;">EID</th>
+                            <th style="width: 30%;">Name</th>
+                            <th style="width: 25%;">Username</th>
+                            <th style="width: 15%;">Role Level</th>
+                            <th class="text-end" style="width: 20%;">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="employeeTableBody">
                         {% for emp in employees %}
                         <tr>
-                            <td class="text-muted">{{ emp.eid }}</td>
-                            <td><strong>{{ emp.name }}</strong></td>
-                            <td><code class="text-muted" style="font-size: 12px;">{{ emp.username }}</code></td>
+                            <td class="emp-eid">{{ emp.eid }}</td>
                             <td>
-                                {% if emp.level in ("admin", "superadmin", "mgmt") %}
-                                <span class="badge bg-secondary" style="font-size: 11px; font-weight: 500;">{{ emp.level }}</span>
+                                <div class="emp-name-container">
+                                    <div class="emp-avatar-small">{{ emp.name[:1] | upper }}</div>
+                                    <strong>{{ emp.name }}</strong>
+                                </div>
+                            </td>
+                            <td><span class="emp-username">{{ emp.username }}</span></td>
+                            <td>
+                                {% if emp.level in ("admin", "superadmin") %}
+                                <span class="badge-role role-admin"><i class="fas fa-user-shield me-1"></i> {{ emp.level }}</span>
+                                {% elif emp.level == "mgmt" %}
+                                <span class="badge-role role-mgmt"><i class="fas fa-briefcase me-1"></i> {{ emp.level }}</span>
                                 {% else %}
-                                <span class="badge bg-success" style="background-color: #e1efe6 !important; color: #1a4d2e !important; font-size: 11px; font-weight: 600;">{{ emp.level }}</span>
+                                <span class="badge-role role-staff"><i class="fas fa-user me-1"></i> {{ emp.level }}</span>
                                 {% endif %}
                             </td>
                             <td class="text-end">
                                 {% if emp.level in ("j", "m", "s") %}
-                                <button class="btn btn-sm btn-success" style="background-color: #1a4d2e; border-color: #1a4d2e; font-weight: 500;" onclick="generateLink({{ emp.eid }}, '{{ emp.name }}')">
-                                    Generate Install Link
+                                <button class="neumorphic-btn primary-btn small" onclick="generateLink('{{ emp.eid }}', '{{ emp.name }}')">
+                                    <i class="fas fa-link me-1"></i> Generate Install Link
                                 </button>
                                 {% else %}
-                                <span class="text-muted" style="font-size: 12px; font-style: italic;">Admins have regular access</span>
+                                <span class="text-muted" style="font-size: 12.5px; font-style: italic; opacity: 0.8;"><i class="fas fa-check-circle text-success me-1"></i>Regular access</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -63,31 +524,38 @@
 </div>
 
 <!-- Custom Modal for displaying generated links -->
-<div id="linkModal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; transition: opacity 0.2s ease;">
-    <div style="background: #ffffff; border-radius: 16px; width: 90%; max-width: 440px; padding: 28px 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; border: 1px solid #e5e7eb;">
-        <span onclick="closeModal()" style="position: absolute; right: 18px; top: 12px; font-size: 22px; cursor: pointer; color: #9ca3af; transition: color 0.15s ease;" onmouseover="this.style.color='#4b5563'" onmouseout="this.style.color='#9ca3af'">&times;</span>
-        <h5 style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; margin: 0 0 12px 0; font-size: 18px; color: #111827;">Installation Link Generated</h5>
-        <div style="font-size: 13px; color: #4b5563; margin-bottom: 18px; line-height: 1.4;">
-            Temporary link generated for <strong id="modalEmpName" style="color: #111827;"></strong>. Send this link to the employee.
+<div id="linkModal" class="modal modal-backdrop-blur">
+    <div class="modal-content-styled">
+        <div class="modal-header-styled">
+            <h5 class="modal-title-styled">
+                <i class="fas fa-shield-alt text-success"></i> Installation Link Generated
+            </h5>
+            <button onclick="closeModal()" class="modal-close-styled">&times;</button>
         </div>
         
-        <div style="display: flex; gap: 8px; margin-bottom: 18px;">
-            <input type="text" id="installUrlInput" readonly style="flex: 1; padding: 10px 12px; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; font-family: monospace; color: #374151;" onclick="this.select()">
-            <button id="copyBtn" onclick="copyLink()" style="padding: 10px 16px; background: #1a4d2e; color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; transition: background 0.15s ease;" onmouseover="this.style.background='#143b23'" onmouseout="this.style.background='#1a4d2e'">Copy</button>
+        <div style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+            Temporary link generated for <strong id="modalEmpName" style="color: var(--text);"></strong>. Send this link to the employee.
+        </div>
+        
+        <div class="url-input-group">
+            <input type="text" id="installUrlInput" class="url-input" readonly onclick="this.select()">
+            <button id="copyBtn" onclick="copyLink()" class="btn-copy">
+                <i class="fas fa-copy"></i> Copy
+            </button>
         </div>
 
         <!-- Direct Share Actions -->
-        <div style="display: flex; gap: 10px; margin-bottom: 18px;">
-            <a id="whatsappShareBtn" target="_blank" style="display: none; flex: 1; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #25d366; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; text-align: center; transition: background 0.15s ease;" onmouseover="this.style.background='#1eb855'" onmouseout="this.style.background='#25d366'">
-                <i class="fab fa-whatsapp" style="font-size: 14px;"></i> WhatsApp
+        <div class="share-grid">
+            <a id="whatsappShareBtn" target="_blank" class="btn-share whatsapp" style="display: none;">
+                <i class="fab fa-whatsapp" style="font-size: 15px;"></i> WhatsApp
             </a>
-            <a id="smsShareBtn" style="display: none; flex: 1; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #007bff; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; text-align: center; transition: background 0.15s ease;" onmouseover="this.style.background='#0069d9'" onmouseout="this.style.background='#007bff'">
+            <a id="smsShareBtn" class="btn-share sms" style="display: none;">
                 <i class="fas fa-comment-sms" style="font-size: 14px;"></i> SMS
             </a>
         </div>
 
-        <div style="background-color: #fffbeb; border: 1px solid #fef3c7; color: #b45309; border-radius: 8px; font-size: 12px; padding: 10px; text-align: center; font-weight: 600; letter-spacing: 0.02em;">
-            <i class="fas fa-clock me-1"></i>
+        <div id="countdownTimerCard" class="timer-alert-card">
+            <i class="fas fa-clock"></i>
             Expires in <strong id="countdownTimer">15:00</strong>
         </div>
     </div>
@@ -95,6 +563,40 @@
 
 <script>
 let timerInterval;
+
+// Client side live search filter
+document.getElementById('employeeSearch').addEventListener('input', function(e) {
+    const query = e.target.value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#employeeTableBody tr');
+    let hasMatches = false;
+    
+    rows.forEach(row => {
+        // Skip checking if it's the noResultsRow itself
+        if (row.id === 'noResultsRow') return;
+        
+        const text = row.textContent.toLowerCase();
+        if (text.includes(query)) {
+            row.style.display = '';
+            hasMatches = true;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    const noResultsRow = document.getElementById('noResultsRow');
+    if (!hasMatches) {
+        if (!noResultsRow) {
+            const tr = document.createElement('tr');
+            tr.id = 'noResultsRow';
+            tr.innerHTML = `<td colspan="5" class="no-results"><i class="fas fa-search me-2"></i>No employees match your search query.</td>`;
+            document.getElementById('employeeTableBody').appendChild(tr);
+        }
+    } else {
+        if (noResultsRow) {
+            noResultsRow.remove();
+        }
+    }
+});
 
 function generateLink(eid, name) {
     // Clear any active timers
@@ -121,8 +623,8 @@ function generateLink(eid, name) {
             
             // Reset copy button styling
             const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Copy";
-            copyBtn.style.background = "#1a4d2e";
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+            copyBtn.style.background = "var(--primary)";
 
             // Configure Quick Share Buttons
             let rawPhone = (data.phone || "").replace(/\D/g, ""); // extract numbers only
@@ -150,7 +652,15 @@ function generateLink(eid, name) {
             }
 
             // Open Custom Modal
-            document.getElementById("linkModal").style.display = "flex";
+            const modal = document.getElementById("linkModal");
+            modal.style.display = "flex";
+            
+            // Reset timer card class
+            const timerCard = document.getElementById("countdownTimerCard");
+            if (timerCard) {
+                timerCard.className = "timer-alert-card";
+                timerCard.innerHTML = '<i class="fas fa-clock me-1"></i> Expires in <strong id="countdownTimer">15:00</strong>';
+            }
 
             // Set countdown timer to 15 minutes (900 seconds)
             startCountdown(900);
@@ -172,6 +682,7 @@ function closeModal() {
 function startCountdown(duration) {
     let timer = duration, minutes, seconds;
     const timerDisplay = document.getElementById("countdownTimer");
+    const timerCard = document.getElementById("countdownTimerCard");
     
     timerInterval = setInterval(function () {
         minutes = parseInt(timer / 60, 10);
@@ -180,12 +691,20 @@ function startCountdown(duration) {
         minutes = minutes < 10 ? "0" + minutes : minutes;
         seconds = seconds < 10 ? "0" + seconds : seconds;
 
-        timerDisplay.textContent = minutes + ":" + seconds;
+        if (timerDisplay) {
+            timerDisplay.textContent = minutes + ":" + seconds;
+        }
 
         if (--timer < 0) {
             clearInterval(timerInterval);
-            timerDisplay.textContent = "EXPIRED";
+            if (timerDisplay) {
+                timerDisplay.textContent = "EXPIRED";
+            }
             document.getElementById("installUrlInput").value = "Link Expired";
+            if (timerCard) {
+                timerCard.className = "timer-alert-card expired";
+                timerCard.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Link has expired!';
+            }
         }
     }, 1000);
 }
@@ -199,8 +718,13 @@ function copyLink() {
     navigator.clipboard.writeText(copyText.value);
 
     const copyBtn = document.getElementById("copyBtn");
-    copyBtn.innerText = "Copied!";
-    copyBtn.style.background = "#28a745";
+    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    copyBtn.style.background = "var(--success)";
+    
+    setTimeout(() => {
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.style.background = "var(--primary)";
+    }, 2000);
 }
 </script>
 {% endblock %}

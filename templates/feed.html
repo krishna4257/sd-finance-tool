@@ -2,728 +2,1183 @@
 
 {% block content %}
 {% set cust_list = customers if customers else customer_feed %}
-
-<h2 class="page-title">📥 Feed Queue</h2>
+{% set closure_count = closure_requests|length if closure_requests else 0 %}
+{% set cust_count = cust_list|length if cust_list else 0 %}
+{% set docs_count = existing_customer_docs|length if existing_customer_docs else 0 %}
+{% set payments_count = payments|length if payments else 0 %}
+{% set total_count = closure_count + cust_count + docs_count + payments_count %}
 
 <style>
-.feed-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
+    /* Feed Queue custom styling */
+    .feed-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 8px 4px;
+    }
 
-.feed-card {
-  background: var(--sidebar);
-  border: 1px solid var(--input-border);
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: 4px 4px 10px rgba(0,0,0,0.06);
-}
+    .page-header-flex {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 24px;
+        text-align: center;
+    }
 
-.feed-card-header,
-.feed-subsection-header,
-.feed-docs-grid,
-.feed-actions,
-.payment-feed-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
+    /* Segmented tabs styling */
+    .feed-tabs-wrapper {
+        margin-bottom: 28px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        display: flex;
+        justify-content: center;
+    }
 
-.feed-card-header {
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
+    .feed-tabs {
+        display: inline-flex;
+        background: var(--border-light);
+        padding: 4px;
+        border-radius: 30px;
+        border: 1px solid var(--border);
+        gap: 4px;
+        min-height: 46px;
+        align-items: center;
+    }
 
-.feed-subsection {
-  background: rgba(0,0,0,0.02);
-  border: 1px solid var(--input-border);
-  border-radius: 14px;
-  padding: 14px;
-  margin-top: 14px;
-}
+    .feed-tab-btn {
+        background: transparent;
+        border: none;
+        outline: none;
+        padding: 8px 18px;
+        color: var(--text-secondary);
+        font-family: var(--font-headline);
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+    }
 
-.feed-subsection-header {
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
+    .feed-tab-btn.active {
+        background: var(--primary);
+        color: #ffffff !important;
+        box-shadow: 0 4px 10px rgba(26, 77, 46, 0.15);
+    }
 
-.feed-meta-grid,
-.feed-payload-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
+    [data-theme="dark"] .feed-tab-btn.active {
+        background: var(--primary);
+        color: #0f172a !important;
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+    }
 
-.feed-meta-item,
-.feed-payload-group {
-  background: var(--bg);
-  border: 1px solid var(--input-border);
-  border-radius: 12px;
-  padding: 10px 12px;
-}
+    .feed-tab-btn:hover:not(.active) {
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.05);
+    }
 
-.feed-meta-item strong,
-.feed-payload-group strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--highlight);
-}
+    [data-theme="dark"] .feed-tab-btn:hover:not(.active) {
+        background: rgba(255, 255, 255, 0.05);
+    }
 
-.feed-status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(212, 175, 55, 0.14);
-  color: var(--highlight);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
+    .feed-badge-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.06);
+        color: var(--text-secondary);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        min-width: 20px;
+    }
 
-.feed-amount {
-  font-weight: 700;
-  color: var(--highlight);
-}
+    .feed-tab-btn.active .feed-badge-count {
+        background: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+    }
 
-.feed-doc-card {
-  flex: 1 1 240px;
-  min-width: 220px;
-  background: var(--bg);
-  border: 1px solid var(--input-border);
-  border-radius: 14px;
-  padding: 12px;
-}
+    [data-theme="dark"] .feed-tab-btn.active .feed-badge-count {
+        background: rgba(0, 0, 0, 0.15);
+        color: #0f172a;
+    }
 
-.feed-doc-preview {
-  width: 100%;
-  max-height: 220px;
-  object-fit: cover;
-  border-radius: 10px;
-  margin-top: 10px;
-  border: 1px solid var(--input-border);
-}
+    /* Cards stack & layout */
+    .feed-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
 
-.feed-doc-empty {
-  margin-top: 10px;
-  padding: 18px;
-  border: 1px dashed var(--input-border);
-  border-radius: 10px;
-  text-align: center;
-  color: var(--text);
-  opacity: 0.7;
-}
+    .admin-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 28px;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
 
-.feed-payload {
-  margin-top: 12px;
-}
+    .admin-card:hover {
+        box-shadow: var(--shadow-md);
+    }
 
-.feed-payload pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 12px;
-  margin: 0;
-}
+    .admin-card-header {
+        border-bottom: 1px solid var(--border);
+        padding: 20px 24px;
+        background: var(--border-light);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
 
-.payment-feed-toolbar {
-  margin-bottom: 12px;
-}
+    .admin-card-title {
+        font-family: var(--font-headline);
+        font-weight: 600;
+        font-size: 1.15rem;
+        margin: 0;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
 
-.feed-edit-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.18);
-  color: #F59E0B;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-left: 8px;
-}
+    .admin-card-body {
+        padding: 24px;
+    }
 
-.feed-edit-diff {
-  margin-top: 10px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
+    /* Feed Card Detail structure */
+    .feed-card {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        transition: border-color 0.2s ease;
+    }
 
-.feed-edit-diff h6 {
-  color: #F59E0B;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 8px 0;
-}
+    .feed-card:hover {
+        border-color: var(--text-muted);
+    }
 
-.feed-edit-row {
-  display: grid;
-  grid-template-columns: 130px 1fr 1fr;
-  gap: 6px 12px;
-  font-size: 13px;
-  margin-bottom: 4px;
-  align-items: center;
-}
+    .feed-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
 
-.feed-edit-label {
-  color: var(--text);
-  opacity: 0.6;
-  font-weight: 600;
-}
+    .feed-card-header-left {
+        flex: 1;
+        min-width: 250px;
+    }
 
-.feed-edit-original {
-  text-decoration: line-through;
-  opacity: 0.5;
-}
+    .feed-card-header-left h4 {
+        margin: 8px 0 4px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        font-family: var(--font-headline);
+    }
 
-.feed-edit-new {
-  color: #F59E0B;
-  font-weight: 600;
-}
+    .feed-card-subtitle {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .feed-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .feed-subsection {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 14px;
+    }
+
+    .feed-subsection-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border-light);
+        padding-bottom: 8px;
+    }
+
+    .feed-subsection-header h5 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    /* Meta Grid */
+    .feed-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    .feed-meta-item {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        transition: border-color 0.2s ease;
+    }
+
+    .feed-meta-item:hover {
+        border-color: var(--text-muted);
+    }
+
+    .feed-meta-item strong {
+        display: block;
+        font-size: 0.725rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+
+    .feed-meta-item span.feed-amount {
+        font-weight: 700;
+        color: var(--text);
+        font-size: 0.95rem;
+    }
+
+    /* Docs grid and previews */
+    .feed-docs-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-top: 10px;
+    }
+
+    .feed-doc-card {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .feed-doc-preview {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        transition: transform 0.2s ease;
+        cursor: pointer;
+    }
+
+    .feed-doc-preview:hover {
+        transform: scale(1.02);
+    }
+
+    .feed-doc-empty {
+        margin-top: 10px;
+        padding: 24px 12px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        background: var(--surface);
+    }
+
+    /* Diff highlights */
+    .feed-edit-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        background: rgba(245, 158, 11, 0.12);
+        color: #d97706;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    [data-theme="dark"] .feed-edit-badge {
+        background: rgba(245, 158, 11, 0.18);
+        color: #fbbf24;
+    }
+
+    .feed-edit-original {
+        text-decoration: line-through;
+        color: var(--text-muted);
+        opacity: 0.7;
+        margin-right: 4px;
+    }
+
+    .feed-edit-new {
+        color: #d97706;
+        font-weight: 600;
+    }
+
+    [data-theme="dark"] .feed-edit-new {
+        color: #fbbf24;
+    }
+
+    .feed-payload {
+        margin-top: 12px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+    }
+
+    .feed-payload pre {
+        background: var(--input-bg);
+        color: var(--text);
+        padding: 14px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 11.5px;
+        font-family: monospace;
+        margin: 0;
+    }
+
+    /* Status Pills */
+    .feed-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        background: var(--warning-light);
+        color: var(--warning);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .feed-status-pill.status-accepted {
+        background: var(--success-light);
+        color: var(--success);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    /* Empty state styling */
+    .empty-state-card {
+        text-align: center;
+        padding: 48px 24px;
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-lg);
+        color: var(--text-secondary);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+    }
+
+    .empty-state-icon {
+        font-size: 2.5rem;
+        color: var(--primary);
+        opacity: 0.6;
+        margin-bottom: 4px;
+    }
+
+    .empty-state-card h4 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-family: var(--font-headline);
+        color: var(--text);
+    }
+
+    .empty-state-card p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        max-width: 320px;
+    }
+
+    /* Payment feed layout overrides */
+    .payment-feed-toolbar {
+        background: var(--border-light);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .payment-total-badge {
+        background: var(--primary-light);
+        color: var(--primary);
+        font-size: 1rem;
+        padding: 6px 16px;
+        border-radius: var(--radius-pill);
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+    }
+
+    [data-theme="dark"] .payment-total-badge {
+        color: var(--text);
+    }
+
+    .admin-table-wrapper {
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--surface);
+    }
+
+    .admin-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+    }
+
+    .admin-table th {
+        background: var(--border-light);
+        color: var(--text-secondary);
+        font-weight: 600;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        font-size: 0.825rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .admin-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        transition: background-color 0.15s ease;
+    }
+
+    .admin-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .admin-table tbody tr:hover td {
+        background-color: var(--border-light);
+    }
+
+    /* Modal styled */
+    .image-modal-backdrop {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        background: rgba(15, 17, 23, 0.75) !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding-top: 0 !important;
+    }
+
+    .image-modal-content {
+        background: var(--surface) !important;
+        border: 1px solid var(--border);
+        padding: 20px !important;
+        border-radius: 16px !important;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        max-width: 90%;
+        max-height: 90%;
+        animation: modalScaleIn 0.25s ease-out;
+    }
+
+    .image-modal-close {
+        position: absolute;
+        top: -14px;
+        right: -14px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        box-shadow: var(--shadow-md);
+        transition: transform 0.2s ease;
+        line-height: 1;
+        z-index: 10;
+    }
+
+    .image-modal-close:hover {
+        transform: scale(1.1);
+    }
+
+    .image-modal-img {
+        max-width: 100%;
+        max-height: 70vh;
+        border-radius: 10px;
+        object-fit: contain;
+        display: block;
+    }
+
+    @media (max-width: 768px) {
+        .feed-card {
+            padding: 16px;
+        }
+        .feed-meta-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .payment-total-badge {
+            margin-left: 0;
+            width: 100%;
+            justify-content: center;
+        }
+    }
 </style>
 
-<div class="raised-box">
-  <h3>Account Closure Requests</h3>
-  <div class="feed-stack">
-    {% for row in closure_requests %}
-    <div class="feed-card">
-      <div class="feed-card-header">
-        <div>
-          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
-          <h4 style="margin-top:8px;">{{ row.name or 'Customer Not Found' }}</h4>
-          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
+<div class="feed-container">
+    <div class="page-header-flex">
+        <h2 class="page-title"><i class="fas fa-inbox" style="color: var(--primary);"></i> Feed Queue</h2>
+    </div>
+
+    <!-- Segmented Tab Switcher -->
+    <div class="feed-tabs-wrapper">
+        <div class="feed-tabs">
+            <button class="feed-tab-btn active" data-tab="all" onclick="switchFeedTab('all')">
+                <i class="fas fa-list-ul"></i> All Queues 
+                <span class="feed-badge-count">{{ total_count }}</span>
+            </button>
+            <button class="feed-tab-btn" data-tab="payments" onclick="switchFeedTab('payments')">
+                <i class="fas fa-money-bill-wave"></i> Payments 
+                <span class="feed-badge-count">{{ payments_count }}</span>
+            </button>
+            <button class="feed-tab-btn" data-tab="customers" onclick="switchFeedTab('customers')">
+                <i class="fas fa-user-plus"></i> New Customers 
+                <span class="feed-badge-count">{{ cust_count }}</span>
+            </button>
+            <button class="feed-tab-btn" data-tab="docs" onclick="switchFeedTab('docs')">
+                <i class="fas fa-file-invoice"></i> Document Reviews 
+                <span class="feed-badge-count">{{ docs_count }}</span>
+            </button>
+            <button class="feed-tab-btn" data-tab="closures" onclick="switchFeedTab('closures')">
+                <i class="fas fa-folder-minus"></i> Account Closures 
+                <span class="feed-badge-count">{{ closure_count }}</span>
+            </button>
         </div>
-        <div class="feed-actions">
-          {% if row.cid %}
-            {% if row.balance_amount == 0 %}
-              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', null)">✅ Accept & Close</button>
-            {% elif row.balance_amount < 0 %}
-              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'written_off')">✅ Accept & Write Off</button>
-            {% else %}
-              <button class="neumorphic-btn ultrasmall" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'defaulted')">⚠️ Accept & Mark Defaulted</button>
-              {% if row.balance_amount <= row.interest_amount %}
-                <div style="display: inline-flex; align-items: center; gap: 6px;">
-                  <input type="number" id="discount-{{ row.feed_id }}" class="neumorphic-input ultrasmall" placeholder="Discount" style="width:90px;" value="{{ row.balance_amount|int }}" max="{{ row.balance_amount|int }}" min="1">
-                  <button class="neumorphic-btn ultrasmall" onclick="acceptClosureWithDiscount('{{ row.feed_id }}', '{{ row.cid }}')">💸 Accept with Discount</button>
+    </div>
+
+    <!-- Master Empty State (Shown when "All" tab has zero total items) -->
+    <div class="empty-state-card" id="master-empty-state" style="display: none; padding: 64px 32px;">
+        <div class="empty-state-icon" style="font-size: 3.5rem; color: var(--success);"><i class="fas fa-check-double"></i></div>
+        <h4>All Queues are Clear!</h4>
+        <p>No pending closures, customer additions, document reviews, or payment entries require action.</p>
+    </div>
+
+    <!-- 1. Account Closure Requests -->
+    <div class="feed-section-container" id="container-closures" data-section="closures">
+        <div class="admin-card">
+            <div class="admin-card-header">
+                <h5 class="admin-card-title">
+                    <i class="fas fa-folder-minus" style="color: var(--primary);"></i>
+                    Account Closure Requests
+                </h5>
+                <span class="feed-badge-count">{{ closure_count }}</span>
+            </div>
+            <div class="admin-card-body">
+                {% if closure_count > 0 %}
+                <div class="feed-stack">
+                    {% for row in closure_requests %}
+                    <div class="feed-card">
+                        <div class="feed-card-header">
+                            <div class="feed-card-header-left">
+                                <div class="feed-status-pill {% if row.status == 'accepted' %}status-accepted{% endif %}">
+                                    {{ row.status or 'pending' }}
+                                </div>
+                                <h4>{{ row.name or 'Customer Not Found' }}</h4>
+                                <div class="feed-card-subtitle">
+                                    <span>Account: <strong>{{ row.ano or '-' }}</strong></span>
+                                    {% if row.vid %}<span>· Village: <strong>{{ row.vid }}</strong></span>{% endif %}
+                                </div>
+                            </div>
+                            <div class="feed-actions">
+                                {% if row.cid %}
+                                    {% if row.balance_amount == 0 %}
+                                    <button class="neumorphic-btn primary-btn small" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', null)">
+                                        <i class="fas fa-check-circle"></i> Accept & Close
+                                    </button>
+                                    {% elif row.balance_amount < 0 %}
+                                    <button class="neumorphic-btn small" style="background: var(--info-light) !important; border-color: var(--info) !important; color: var(--info) !important;" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'written_off')">
+                                        <i class="fas fa-file-invoice-dollar"></i> Accept & Write Off
+                                    </button>
+                                    {% else %}
+                                    <button class="neumorphic-btn danger-btn small" onclick="acceptClosure('{{ row.feed_id }}', '{{ row.cid }}', 'defaulted')">
+                                        <i class="fas fa-exclamation-triangle"></i> Accept & Default
+                                    </button>
+                                    {% if row.balance_amount <= row.interest_amount %}
+                                        <div style="display: inline-flex; align-items: center; gap: 8px;">
+                                            <input type="number" id="discount-{{ row.feed_id }}" class="search-input" style="width:110px; padding: 8px 10px;" placeholder="Discount" value="{{ row.balance_amount|int }}" max="{{ row.balance_amount|int }}" min="1">
+                                            <button class="neumorphic-btn primary-btn small" onclick="acceptClosureWithDiscount('{{ row.feed_id }}', '{{ row.cid }}')">
+                                                <i class="fas fa-percent"></i> Accept with Discount
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                                <button class="neumorphic-btn btn-outline small" onclick="rejectClosure('{{ row.feed_id }}')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="feed-subsection">
+                            <div class="feed-subsection-header">
+                                <h5>Account Details</h5>
+                            </div>
+                            <div class="feed-meta-grid">
+                                <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Customer ID</strong>{{ row.cid or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Village ID</strong>{{ row.vid or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
+                                <div class="feed-meta-item"><strong>Paid Amount</strong><span class="feed-amount">₹{{ row.paid_amount or 0 }}</span></div>
+                                <div class="feed-meta-item"><strong>Balance Amount</strong><span class="feed-amount" style="color: {% if (row.balance_amount or 0) > 0 %}var(--danger){% elif (row.balance_amount or 0) < 0 %}var(--success){% else %}var(--text){% endif %};">₹{{ row.balance_amount or 0 }}</span></div>
+                                <div class="feed-meta-item"><strong>Interest Amount</strong><span class="feed-amount">₹{{ row.interest_amount or 0 }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-              {% endif %}
-            {% endif %}
-          {% endif %}
-          <button class="neumorphic-btn ultrasmall" onclick="rejectClosure('{{ row.feed_id }}')">❌ Reject Request</button>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Details</h5>
-        </div>
-        <div class="feed-meta-grid">
-          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
-          <div class="feed-meta-item"><strong>Customer ID</strong>{{ row.cid or '-' }}</div>
-          <div class="feed-meta-item"><strong>Village ID</strong>{{ row.vid or '-' }}</div>
-          <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Paid Amount</strong><span class="feed-amount">₹{{ row.paid_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Balance Amount</strong><span class="feed-amount" style="color: {% if (row.balance_amount or 0) > 0 %}var(--danger){% elif (row.balance_amount or 0) < 0 %}var(--success){% else %}var(--text){% endif %};">₹{{ row.balance_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Interest Amount</strong><span class="feed-amount">₹{{ row.interest_amount or 0 }}</span></div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-
-    {% if not closure_requests %}
-    <div class="feed-card" style="text-align:center;">No account closure requests available.</div>
-    {% endif %}
-  </div>
-</div>
-
-<div class="raised-box">
-  <h3>Customer Feed</h3>
-
-  <div class="feed-stack">
-    {% for row in cust_list %}
-    <div class="feed-card">
-      <div class="feed-card-header">
-        <div>
-          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-            <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
-            {% if row.edit %}
-              <div class="feed-edit-badge">✏️ Edited by Employee</div>
-            {% endif %}
-          </div>
-          <h4 style="margin-top:8px;">{{ row.name or 'Unnamed Customer' }}</h4>
-          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
-        </div>
-        <div class="feed-actions">
-          <button class="neumorphic-btn ultrasmall" onclick="accept('{{ row.feed_id }}')">✅ Accept Customer</button>
-          <button class="neumorphic-btn ultrasmall" onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
-          <button class="neumorphic-btn ultrasmall" onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Customer Section</h5>
-        </div>
-        <div class="feed-meta-grid">
-          <div class="feed-meta-item"><strong>Name</strong>
-            {% if row.edit and row.edit.name and row.edit.name != row.name %}
-              <span class="feed-edit-original">{{ row.name or '-' }}</span>
-              <span class="feed-edit-new"> → {{ row.edit.name }}</span>
-            {% else %}{{ row.name or '-' }}{% endif %}
-          </div>
-          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
-          <div class="feed-meta-item"><strong>Parent Account</strong>{{ row.pano or '-' }}</div>
-          <div class="feed-meta-item"><strong>Village</strong>{{ row.vid or '-' }}</div>
-          <div class="feed-meta-item"><strong>Loan Type</strong>{{ row.type or '-' }}</div>
-          <div class="feed-meta-item"><strong>Period</strong>{{ row.period or '-' }}</div>
-          <div class="feed-meta-item"><strong>Start Date</strong>{{ row.start_date or '-' }}</div>
-          <div class="feed-meta-item"><strong>End Date</strong>{{ row.end_date or '-' }}</div>
-          <div class="feed-meta-item"><strong>Total Amount</strong>
-            {% if row.edit and row.edit.total_amount and row.edit.total_amount|string != row.total_amount|string %}
-              <span class="feed-edit-original feed-amount">₹{{ row.total_amount or 0 }}</span>
-              <span class="feed-edit-new"> → ₹{{ row.edit.total_amount }}</span>
-            {% else %}<span class="feed-amount">₹{{ row.total_amount or 0 }}</span>{% endif %}
-          </div>
-          <div class="feed-meta-item"><strong>Installment</strong><span class="feed-amount">₹{{ row.installment_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Aadhaar Number</strong>
-            {% if row.edit and row.edit.aadhaar_number and row.edit.aadhaar_number != row.aadhaar_number %}
-              <span class="feed-edit-original">{{ row.aadhaar_number or '-' }}</span>
-              <span class="feed-edit-new"> → {{ row.edit.aadhaar_number }}</span>
-            {% else %}{{ row.aadhaar_number or '-' }}{% endif %}
-          </div>
-          <div class="feed-meta-item"><strong>Phone</strong>
-            {% if row.edit and row.edit.phone_number %}
-              {% if row.edit.phone_number != (row.phone_number or '') %}
-                <span class="feed-edit-original">{{ row.phone_number or '-' }}</span>
-                <span class="feed-edit-new"> → {{ row.edit.phone_number }}</span>
-              {% else %}{{ row.phone_number or '-' }}{% endif %}
-            {% else %}{{ row.phone_number or '-' }}{% endif %}
-          </div>
-          <div class="feed-meta-item"><strong>Latitude</strong>{{ row.latitude or '-' }}</div>
-          <div class="feed-meta-item"><strong>Longitude</strong>{{ row.longitude or '-' }}</div>
-          <div class="feed-meta-item" style="grid-column: 1 / -1;"><strong>Notes</strong>
-            {% if row.edit and row.edit.notes and row.edit.notes != row.notes %}
-              <span class="feed-edit-original">{{ row.notes or '-' }}</span>
-              <span class="feed-edit-new"> → {{ row.edit.notes }}</span>
-            {% else %}{{ row.notes or '-' }}{% endif %}
-          </div>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Customer Docs</h5>
-          <button class="neumorphic-btn ultrasmall" onclick="acceptDocs('{{ row.feed_id }}')">📄 Accept Docs</button>
-        </div>
-
-        <div class="feed-docs-grid">
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Front</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
-            {% if row.aadhaar_front_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Back</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
-            {% if row.aadhaar_back_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">House Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
-            {% if row.house_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
-            {% else %}
-              <div class="feed-doc-empty">No house photo received.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Full Payload</h5>
-          <button
-            class="neumorphic-btn ultrasmall"
-            type="button"
-            data-target="payload-{{ loop.index }}"
-            aria-expanded="false"
-            onclick="togglePayload(this)">
-            📦 View Payload
-          </button>
-        </div>
-
-        <div id="payload-{{ loop.index }}" class="feed-payload" hidden>
-          <div class="feed-payload-grid">
-            <div class="feed-payload-group">
-              <strong>Customer</strong>
-              <pre>{{ {
-                'feed_id': row.feed_id,
-                'ano': row.ano,
-                'name': row.name,
-                'pano': row.pano,
-                'vid': row.vid,
-                'type': row.type,
-                'period': row.period,
-                'start_date': row.start_date,
-                'end_date': row.end_date,
-                'total_amount': row.total_amount,
-                'installment_amount': row.installment_amount,
-                'aadhaar_number': row.aadhaar_number,
-                'latitude': row.latitude,
-                'longitude': row.longitude,
-                'notes': row.notes,
-                'status': row.status
-              } | tojson(indent=2) }}</pre>
+                {% else %}
+                <div class="empty-state-card">
+                    <div class="empty-state-icon"><i class="fas fa-check-circle text-success"></i></div>
+                    <h4>No Closure Requests</h4>
+                    <p>There are no account closure requests awaiting review.</p>
+                </div>
+                {% endif %}
             </div>
-            <div class="feed-payload-group">
-              <strong>Customer Docs</strong>
-              <pre>{{ {
-                'aadhaar_front_pic': 'available' if row.aadhaar_front_pic else 'missing',
-                'aadhaar_back_pic': 'available' if row.aadhaar_back_pic else 'missing',
-                'house_photo': 'available' if row.house_photo else 'missing'
-              } | tojson(indent=2) }}</pre>
+        </div>
+    </div>
+
+    <!-- 2. Customer Feed -->
+    <div class="feed-section-container" id="container-customers" data-section="customers">
+        <div class="admin-card">
+            <div class="admin-card-header">
+                <h5 class="admin-card-title">
+                    <i class="fas fa-user-plus" style="color: var(--primary);"></i>
+                    New Customer Registration Feed
+                </h5>
+                <span class="feed-badge-count">{{ cust_count }}</span>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
+            <div class="admin-card-body">
+                {% if cust_count > 0 %}
+                <div class="feed-stack">
+                    {% for row in cust_list %}
+                    <div class="feed-card">
+                        <div class="feed-card-header">
+                            <div class="feed-card-header-left">
+                                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                    <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+                                    {% if row.edit %}
+                                    <div class="feed-edit-badge"><i class="fas fa-edit me-1"></i>Edited by Employee</div>
+                                    {% endif %}
+                                </div>
+                                <h4>{{ row.name or 'Unnamed Customer' }}</h4>
+                                <div class="feed-card-subtitle">
+                                    <span>Account: <strong>{{ row.ano or '-' }}</strong></span>
+                                    {% if row.vid %}<span>· Village: <strong>{{ row.vid }}</strong></span>{% endif %}
+                                </div>
+                            </div>
+                            <div class="feed-actions">
+                                <button class="neumorphic-btn primary-btn small" onclick="accept('{{ row.feed_id }}')">
+                                    <i class="fas fa-check"></i> Accept Customer
+                                </button>
+                                <button class="neumorphic-btn btn-outline small" onclick="editCustomer('{{ row.feed_id }}')">
+                                    <i class="fas fa-pencil-alt"></i> Edit
+                                </button>
+                                <button class="neumorphic-btn danger-btn small" onclick="rejectCustomer('{{ row.feed_id }}')">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
+                        </div>
 
-    {% if not cust_list %}
-    <div class="feed-card" style="text-align:center;">No customer feed items available.</div>
-    {% endif %}
-  </div>
-</div>
-}
+                        <div class="feed-subsection">
+                            <div class="feed-subsection-header">
+                                <h5>Customer Details</h5>
+                            </div>
+                            <div class="feed-meta-grid">
+                                <div class="feed-meta-item">
+                                    <strong>Name</strong>
+                                    {% if row.edit and row.edit.name and row.edit.name != row.name %}
+                                    <span class="feed-edit-original">{{ row.name or '-' }}</span>
+                                    <span class="feed-edit-new"> → {{ row.edit.name }}</span>
+                                    {% else %}{{ row.name or '-' }}{% endif %}
+                                </div>
+                                <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Parent Account</strong>{{ row.pano or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Village</strong>{{ row.vid or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Loan Type</strong>{{ row.type or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Period</strong>{{ row.period or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Start Date</strong>{{ row.start_date or '-' }}</div>
+                                <div class="feed-meta-item"><strong>End Date</strong>{{ row.end_date or '-' }}</div>
+                                <div class="feed-meta-item">
+                                    <strong>Total Amount</strong>
+                                    {% if row.edit and row.edit.total_amount and row.edit.total_amount|string != row.total_amount|string %}
+                                    <span class="feed-edit-original feed-amount">₹{{ row.total_amount or 0 }}</span>
+                                    <span class="feed-edit-new"> → ₹{{ row.edit.total_amount }}</span>
+                                    {% else %}<span class="feed-amount">₹{{ row.total_amount or 0 }}</span>{% endif %}
+                                </div>
+                                <div class="feed-meta-item"><strong>Installment</strong><span class="feed-amount">₹{{ row.installment_amount or 0 }}</span></div>
+                                <div class="feed-meta-item">
+                                    <strong>Aadhaar Number</strong>
+                                    {% if row.edit and row.edit.aadhaar_number and row.edit.aadhaar_number != row.aadhaar_number %}
+                                    <span class="feed-edit-original">{{ row.aadhaar_number or '-' }}</span>
+                                    <span class="feed-edit-new"> → {{ row.edit.aadhaar_number }}</span>
+                                    {% else %}{{ row.aadhaar_number or '-' }}{% endif %}
+                                </div>
+                                <div class="feed-meta-item">
+                                    <strong>Phone</strong>
+                                    {% if row.edit and row.edit.phone_number %}
+                                        {% if row.edit.phone_number != (row.phone_number or '') %}
+                                        <span class="feed-edit-original">{{ row.phone_number or '-' }}</span>
+                                        <span class="feed-edit-new"> → {{ row.edit.phone_number }}</span>
+                                        {% else %}{{ row.phone_number or '-' }}{% endif %}
+                                    {% else %}{{ row.phone_number or '-' }}{% endif %}
+                                </div>
+                                <div class="feed-meta-item"><strong>Latitude</strong>{{ row.latitude or '-' }}</div>
+                                <div class="feed-meta-item"><strong>Longitude</strong>{{ row.longitude or '-' }}</div>
+                                <div class="feed-meta-item" style="grid-column: 1 / -1;">
+                                    <strong>Notes</strong>
+                                    {% if row.edit and row.edit.notes and row.edit.notes != row.notes %}
+                                    <span class="feed-edit-original">{{ row.notes or '-' }}</span>
+                                    <span class="feed-edit-new"> → {{ row.edit.notes }}</span>
+                                    {% else %}{{ row.notes or '-' }}{% endif %}
+                                </div>
+                            </div>
+                        </div>
 
-@media (max-width: 768px) {
-  .feed-card,
-  .feed-subsection {
-    padding: 14px;
-  }
-}
-</style>
+                        <!-- Documents Section -->
+                        <div class="feed-subsection">
+                            <div class="feed-subsection-header">
+                                <h5>Submitted Documents</h5>
+                                <button class="neumorphic-btn btn-outline small" onclick="acceptDocs('{{ row.feed_id }}')">
+                                    <i class="fas fa-file-signature"></i> Accept Docs Only
+                                </button>
+                            </div>
+                            <div class="feed-docs-grid">
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">Aadhaar Front</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.aadhaar_front_pic %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview Front
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Front photo</div>
+                                    {% endif %}
+                                </div>
 
-<div class="raised-box">
-  <h3>Customer Feed</h3>
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">Aadhaar Back</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.aadhaar_back_pic %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview Back
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Back photo</div>
+                                    {% endif %}
+                                </div>
 
-  <div class="feed-stack">
-    {% for row in cust_list %}
-    <div class="feed-card">
-      <div class="feed-card-header">
-        <div>
-          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
-          <h4 style="margin-top:8px;">{{ row.name or 'Unnamed Customer' }}</h4>
-          <div style="opacity:0.75;">Account: {{ row.ano or '-' }}{% if row.vid %} · Village: {{ row.vid }}{% endif %}</div>
-        </div>
-        <div class="feed-actions">
-          <button class="neumorphic-btn ultrasmall" onclick="accept('{{ row.feed_id }}')">✅ Accept Customer</button>
-          <button class="neumorphic-btn ultrasmall" onclick="editCustomer('{{ row.feed_id }}')">✏️ Edit</button>
-          <button class="neumorphic-btn ultrasmall" onclick="rejectCustomer('{{ row.feed_id }}')">❌ Delete</button>
-        </div>
-      </div>
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">House Photo</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.house_photo else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.house_photo %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview House
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-home me-1"></i> No House photo</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
 
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Customer Section</h5>
-        </div>
-        <div class="feed-meta-grid">
-          <div class="feed-meta-item"><strong>Name</strong>{{ row.name or '-' }}</div>
-          <div class="feed-meta-item"><strong>Account Number</strong>{{ row.ano or '-' }}</div>
-          <div class="feed-meta-item"><strong>Parent Account</strong>{{ row.pano or '-' }}</div>
-          <div class="feed-meta-item"><strong>Village</strong>{{ row.vid or '-' }}</div>
-          <div class="feed-meta-item"><strong>Loan Type</strong>{{ row.type or '-' }}</div>
-          <div class="feed-meta-item"><strong>Period</strong>{{ row.period or '-' }}</div>
-          <div class="feed-meta-item"><strong>Start Date</strong>{{ row.start_date or '-' }}</div>
-          <div class="feed-meta-item"><strong>End Date</strong>{{ row.end_date or '-' }}</div>
-          <div class="feed-meta-item"><strong>Total Amount</strong><span class="feed-amount">₹{{ row.total_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Installment</strong><span class="feed-amount">₹{{ row.installment_amount or 0 }}</span></div>
-          <div class="feed-meta-item"><strong>Aadhaar Number</strong>{{ row.aadhaar_number or '-' }}</div>
-          <div class="feed-meta-item"><strong>Latitude</strong>{{ row.latitude or '-' }}</div>
-          <div class="feed-meta-item"><strong>Longitude</strong>{{ row.longitude or '-' }}</div>
-          <div class="feed-meta-item" style="grid-column: 1 / -1;"><strong>Notes</strong>{{ row.notes or '-' }}</div>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Customer Docs</h5>
-          <button class="neumorphic-btn ultrasmall" onclick="acceptDocs('{{ row.feed_id }}')">📄 Accept Docs</button>
-        </div>
-
-        <div class="feed-docs-grid">
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Front</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
-            {% if row.aadhaar_front_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Back</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
-            {% if row.aadhaar_back_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">House Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
-            {% if row.house_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
-            {% else %}
-              <div class="feed-doc-empty">No house photo received.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Full Payload</h5>
-          <button
-            class="neumorphic-btn ultrasmall"
-            type="button"
-            data-target="payload-{{ loop.index }}"
-            aria-expanded="false"
-            onclick="togglePayload(this)">
-            📦 View Payload
-          </button>
-        </div>
-
-        <div id="payload-{{ loop.index }}" class="feed-payload" hidden>
-          <div class="feed-payload-grid">
-            <div class="feed-payload-group">
-              <strong>Customer</strong>
-              <pre>{{ {
-                'feed_id': row.feed_id,
-                'ano': row.ano,
-                'name': row.name,
-                'pano': row.pano,
-                'vid': row.vid,
-                'type': row.type,
-                'period': row.period,
-                'start_date': row.start_date,
-                'end_date': row.end_date,
-                'total_amount': row.total_amount,
-                'installment_amount': row.installment_amount,
-                'aadhaar_number': row.aadhaar_number,
-                'latitude': row.latitude,
-                'longitude': row.longitude,
-                'notes': row.notes,
-                'status': row.status
-              } | tojson(indent=2) }}</pre>
+                        <!-- Payload Block -->
+                        <div class="feed-subsection">
+                            <div class="feed-subsection-header">
+                                <h5>Raw Payload Block</h5>
+                                <button class="neumorphic-btn btn-outline small" type="button" data-target="payload-{{ loop.index }}" aria-expanded="false" onclick="togglePayload(this)">
+                                    <i class="fas fa-code"></i> View JSON
+                                </button>
+                            </div>
+                            <div id="payload-{{ loop.index }}" class="feed-payload" hidden>
+                                <div class="feed-payload-grid">
+                                    <div class="feed-payload-group">
+                                        <strong>Customer Data</strong>
+                                        <pre>{{ {
+                                            'feed_id': row.feed_id,
+                                            'ano': row.ano,
+                                            'name': row.name,
+                                            'pano': row.pano,
+                                            'vid': row.vid,
+                                            'type': row.type,
+                                            'period': row.period,
+                                            'start_date': row.start_date,
+                                            'end_date': row.end_date,
+                                            'total_amount': row.total_amount,
+                                            'installment_amount': row.installment_amount,
+                                            'aadhaar_number': row.aadhaar_number,
+                                            'latitude': row.latitude,
+                                            'longitude': row.longitude,
+                                            'notes': row.notes,
+                                            'status': row.status
+                                        } | tojson(indent=2) }}</pre>
+                                    </div>
+                                    <div class="feed-payload-group">
+                                        <strong>Customer Attachments</strong>
+                                        <pre>{{ {
+                                            'aadhaar_front_pic': 'available' if row.aadhaar_front_pic else 'missing',
+                                            'aadhaar_back_pic': 'available' if row.aadhaar_back_pic else 'missing',
+                                            'house_photo': 'available' if row.house_photo else 'missing'
+                                        } | tojson(indent=2) }}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-card">
+                    <div class="empty-state-icon"><i class="fas fa-check-circle text-success"></i></div>
+                    <h4>No Customer Registrations</h4>
+                    <p>No new customer additions are pending validation.</p>
+                </div>
+                {% endif %}
             </div>
-            <div class="feed-payload-group">
-              <strong>Customer Docs</strong>
-              <pre>{{ {
-                'aadhaar_front_pic': 'available' if row.aadhaar_front_pic else 'missing',
-                'aadhaar_back_pic': 'available' if row.aadhaar_back_pic else 'missing',
-                'house_photo': 'available' if row.house_photo else 'missing'
-              } | tojson(indent=2) }}</pre>
+        </div>
+    </div>
+
+    <!-- 3. Existing Customer Docs -->
+    <div class="feed-section-container" id="container-docs" data-section="docs">
+        <div class="admin-card">
+            <div class="admin-card-header">
+                <h5 class="admin-card-title">
+                    <i class="fas fa-file-invoice" style="color: var(--primary);"></i>
+                    Existing Customer Docs Review
+                </h5>
+                <span class="feed-badge-count">{{ docs_count }}</span>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
+            <div class="admin-card-body">
+                {% if docs_count > 0 %}
+                <div class="feed-stack">
+                    {% for row in existing_customer_docs %}
+                    <div class="feed-card">
+                        <div class="feed-card-header">
+                            <div class="feed-card-header-left">
+                                <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
+                                <h4>{{ row.name or 'Existing Customer' }}</h4>
+                                <div class="feed-card-subtitle">
+                                    <span>Account: <strong>{{ row.ano or '-' }}</strong></span>
+                                    {% if row.vid %}<span>· Village: <strong>{{ row.vid }}</strong></span>{% endif %}
+                                    {% if row.cid %}<span>· CID: <strong>{{ row.cid }}</strong></span>{% endif %}
+                                </div>
+                                {% if row.created_at %}
+                                <div style="opacity:0.65; font-size:12.5px; margin-top:4px;"><i class="fas fa-clock me-1"></i> Submitted: {{ row.created_at }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="feed-actions">
+                                <button class="neumorphic-btn primary-btn small" onclick="acceptExistingDocs('{{ row.docs_feed_id }}')">
+                                    <i class="fas fa-check"></i> Accept Uploads
+                                </button>
+                                <button class="neumorphic-btn danger-btn small" onclick="rejectExistingDocs('{{ row.docs_feed_id }}')">
+                                    <i class="fas fa-times"></i> Reject Uploads
+                                </button>
+                            </div>
+                        </div>
 
-    {% if not cust_list %}
-    <div class="feed-card" style="text-align:center;">No customer feed items available.</div>
-    {% endif %}
-  </div>
+                        <div class="feed-subsection">
+                            <div class="feed-subsection-header">
+                                <h5>Uploaded Documents</h5>
+                            </div>
+                            <div class="feed-docs-grid">
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">Aadhaar Front</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.aadhaar_front_pic %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview Front
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Front photo</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">Aadhaar Back</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.aadhaar_back_pic %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview Back
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Back photo</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="feed-doc-card">
+                                    <span class="feed-status-pill" style="align-self: flex-start;">House Photo</span>
+                                    <div style="margin-top: 10px; font-size: 12.5px;">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.house_photo else 'Missing' }}</span>
+                                    </div>
+                                    {% if row.house_photo %}
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                        <i class="fas fa-eye"></i> Preview House
+                                    </button>
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    {% else %}
+                                    <div class="feed-doc-empty"><i class="fas fa-home me-1"></i> No House photo</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-card">
+                    <div class="empty-state-icon"><i class="fas fa-check-circle text-success"></i></div>
+                    <h4>No Pending Documents</h4>
+                    <p>No document updates are currently pending verification review.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Payment Feed -->
+    <div class="feed-section-container" id="container-payments" data-section="payments">
+        <div class="admin-card">
+            <div class="admin-card-header">
+                <h5 class="admin-card-title">
+                    <i class="fas fa-money-bill-wave" style="color: var(--primary);"></i>
+                    Payment Feed Review
+                </h5>
+                <span class="feed-badge-count">{{ payments_count }}</span>
+            </div>
+            <div class="admin-card-body">
+                {% if payments_count > 0 %}
+                <div class="payment-feed-toolbar">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:12.5px; font-weight:600; color:var(--text-secondary);">Group By:</span>
+                        <select id="groupBy" class="search-input" style="width:auto; min-width:140px; padding: 8px 12px;">
+                            <option value="none">None</option>
+                            <option value="date">Group by Date</option>
+                            <option value="ano">Group by ANO</option>
+                        </select>
+                        <input id="groupInput" class="search-input" placeholder="Enter value" style="display:none; width:160px; padding: 8px 12px;" />
+                    </div>
+
+                    <div style="display:flex; gap:8px;">
+                        <button class="neumorphic-btn btn-outline small" onclick="selectAllPayments()"><i class="fas fa-check-double"></i> Select All</button>
+                        <button id="acceptBtn" class="neumorphic-btn primary-btn small" onclick="acceptSelected()"><i class="fas fa-check-circle"></i> Accept Selected</button>
+                    </div>
+
+                    <div class="payment-total-badge">
+                        <span>Total:</span> <strong>₹<span id="selectedTotal">0</span></strong>
+                    </div>
+                </div>
+
+                <div class="admin-table-wrapper table-responsive">
+                    <table id="feedPaymentTable" class="admin-table customer-table payment-feed-table table align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width:50px; padding-left:18px;"><input type="checkbox" onclick="toggleAll(this)"></th>
+                                <th>A.no</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Account Mapping</th>
+                                <th class="text-end" style="width:25%;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in payments %}
+                            {% set date_parts = row.pdt.split('-') %}
+                            {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
+                            <tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
+                                <td style="padding-left:18px;"><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
+                                <td data-order="{{ row.ano }}"><strong>{{ row.ano }}</strong></td>
+                                <td data-order="{{ iso_date }}">{{ row.pdt }}</td>
+                                <td data-order="{{ row.edit.amt if (row.edit and row.edit.amt) else row.amt }}"
+                                    data-money="{{ row.edit.amt if (row.edit and row.edit.amt) else row.amt }}"
+                                    {% if row.edit and ((row.edit.amt and row.edit.amt|float != row.amt|float) or (row.edit.payment_type and row.edit.payment_type != row.payment_type)) %}
+                                    data-editing="1"
+                                    {% endif %}>
+                                    {% if row.edit and row.edit.amt and row.edit.amt|float != row.amt|float %}
+                                        <div class="feed-edit-badge" style="display:inline-block; margin-bottom:4px;"><i class="fas fa-edit"></i> Edited</div><br>
+                                        <span class="feed-edit-original">₹{{ "{:,.0f}".format(row.amt|float) }}</span>
+                                        <span class="feed-edit-new"> → ₹{{ "{:,.0f}".format(row.edit.amt|float) }}</span>
+                                    {% else %}
+                                        <strong>₹{{ "{:,.0f}".format(row.amt|float) }}</strong>
+                                    {% endif %}
+                                    {% if row.edit and row.edit.payment_type and row.edit.payment_type != row.payment_type %}
+                                        <br><small class="feed-edit-original">{{ row.payment_type }}</small>
+                                        <small class="feed-edit-new"> → {{ row.edit.payment_type }}</small>
+                                    {% endif %}
+                                </td>
+                                <td><span class="feed-status-pill">{{ row.status }}</span></td>
+                                <td><code class="emp-username">{{ row.ano }}</code></td>
+                                <td class="text-end" style="padding-right: 18px;">
+                                    <button class="neumorphic-btn primary-btn small" onclick="acceptPayment('{{ row.feed_payment_id }}')">
+                                        <i class="fas fa-check"></i> Accept
+                                    </button>
+                                    <button class="neumorphic-btn btn-outline small" onclick="editPayment('{{ row.feed_payment_id }}')">
+                                        <i class="fas fa-pencil-alt"></i> Edit
+                                    </button>
+                                    <button class="neumorphic-btn danger-btn small" onclick="rejectPayment('{{ row.feed_payment_id }}')">
+                                        <i class="fas fa-trash-alt"></i> Reject
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state-card">
+                    <div class="empty-state-icon"><i class="fas fa-check-circle text-success"></i></div>
+                    <h4>Payment Queue is Clear</h4>
+                    <p>All client payments are currently processed and verified.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="raised-box">
-  <h3>Existing Customer Docs</h3>
-  <p style="opacity:0.75; margin-top:-6px; margin-bottom:12px;">
-    Documents submitted while collecting payment from customers who were missing Aadhaar or house photos.
-  </p>
+<!-- Floating Toast Notification System -->
+<div id="toast" style="position:fixed; bottom:24px; right:24px; background:var(--surface); color:var(--text); border:1px solid var(--border); box-shadow:var(--shadow-lg); padding:12px 20px; border-radius:10px; display:none; z-index:9999; font-size:13.5px; font-weight:600;"></div>
 
-  <div class="feed-stack">
-    {% for row in existing_customer_docs or [] %}
-    <div class="feed-card">
-      <div class="feed-card-header">
-        <div>
-          <div class="feed-status-pill">{{ row.status or 'pending' }}</div>
-          <h4 style="margin-top:8px;">{{ row.name or 'Existing Customer' }}</h4>
-          <div style="opacity:0.75;">
-            Account: {{ row.ano or '-' }}
-            {% if row.vid %} · Village: {{ row.vid }}{% endif %}
-            {% if row.cid %} · CID: {{ row.cid }}{% endif %}
-          </div>
-          {% if row.created_at %}
-          <div style="opacity:0.65; font-size:12px; margin-top:4px;">Submitted: {{ row.created_at }}</div>
-          {% endif %}
-        </div>
-        <div class="feed-actions">
-          <button class="neumorphic-btn ultrasmall" onclick="acceptExistingDocs('{{ row.docs_feed_id }}')">✅ Accept Docs</button>
-          <button class="neumorphic-btn ultrasmall" onclick="rejectExistingDocs('{{ row.docs_feed_id }}')">❌ Reject</button>
-        </div>
-      </div>
-
-      <div class="feed-subsection">
-        <div class="feed-subsection-header">
-          <h5>Uploaded Documents</h5>
-        </div>
-
-        <div class="feed-docs-grid">
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Front</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</div>
-            {% if row.aadhaar_front_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">🪪 Preview Aadhaar Front</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar front photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">Aadhaar Back</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</div>
-            {% if row.aadhaar_back_pic %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">🪪 Preview Aadhaar Back</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview">
-            {% else %}
-              <div class="feed-doc-empty">No Aadhaar back photo received.</div>
-            {% endif %}
-          </div>
-
-          <div class="feed-doc-card">
-            <div class="feed-status-pill">House Photo</div>
-            <div style="margin-top:8px;"><strong>Doc Status:</strong> {{ 'Available' if row.house_photo else 'Missing' }}</div>
-            {% if row.house_photo %}
-              <button class="neumorphic-btn ultrasmall" style="margin-top:10px;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">🏠 Preview House</button>
-              <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview">
-            {% else %}
-              <div class="feed-doc-empty">No house photo received.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
+<!-- Full Image View Modal -->
+<div id="imageModal" class="modal image-modal-backdrop">
+    <div class="image-modal-content">
+        <button onclick="closeImageModal()" class="image-modal-close"><i class="fas fa-times"></i></button>
+        <img id="modalImage" class="image-modal-img" src="" alt="Document preview">
     </div>
-    {% endfor %}
-
-    {% if not existing_customer_docs %}
-    <div class="feed-card" style="text-align:center;">No existing customer document uploads pending review.</div>
-    {% endif %}
-  </div>
-</div>
-
-<div class="raised-box">
-  <h3>Payment Feed</h3>
-
-  <div class="payment-feed-toolbar">
-    <select id="groupBy" class="neumorphic-input ultrasmall" style="width:auto; min-width:140px;">
-      <option value="none">None</option>
-      <option value="date">Group by Date</option>
-      <option value="ano">Group by ANO</option>
-    </select>
-
-    <input id="groupInput" class="neumorphic-input ultrasmall" placeholder="Enter value" style="display:none; width:160px;" />
-
-    <button class="neumorphic-btn ultrasmall" onclick="selectAllPayments()">Select All</button>
-    <button id="acceptBtn" class="neumorphic-btn ultrasmall" onclick="acceptSelected()">✅ Accept Selected</button>
-
-    <div style="margin-left:auto; font-weight:bold;">
-      Total: ₹<span id="selectedTotal">0</span>
-    </div>
-  </div>
-
-  <div class="customer-table-wrapper">
-    <table id="feedPaymentTable" class="customer-table payment-feed-table">
-      <thead>
-        <tr>
-          <th style="width:40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
-          <th>A.no</th>
-          <th>Date</th>
-          <th>Amount</th>
-          <th>Status</th>
-          <th>Account Mapping</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in payments %}
-        {% set date_parts = row.pdt.split('-') %}
-        {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
-        <tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
-          <td><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
-          <td data-order="{{ row.ano }}">{{ row.ano }}</td>
-          <td data-order="{{ iso_date }}">{{ row.pdt }}</td>
-          <td data-money="{{ row.amt }}" data-order="{{ row.amt }}">
-            {% if row.edit and row.edit.amt and row.edit.amt|string != row.amt|string %}
-              <span class="feed-edit-badge" style="display:inline-block; margin-bottom:4px;">✏️ Edited</span><br>
-              <span class="feed-edit-original">₹{{ row.amt }}</span>
-              <span class="feed-edit-new"> → ₹{{ row.edit.amt }}</span>
-            {% else %}
-              ₹{{ row.amt }}
-            {% endif %}
-            {% if row.edit and row.edit.payment_type and row.edit.payment_type != row.payment_type %}
-              <br><small class="feed-edit-original">{{ row.payment_type }}</small>
-              <small class="feed-edit-new"> → {{ row.edit.payment_type }}</small>
-            {% endif %}
-          </td>
-          <td>{{ row.status }}</td>
-          <td>{{ row.ano }}</td>
-          <td>
-            <button class="neumorphic-btn ultrasmall" onclick="acceptPayment('{{ row.feed_payment_id }}')">✅ Accept</button>
-            <button class="neumorphic-btn ultrasmall" onclick="editPayment('{{ row.feed_payment_id }}')">✏️ Edit</button>
-            <button class="neumorphic-btn ultrasmall" onclick="rejectPayment('{{ row.feed_payment_id }}')">❌ Reject</button>
-          </td>
-        </tr>
-        {% endfor %}
-
-        {% if not payments %}
-        <tr>
-          <td colspan="7" style="text-align:center; padding:20px;">No payment feed items available.</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-
-  <div id="toast" style="position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 16px; border-radius:8px; display:none; z-index:9999; font-size:14px;"></div>
-</div>
-
-<div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
-  <div style="position:relative; background:#222; padding:10px; border-radius:10px;">
-    <span onclick="closeImageModal()" style="position:absolute; top:5px; right:10px; cursor:pointer; font-size:20px;">❌</span>
-    <img id="modalImage" style="max-width:500px; max-height:500px; border-radius:8px;">
-  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Dynamic client-side section segmented switcher
+function switchFeedTab(tabId) {
+    // Update active tab buttons
+    document.querySelectorAll('.feed-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const activeBtn = document.querySelector(`.feed-tab-btn[data-tab="${tabId}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+    }
+
+    // Hide/show containers based on selection
+    const containers = document.querySelectorAll('.feed-section-container');
+    const closureCount = parseInt('{{ closure_count }}') || 0;
+    const custCount = parseInt('{{ cust_count }}') || 0;
+    const docsCount = parseInt('{{ docs_count }}') || 0;
+    const paymentsCount = parseInt('{{ payments_count }}') || 0;
+    const totalCount = parseInt('{{ total_count }}') || 0;
+
+    containers.forEach(container => {
+        const sectType = container.dataset.section;
+        
+        if (tabId === 'all') {
+            // Under "All", show sections that HAVE data
+            let hasData = false;
+            if (sectType === 'closures' && closureCount > 0) hasData = true;
+            if (sectType === 'customers' && custCount > 0) hasData = true;
+            if (sectType === 'docs' && docsCount > 0) hasData = true;
+            if (sectType === 'payments' && paymentsCount > 0) hasData = true;
+
+            if (hasData) {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        } else {
+            // Show selected container exclusively
+            if (sectType === tabId) {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+    });
+
+    // Toggle master empty state
+    const masterEmpty = document.getElementById('master-empty-state');
+    if (tabId === 'all') {
+        if (totalCount === 0) {
+            masterEmpty.style.display = 'flex';
+        } else {
+            masterEmpty.style.display = 'none';
+        }
+    } else {
+        masterEmpty.style.display = 'none';
+    }
+
+    // Save active selection
+    localStorage.setItem('active-feed-tab', tabId);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTab = localStorage.getItem('active-feed-tab') || 'all';
+    switchFeedTab(savedTab);
+});
+</script>
 <script src="{{ url_for('static', filename='js/feed.js') }}"></script>
 {% endblock %}
