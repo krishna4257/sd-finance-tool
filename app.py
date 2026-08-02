@@ -2553,19 +2553,15 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
             "freeze_date": freeze_date.isoformat() if freeze_date else None
         }
 
-    # Fetch payments
-    cur.execute("""
-        SELECT amt, payment_date
-        FROM (
-            SELECT amt, payment_date, pid, cid FROM payment
-            UNION ALL
-            SELECT amt, payment_date, pid, cid FROM closed_cust_payment
-            UNION ALL
-            SELECT amount AS amt, payment_date, pid, cid FROM historic_payment_data
-        ) all_pmts
-        WHERE cid = %s
-        ORDER BY payment_date, pid
-    """, (cid,))
+    # Fetch payments strictly from corresponding table based on customer origin
+    if source_table == "customer":
+        cur.execute("SELECT amt, payment_date FROM payment WHERE cid = %s ORDER BY payment_date, pid", (cid,))
+    elif source_table == "closed_cust_account":
+        cur.execute("SELECT amt, payment_date FROM closed_cust_payment WHERE cid = %s ORDER BY payment_date, pid", (cid,))
+    elif source_table == "historic_customer_data":
+        cur.execute("SELECT amount AS amt, payment_date FROM historic_payment_data WHERE cid = %s ORDER BY payment_date, pid", (cid,))
+    else:
+        cur.execute("SELECT amt, payment_date FROM payment WHERE cid = %s ORDER BY payment_date, pid", (cid,))
     prows = cur.fetchall()
     payments = [{"amt": prow[0], "payment_date": prow[1]} for prow in prows]
 
@@ -6208,20 +6204,21 @@ def search_customer():
                     cust[key] = format_date_display(cust[key])
             customers = [cust]
 
+            orig_start_date = row[4]
             # 🔸 Fetch payments for this customer (from both payment and closed_cust_payment)
             cur.execute("""
                 SELECT ano, payment_date, amt, pid
                 FROM payment
-                WHERE cid = %s
+                WHERE cid = %s AND (%s::date IS NULL OR payment_date >= %s::date)
 
                 UNION ALL
 
                 SELECT ano, payment_date, amt, pid
                 FROM closed_cust_payment
-                WHERE cid = %s
+                WHERE cid = %s AND (%s::date IS NULL OR payment_date >= %s::date)
 
                 ORDER BY payment_date, pid
-            """, (cust["cid"], cust["cid"]))
+            """, (cust["cid"], orig_start_date, orig_start_date, cust["cid"], orig_start_date, orig_start_date))
 
             payments = []
             for r in cur.fetchall():
@@ -6376,14 +6373,14 @@ def api_customer_detail_with_payments(account_no):
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                    base_amount, cutting_amount, interest_amount, interest_discount
+                    base_amount, cutting_amount, interest_amount, interest_discount, source_table
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'customer' AS source_table
                     FROM customer
                     WHERE vid = %s AND cid = %s
                     
@@ -6394,7 +6391,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'closed_cust_account' AS source_table
                     FROM closed_cust_account
                     WHERE vid = %s AND cid = %s
                     
@@ -6405,7 +6402,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'historic_customer_data' AS source_table
                     FROM historic_customer_data
                     WHERE vid = %s AND cid = %s
                 ) all_cust
@@ -6421,14 +6418,14 @@ def api_customer_detail_with_payments(account_no):
                     balance_amount, installment_amount, type, period, pano, created_at, 
                     aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                     customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                    base_amount, cutting_amount, interest_amount, interest_discount
+                    base_amount, cutting_amount, interest_amount, interest_discount, source_table
                 FROM (
                     SELECT 
                         cid, ano, name, vid, start_date, end_date, total_amount, paid_amount, 
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, 'active' AS status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'customer' AS source_table
                     FROM customer
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -6439,7 +6436,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'closed_cust_account' AS source_table
                     FROM closed_cust_account
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                     
@@ -6450,7 +6447,7 @@ def api_customer_detail_with_payments(account_no):
                         balance_amount, installment_amount, type, period, pano, created_at, 
                         aadhaar_number, notes, latitude, longitude, eid, phone_number, status,
                         customer_rating, final_frozen_rating, final_risk_level, freeze_date,
-                        base_amount, cutting_amount, interest_amount, interest_discount
+                        base_amount, cutting_amount, interest_amount, interest_discount, 'historic_customer_data' AS source_table
                     FROM historic_customer_data
                     WHERE vid = %s AND CAST(ano AS TEXT) = %s
                 ) all_cust
@@ -6467,7 +6464,7 @@ def api_customer_detail_with_payments(account_no):
             "balance_amount", "installment_amount", "type", "period", "pano", "created_at", 
             "aadhaar_number", "notes", "latitude", "longitude", "eid", "phone_number", "status",
             "customer_rating", "final_frozen_rating", "final_risk_level", "freeze_date",
-            "base_amount", "cutting_amount", "interest_amount", "interest_discount"
+            "base_amount", "cutting_amount", "interest_amount", "interest_discount", "source_table"
         ]
 
         cust = dict(zip(loanee_headers, row))
@@ -6482,26 +6479,36 @@ def api_customer_detail_with_payments(account_no):
             if cust.get(key):
                 cust[key] = cust[key].isoformat()
 
-        # Fetch payments
-        cur.execute("""
-            SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
-            FROM payment
-            WHERE cid = %s
-            
-            UNION ALL
-            
-            SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
-            FROM closed_cust_payment
-            WHERE cid = %s
-            
-            UNION ALL
-            
-            SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amount AS amt, pid
-            FROM historic_payment_data
-            WHERE cid = %s
-            
-            ORDER BY payment_date, pid
-        """, (cust["cid"], cust["cid"], cust["cid"]))
+        # Fetch payments strictly from corresponding table based on customer origin
+        source_table = cust.get("source_table")
+        if source_table == "customer":
+            cur.execute("""
+                SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
+                FROM payment
+                WHERE cid = %s
+                ORDER BY payment_date, pid
+            """, (cust["cid"],))
+        elif source_table == "closed_cust_account":
+            cur.execute("""
+                SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
+                FROM closed_cust_payment
+                WHERE cid = %s
+                ORDER BY payment_date, pid
+            """, (cust["cid"],))
+        elif source_table == "historic_customer_data":
+            cur.execute("""
+                SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amount AS amt, pid
+                FROM historic_payment_data
+                WHERE cid = %s
+                ORDER BY payment_date, pid
+            """, (cust["cid"],))
+        else:
+            cur.execute("""
+                SELECT ano, TO_CHAR(payment_date, 'YYYY-MM-DD') as payment_date, amt, pid
+                FROM payment
+                WHERE cid = %s
+                ORDER BY payment_date, pid
+            """, (cust["cid"],))
 
         prows = cur.fetchall()
         payments = []
