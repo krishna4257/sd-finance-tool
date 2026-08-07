@@ -6269,9 +6269,12 @@ def api_customer_save_payments():
         row = cur.fetchone()
         old_balance = row[0] if row else Decimal("0")
 
-        # Get existing pids for this customer
-        cur.execute(f"SELECT pid FROM {table_payment} WHERE cid = %s", (cid,))
+        # Get existing pids for this customer (ignoring NULLs)
+        cur.execute(f"SELECT pid FROM {table_payment} WHERE cid = %s AND pid IS NOT NULL", (cid,))
         existing_pids = {row[0] for row in cur.fetchall()}
+
+        # Remove any legacy un-indexed NULL-pid rows for this customer to prevent duplicate accumulation
+        cur.execute(f"DELETE FROM {table_payment} WHERE cid = %s AND pid IS NULL", (cid,))
 
         incoming_pids = set()
         for p in payments:
@@ -6300,15 +6303,19 @@ def api_customer_save_payments():
                 cur.execute(f"""
                     INSERT INTO {table_payment} (cid, vid, eid, ano, amt, payment_date)
                     VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING pid
                 """, (cid, vid, eid, ano, amt, pdt))
+                res_pid = cur.fetchone()
+                if res_pid and res_pid[0]:
+                    incoming_pids.add(res_pid[0])
 
-        # DELETE missing pids
-        pids_to_delete = existing_pids - incoming_pids
+        # DELETE missing pids safely
+        pids_to_delete = list(existing_pids - incoming_pids)
         if pids_to_delete:
             cur.execute(f"""
                 DELETE FROM {table_payment}
-                WHERE pid IN %s AND cid = %s
-            """, (tuple(pids_to_delete), cid))
+                WHERE cid = %s AND pid = ANY(%s)
+            """, (cid, pids_to_delete))
 
         # Recalculate totals
         cur.execute(f"SELECT total_amount, COALESCE(interest_discount, 0) FROM {table_customer} WHERE cid = %s", (cid,))
@@ -10884,6 +10891,8 @@ def api_dashboard_posting_analytics(vid):
         # Group payments by payment_date
         payments_by_date = {}
         for p_cid, p_amt, p_date, p_created_at, p_eid in (p[:5] for p in payments):
+            if not p_date:
+                continue
             dt = p_date.date() if isinstance(p_date, datetime) else p_date
             if dt not in payments_by_date:
                 payments_by_date[dt] = []
@@ -11060,11 +11069,12 @@ def api_dashboard_posting_analytics(vid):
                 employee_map[p_eid] = {"eid": p_eid, "name": "Unknown", "payment_count": 0, "total_collected": 0.0, "total_lag_days": 0.0}
             
             p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
-            c_dt = p_created_at.date() if isinstance(p_created_at, datetime) else p_created_at
-            lag = (c_dt - p_dt).days
+            c_dt = p_created_at.date() if (p_created_at and isinstance(p_created_at, datetime)) else p_created_at
             employee_map[p_eid]["payment_count"] += 1
             employee_map[p_eid]["total_collected"] += float(p_amt) if p_amt is not None else 0.0
-            employee_map[p_eid]["total_lag_days"] += max(0, lag)
+            if p_dt and c_dt:
+                lag = max(0, (c_dt - p_dt).days)
+                employee_map[p_eid]["total_lag_days"] += lag
 
         # Fetch employee names
         if employee_map:
@@ -11093,8 +11103,8 @@ def api_dashboard_posting_analytics(vid):
         weekly_lags = {}
         for p_cid, p_amt, p_date, p_created_at, p_eid in (p[:5] for p in payments):
             p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
-            c_dt = p_created_at.date() if isinstance(p_created_at, datetime) else p_created_at
-            if p_dt and p_dt.year >= 2025:
+            c_dt = p_created_at.date() if (p_created_at and isinstance(p_created_at, datetime)) else p_created_at
+            if p_dt and c_dt and p_dt.year >= 2025:
                 lag = max(0, (c_dt - p_dt).days)
                 if p_dt not in weekly_lags:
                     weekly_lags[p_dt] = []
