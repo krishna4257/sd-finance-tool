@@ -1,7 +1,13 @@
-function handleFeedAction(url, successMessage, failureFallback) {
-  return csrfFetch(url, {
+function handleFeedAction(url, successMessage, failureFallback, body = null) {
+  const options = {
     method: "POST"
-  })
+  };
+  if (body) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(body);
+  }
+
+  return csrfFetch(url, options)
     .then(res => res.json())
     .then(data => {
       if (data.success) {
@@ -49,15 +55,214 @@ function acceptExistingDocs(docs_feed_id) {
   );
 }
 
-function rejectExistingDocs(docs_feed_id) {
-  if (!confirm("Reject these uploaded documents?")) {
+function openEditModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+function closeEditModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+/* Edit Customer Feed */
+function editCustomer(feed_id) {
+  const scriptTag = document.getElementById(`cust-data-${feed_id}`);
+  if (!scriptTag) {
+    alert("Customer data not found");
     return;
   }
+  let data = {};
+  try {
+    data = JSON.parse(scriptTag.textContent || "{}");
+  } catch (e) {
+    console.error("Failed to parse customer JSON:", e);
+  }
 
+  document.getElementById("edit_cust_feed_id").value = feed_id;
+  document.getElementById("edit_cust_name").value = data.name || "";
+  document.getElementById("edit_cust_ano").value = data.ano || "";
+  document.getElementById("edit_cust_vid").value = data.vid || "";
+  document.getElementById("edit_cust_pano").value = data.pano || "";
+  document.getElementById("edit_cust_total_amount").value = data.total_amount || "";
+  document.getElementById("edit_cust_installment_amount").value = data.installment_amount || "";
+  document.getElementById("edit_cust_type").value = data.type || "weekly";
+  document.getElementById("edit_cust_period").value = data.period || "";
+  document.getElementById("edit_cust_start_date").value = data.start_date || "";
+  document.getElementById("edit_cust_end_date").value = data.end_date || "";
+  document.getElementById("edit_cust_aadhaar_number").value = data.aadhaar_number || "";
+  document.getElementById("edit_cust_phone_number").value = data.phone_number || "";
+  document.getElementById("edit_cust_notes").value = data.notes || "";
+
+  openEditModal("editCustomerModal");
+}
+
+function saveCustomerEdit(e) {
+  e.preventDefault();
+  const feed_id = document.getElementById("edit_cust_feed_id").value;
+  const payload = {
+    name: document.getElementById("edit_cust_name").value.trim(),
+    ano: document.getElementById("edit_cust_ano").value.trim(),
+    vid: document.getElementById("edit_cust_vid").value.trim(),
+    pano: document.getElementById("edit_cust_pano").value.trim(),
+    total_amount: document.getElementById("edit_cust_total_amount").value.trim(),
+    installment_amount: document.getElementById("edit_cust_installment_amount").value.trim(),
+    type: document.getElementById("edit_cust_type").value,
+    period: document.getElementById("edit_cust_period").value.trim(),
+    start_date: document.getElementById("edit_cust_start_date").value,
+    end_date: document.getElementById("edit_cust_end_date").value,
+    aadhaar_number: document.getElementById("edit_cust_aadhaar_number").value.trim(),
+    phone_number: document.getElementById("edit_cust_phone_number").value.trim(),
+    notes: document.getElementById("edit_cust_notes").value.trim()
+  };
+
+  handleFeedAction(
+    `/feed/customer/edit/${feed_id}`,
+    "Customer feed item updated successfully",
+    "Failed to update customer feed item",
+    payload
+  );
+  closeEditModal("editCustomerModal");
+}
+
+/* Edit Payment Feed */
+function editPayment(feed_payment_id) {
+  const scriptTag = document.getElementById(`pay-data-${feed_payment_id}`);
+  let data = {};
+  if (scriptTag) {
+    try {
+      data = JSON.parse(scriptTag.textContent || "{}");
+    } catch (e) {
+      console.error("Failed to parse payment JSON:", e);
+    }
+  }
+
+  document.getElementById("edit_pay_feed_id").value = feed_payment_id;
+  document.getElementById("edit_pay_ano").value = data.ano || "";
+  document.getElementById("edit_pay_amt").value = data.amt || "";
+  document.getElementById("edit_pay_date").value = data.pdt || data.payment_date || "";
+  document.getElementById("edit_pay_type").value = data.payment_type || "cash";
+
+  openEditModal("editPaymentModal");
+}
+
+function savePaymentEdit(e) {
+  e.preventDefault();
+  const feed_payment_id = document.getElementById("edit_pay_feed_id").value;
+  const payload = {
+    ano: document.getElementById("edit_pay_ano").value.trim(),
+    amt: document.getElementById("edit_pay_amt").value.trim(),
+    payment_date: document.getElementById("edit_pay_date").value,
+    payment_type: document.getElementById("edit_pay_type").value
+  };
+
+  handleFeedAction(
+    `/feed/payment/edit/${feed_payment_id}`,
+    "Payment feed item updated successfully",
+    "Failed to update payment feed item",
+    payload
+  );
+  closeEditModal("editPaymentModal");
+}
+
+/* Edit Closure Request */
+function editClosure(feed_id, ano, vid) {
+  document.getElementById("edit_closure_feed_id").value = feed_id;
+  document.getElementById("edit_closure_ano").value = ano || "";
+  document.getElementById("edit_closure_vid").value = vid || "";
+
+  openEditModal("editClosureModal");
+}
+
+function saveClosureEdit(e) {
+  e.preventDefault();
+  const feed_id = document.getElementById("edit_closure_feed_id").value;
+  const payload = {
+    ano: document.getElementById("edit_closure_ano").value.trim(),
+    vid: document.getElementById("edit_closure_vid").value.trim()
+  };
+
+  handleFeedAction(
+    `/feed/closure/edit/${feed_id}`,
+    "Account closure request updated successfully",
+    "Failed to update closure request",
+    payload
+  );
+  closeEditModal("editClosureModal");
+}
+
+/* Edit Existing Docs Review */
+function editExistingDocs(docs_feed_id, ano, vid) {
+  document.getElementById("edit_docs_feed_id").value = docs_feed_id;
+  document.getElementById("edit_docs_ano").value = ano || "";
+  document.getElementById("edit_docs_vid").value = vid || "";
+
+  openEditModal("editDocsModal");
+}
+
+function saveDocsEdit(e) {
+  e.preventDefault();
+  const docs_feed_id = document.getElementById("edit_docs_feed_id").value;
+  const payload = {
+    ano: document.getElementById("edit_docs_ano").value.trim(),
+    vid: document.getElementById("edit_docs_vid").value.trim()
+  };
+
+  handleFeedAction(
+    `/feed/existing-docs/edit/${docs_feed_id}`,
+    "Document review entry updated successfully",
+    "Failed to update document review entry",
+    payload
+  );
+  closeEditModal("editDocsModal");
+}
+
+/* Delete Functions */
+function deleteClosure(feed_id) {
+  if (!confirm("Are you sure you want to delete this closure request entry permanently?")) {
+    return;
+  }
   return handleFeedAction(
-    `/feed/existing-docs/reject/${docs_feed_id}`,
-    "Documents rejected",
-    "Failed to reject documents"
+    `/feed/closure/delete/${feed_id}`,
+    "Closure request deleted successfully",
+    "Failed to delete closure request"
+  );
+}
+
+function deleteCustomer(feed_id) {
+  if (!confirm("Are you sure you want to delete this customer registration feed entry permanently?")) {
+    return;
+  }
+  return handleFeedAction(
+    `/feed/customer/delete/${feed_id}`,
+    "Customer feed entry deleted successfully",
+    "Failed to delete customer feed entry"
+  );
+}
+
+function deleteExistingDocs(docs_feed_id) {
+  if (!confirm("Are you sure you want to delete this document review entry permanently?")) {
+    return;
+  }
+  return handleFeedAction(
+    `/feed/existing-docs/delete/${docs_feed_id}`,
+    "Document review entry deleted successfully",
+    "Failed to delete document review entry"
+  );
+}
+
+function deletePayment(feed_payment_id) {
+  if (!confirm("Are you sure you want to delete this payment feed entry permanently?")) {
+    return;
+  }
+  return handleFeedAction(
+    `/feed/payment/delete/${feed_payment_id}`,
+    "Payment feed entry deleted successfully",
+    "Failed to delete payment feed entry"
   );
 }
 
@@ -196,7 +401,7 @@ function acceptClosure(feed_id, cid, action) {
   if (action === "written_off" && !confirm("Are you sure you want to close this account and mark it as Written Off?")) {
     return;
   }
-  
+
   return csrfFetch(`/feed/closure/accept/${feed_id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -224,7 +429,7 @@ function acceptClosureWithDiscount(feed_id, cid) {
     alert("Discount must be greater than 0");
     return;
   }
-  
+
   if (!confirm(`Are you sure you want to close this account with a discount of ₹${val}?`)) {
     return;
   }
@@ -241,29 +446,6 @@ function acceptClosureWithDiscount(feed_id, cid) {
         location.reload();
       } else {
         alert(data.error || "Failed to close account");
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      alert("Server error");
-    });
-}
-
-function rejectClosure(feed_id) {
-  if (!confirm("Reject this account closure request?")) {
-    return;
-  }
-
-  return csrfFetch(`/feed/closure/reject/${feed_id}`, {
-    method: "POST"
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        alert("Closure request rejected.");
-        location.reload();
-      } else {
-        alert(data.error || "Failed to reject closure request");
       }
     })
     .catch(err => {
@@ -289,35 +471,83 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   const groupByEl = document.getElementById("groupBy");
-  const groupInput = document.getElementById("groupInput");
-  if (!groupByEl || !groupInput) return;
+  const groupSelect = document.getElementById("groupSelect");
+  if (!groupByEl || !groupSelect) return;
 
-  groupByEl.addEventListener("change", function () {
-    const type = this.value;
+  function populateGroupSelect(type) {
+    groupSelect.innerHTML = "";
 
-    groupInput.value = "";
+    if (type === "none") {
+      groupSelect.style.display = "none";
+      document.querySelectorAll(".pay-checkbox").forEach(cb => {
+        cb.checked = false;
+      });
+      updateTotalPayment();
+      return;
+    }
+
+    groupSelect.style.display = "inline-block";
+
+    const uniqueValues = new Set();
+    const rows = document.querySelectorAll(".payment-feed-table tbody tr");
+
+    rows.forEach(row => {
+      if (type === "date") {
+        const d = (row.dataset.date || row.dataset.isoDate || "").trim();
+        if (d) uniqueValues.add(d);
+      } else if (type === "ano") {
+        const a = (row.dataset.ano || "").trim();
+        if (a) uniqueValues.add(a);
+      }
+    });
+
+    const defaultOpt = document.createElement("option");
+    defaultOpt.value = "";
+    defaultOpt.textContent = type === "date" ? "-- Select Date --" : "-- Select ANO --";
+    groupSelect.appendChild(defaultOpt);
+
+    const sortedValues = Array.from(uniqueValues).sort((a, b) => {
+      if (type === "ano") {
+        return (parseInt(a) || 0) - (parseInt(b) || 0);
+      }
+      return a.localeCompare(b);
+    });
+
+    sortedValues.forEach(val => {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      groupSelect.appendChild(opt);
+    });
+
     document.querySelectorAll(".pay-checkbox").forEach(cb => {
       cb.checked = false;
     });
     updateTotalPayment();
+  }
 
-    if (type === "none") {
-      groupInput.style.display = "none";
-    } else {
-      groupInput.style.display = "inline-block";
-      groupInput.placeholder = type === "date" ? "Enter date (YYYY-MM-DD)" : "Enter ANO";
-    }
+  groupByEl.addEventListener("change", function () {
+    populateGroupSelect(this.value);
   });
 
-  groupInput.addEventListener("input", function () {
+  groupSelect.addEventListener("change", function () {
     const type = groupByEl.value;
-    const value = this.value.trim();
-    if (!value) return;
+    const selectedVal = this.value.trim();
 
     document.querySelectorAll(".payment-feed-table tbody tr").forEach(row => {
       const cb = row.querySelector(".pay-checkbox");
       if (!cb) return;
-      cb.checked = row.dataset[type] == value;
+
+      if (!selectedVal) {
+        cb.checked = false;
+      } else if (type === "date") {
+        const rowDate = (row.dataset.date || "").trim();
+        const rowIsoDate = (row.dataset.isoDate || "").trim();
+        cb.checked = (rowDate === selectedVal || rowIsoDate === selectedVal);
+      } else if (type === "ano") {
+        const rowAno = (row.dataset.ano || "").trim();
+        cb.checked = (rowAno === selectedVal);
+      }
     });
 
     updateTotalPayment();
