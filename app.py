@@ -7946,22 +7946,29 @@ def accept_closure_request(feed_id):
             conn.close()
 
 
-@app.post("/feed/closure/reject/<feed_id>")
+@app.post("/feed/closure/edit/<feed_id>")
 @login_required
-def reject_closure_request(feed_id):
+def edit_closure_request(feed_id):
     conn = None
     cur = None
     try:
+        data = request.get_json() or {}
+        ano = data.get("ano")
+        vid = data.get("vid")
+
+        if ano is None or vid is None:
+            return jsonify({"success": False, "error": "Account number and village ID are required"}), 400
+
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # Update status to rejected
         cur.execute("""
             UPDATE account_closure_feed
-            SET status = 'rejected'
+            SET ano = %s, vid = %s
             WHERE feed_id = %s AND status = 'pending'
-            RETURNING ano, vid
-        """, (feed_id,))
+            RETURNING feed_id
+        """, (ano, vid, feed_id))
+
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Pending closure request not found"}), 404
@@ -7972,13 +7979,196 @@ def reject_closure_request(feed_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"Error rejecting closure request: {e}")
+        logger.error(f"Error editing closure request: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if cur:
             cur.close()
         if conn:
             conn.close()
+
+
+@app.post("/feed/customer/edit/<feed_id>")
+@login_required
+def edit_customer_feed(feed_id):
+    conn = None
+    cur = None
+    try:
+        data = request.get_json() or {}
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT local_uuid, payload
+            FROM customer_feed
+            WHERE feed_id = %s
+        """, (feed_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Customer feed item not found"}), 404
+
+        local_uuid, payload_raw = row
+        payload = payload_raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+
+        if not isinstance(payload, dict):
+            payload = {}
+
+        # Fields that can be edited
+        editable_keys = [
+            "name", "ano", "total_amount", "installment_amount", "aadhaar_number",
+            "phone_number", "type", "period", "start_date", "end_date", "notes", "vid", "pano"
+        ]
+
+        edited_payload = {}
+        for k in editable_keys:
+            if k in data and data[k] is not None:
+                val = str(data[k]).strip()
+                if k in ("ano", "total_amount", "installment_amount", "period", "vid", "pano"):
+                    try:
+                        if "." in val:
+                            val = float(val)
+                        else:
+                            val = int(val)
+                    except ValueError:
+                        pass
+                payload[k] = val
+                edited_payload[k] = val
+
+        cur.execute("""
+            UPDATE customer_feed
+            SET payload = %s
+            WHERE feed_id = %s
+        """, (json.dumps(payload), feed_id))
+
+        if local_uuid:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS customer_feed_edits (
+                    edit_id SERIAL PRIMARY KEY,
+                    local_uuid TEXT NOT NULL,
+                    edited_payload JSONB NOT NULL,
+                    eid INTEGER,
+                    vid INTEGER,
+                    edit_status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
+                SELECT edit_id FROM customer_feed_edits WHERE local_uuid = %s LIMIT 1
+            """, (local_uuid,))
+            existing_edit = cur.fetchone()
+
+            if existing_edit:
+                cur.execute("""
+                    UPDATE customer_feed_edits
+                    SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                    WHERE local_uuid = %s
+                """, (json.dumps(edited_payload), local_uuid))
+            else:
+                cur.execute("""
+                    INSERT INTO customer_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                    VALUES (%s, %s, %s, %s, 'pending', NOW())
+                """, (local_uuid, json.dumps(edited_payload), payload.get("eid"), payload.get("vid")))
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error editing customer feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/closure/delete/<feed_id>")
+@login_required
+def delete_closure_request(feed_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("DELETE FROM account_closure_feed WHERE feed_id = %s RETURNING feed_id", (feed_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Closure request not found"}), 404
+
+        conn.commit()
+        audit_log(
+            action="delete_closure_feed",
+            entity_type="account_closure_feed",
+            entity_id=feed_id,
+            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+        )
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting closure request: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/customer/delete/<feed_id>")
+@login_required
+def delete_customer_feed(feed_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT local_uuid FROM customer_feed WHERE feed_id = %s", (feed_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Customer feed item not found"}), 404
+
+        local_uuid = row[0]
+
+        cur.execute("DELETE FROM customer_feed WHERE feed_id = %s", (feed_id,))
+        if local_uuid:
+            try:
+                cur.execute("DELETE FROM customer_feed_edits WHERE local_uuid = %s", (local_uuid,))
+            except Exception:
+                pass
+
+        conn.commit()
+        audit_log(
+            action="delete_customer_feed",
+            entity_type="customer_feed",
+            entity_id=feed_id,
+            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+        )
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting customer feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 
 
 @app.post("/feed/customer/accept/<feed_id>")
@@ -8364,43 +8554,228 @@ def accept_existing_customer_docs(docs_feed_id):
     return {"success": True}
 
 
-@app.post("/feed/existing-docs/reject/<docs_feed_id>")
+@app.post("/feed/existing-docs/edit/<docs_feed_id>")
 @login_required
-def reject_existing_customer_docs(docs_feed_id):
-    conn = get_pg_connection()
-    cur = conn.cursor()
+def edit_existing_customer_docs(docs_feed_id):
+    conn = None
+    cur = None
+    try:
+        data = request.get_json() or {}
+        ano = data.get("ano")
+        vid = data.get("vid")
 
-    logged_user = session.get("employee_id") or session.get("eid")
-    if not logged_user:
-        return {"success": False, "error": "User not logged properly"}
+        if ano is None or vid is None:
+            return jsonify({"success": False, "error": "Account number and village ID are required"}), 400
 
-    cur.execute("""
-        UPDATE customer_docs_feed
-        SET status = 'rejected',
-            reviewed_by = %s,
-            reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-        WHERE docs_feed_id = %s
-          AND status = 'pending'
-        RETURNING docs_feed_id
-    """, (logged_user, docs_feed_id))
+        conn = get_pg_connection()
+        cur = conn.cursor()
 
-    row = cur.fetchone()
-    if not row:
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "Pending docs feed item not found"}
+        cur.execute("""
+            UPDATE customer_docs_feed
+            SET ano = %s, vid = %s
+            WHERE docs_feed_id = %s AND status = 'pending'
+            RETURNING docs_feed_id
+        """, (ano, vid, docs_feed_id))
 
-    conn.commit()
-    audit_log(
-        action="reject_existing_customer_docs",
-        entity_type="customer_docs_feed",
-        entity_id=docs_feed_id,
-        details={"reviewed_by": logged_user}
-    )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Pending docs feed item not found"}), 404
 
-    cur.close()
-    conn.close()
-    return {"success": True}
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error editing docs feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/payment/edit/<feed_payment_id>")
+@login_required
+def edit_payment_feed(feed_payment_id):
+    conn = None
+    cur = None
+    try:
+        data = request.get_json() or {}
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT local_uuid, payload
+            FROM payment_feed_items
+            WHERE feed_payment_id = %s
+        """, (feed_payment_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Payment feed item not found"}), 404
+
+        local_uuid, payload_raw = row
+        payload = payload_raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+
+        if not isinstance(payload, dict):
+            payload = {}
+
+        # Update payload fields
+        if "ano" in data and data["ano"] is not None:
+            try:
+                payload["ano"] = int(data["ano"])
+            except ValueError:
+                payload["ano"] = str(data["ano"]).strip()
+        if "amt" in data and data["amt"] is not None:
+            try:
+                payload["amt"] = float(data["amt"])
+            except ValueError:
+                pass
+        if "payment_date" in data and data["payment_date"]:
+            payload["payment_date"] = str(data["payment_date"]).strip()
+            payload["pdt"] = str(data["payment_date"]).strip()
+        if "pdt" in data and data["pdt"]:
+            payload["pdt"] = str(data["pdt"]).strip()
+            payload["payment_date"] = str(data["pdt"]).strip()
+        if "payment_type" in data and data["payment_type"]:
+            payload["payment_type"] = str(data["payment_type"]).strip()
+
+        cur.execute("""
+            UPDATE payment_feed_items
+            SET payload = %s
+            WHERE feed_payment_id = %s
+        """, (json.dumps(payload), feed_payment_id))
+
+        if local_uuid:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS payment_feed_edits (
+                    edit_id SERIAL PRIMARY KEY,
+                    local_uuid TEXT NOT NULL,
+                    edited_payload JSONB NOT NULL,
+                    eid INTEGER,
+                    vid INTEGER,
+                    edit_status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
+                SELECT edit_id FROM payment_feed_edits WHERE local_uuid = %s LIMIT 1
+            """, (local_uuid,))
+            existing_edit = cur.fetchone()
+
+            if existing_edit:
+                cur.execute("""
+                    UPDATE payment_feed_edits
+                    SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                    WHERE local_uuid = %s
+                """, (json.dumps(payload), local_uuid))
+            else:
+                cur.execute("""
+                    INSERT INTO payment_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                    VALUES (%s, %s, %s, %s, 'pending', NOW())
+                """, (local_uuid, json.dumps(payload), payload.get("eid"), payload.get("vid")))
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error editing payment feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/existing-docs/delete/<docs_feed_id>")
+@login_required
+def delete_existing_customer_docs(docs_feed_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("DELETE FROM customer_docs_feed WHERE docs_feed_id = %s RETURNING docs_feed_id", (docs_feed_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Pending docs feed item not found"}), 404
+
+        conn.commit()
+        audit_log(
+            action="delete_existing_customer_docs",
+            entity_type="customer_docs_feed",
+            entity_id=docs_feed_id,
+            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+        )
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting docs feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/payment/delete/<feed_payment_id>")
+@login_required
+def delete_payment_feed(feed_payment_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT local_uuid FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Payment feed item not found"}), 404
+
+        local_uuid = row[0]
+
+        cur.execute("DELETE FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
+        if local_uuid:
+            try:
+                cur.execute("DELETE FROM payment_feed_edits WHERE local_uuid = %s", (local_uuid,))
+            except Exception:
+                pass
+
+        conn.commit()
+        audit_log(
+            action="delete_payment_feed",
+            entity_type="payment_feed",
+            entity_id=feed_payment_id,
+            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+        )
+        return jsonify({"success": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting payment feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 
 
 @app.post("/feed/payment/accept/<feed_payment_id>")

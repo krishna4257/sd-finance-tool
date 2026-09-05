@@ -543,6 +543,84 @@
         display: block;
     }
 
+    /* Custom Edit Modal styling */
+    .custom-modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        background: rgba(15, 17, 23, 0.75) !important;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+    }
+
+    .custom-modal-content {
+        background: var(--surface) !important;
+        border: 1px solid var(--border);
+        padding: 24px !important;
+        border-radius: 16px !important;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        width: 100%;
+        max-width: 580px;
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: modalScaleIn 0.2s ease-out;
+        color: var(--text);
+    }
+
+    .custom-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 12px;
+    }
+
+    .custom-modal-header h4 {
+        margin: 0;
+        font-family: var(--font-headline);
+        font-weight: 700;
+        font-size: 1.15rem;
+    }
+
+    .custom-modal-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+
+    .custom-modal-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .custom-modal-field.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .custom-modal-field label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .custom-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 24px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+    }
+
     @media (max-width: 768px) {
         .feed-card {
             padding: 16px;
@@ -554,6 +632,9 @@
             margin-left: 0;
             width: 100%;
             justify-content: center;
+        }
+        .custom-modal-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -646,8 +727,11 @@
                                     {% endif %}
                                     {% endif %}
                                 {% endif %}
-                                <button class="neumorphic-btn btn-outline small" onclick="rejectClosure('{{ row.feed_id }}')">
-                                    <i class="fas fa-times"></i> Reject
+                                <button class="neumorphic-btn btn-outline small" onclick="editClosure('{{ row.feed_id }}', '{{ row.ano }}', '{{ row.vid }}')">
+                                    <i class="fas fa-pencil-alt"></i> Edit
+                                </button>
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteClosure('{{ row.feed_id }}')">
+                                    <i class="fas fa-trash-alt"></i> Delete
                                 </button>
                             </div>
                         </div>
@@ -716,9 +800,27 @@
                                 <button class="neumorphic-btn btn-outline small" onclick="editCustomer('{{ row.feed_id }}')">
                                     <i class="fas fa-pencil-alt"></i> Edit
                                 </button>
-                                <button class="neumorphic-btn danger-btn small" onclick="rejectCustomer('{{ row.feed_id }}')">
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteCustomer('{{ row.feed_id }}')">
                                     <i class="fas fa-trash-alt"></i> Delete
                                 </button>
+                                <script id="cust-data-{{ row.feed_id }}" type="application/json">
+                                {{ {
+                                    'feed_id': row.feed_id,
+                                    'name': row.edit.name if (row.edit and row.edit.name) else row.name,
+                                    'ano': row.edit.ano if (row.edit and row.edit.ano) else row.ano,
+                                    'vid': row.edit.vid if (row.edit and row.edit.vid) else row.vid,
+                                    'pano': row.edit.pano if (row.edit and row.edit.pano) else row.pano,
+                                    'total_amount': row.edit.total_amount if (row.edit and row.edit.total_amount) else row.total_amount,
+                                    'installment_amount': row.edit.installment_amount if (row.edit and row.edit.installment_amount) else row.installment_amount,
+                                    'aadhaar_number': row.edit.aadhaar_number if (row.edit and row.edit.aadhaar_number) else row.aadhaar_number,
+                                    'phone_number': row.edit.phone_number if (row.edit and row.edit.phone_number) else row.phone_number,
+                                    'type': row.edit.type if (row.edit and row.edit.type) else row.type,
+                                    'period': row.edit.period if (row.edit and row.edit.period) else row.period,
+                                    'start_date': row.edit.start_date if (row.edit and row.edit.start_date) else row.start_date,
+                                    'end_date': row.edit.end_date if (row.edit and row.edit.end_date) else row.end_date,
+                                    'notes': row.edit.notes if (row.edit and row.edit.notes) else row.notes
+                                } | tojson }}
+                                </script>
                             </div>
                         </div>
 
@@ -924,8 +1026,11 @@
                                 <button class="neumorphic-btn primary-btn small" onclick="acceptExistingDocs('{{ row.docs_feed_id }}')">
                                     <i class="fas fa-check"></i> Accept Uploads
                                 </button>
-                                <button class="neumorphic-btn danger-btn small" onclick="rejectExistingDocs('{{ row.docs_feed_id }}')">
-                                    <i class="fas fa-times"></i> Reject Uploads
+                                <button class="neumorphic-btn btn-outline small" onclick="editExistingDocs('{{ row.docs_feed_id }}', '{{ row.ano }}', '{{ row.vid }}')">
+                                    <i class="fas fa-pencil-alt"></i> Edit
+                                </button>
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteExistingDocs('{{ row.docs_feed_id }}')">
+                                    <i class="fas fa-trash-alt"></i> Delete
                                 </button>
                             </div>
                         </div>
@@ -1018,7 +1123,7 @@
                             <option value="date">Group by Date</option>
                             <option value="ano">Group by ANO</option>
                         </select>
-                        <input id="groupInput" class="search-input" placeholder="Enter value" style="display:none; width:160px; padding: 8px 12px;" />
+                        <select id="groupSelect" class="search-input" style="display:none; width:auto; min-width:160px; padding: 8px 12px;"></select>
                     </div>
 
                     <div style="display:flex; gap:8px;">
@@ -1048,7 +1153,7 @@
                             {% for row in payments %}
                             {% set date_parts = row.pdt.split('-') %}
                             {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
-                            <tr data-date="{{ row.pdt }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
+                            <tr data-date="{{ row.pdt }}" data-iso-date="{{ iso_date }}" data-ano="{{ row.ano }}" data-amount="{{ row.amt }}">
                                 <td style="padding-left:18px;"><input type="checkbox" class="pay-checkbox" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()"></td>
                                 <td data-order="{{ row.ano }}"><strong>{{ row.ano }}</strong></td>
                                 <td data-order="{{ iso_date }}">{{ row.pdt }}</td>
@@ -1078,9 +1183,18 @@
                                     <button class="neumorphic-btn btn-outline small" onclick="editPayment('{{ row.feed_payment_id }}')">
                                         <i class="fas fa-pencil-alt"></i> Edit
                                     </button>
-                                    <button class="neumorphic-btn danger-btn small" onclick="rejectPayment('{{ row.feed_payment_id }}')">
-                                        <i class="fas fa-trash-alt"></i> Reject
+                                    <button class="neumorphic-btn danger-btn small" onclick="deletePayment('{{ row.feed_payment_id }}')">
+                                        <i class="fas fa-trash-alt"></i> Delete
                                     </button>
+                                    <script id="pay-data-{{ row.feed_payment_id }}" type="application/json">
+                                    {{ {
+                                        'feed_payment_id': row.feed_payment_id,
+                                        'ano': row.edit.ano if (row.edit and row.edit.ano) else row.ano,
+                                        'amt': row.edit.amt if (row.edit and row.edit.amt) else row.amt,
+                                        'pdt': row.edit.pdt if (row.edit and row.edit.pdt) else (row.edit.payment_date if (row.edit and row.edit.payment_date) else row.pdt),
+                                        'payment_type': row.edit.payment_type if (row.edit and row.edit.payment_type) else row.payment_type
+                                    } | tojson }}
+                                    </script>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -1102,11 +1216,172 @@
 <!-- Floating Toast Notification System -->
 <div id="toast" style="position:fixed; bottom:24px; right:24px; background:var(--surface); color:var(--text); border:1px solid var(--border); box-shadow:var(--shadow-lg); padding:12px 20px; border-radius:10px; display:none; z-index:9999; font-size:13.5px; font-weight:600;"></div>
 
-<!-- Full Image View Modal -->
-<div id="imageModal" class="modal image-modal-backdrop">
-    <div class="image-modal-content">
-        <button onclick="closeImageModal()" class="image-modal-close"><i class="fas fa-times"></i></button>
-        <img id="modalImage" class="image-modal-img" src="" alt="Document preview">
+<!-- 1. Edit Customer Modal -->
+<div id="editCustomerModal" class="modal custom-modal-backdrop">
+    <div class="custom-modal-content">
+        <div class="custom-modal-header">
+            <h4><i class="fas fa-user-edit" style="color: var(--primary);"></i> Edit Customer Feed Entry</h4>
+            <button type="button" onclick="closeEditModal('editCustomerModal')" class="image-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="editCustomerForm" onsubmit="saveCustomerEdit(event)">
+            <input type="hidden" id="edit_cust_feed_id">
+            <div class="custom-modal-grid">
+                <div class="custom-modal-field">
+                    <label for="edit_cust_name">Customer Name</label>
+                    <input type="text" id="edit_cust_name" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_ano">Account Number (ANO)</label>
+                    <input type="number" id="edit_cust_ano" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_vid">Village ID (VID)</label>
+                    <input type="number" id="edit_cust_vid" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_pano">Parent Account (PANO)</label>
+                    <input type="number" id="edit_cust_pano" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_total_amount">Total Amount (₹)</label>
+                    <input type="number" id="edit_cust_total_amount" class="search-input" step="any" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_installment_amount">Installment Amount (₹)</label>
+                    <input type="number" id="edit_cust_installment_amount" class="search-input" step="any">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_type">Loan Type</label>
+                    <select id="edit_cust_type" class="search-input">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="W">W (Weekly)</option>
+                        <option value="M">M (Monthly)</option>
+                    </select>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_period">Period</label>
+                    <input type="number" id="edit_cust_period" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_start_date">Start Date</label>
+                    <input type="date" id="edit_cust_start_date" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_end_date">End Date</label>
+                    <input type="date" id="edit_cust_end_date" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_aadhaar_number">Aadhaar Number</label>
+                    <input type="text" id="edit_cust_aadhaar_number" class="search-input">
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_cust_phone_number">Phone Number</label>
+                    <input type="text" id="edit_cust_phone_number" class="search-input">
+                </div>
+                <div class="custom-modal-field full-width">
+                    <label for="edit_cust_notes">Notes</label>
+                    <textarea id="edit_cust_notes" class="search-input" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" class="neumorphic-btn btn-outline small" onclick="closeEditModal('editCustomerModal')">Cancel</button>
+                <button type="submit" class="neumorphic-btn primary-btn small"><i class="fas fa-save me-1"></i> Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Edit Payment Modal -->
+<div id="editPaymentModal" class="modal custom-modal-backdrop">
+    <div class="custom-modal-content" style="max-width: 480px;">
+        <div class="custom-modal-header">
+            <h4><i class="fas fa-edit" style="color: var(--primary);"></i> Edit Payment Feed Entry</h4>
+            <button type="button" onclick="closeEditModal('editPaymentModal')" class="image-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="editPaymentForm" onsubmit="savePaymentEdit(event)">
+            <input type="hidden" id="edit_pay_feed_id">
+            <div class="custom-modal-grid" style="grid-template-columns: 1fr;">
+                <div class="custom-modal-field">
+                    <label for="edit_pay_ano">Account Number (ANO)</label>
+                    <input type="number" id="edit_pay_ano" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_pay_amt">Payment Amount (₹)</label>
+                    <input type="number" id="edit_pay_amt" class="search-input" step="any" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_pay_date">Payment Date</label>
+                    <input type="date" id="edit_pay_date" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_pay_type">Payment Type</label>
+                    <select id="edit_pay_type" class="search-input">
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                    </select>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" class="neumorphic-btn btn-outline small" onclick="closeEditModal('editPaymentModal')">Cancel</button>
+                <button type="submit" class="neumorphic-btn primary-btn small"><i class="fas fa-save me-1"></i> Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 3. Edit Closure Modal -->
+<div id="editClosureModal" class="modal custom-modal-backdrop">
+    <div class="custom-modal-content" style="max-width: 440px;">
+        <div class="custom-modal-header">
+            <h4><i class="fas fa-folder-minus" style="color: var(--primary);"></i> Edit Closure Request</h4>
+            <button type="button" onclick="closeEditModal('editClosureModal')" class="image-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="editClosureForm" onsubmit="saveClosureEdit(event)">
+            <input type="hidden" id="edit_closure_feed_id">
+            <div class="custom-modal-grid" style="grid-template-columns: 1fr;">
+                <div class="custom-modal-field">
+                    <label for="edit_closure_ano">Account Number (ANO)</label>
+                    <input type="number" id="edit_closure_ano" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_closure_vid">Village ID (VID)</label>
+                    <input type="number" id="edit_closure_vid" class="search-input" required>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" class="neumorphic-btn btn-outline small" onclick="closeEditModal('editClosureModal')">Cancel</button>
+                <button type="submit" class="neumorphic-btn primary-btn small"><i class="fas fa-save me-1"></i> Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. Edit Docs Modal -->
+<div id="editDocsModal" class="modal custom-modal-backdrop">
+    <div class="custom-modal-content" style="max-width: 440px;">
+        <div class="custom-modal-header">
+            <h4><i class="fas fa-file-invoice" style="color: var(--primary);"></i> Edit Document Review Entry</h4>
+            <button type="button" onclick="closeEditModal('editDocsModal')" class="image-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="editDocsForm" onsubmit="saveDocsEdit(event)">
+            <input type="hidden" id="edit_docs_feed_id">
+            <div class="custom-modal-grid" style="grid-template-columns: 1fr;">
+                <div class="custom-modal-field">
+                    <label for="edit_docs_ano">Account Number (ANO)</label>
+                    <input type="number" id="edit_docs_ano" class="search-input" required>
+                </div>
+                <div class="custom-modal-field">
+                    <label for="edit_docs_vid">Village ID (VID)</label>
+                    <input type="number" id="edit_docs_vid" class="search-input" required>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" class="neumorphic-btn btn-outline small" onclick="closeEditModal('editDocsModal')">Cancel</button>
+                <button type="submit" class="neumorphic-btn primary-btn small"><i class="fas fa-save me-1"></i> Save Changes</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
