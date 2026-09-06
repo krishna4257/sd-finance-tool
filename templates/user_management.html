@@ -290,6 +290,25 @@
     </div>
 </div>
 
+<!-- Devices List Modal -->
+<div id="devices-modal" class="modal-overlay"
+    style="display:none; z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div class="raised-box"
+        style="width: 580px; max-width: 90vw; background: var(--surface); padding: 22px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 id="devices-modal-title" style="margin:0; color:var(--primary); font-family:'Space Grotesk',sans-serif;">Installed Devices</h3>
+            <button onclick="closeDevicesModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.4rem;">&times;</button>
+        </div>
+
+        <div id="devices-modal-content" style="max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+            <button class="neumorphic-btn small" onclick="closeDevicesModal()" style="padding: 8px 16px;">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let selectedUserId = null;
 
@@ -334,6 +353,45 @@
         userModal.classList.add("show");
     };
 
+    function openDevicesModal(userId) {
+        const user = (window.cachedUsers || []).find(u => u.id === userId);
+        if (!user) return;
+
+        const title = document.getElementById("devices-modal-title");
+        const content = document.getElementById("devices-modal-content");
+        title.textContent = `Installed Devices (${user.username})`;
+
+        const devices = user.devices || [];
+        if (devices.length === 0) {
+            content.innerHTML = `<div style="text-align:center; color:var(--text-secondary); padding:20px;">No devices registered for this user account.</div>`;
+        } else {
+            content.innerHTML = devices.map((d, index) => `
+                <div style="background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; font-size: 0.9rem; color: var(--text);">
+                            <i class="fas fa-mobile-alt" style="margin-right: 6px; color: var(--primary);"></i> ${d.device_model || 'Mobile Device'}
+                        </span>
+                        <span style="font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; background: ${d.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${d.is_active ? '#10b981' : '#ef4444'};">
+                            ${d.is_active ? 'Active' : 'Disabled'}
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        <span><strong>Device ID:</strong> <code style="color: var(--text-secondary); font-size: 10px;">${d.device_id}</code></span>
+                        <span><strong>Last Active:</strong> ${d.last_active}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        const modal = document.getElementById("devices-modal");
+        if (modal) modal.style.display = "flex";
+    }
+
+    function closeDevicesModal() {
+        const modal = document.getElementById("devices-modal");
+        if (modal) modal.style.display = "none";
+    }
+
     async function loadUsers() {
         if ($.fn.DataTable.isDataTable('#userTable')) {
             $('#userTable').DataTable().destroy();
@@ -352,23 +410,33 @@
             tr.dataset.id = u.id;
             tr.dataset.employeeId = u.employee_id;
 
-            // Generate clean badges for mobile app installation status
+            // Generate clean badges for mobile app installation status & multi-device count
+            const devCount = u.device_count || (u.devices ? u.devices.length : 0);
+            let deviceBadgeHtml = '';
             let lastActiveHtml = '';
-            if (!u.device_id || u.device_id === '-' || u.device_id === 'Not Installed') {
-                lastActiveHtml = `<span style="background-color: #f3f4f6 !important; color: #6b7280 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Not Installed</span>`;
-            } else if (u.device_id === 'Pending Bind' || u.last_active === 'Never') {
-                lastActiveHtml = `<span style="background-color: #fffbeb !important; color: #b45309 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Registered</span>`;
-            } else {
+
+            if (devCount > 0 && u.device_id !== 'Pending Bind') {
+                deviceBadgeHtml = `
+                    <button class="neumorphic-btn small" onclick="openDevicesModal(${u.id})" style="padding: 4px 10px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.1) !important; color: #2563eb !important; border: 1px solid rgba(37, 99, 235, 0.2) !important; border-radius: 8px; cursor: pointer;">
+                        <i class="fas fa-mobile-alt"></i> ${devCount} Device${devCount > 1 ? 's' : ''}
+                    </button>
+                `;
                 lastActiveHtml = `<span style="background-color: #e1efe6 !important; color: #1a4d2e !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
                     <span style="width: 6px; height: 6px; background-color: #10b981; border-radius: 50%; display: inline-block;"></span>
                     ${u.last_active}
                 </span>`;
+            } else if (u.device_id === 'Pending Bind') {
+                deviceBadgeHtml = `<span style="background-color: #fffbeb !important; color: #b45309 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Pending Bind</span>`;
+                lastActiveHtml = `<span style="background-color: #fffbeb !important; color: #b45309 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Registered</span>`;
+            } else {
+                deviceBadgeHtml = `<span style="background-color: #f3f4f6 !important; color: #6b7280 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Not Installed</span>`;
+                lastActiveHtml = `<span style="background-color: #f3f4f6 !important; color: #6b7280 !important; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 500; display: inline-block;">Not Installed</span>`;
             }
 
             tr.innerHTML = `
             <td data-field="username">${u.username}</td>
             <td data-field="employee_name">${u.employee_name || '-'}</td>
-            <td data-field="device_id"><code style="font-size: 11px; color: #6b7280;">${u.device_id || '-'}</code></td>
+            <td data-field="device_id">${deviceBadgeHtml}</td>
             <td data-field="last_active">${lastActiveHtml}</td>
             <td data-field="role">${u.role}</td>
             <td data-field="villages" class="left-align">

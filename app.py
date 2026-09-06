@@ -155,7 +155,53 @@ def format_date_display(value):
         value = value.date()
     if isinstance(value, date):
         return value.strftime("%d-%m-%Y")
-    return ""
+
+def ensure_feed_tables_exist(cur):
+    """Ensure customer_feed_edits and payment_feed_edits tables exist."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS customer_feed_edits (
+            edit_id SERIAL PRIMARY KEY,
+            local_uuid TEXT NOT NULL,
+            edited_payload JSONB NOT NULL,
+            eid INTEGER,
+            vid INTEGER,
+            edit_status TEXT DEFAULT 'pending',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS payment_feed_edits (
+            edit_id SERIAL PRIMARY KEY,
+            local_uuid TEXT NOT NULL,
+            edited_payload JSONB NOT NULL,
+            eid INTEGER,
+            vid INTEGER,
+            edit_status TEXT DEFAULT 'pending',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
+
+def ensure_user_devices_table(cur):
+    """Ensure user_devices table has device_model column and unique index on (user_id, device_id)."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_devices (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            device_id TEXT NOT NULL,
+            device_model TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            last_active TIMESTAMPTZ DEFAULT NOW(),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        ALTER TABLE user_devices ADD COLUMN IF NOT EXISTS device_model TEXT
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_user_devices_user_device 
+        ON user_devices (user_id, device_id)
+    """)
 
 
 def generate_mobile_token(user_id, eid):
@@ -2708,44 +2754,38 @@ def mobile_login():
         eid = result[0]
 
         # ---------------------------
-        # Device Locking & Binding (Admins are exempt)
+        # Multi-Device Installation Tracking & Lock Check
         # ---------------------------
         device_id = data.get("device_id")
+        device_model = data.get("device_model") or data.get("device_name") or "Mobile Device"
+
+        if device_id and device_id != 'PENDING':
+            ensure_user_devices_table(cur)
+            # Record/Upsert this device for the user account (including admins)
+            cur.execute("""
+                INSERT INTO user_devices (user_id, device_id, device_model, is_active, last_active, created_at)
+                VALUES (%s, %s, %s, TRUE, NOW(), NOW())
+                ON CONFLICT (user_id, device_id)
+                DO UPDATE SET
+                    last_active = NOW(),
+                    device_model = COALESCE(EXCLUDED.device_model, user_devices.device_model),
+                    is_active = TRUE
+            """, (user_id, device_id, device_model))
+            conn.commit()
+
         if level and level.strip().lower() in ("j", "m", "s"):
             if not device_id:
                 return {"error": "device_id required"}, 400
 
             cur.execute("""
-                SELECT device_id, is_active 
+                SELECT is_active 
                 FROM user_devices 
-                WHERE user_id = %s
-            """, (user_id,))
+                WHERE user_id = %s AND device_id = %s
+            """, (user_id, device_id))
             dev_row = cur.fetchone()
 
-            if not dev_row:
-                return {"error": "Device not registered. Use the installation link first."}, 403
-
-            saved_device_id, device_active = dev_row
-            if not device_active:
+            if dev_row and not dev_row[0]:
                 return {"error": "Device disabled. Contact administrator."}, 403
-
-            if saved_device_id == 'PENDING':
-                # Bind this device to the user
-                cur.execute("""
-                    UPDATE user_devices
-                    SET device_id = %s, last_active = NOW()
-                    WHERE user_id = %s AND device_id = 'PENDING'
-                """, (device_id, user_id))
-                conn.commit()
-            elif saved_device_id != device_id:
-                return {"error": "Login not allowed from this device. Bound to another device."}, 403
-            else:
-                cur.execute("""
-                    UPDATE user_devices
-                    SET last_active = NOW()
-                    WHERE user_id = %s AND device_id = %s
-                """, (user_id, device_id))
-                conn.commit()
 
         token = generate_mobile_token(user_id, eid)
 
@@ -5842,10 +5882,10 @@ def post_payment_analytics():
 
         if not last_date:
             last_date = datetime.today().date()
-            last_date_str = format_date_display(last_date) + " (No postings yet)"
+            last_date_str = format_date_display(last_date) + " (No postings yet)" # type: ignore
         else:
             days_ago = (datetime.now(KOLKATA).date() - last_date).days
-            last_date_str = format_date_display(last_date) + f" ({days_ago} days ago)"
+            last_date_str = format_date_display(last_date) + f" ({days_ago} days ago)" # type: ignore
 
         # 2. Get all active or historically active customers for this village (both open and closed)
         cur.execute("""
@@ -8206,6 +8246,9 @@ def accept_customer(feed_id):
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
 
+    # Ensure feed edit tracking tables exist safely
+    ensure_feed_tables_exist(cur)
+
     # Merge pending edit if any
     if local_uuid:
         cur.execute("""
@@ -8242,6 +8285,12 @@ def accept_customer(feed_id):
     elif loan_type == "monthly":
         loan_type = "M"
 
+    # Robust date parsing to ensure PostgreSQL DATE format (YYYY-MM-DD)
+    start_date_obj = parse_date_input(data.get("start_date")) # type: ignore
+    end_date_obj = parse_date_input(data.get("end_date")) # type: ignore
+    start_date_val = start_date_obj.strftime("%Y-%m-%d") if start_date_obj else data.get("start_date") # type: ignore
+    end_date_val = end_date_obj.strftime("%Y-%m-%d") if end_date_obj else data.get("end_date") # type: ignore
+
     cur.execute("""
         INSERT INTO customer
         (
@@ -8276,8 +8325,8 @@ def accept_customer(feed_id):
         data.get("ano"), # type: ignore
         data.get("name"), # type: ignore
         data.get("vid"), # type: ignore
-        data.get("start_date"), # type: ignore
-        data.get("end_date"), # type: ignore
+        start_date_val,
+        end_date_val,
         data.get("total_amount"), # type: ignore
         data.get("base_amount", 0), # type: ignore
         data.get("cutting_amount", 0), # type: ignore
@@ -8810,6 +8859,9 @@ def accept_payment(feed_payment_id):
             data = json.loads(data)
         except Exception:
             return {"success": False, "error": "Invalid payload format"}
+
+    # Ensure feed edit tracking tables exist safely
+    ensure_feed_tables_exist(cur)
 
     # Merge pending edit if any
     if local_uuid:
@@ -12952,20 +13004,26 @@ def list_users():
 
     if user_ids:
 
-        # Batch fetch active devices
+        ensure_user_devices_table(cur)
+
+        # Batch fetch devices ordered by last_active
         cur.execute("""
-            SELECT user_id, device_id, last_active
+            SELECT user_id, device_id, device_model, last_active, is_active
             FROM user_devices
             WHERE user_id = ANY(%s)
-              AND is_active = TRUE
+            ORDER BY last_active DESC NULLS LAST, id DESC
         """, (user_ids,))
 
-        for uid, device_id, last_active in cur.fetchall():
+        for uid, device_id, device_model, last_active, is_active in cur.fetchall():
             is_pending = (device_id == 'PENDING')
-            devices_by_user[uid] = {
+            formatted_last_active = "Never" if (is_pending or not last_active) else last_active.strftime("%d/%m/%Y %I:%M %p")
+            dev_obj = {
                 "device_id": "Pending Bind" if is_pending else device_id,
-                "last_active": "Never" if (is_pending or not last_active) else last_active.strftime("%d/%m/%Y %I:%M %p")
+                "device_model": device_model or "Mobile Device",
+                "last_active": formatted_last_active,
+                "is_active": is_active
             }
+            devices_by_user.setdefault(uid, []).append(dev_obj)
 
         # Batch fetch village access
         cur.execute("""
@@ -12989,7 +13047,8 @@ def list_users():
 
     for row in rows:
         user_id, username, employee_id, is_active, emp_name, level = row
-        dev_info = devices_by_user.get(user_id, {"device_id": "-", "last_active": "Never"})
+        user_devs = devices_by_user.get(user_id, [])
+        primary_dev = user_devs[0] if user_devs else {"device_id": "-", "device_model": "-", "last_active": "Never"}
 
         users.append({
             "id": user_id,
@@ -12997,8 +13056,11 @@ def list_users():
             "employee_id": employee_id,
             "employee_name": emp_name,
             "role": level,
-            "device_id": dev_info["device_id"],
-            "last_active": dev_info["last_active"],
+            "device_id": primary_dev["device_id"],
+            "device_model": primary_dev["device_model"],
+            "last_active": primary_dev["last_active"],
+            "device_count": len(user_devs),
+            "devices": user_devs,
             "is_active": is_active,
             "villages": villages_by_user.get(user_id, [])
         })
