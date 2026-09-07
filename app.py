@@ -6210,8 +6210,8 @@ def api_ocr_extract_bulk():
         # Method B: Secondary fallback to google-genai SDK if REST didn't extract
         if not extracted_text:
             try:
-                from google import genai
-                from google.genai import types
+                from google import genai # type: ignore
+                from google.genai import types # type: ignore
 
                 client = genai.Client(api_key=api_key)
                 sdk_contents = []
@@ -6329,10 +6329,10 @@ def api_bulk_capture_session_create():
 
     qr_base64 = ""
     try:
-        import qrcode
+        import qrcode # type: ignore
         qr = qrcode.QRCode(
             version=None,  # Auto-fit version based on URL length
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            error_correction=qrcode.constants.ERROR_CORRECT_M, # type: ignore
             box_size=8,
             border=3,
         )
@@ -6340,7 +6340,7 @@ def api_bulk_capture_session_create():
         qr.make(fit=True)
         img = qr.make_image(fill_color="#1a1a2e", back_color="#ffffff")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="PNG") # type: ignore
         qr_base64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception as qr_err:
         logger.warning(f"Could not generate QR code with qrcode lib: {qr_err}")
@@ -6574,7 +6574,7 @@ def api_bulk_capture_simulate_upload(session_id):
         if not session_obj:
             return jsonify(error="Session not found"), 404
 
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw # type: ignore
 
     def create_mock_ledger_page(page_no):
         img = Image.new("RGB", (600, 800), color="#ffffff")
