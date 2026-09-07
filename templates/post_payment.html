@@ -449,6 +449,48 @@
       outline-offset: -2px;
       background-color: rgba(37, 99, 235, 0.08) !important;
     }
+
+    @keyframes bulk-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .bulk-thumb-badge {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      background: rgba(37, 99, 235, 0.9);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .bulk-thumb-remove {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #dc2626;
+      color: #fff;
+      border: 1.5px solid #fff;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+      line-height: 1;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      z-index: 5;
+    }
+
+    .bulk-thumb-remove:hover {
+      background: #b91c1c;
+      transform: scale(1.1);
+    }
   </style>
   <div
     style="background:var(--surface); border-radius:14px; width:min(950px,96vw); height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,0.22); overflow:hidden;">
@@ -466,6 +508,46 @@
         <span style="font-size:13px; white-space:nowrap; font-weight:500;">Payment Date</span>
         <input type="text" id="bulkDate" placeholder="dd-mm-yyyy" style="width:160px;">
       </label>
+
+      <!-- AI OCR Upload Zone (Purely additive) -->
+      <div id="bulkOcrUploadContainer" style="border:1.5px dashed var(--border); border-radius:10px; padding:12px 16px; background:var(--bg-body); display:flex; flex-direction:column; gap:10px; flex-shrink:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-camera" style="color:#2563eb; font-size:15px;"></i>
+            <span style="font-size:13px; font-weight:600; color:var(--text);">AI OCR Ledger Extraction</span>
+            <span style="font-size:11px; color:var(--text-secondary); background:rgba(37,99,235,0.08); padding:2px 8px; border-radius:12px; font-weight:500;">Gemini Flash AI</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="bulkCaptureMobileBtn" class="neumorphic-btn small" style="margin:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#2563eb; font-weight:600; border:1px solid #bfdbfe; background:rgba(37,99,235,0.06);" onclick="openBulkCaptureModal()">
+              <i class="fas fa-qrcode"></i> Capture with Phone
+            </button>
+            <label for="bulkImageInput" class="neumorphic-btn small" style="margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:12px;">
+              <i class="fas fa-plus"></i> Select Images
+            </label>
+            <input type="file" id="bulkImageInput" multiple accept="image/*" style="display:none;">
+            <button type="button" id="bulkClearImagesBtn" class="neumorphic-btn small danger-btn" style="margin:0; display:none; font-size:12px;" onclick="clearBulkImages()">Clear</button>
+            <button type="button" id="bulkExtractBtn" class="neumorphic-btn small" style="margin:0; display:none; color:#16a34a; font-weight:600; font-size:12px;" onclick="extractBulkImagesWithAI()">
+              <i class="fas fa-magic"></i> Extract with AI
+            </button>
+          </div>
+        </div>
+
+        <!-- Drop area & thumbnail list -->
+        <div id="bulkDropArea" style="min-height:48px; border:1px dashed rgba(0,0,0,0.15); border-radius:8px; display:flex; align-items:center; justify-content:center; padding:8px 12px; cursor:pointer; background:var(--surface); transition:border-color 0.2s, background-color 0.2s;">
+          <div id="bulkDropPlaceholder" style="display:flex; align-items:center; gap:10px; color:var(--text-secondary); font-size:12px;">
+            <i class="fas fa-images" style="font-size:18px; color:var(--text-secondary);"></i>
+            <span>Drag &amp; drop ledger page images here or <strong>click to browse</strong> (Page 1, Page 2...)</span>
+          </div>
+          <div id="bulkThumbnailsContainer" style="display:none; flex-wrap:wrap; gap:10px; width:100%; align-items:center;"></div>
+        </div>
+
+        <!-- Extraction Progress Indicator -->
+        <div id="bulkExtractProgress" style="display:none; align-items:center; gap:10px; font-size:12px; color:#2563eb; font-weight:600; padding:2px 0;">
+          <div style="width:16px; height:16px; border:2px solid #93c5fd; border-top-color:#2563eb; border-radius:50%; animation:bulk-spin 0.8s linear infinite;"></div>
+          <span id="bulkExtractProgressText">Processing ledger images with Gemini AI... Please wait.</span>
+        </div>
+      </div>
+
       <textarea id="bulkText"
         placeholder="Paste entries here, e.g.&#10;Page 1&#10;&#10;(1,500), (2,500), (3,300)&#10;&#10;(21,400), (22,10000)&#10;&#10;(41,300), (42,100)&#10;&#10;Page 2&#10;&#10;(61,150), (62,100)"
         style="flex:1; resize:none; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; font-family:monospace; background:var(--bg-body); color:var(--text); box-sizing:border-box; min-height:0;"></textarea>
@@ -515,6 +597,83 @@
   </div>
 </div>
 <!-- ==================== END BULK ENTRY MODAL =================== -->
+
+<!-- ==================== MOBILE SCANNER 2-STEP MODAL =================== -->
+<div id="bulkCaptureModal"
+  style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(6px); z-index:11000; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:var(--surface); border-radius:18px; width:min(440px,94vw); display:flex; flex-direction:column; box-shadow:0 20px 50px rgba(0,0,0,0.25); border:1px solid var(--border); overflow:hidden; animation:bulk-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
+    
+    <!-- Minimal Header -->
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="captureStepBadge" style="background:var(--primary-light); color:var(--primary); font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; letter-spacing:0.5px;">STEP 1 OF 2</span>
+        <h3 id="captureModalTitle" style="margin:0; font-size:15px; font-weight:700; color:var(--text);">Scan with Phone</h3>
+      </div>
+      <button type="button" onclick="closeBulkCaptureModal()"
+        style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--text-secondary); line-height:1;">&times;</button>
+    </div>
+
+    <!-- STEP 1: Just the QR Code -->
+    <div id="captureStep1" style="display:flex; flex-direction:column; align-items:center; padding:28px 24px; gap:18px; text-align:center;">
+      <!-- Clean QR Container -->
+      <div style="background:#ffffff; border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,0.06); display:flex; align-items:center; justify-content:center; width:220px; height:220px;">
+        <div id="bulkCaptureQrLoading" style="display:flex; flex-direction:column; align-items:center; gap:10px; color:var(--text-secondary);">
+          <div style="width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:bulk-spin 0.8s linear infinite;"></div>
+          <span style="font-size:12px; font-weight:500;">Generating QR...</span>
+        </div>
+        <img id="bulkCaptureQrImg" src="" alt="Scan QR Code" style="display:none; width:192px; height:192px; object-fit:contain; border-radius:8px;" />
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="font-size:14px; font-weight:600; color:var(--text);">Point phone camera at the QR code</div>
+        <div style="font-size:12px; color:var(--text-secondary); line-height:1.4;">
+          Opens the high-contrast document scanner in your phone's browser.
+        </div>
+      </div>
+
+      <!-- Quick test helper -->
+      <button type="button" onclick="simulateMobileCaptureUpload()" style="background:none; border:none; color:var(--text-muted); font-size:11px; cursor:pointer; text-decoration:underline;">
+        Test demo upload without phone
+      </button>
+    </div>
+
+    <!-- STEP 2: Waiting for Images / Process with AI -->
+    <div id="captureStep2" style="display:none; flex-direction:column; align-items:center; padding:32px 24px; gap:20px; text-align:center;">
+      
+      <!-- Animated Status Ring -->
+      <div id="captureStep2IconWrap" style="width:68px; height:68px; border-radius:50%; background:var(--primary-light); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:26px; position:relative;">
+        <i id="captureStep2Icon" class="fas fa-camera"></i>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div id="captureStep2Heading" style="font-size:16px; font-weight:700; color:var(--text);">Phone Connected!</div>
+        <div id="captureStep2Sub" style="font-size:13px; color:var(--text-secondary); line-height:1.4; max-width:300px;">
+          Snap your ledger pages and tap <strong>"Send to Desktop"</strong> on your phone.
+        </div>
+      </div>
+
+      <!-- Live page counter pill -->
+      <div id="capturePagesPill" style="display:none; background:var(--primary-lighter); border:1px solid var(--primary-light); color:var(--primary); padding:6px 16px; border-radius:20px; font-size:12px; font-weight:700;">
+        <i class="fas fa-check-circle" style="color:var(--success);"></i> <span id="capturePagesReceivedCount">0</span> pages ready for extraction
+      </div>
+
+      <!-- Action Button: Process with AI -->
+      <div style="width:100%; display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+        <button type="button" id="captureProcessAiBtn" class="neumorphic-btn small"
+          style="display:none; width:100%; padding:11px; font-size:13px; font-weight:700; color:#fff; background:var(--primary); border:none; border-radius:10px; box-shadow:0 4px 14px rgba(26,77,46,0.3); align-items:center; justify-content:center; gap:8px;"
+          onclick="triggerAiExtractionFromModal()">
+          <i class="fas fa-magic"></i> Process with AI
+        </button>
+        <button type="button" class="neumorphic-btn small" onclick="closeBulkCaptureModal()"
+          style="width:100%; padding:8px; font-size:12px; color:var(--text-secondary); border:none; background:transparent;">
+          Cancel
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ==================== END MOBILE SCANNER 2-STEP MODAL =================== -->
 
 
 

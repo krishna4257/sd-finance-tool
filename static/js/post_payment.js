@@ -2447,6 +2447,9 @@ function closeBulkEntryModal() {
     document.getElementById('bulkLedgerContainer').innerHTML = '';
     document.getElementById('bulkGrandTotal').textContent = '';
     _bulkPages = [];
+    if (typeof clearBulkImages === 'function') {
+        clearBulkImages();
+    }
     if (window._highlightedInput) {
         window._highlightedInput.classList.remove('ledger-highlight-cell');
         window._highlightedInput = null;
@@ -2511,13 +2514,15 @@ function parseBulkInput(text) {
     }
     flushSec();
 
-    // Pad each page to exactly 3 sections, and each section to exactly 20 cells
+    // Pad each page to exactly 3 sections; pad each section to the max row count across
+    // the 3 sections (minimum 20) so columns align and pages with >20 rows per section are supported.
     pages.forEach(page => {
         while (page.sections.length < 3) {
             page.sections.push([]);
         }
+        const maxRows = Math.max(20, ...page.sections.map(s => s.length));
         page.sections.forEach(sec => {
-            while (sec.length < 20) {
+            while (sec.length < maxRows) {
                 sec.push({ ano: '', amt: '' });
             }
         });
@@ -2527,59 +2532,107 @@ function parseBulkInput(text) {
 }
 
 // ── Validate one (ano, amt, date) triple ──
-// Returns: null = OK | 'EMPTY' = skip silently | 'SKIP' = skip execute but valid | error string = show error
+// Returns: { severity: 'strict'|'medium'|'ignoring'|'empty'|'skip', message: '...' }
+//   severity='empty' → skip silently (both blank)
+//   severity='skip'  → skip execute but visually fine (dash slot)
+//   severity='ignoring' → yellow/muted, not counted in footer
+//   severity='medium'   → orange, counted in footer
+//   severity='strict'   → red, counted in footer, blocks Execute
 function validateBulkRow(ano, amt, date) {
     const anoStr = String(ano || '').trim();
     const amtStr = String(amt === null || amt === undefined ? '' : amt).trim();
 
-    if (!anoStr && !amtStr) return 'EMPTY';
-
-    // Letters/words are NOT acceptable in A.No or Amount (excluding empty or literal "-")
     const hasLettersAno = /[a-zA-Z]/.test(anoStr);
     const hasLettersAmt = /[a-zA-Z]/.test(amtStr);
+    const isDashAno = anoStr === '-';
+    const isDashAmt = amtStr === '-';
+    const amtBlankOrDash = !amtStr || isDashAmt;
 
+    // Both cells empty → ignoring (silent)
+    if (!anoStr && !amtStr) return { severity: 'empty', message: '' };
+
+    // Letters/words in account number
     if (hasLettersAno || anoStr.toUpperCase() === 'N') {
-        return '❌ Invalid account number (letters/words not acceptable)';
-    }
-    if (hasLettersAmt || amtStr.toUpperCase() === 'N') {
-        return '❌ Invalid amount (letters/words not acceptable)';
-    }
-
-    if (!anoStr && amtStr) return '❌ Account number is missing';
-    if (anoStr && !amtStr) return '❌ Amount is missing';
-
-    // Dash is acceptable in both!
-    if (anoStr === '-' || amtStr === '-') {
-        // If A.No is a normal number, check if it exists in active customers
-        if (anoStr !== '-') {
-            const customer = CUSTOMER_MAP[anoStr];
-            if (!customer) {
-                return '❌ A.no not found in database!';
-            }
+        if (amtBlankOrDash) {
+            // No real amount → ignoring
+            return { severity: 'ignoring', message: 'Letters in A.No (no amount — ignored)' };
+        } else {
+            // Real amount present → strict
+            return { severity: 'strict', message: '❌ Invalid A.No (letters/words) with amount present' };
         }
-        return 'SKIP';
     }
 
+    // Letters/words in amount → always strict
+    if (hasLettersAmt || amtStr.toUpperCase() === 'N') {
+        return { severity: 'strict', message: '❌ Invalid amount (letters/words not acceptable)' };
+    }
+
+    // Missing account number (blank ano)
+    if (!anoStr && amtStr) {
+        if (amtBlankOrDash) {
+            return { severity: 'ignoring', message: 'Missing A.No (no amount — ignored)' };
+        } else {
+            return { severity: 'strict', message: '❌ Account number is missing but amount is present' };
+        }
+    }
+
+    // Missing amount (ano present, amt blank) → ignoring
+    if (anoStr && !amtStr) {
+        return { severity: 'ignoring', message: 'Amount is missing (ignored)' };
+    }
+
+    // Dash in A.No
+    if (isDashAno) {
+        if (amtBlankOrDash) {
+            return { severity: 'ignoring', message: 'Dash in A.No with no amount (ignored)' };
+        } else {
+            return { severity: 'strict', message: '❌ Dash in A.No but real amount present' };
+        }
+    }
+
+    // Dash in amount → ignoring (skip from execution)
+    if (isDashAmt) {
+        // A.No is present and not a dash — check if it exists in DB
+        const customer = CUSTOMER_MAP[anoStr];
+        if (!customer) {
+            return { severity: 'ignoring', message: 'A.No not in DB with dash amount (ignored)' };
+        }
+        return { severity: 'skip', message: '' };
+    }
+
+    // Amount ≤ 0 or not a number → strict
     const amtNum = parseFloat(amtStr);
     if (isNaN(amtNum) || amtNum <= 0) {
-        return '❌ Amount must be > 0';
+        return { severity: 'strict', message: '❌ Amount must be > 0' };
     }
 
+    // A.No not found in database WITH a real amount → strict
     const customer = CUSTOMER_MAP[anoStr];
     if (!customer) {
-        return '❌ A.no not found in database!';
+        return { severity: 'strict', message: '❌ A.No not found in database!' };
     }
 
+    // Date validation
     const validation = isPostingDateValidForCustomer(anoStr, date);
     if (!validation.valid) {
-        return validation.error;
+        // Determine if it's a medium (date-related) or strict (invalid format)
+        if (validation.error.includes('Invalid posting date')) {
+            return { severity: 'strict', message: validation.error };
+        }
+        if (validation.error.includes('invalid start date')) {
+            return { severity: 'medium', message: validation.error };
+        }
+        // Posting date earlier than start date → medium
+        return { severity: 'medium', message: validation.error };
     }
 
+    // Duplicate A.No + Date in tempTable → strict
     const dup = tempTable.some(r => String(r.ano) === anoStr && r.pdt === date);
     if (dup) {
-        return '❌ Duplicate A.no + Date combo exists.';
+        return { severity: 'strict', message: '❌ Duplicate A.No + Date combo exists in temp table.' };
     }
 
+    // All good
     return null;
 }
 
@@ -2620,11 +2673,12 @@ function renderBulkLedger(pages, date) {
         thead.appendChild(hr);
         table.appendChild(thead);
 
-        // Body rows (exactly 20 rows)
+        // Body rows (dynamic row count — sections are pre-padded to the same length)
         const tbody = document.createElement('tbody');
         const secs = page.sections;
+        const rowCount = secs[0].length;
 
-        for (let ri = 0; ri < 20; ri++) {
+        for (let ri = 0; ri < rowCount; ri++) {
             const tr = document.createElement('tr');
 
             [0, 1, 2].forEach((si) => {
@@ -2771,11 +2825,20 @@ function getAmountFontWeight(val) {
 }
 
 // ── Re-validate all cells; refresh highlighting, totals, execute button ──
+// Three tiers: strict (red, blocks Execute), medium (orange), ignoring (yellow/muted)
 function updateBulkState(pages, date) {
     const seenKeys = {};
-    let totalErrors = 0;
+    let totalStrictErrors = 0;
+    let totalMediumErrors = 0;
     let grandTotalAmount = 0;
     let grandTotalCustomers = 0;
+
+    // Style maps for each severity tier
+    const severityStyles = {
+        strict:   { bg: 'rgba(220, 38, 38, 0.18)', color: '#b91c1c', rowBg: 'rgba(220, 38, 38, 0.08)' },
+        medium:   { bg: 'rgba(234, 88, 12, 0.18)', color: '#c2410c', rowBg: 'rgba(234, 88, 12, 0.06)' },
+        ignoring: { bg: 'rgba(202, 138, 4, 0.15)', color: '#a16207', rowBg: '' },
+    };
 
     pages.forEach((page, pi) => {
         let pageTotalAmount = 0;
@@ -2789,63 +2852,79 @@ function updateBulkState(pages, date) {
                 const anoStr = String(pair.ano || '').trim();
                 const amtStr = String(pair.amt || '').trim();
 
-                let error = validateBulkRow(pair.ano, pair.amt, date);
+                let result = validateBulkRow(pair.ano, pair.amt, date);
 
-                if (anoStr && anoStr !== '-') {
+                // Intra-bulk duplicate check (strict) — only for valid rows with real A.No
+                if (anoStr && anoStr !== '-' && result === null) {
                     const key = `${anoStr}__${date}`;
-                    if (!error && seenKeys[key]) {
-                        error = '❌ Duplicate A.No within this bulk entry';
+                    if (seenKeys[key]) {
+                        result = { severity: 'strict', message: '❌ Duplicate A.No within this bulk entry' };
                     }
                     seenKeys[key] = true;
                 }
 
-                const isError = error && error !== 'EMPTY' && error !== 'SKIP';
-                const isSkip = error === 'SKIP';
-
-                const anoUpper = anoStr.toUpperCase();
-                const amtUpper = amtStr.toUpperCase();
-
-                // Highlight cell in red if it is a blocking error, or is "-" or "N" (representing unrecognized/skipped)
-                const highlightAno = isError || anoStr === '-' || anoUpper === 'N';
-                const highlightAmt = isError || amtStr === '-' || amtUpper === 'N';
+                const severity = result ? result.severity : null;
+                const message = result ? result.message : '';
 
                 const anoInp = document.querySelector(`input[data-page="${pi}"][data-sec="${si}"][data-row="${ri}"][data-field="ano"]`);
                 const amtInp = document.querySelector(`input[data-page="${pi}"][data-sec="${si}"][data-row="${ri}"][data-field="amt"]`);
+                const tr = anoInp ? anoInp.closest('tr') : null;
 
-                const errBg = 'rgba(239, 68, 68, 0.22)';
-                const errTitle = isError ? error : 'Acceptable non-paying slot (-)';
+                // Reset row background
+                if (tr) tr.style.backgroundColor = '';
 
-                if (anoInp) {
-                    if (highlightAno) {
-                        anoInp.style.backgroundColor = errBg;
-                        anoInp.title = errTitle;
-                        anoInp.style.color = '#b91c1c';
-                    } else {
+                // Apply styling based on severity
+                if (severity === 'strict' || severity === 'medium' || severity === 'ignoring') {
+                    const style = severityStyles[severity];
+
+                    if (anoInp) {
+                        anoInp.style.backgroundColor = style.bg;
+                        anoInp.style.color = style.color;
+                        anoInp.title = message;
+                    }
+                    if (amtInp) {
+                        amtInp.style.backgroundColor = style.bg;
+                        amtInp.style.color = style.color;
+                        amtInp.style.fontWeight = 'normal';
+                        amtInp.title = message;
+                    }
+                    if (tr && style.rowBg) {
+                        tr.style.backgroundColor = style.rowBg;
+                    }
+
+                    if (severity === 'strict') totalStrictErrors++;
+                    if (severity === 'medium') totalMediumErrors++;
+                } else if (severity === 'skip') {
+                    // Dash/skip slots — muted style like ignoring
+                    const skipStyle = severityStyles.ignoring;
+                    if (anoInp) {
+                        anoInp.style.backgroundColor = skipStyle.bg;
+                        anoInp.style.color = skipStyle.color;
+                        anoInp.title = 'Non-paying slot (dash)';
+                    }
+                    if (amtInp) {
+                        amtInp.style.backgroundColor = skipStyle.bg;
+                        amtInp.style.color = skipStyle.color;
+                        amtInp.style.fontWeight = 'normal';
+                        amtInp.title = 'Non-paying slot (dash)';
+                    }
+                } else {
+                    // Clean cell (null = OK, or empty)
+                    if (anoInp) {
                         anoInp.style.backgroundColor = '';
                         anoInp.title = '';
                         anoInp.style.color = '';
                     }
-                }
-                if (amtInp) {
-                    if (highlightAmt) {
-                        amtInp.style.backgroundColor = errBg;
-                        amtInp.title = errTitle;
-                        amtInp.style.color = '#b91c1c';
-                        amtInp.style.fontWeight = 'normal';
-                    } else {
+                    if (amtInp) {
                         amtInp.style.backgroundColor = '';
                         amtInp.title = '';
-
                         const valNum = parseFloat(amtStr);
                         amtInp.style.color = getAmountColor(valNum);
                         amtInp.style.fontWeight = getAmountFontWeight(valNum);
                     }
-                }
 
-                if (isError) {
-                    totalErrors++;
-                } else if (error !== 'EMPTY' && !isSkip) {
-                    if (anoStr && anoStr !== '-') {
+                    // Count valid rows for totals
+                    if (severity !== 'empty' && anoStr && anoStr !== '-') {
                         sectionTotalCustomers++;
                         sectionTotalAmount += parseFloat(amtStr) || 0;
                     }
@@ -2874,20 +2953,28 @@ function updateBulkState(pages, date) {
         grandTotalAmount += pageTotalAmount;
     });
 
+    // Grand total with separate strict/medium counts
     const gtEl = document.getElementById('bulkGrandTotal');
     if (gtEl) {
-        if (totalErrors > 0) {
-            gtEl.textContent = `Grand Total: ₹${grandTotalAmount.toLocaleString('en-IN')} · ${grandTotalCustomers} customers · ⚠ ${totalErrors} error(s)`;
+        const hasIssues = totalStrictErrors > 0 || totalMediumErrors > 0;
+        let gtText = `Grand Total: ₹${grandTotalAmount.toLocaleString('en-IN')} · ${grandTotalCustomers} customers`;
+        if (totalStrictErrors > 0) gtText += ` · 🔴 ${totalStrictErrors} strict error(s)`;
+        if (totalMediumErrors > 0) gtText += ` · 🟠 ${totalMediumErrors} warning(s)`;
+        gtEl.textContent = gtText;
+
+        if (totalStrictErrors > 0) {
             gtEl.style.cssText = 'font-size:14px; font-weight:700; color:#dc2626; background:rgba(220, 38, 38, 0.08); border:1px solid rgba(220, 38, 38, 0.2); padding:6px 16px; border-radius:20px;';
+        } else if (totalMediumErrors > 0) {
+            gtEl.style.cssText = 'font-size:14px; font-weight:700; color:#c2410c; background:rgba(234, 88, 12, 0.08); border:1px solid rgba(234, 88, 12, 0.2); padding:6px 16px; border-radius:20px;';
         } else {
-            gtEl.textContent = `Grand Total: ₹${grandTotalAmount.toLocaleString('en-IN')} · ${grandTotalCustomers} customers`;
             gtEl.style.cssText = 'font-size:14px; font-weight:700; color:var(--text); background:rgba(22, 163, 74, 0.08); border:1px solid rgba(22, 163, 74, 0.25); padding:6px 16px; border-radius:20px;';
         }
     }
 
+    // Execute button — only strict errors block it
     const execBtn = document.getElementById('bulkExecuteBtn');
     if (execBtn) {
-        const canExecute = totalErrors === 0 && grandTotalCustomers > 0;
+        const canExecute = totalStrictErrors === 0 && grandTotalCustomers > 0;
         execBtn.disabled = !canExecute;
         if (canExecute) {
             execBtn.style.backgroundColor = '#16a34a';
@@ -2900,11 +2987,17 @@ function updateBulkState(pages, date) {
         }
     }
 
+    // Error summary message
     const errEl = document.getElementById('bulkPreviewError');
     if (errEl) {
-        if (totalErrors > 0) {
-            errEl.textContent = `⚠ ${totalErrors} cell(s) have errors (highlighted in red). Fix them — the Execute button will turn green when all errors are resolved.`;
+        if (totalStrictErrors > 0) {
+            errEl.textContent = `⚠ ${totalStrictErrors} strict error(s) found (red rows). Fix them — the Execute button will turn green when all strict errors are resolved.`;
             errEl.style.display = 'block';
+            errEl.style.color = '#dc2626';
+        } else if (totalMediumErrors > 0) {
+            errEl.textContent = `ℹ ${totalMediumErrors} warning(s) found (orange). These won't block execution but may need attention.`;
+            errEl.style.display = 'block';
+            errEl.style.color = '#c2410c';
         } else {
             errEl.style.display = 'none';
         }
@@ -2962,9 +3055,9 @@ function executeBulkEntry() {
                 if (!anoStr) return; // skip empty
                 const key = `${anoStr}__${date}`;
                 if (seenKeys[key]) return; // skip intra-bulk dup
-                const error = validateBulkRow(pair.ano, pair.amt, date);
-                if (error === 'SKIP' || error === 'EMPTY') return; // skip non-paying/empty entries
-                if (error) return; // skip invalid
+                const result = validateBulkRow(pair.ano, pair.amt, date);
+                // Only add rows that pass validation (result === null)
+                if (result !== null) return; // skip any severity (strict/medium/ignoring/skip/empty)
                 seenKeys[key] = true;
                 tempTable.unshift({ ano: anoStr, pdt: date, amt: Number(amtStr) });
                 added++;
@@ -3025,9 +3118,14 @@ document.addEventListener('keydown', (e) => {
 
         let nextInp = null;
 
+        // Dynamic max row for the current page/section
+        const maxRow = (_bulkPages && _bulkPages[page] && _bulkPages[page].sections[sec])
+            ? _bulkPages[page].sections[sec].length - 1
+            : 19;
+
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            if (row < 19) {
+            if (row < maxRow) {
                 nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row + 1}"][data-field="${field}"]`);
             } else {
                 const nextPage = page + 1;
@@ -3039,7 +3137,10 @@ document.addEventListener('keydown', (e) => {
                 nextInp = document.querySelector(`input[data-page="${page}"][data-sec="${sec}"][data-row="${row - 1}"][data-field="${field}"]`);
             } else if (page > 0) {
                 const prevPage = page - 1;
-                nextInp = document.querySelector(`input[data-page="${prevPage}"][data-sec="${sec}"][data-row="19"][data-field="${field}"]`);
+                const prevMaxRow = (_bulkPages && _bulkPages[prevPage] && _bulkPages[prevPage].sections[sec])
+                    ? _bulkPages[prevPage].sections[sec].length - 1
+                    : 19;
+                nextInp = document.querySelector(`input[data-page="${prevPage}"][data-sec="${sec}"][data-row="${prevMaxRow}"][data-field="${field}"]`);
             }
         } else if (e.key === 'ArrowRight') {
             e.preventDefault();
@@ -3070,5 +3171,565 @@ document.addEventListener('keydown', (e) => {
 // END BULK ENTRY MODAL
 // ============================================================
 
+// ============================================================
+// BULK ENTRY MODAL — AI OCR IMAGE UPLOAD (GEMINI AI)
+// ============================================================
+let _bulkImageFiles = [];
 
+function handleBulkImageSelect(files) {
+    if (!files || !files.length) return;
+    const newFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (!newFiles.length) {
+        const errEl = document.getElementById('bulkModalError');
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.style.background = '#fef2f2';
+            errEl.style.color = '#b91c1c';
+            errEl.style.borderColor = '#fca5a5';
+            errEl.textContent = '❌ Please select valid image files (JPG, PNG, WebP, etc.).';
+        }
+        return;
+    }
+    _bulkImageFiles = _bulkImageFiles.concat(newFiles);
+    renderBulkImageThumbnails();
+}
+
+function renderBulkImageThumbnails() {
+    const container = document.getElementById('bulkThumbnailsContainer');
+    const placeholder = document.getElementById('bulkDropPlaceholder');
+    const extractBtn = document.getElementById('bulkExtractBtn');
+    const clearBtn = document.getElementById('bulkClearImagesBtn');
+    const errEl = document.getElementById('bulkModalError');
+
+    if (errEl) errEl.style.display = 'none';
+    if (!container || !placeholder) return;
+
+    container.innerHTML = '';
+
+    if (_bulkImageFiles.length === 0) {
+        container.style.display = 'none';
+        placeholder.style.display = 'flex';
+        if (extractBtn) extractBtn.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+        return;
+    }
+
+    placeholder.style.display = 'none';
+    container.style.display = 'flex';
+    if (extractBtn) {
+        extractBtn.style.display = 'inline-flex';
+        const pageCountText = _bulkImageFiles.length + ' page' + (_bulkImageFiles.length > 1 ? 's' : '');
+        extractBtn.innerHTML = '<i class="fas fa-magic"></i> Extract with AI (' + pageCountText + ')';
+    }
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
+
+    _bulkImageFiles.forEach((file, idx) => {
+        const thumbCard = document.createElement('div');
+        thumbCard.style.cssText = 'position:relative; width:64px; height:64px; border-radius:6px; border:1px solid var(--border); overflow:visible; background:#000; flex-shrink:0;';
+
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.alt = 'Page ' + (idx + 1);
+        img.style.cssText = 'width:100%; height:100%; object-fit:cover; border-radius:6px;';
+        thumbCard.appendChild(img);
+
+        const badge = document.createElement('span');
+        badge.className = 'bulk-thumb-badge';
+        badge.textContent = 'P' + (idx + 1);
+        thumbCard.appendChild(badge);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'bulk-thumb-remove';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.title = 'Remove this image';
+        removeBtn.onclick = function (e) {
+            e.stopPropagation();
+            removeBulkImage(idx);
+        };
+        thumbCard.appendChild(removeBtn);
+
+        container.appendChild(thumbCard);
+    });
+}
+
+function removeBulkImage(index) {
+    if (index >= 0 && index < _bulkImageFiles.length) {
+        _bulkImageFiles.splice(index, 1);
+        const input = document.getElementById('bulkImageInput');
+        if (input) input.value = '';
+        renderBulkImageThumbnails();
+    }
+}
+
+function clearBulkImages() {
+    _bulkImageFiles = [];
+    const input = document.getElementById('bulkImageInput');
+    if (input) input.value = '';
+    renderBulkImageThumbnails();
+    const prog = document.getElementById('bulkExtractProgress');
+    if (prog) prog.style.display = 'none';
+}
+
+function compressImageForOcr(file, maxDimension = 1600, quality = 0.85) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/') || file.size < 250 * 1024) {
+            return resolve(file);
+        }
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = function () {
+            URL.revokeObjectURL(objectUrl);
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob((blob) => {
+                if (!blob || blob.size >= file.size) {
+                    resolve(file);
+                } else {
+                    const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+                    const compressed = new File([blob], newName, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    resolve(compressed);
+                }
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(objectUrl);
+            resolve(file);
+        };
+        img.src = objectUrl;
+    });
+}
+
+async function extractBulkImagesWithAI() {
+    if (!_bulkImageFiles.length) {
+        const errEl = document.getElementById('bulkModalError');
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.style.background = '#fef2f2';
+            errEl.style.color = '#b91c1c';
+            errEl.style.borderColor = '#fca5a5';
+            errEl.textContent = '❌ Please select at least one ledger image first.';
+        }
+        return;
+    }
+
+    const extractBtn = document.getElementById('bulkExtractBtn');
+    const clearBtn = document.getElementById('bulkClearImagesBtn');
+    const prog = document.getElementById('bulkExtractProgress');
+    const progText = document.getElementById('bulkExtractProgressText');
+    const errEl = document.getElementById('bulkModalError');
+
+    if (errEl) errEl.style.display = 'none';
+
+    if (extractBtn) {
+        extractBtn.disabled = true;
+        extractBtn.style.opacity = '0.6';
+    }
+    if (clearBtn) clearBtn.disabled = true;
+
+    const startTime = Date.now();
+    const count = _bulkImageFiles.length;
+
+    if (prog) {
+        prog.style.display = 'flex';
+        if (progText) {
+            progText.textContent = 'Optimizing ' + count + ' image' + (count > 1 ? 's' : '') + ' for fast upload...';
+        }
+    }
+
+    const abortCtrl = new AbortController();
+    const timeoutId = setTimeout(() => {
+        abortCtrl.abort();
+    }, 180000);
+
+    let progressInterval = null;
+
+    try {
+        const compressedFiles = await Promise.all(
+            _bulkImageFiles.map(f => compressImageForOcr(f))
+        );
+
+        let elapsedSec = 0;
+        if (progText) {
+            progText.textContent = 'Analyzing ' + count + ' page' + (count > 1 ? 's' : '') + ' with Gemini Flash... (1s)';
+        }
+
+        progressInterval = setInterval(() => {
+            elapsedSec++;
+            if (progText) {
+                progText.textContent = 'Analyzing ' + count + ' page' + (count > 1 ? 's' : '') + ' with Gemini Flash... (' + elapsedSec + 's)';
+            }
+        }, 1000);
+
+        const formData = new FormData();
+        compressedFiles.forEach(file => {
+            formData.append('images', file);
+        });
+
+        const response = await csrfFetch('/api/ocr_extract_bulk', {
+            method: 'POST',
+            body: formData,
+            signal: abortCtrl.signal
+        });
+
+        clearTimeout(timeoutId);
+        if (progressInterval) clearInterval(progressInterval);
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || ('Server responded with status ' + response.status));
+        }
+
+        const textArea = document.getElementById('bulkText');
+        if (textArea) {
+            textArea.value = data.text;
+            textArea.focus();
+        }
+
+        const totalSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.style.background = '#f0fdf4';
+            errEl.style.color = '#15803d';
+            errEl.style.borderColor = '#86efac';
+            const pageNum = data.pages_count || count;
+            errEl.textContent = '✅ Extracted ' + pageNum + ' page(s) in ' + totalSec + 's! Review the text below, then click "Parse & Preview".';
+        }
+
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (progressInterval) clearInterval(progressInterval);
+        console.error('OCR extraction failed:', err);
+        let msg = err.message || err;
+        if (err.name === 'AbortError') {
+            msg = 'Request timed out after 3 minutes. Please check your internet connection or try with fewer images.';
+        }
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.style.background = '#fef2f2';
+            errEl.style.color = '#b91c1c';
+            errEl.style.borderColor = '#fca5a5';
+            errEl.textContent = '❌ AI Extraction failed: ' + msg;
+        }
+    } finally {
+        if (progressInterval) clearInterval(progressInterval);
+        if (extractBtn) {
+            extractBtn.disabled = false;
+            extractBtn.style.opacity = '1';
+        }
+        if (clearBtn) clearBtn.disabled = false;
+        if (prog) prog.style.display = 'none';
+    }
+}
+
+// Wire drag & drop and file input on DOM ready
+document.addEventListener('DOMContentLoaded', function () {
+    const dropArea = document.getElementById('bulkDropArea');
+    const imageInput = document.getElementById('bulkImageInput');
+
+    if (dropArea) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.style.borderColor = '#2563eb';
+                dropArea.style.backgroundColor = 'rgba(37, 99, 235, 0.05)';
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.style.borderColor = 'rgba(0,0,0,0.15)';
+                dropArea.style.backgroundColor = 'var(--surface)';
+            });
+        });
+
+        dropArea.addEventListener('drop', function (e) {
+            const dt = e.dataTransfer;
+            if (dt && dt.files && dt.files.length) {
+                handleBulkImageSelect(dt.files);
+            }
+        });
+    }
+
+    if (imageInput) {
+        imageInput.addEventListener('change', function () {
+            if (this.files && this.files.length) {
+                handleBulkImageSelect(this.files);
+            }
+        });
+    }
+});
+
+
+// ============================================================
+// MOBILE SCANNER 2-STEP LIVE SESSION
+// ============================================================
+let _bulkCaptureSessionId = null;
+let _bulkCapturePollInterval = null;
+
+async function openBulkCaptureModal() {
+    const modal = document.getElementById('bulkCaptureModal');
+    const step1 = document.getElementById('captureStep1');
+    const step2 = document.getElementById('captureStep2');
+    const qrLoading = document.getElementById('bulkCaptureQrLoading');
+    const qrImg = document.getElementById('bulkCaptureQrImg');
+    const badge = document.getElementById('captureStepBadge');
+    const title = document.getElementById('captureModalTitle');
+
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    if (step1) step1.style.display = 'flex';
+    if (step2) step2.style.display = 'none';
+    if (badge) {
+        badge.textContent = 'STEP 1 OF 2';
+        badge.style.background = 'var(--primary-light)';
+        badge.style.color = 'var(--primary)';
+    }
+    if (title) title.textContent = 'Scan with Phone';
+
+    if (qrLoading) qrLoading.style.display = 'flex';
+    if (qrImg) {
+        qrImg.style.display = 'none';
+        qrImg.src = '';
+    }
+
+    if (_bulkCapturePollInterval) {
+        clearInterval(_bulkCapturePollInterval);
+        _bulkCapturePollInterval = null;
+    }
+    _bulkCaptureSessionId = null;
+
+    try {
+        const resp = await window.csrfFetch('/api/bulk_capture/session/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to initialize capture session');
+        }
+
+        _bulkCaptureSessionId = data.session_id;
+
+        if (data.qr_code && qrImg) {
+            qrImg.src = data.qr_code;
+            qrImg.style.display = 'block';
+            if (qrLoading) qrLoading.style.display = 'none';
+        } else if (qrLoading) {
+            qrLoading.innerHTML = '<span style="font-size:12px; color:#b91c1c;">QR generation error</span>';
+        }
+
+        // Poll for phone connection and image upload
+        _bulkCapturePollInterval = setInterval(pollBulkCaptureStatus, 1500);
+
+    } catch (err) {
+        console.error('Error starting capture session:', err);
+        if (qrLoading) {
+            qrLoading.innerHTML = '<span style="font-size:12px; color:#b91c1c;">' + (err.message || 'Error connecting to server') + '</span>';
+        }
+    }
+}
+
+function closeBulkCaptureModal() {
+    const modal = document.getElementById('bulkCaptureModal');
+    if (modal) modal.style.display = 'none';
+
+    if (_bulkCapturePollInterval) {
+        clearInterval(_bulkCapturePollInterval);
+        _bulkCapturePollInterval = null;
+    }
+
+    // Immediately cancel session so the mobile URL gets invalidated
+    if (_bulkCaptureSessionId) {
+        const sid = _bulkCaptureSessionId;
+        _bulkCaptureSessionId = null;
+        window.csrfFetch('/api/bulk_capture/session/cancel/' + sid, { method: 'POST' }).catch(() => {});
+    }
+}
+
+async function pollBulkCaptureStatus() {
+    if (!_bulkCaptureSessionId) return;
+
+    try {
+        const resp = await fetch('/api/bulk_capture/session/status/' + _bulkCaptureSessionId);
+        if (!resp.ok) {
+            if (resp.status === 404) {
+                clearInterval(_bulkCapturePollInterval);
+                _bulkCapturePollInterval = null;
+            }
+            return;
+        }
+
+        const data = await resp.json();
+        if (!data.success) return;
+
+        const step1 = document.getElementById('captureStep1');
+        const step2 = document.getElementById('captureStep2');
+        const badge = document.getElementById('captureStepBadge');
+        const title = document.getElementById('captureModalTitle');
+        const heading = document.getElementById('captureStep2Heading');
+        const sub = document.getElementById('captureStep2Sub');
+        const iconWrap = document.getElementById('captureStep2IconWrap');
+        const icon = document.getElementById('captureStep2Icon');
+        const pill = document.getElementById('capturePagesPill');
+        const countSpan = document.getElementById('capturePagesReceivedCount');
+        const processAiBtn = document.getElementById('captureProcessAiBtn');
+
+        // Transition to STEP 2 once phone connects or when images are being uploaded
+        if (data.status === 'connected' || data.status === 'completed') {
+            if (step1 && step1.style.display !== 'none') {
+                step1.style.display = 'none';
+                if (step2) step2.style.display = 'flex';
+                if (badge) {
+                    badge.textContent = 'STEP 2 OF 2';
+                    badge.style.background = 'var(--primary-lighter)';
+                    badge.style.color = 'var(--primary)';
+                }
+                if (title) title.textContent = 'Capture & Extract';
+            }
+        }
+
+        if (data.status === 'connected') {
+            if (heading) heading.textContent = 'Phone Connected!';
+            if (sub) sub.innerHTML = 'Snap your ledger pages and tap <strong>"Send to Desktop"</strong> on your phone.';
+            if (iconWrap) {
+                iconWrap.style.background = 'var(--primary-light)';
+                iconWrap.style.color = 'var(--primary)';
+            }
+            if (icon) icon.className = 'fas fa-camera';
+            if (pill) pill.style.display = 'none';
+            if (processAiBtn) processAiBtn.style.display = 'none';
+
+        } else if (data.status === 'completed' && data.images && data.images.length > 0) {
+            // Stop polling - all images are in
+            clearInterval(_bulkCapturePollInterval);
+            _bulkCapturePollInterval = null;
+
+            // Load images into bulk memory
+            await loadCapturedImagesIntoBulk(data.images);
+
+            if (heading) heading.textContent = 'Pages Received!';
+            if (sub) sub.textContent = 'Scanned pages successfully transferred from your phone.';
+            if (iconWrap) {
+                iconWrap.style.background = '#e8f5e9';
+                iconWrap.style.color = '#16a34a';
+            }
+            if (icon) icon.className = 'fas fa-check-circle';
+
+            if (countSpan) countSpan.textContent = data.images.length;
+            if (pill) pill.style.display = 'inline-flex';
+
+            // Show "Process with AI" button prominently
+            if (processAiBtn) {
+                processAiBtn.style.display = 'inline-flex';
+                const pageWord = data.images.length + ' page' + (data.images.length > 1 ? 's' : '');
+                processAiBtn.innerHTML = '<i class="fas fa-magic"></i> Process with AI (' + pageWord + ')';
+            }
+        }
+
+    } catch (err) {
+        console.warn('Capture polling error:', err);
+    }
+}
+
+async function loadCapturedImagesIntoBulk(imagesMeta) {
+    if (!imagesMeta || !imagesMeta.length) return;
+
+    const newFiles = [];
+    for (let i = 0; i < imagesMeta.length; i++) {
+        const meta = imagesMeta[i];
+        try {
+            const res = await fetch(meta.url);
+            const blob = await res.blob();
+            const filename = meta.filename || ('scanned_page_' + (i + 1) + '.jpg');
+            const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+            newFiles.push(file);
+        } catch (downloadErr) {
+            console.error('Failed to load captured image ' + i, downloadErr);
+        }
+    }
+
+    if (newFiles.length > 0) {
+        _bulkImageFiles = _bulkImageFiles.concat(newFiles);
+        renderBulkImageThumbnails();
+    }
+}
+
+async function triggerAiExtractionFromModal() {
+    const processAiBtn = document.getElementById('captureProcessAiBtn');
+    const heading = document.getElementById('captureStep2Heading');
+    const sub = document.getElementById('captureStep2Sub');
+
+    if (processAiBtn) {
+        processAiBtn.disabled = true;
+        processAiBtn.innerHTML = '<div style="width:16px; height:16px; border:2px solid #ffffff; border-top-color:transparent; border-radius:50%; animation:bulk-spin 0.8s linear infinite;"></div> Extracting with Gemini Flash...';
+    }
+    if (heading) heading.textContent = 'Processing with Gemini AI...';
+    if (sub) sub.textContent = 'Extracting names and payment amounts from scanned pages.';
+
+    try {
+        await extractBulkImagesWithAI();
+
+        // Once output is ready in bulk, close the modal smoothly
+        setTimeout(() => {
+            closeBulkCaptureModal();
+        }, 500);
+
+    } catch (err) {
+        console.error('AI extraction error from modal:', err);
+        if (heading) heading.textContent = 'Extraction Failed';
+        if (sub) sub.textContent = err.message || 'Please check API key and try again.';
+        if (processAiBtn) {
+            processAiBtn.disabled = false;
+            processAiBtn.innerHTML = '<i class="fas fa-redo"></i> Retry AI Extraction';
+        }
+    }
+}
+
+async function simulateMobileCaptureUpload() {
+    if (!_bulkCaptureSessionId) {
+        alert('No active capture session. Please reopen the dialog.');
+        return;
+    }
+
+    try {
+        const resp = await window.csrfFetch('/api/bulk_capture/simulate_upload/' + _bulkCaptureSessionId, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            alert('Simulation error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error('Simulation error:', err);
+        alert('Simulation error: ' + err.message);
+    }
+}
 

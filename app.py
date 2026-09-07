@@ -19,9 +19,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
+import secrets
+import threading
+import io
+import base64
+import socket
 from flask import (
     Flask, render_template, request, redirect,
-    session, jsonify, flash, url_for
+    session, jsonify, flash, url_for, send_file
 )
 from db import get_pg_connection, get_pool_stats
 from flask_limiter import Limiter
@@ -6009,6 +6014,604 @@ def post_payment_analytics():
     finally:
         cur.close()
         conn.close()
+
+
+
+# ----------------------------------------------------
+# BULK LEDGER OCR EXTRACTION (GEMINI AI)
+# ----------------------------------------------------
+LEDGER_OCR_PROMPT = """You are an OCR extraction engine.
+Your task is to extract handwritten ledger data from the attached images with maximum accuracy.
+Do NOT summarize, explain, calculate totals, or reformat beyond what is requested.
+
+Image Structure
+Each image represents one page.
+Each page contains three independent vertical sections (columns).
+Each section contains rows.
+Every row contains:
+Account Number (left side of that section)
+Amount (right side of that section)
+Treat every section independently.
+Read rows top to bottom.
+Read sections left → middle → right.
+When moving to the next image, start a new page.
+
+Extraction Rules
+For every row output exactly:
+(AccountNumber,Amount)
+Examples:
+(1,500)
+(25,1000)
+(94,700)
+
+Important Rules
+1. Never skip rows
+Every account number that appears in the image must appear exactly once in the output.
+
+2. If amount is a dash
+If the amount field contains only a dash, blank dash, horizontal line, or intentionally empty value, output
+(account,-)
+Example
+Image:
+24    —
+Output
+(24,-)
+
+3. If the amount is unreadable
+If you are less than 95% confident about the handwritten amount,
+DO NOT guess.
+Output
+(account,N)
+Examples
+(15,N)
+(43,N)
+Never invent numbers.
+
+4. If the account number is unreadable
+If the account number itself cannot be read with at least 95% confidence,
+skip that row completely.
+Do not invent account numbers.
+
+5. Preserve values exactly
+Do not:
+round numbers
+correct handwriting
+infer missing digits
+calculate missing values
+Only transcribe what is actually written.
+
+6. Ignore everything except ledger rows
+Ignore:
+titles
+dates
+totals
+page totals
+notes
+signatures
+scribbles
+headings
+Only extract account-number/amount pairs.
+
+7. Do NOT output totals
+Ignore every total written at the bottom.
+Never calculate totals.
+Never mention totals.
+
+Output Format
+Separate every page.
+Separate every section with one blank line.
+Example:
+Page 1
+
+(1,500), (2,500), (3,300), (4,200), (5,200)
+
+(21,400), (22,10000), (23,100), (24,-), (25,100)
+
+(41,300), (42,100), (43,N), (44,100), (45,-)
+
+
+Page 2
+
+(61,150), (62,100), (63,200), (64,100)
+
+(81,100), (82,500), (83,500), (84,100)
+
+Accuracy Policy
+Before producing the final output, verify:
+Every section has been processed.
+Rows are in the correct order.
+No account numbers are duplicated.
+No rows are skipped.
+Every unreadable amount is replaced with N.
+Every dash remains -.
+No totals appear.
+No explanations appear.
+Output contains only the requested pairs.
+Return nothing except the formatted extraction."""
+
+
+@app.route("/api/ocr_extract_bulk", methods=["POST"])
+@login_required
+def api_ocr_extract_bulk():
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return jsonify(
+            success=False,
+            error="Gemini API Key is not set in .env. Please set GEMINI_API_KEY in your .env file."
+        ), 400
+
+    uploaded_files = request.files.getlist("images")
+    if not uploaded_files:
+        return jsonify(success=False, error="No images uploaded."), 400
+
+    valid_files = [f for f in uploaded_files if f and f.filename]
+    if not valid_files:
+        return jsonify(success=False, error="No valid images selected."), 400
+
+    try:
+        preferred_model = os.environ.get("GEMINI_OCR_MODEL", "gemini-3.7-flash").strip()
+        candidate_models = [preferred_model, "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.6-flash"]
+        seen_models = set()
+        models_to_try = [m for m in candidate_models if not (m in seen_models or seen_models.add(m))]
+
+        # Read images and prepare base64 parts
+        image_data_list = []
+        for file in valid_files:
+            file_bytes = file.read()
+            mime = file.mimetype or "image/jpeg"
+            b64_str = base64.b64encode(file_bytes).decode("utf-8")
+            image_data_list.append({"mime": mime, "b64": b64_str, "bytes": file_bytes})
+
+        extracted_text = None
+        last_error = None
+
+        # Method A: Direct official Gemini REST API (zero SDK dependency / eliminates import conflicts)
+        for m in models_to_try:
+            try:
+                import requests
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+                parts = []
+                for item in image_data_list:
+                    parts.append({
+                        "inline_data": {
+                            "mime_type": item["mime"],
+                            "data": item["b64"]
+                        }
+                    })
+                parts.append({"text": LEDGER_OCR_PROMPT})
+
+                payload = {"contents": [{"parts": parts}]}
+                resp = requests.post(url, json=payload, timeout=45)
+
+                if resp.status_code == 200:
+                    resp_json = resp.json()
+                    candidates = resp_json.get("candidates", [])
+                    if candidates:
+                        content = candidates[0].get("content", {})
+                        p_list = content.get("parts", [])
+                        if p_list:
+                            extracted_text = p_list[0].get("text", "").strip()
+                            if extracted_text:
+                                break
+                else:
+                    err_msg = resp.text
+                    try:
+                        err_json = resp.json()
+                        err_msg = err_json.get("error", {}).get("message", resp.text)
+                    except Exception:
+                        pass
+                    last_error = RuntimeError(f"{m} (HTTP {resp.status_code}): {err_msg}")
+                    logger.warning(f"REST Gemini model {m} returned {resp.status_code}: {err_msg}")
+
+            except Exception as rest_err:
+                last_error = rest_err
+                logger.warning(f"REST Gemini model {m} failed: {rest_err}")
+
+        # Method B: Secondary fallback to google-genai SDK if REST didn't extract
+        if not extracted_text:
+            try:
+                from google import genai
+                from google.genai import types
+
+                client = genai.Client(api_key=api_key)
+                sdk_contents = []
+                for item in image_data_list:
+                    part = types.Part.from_bytes(data=item["bytes"], mime_type=item["mime"])
+                    sdk_contents.append(part)
+                sdk_contents.append(LEDGER_OCR_PROMPT)
+
+                for m in models_to_try:
+                    try:
+                        sdk_res = client.models.generate_content(model=m, contents=sdk_contents)
+                        if sdk_res and sdk_res.text:
+                            extracted_text = sdk_res.text.strip()
+                            break
+                    except Exception as sdk_err:
+                        last_error = sdk_err
+            except Exception as import_or_sdk_err:
+                logger.warning(f"google-genai SDK fallback unavailable: {import_or_sdk_err}")
+
+        if not extracted_text:
+            raise last_error or RuntimeError("Could not extract ledger data from Gemini API.")
+
+        return jsonify(
+            success=True,
+            text=extracted_text,
+            pages_count=len(valid_files)
+        )
+
+    except Exception as e:
+        logger.error(f"OCR Extraction Error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
+
+# ----------------------------------------------------
+# ----------------------------------------------------
+# SMART COUNTING MOBILE SCANNER (STANDALONE WEB CAPTURE)
+# ----------------------------------------------------
+# Thread-safe in-memory session broker for live mobile scanner pairing
+_BULK_CAPTURE_SESSIONS = {}
+_BULK_CAPTURE_LOCK = threading.Lock()
+_BULK_SESSION_TTL_SECONDS = 900  # 15 minutes
+
+def _cleanup_bulk_capture_sessions():
+    """Removes sessions older than TTL."""
+    now = datetime.now(timezone.utc)
+    with _BULK_CAPTURE_LOCK:
+        expired = [
+            sid for sid, sdata in _BULK_CAPTURE_SESSIONS.items()
+            if (now - sdata.get("created_at", now)).total_seconds() > _BULK_SESSION_TTL_SECONDS
+        ]
+        for sid in expired:
+            _BULK_CAPTURE_SESSIONS.pop(sid, None)
+
+def _find_session_by_code(code_str):
+    """Finds an active session matching the 6-digit sync code."""
+    if not code_str:
+        return None, None
+    clean_code = str(code_str).replace("-", "").replace(" ", "").strip().upper()
+    now = datetime.now(timezone.utc)
+    with _BULK_CAPTURE_LOCK:
+        for sid, sdata in _BULK_CAPTURE_SESSIONS.items():
+            s_code = str(sdata.get("code", "")).replace("-", "").replace(" ", "").strip().upper()
+            if s_code == clean_code:
+                if (now - sdata.get("created_at", now)).total_seconds() <= _BULK_SESSION_TTL_SECONDS:
+                    return sid, sdata
+    return None, None
+
+
+def _get_reachable_mobile_host(request):
+    """
+    Determines the best network host/IP so a phone scanning the QR code can reach the server.
+    If the request is from localhost or 127.0.0.1, resolves the machine's actual LAN IP (e.g. 192.168.x.x)
+    and keeps the correct port, allowing any phone on the Wi-Fi network to open the URL directly.
+    """
+    configured_base = os.environ.get("MOBILE_SCANNER_BASE_URL", "").strip()
+    if configured_base:
+        return configured_base.rstrip("/")
+
+    req_host = request.host  # e.g. "localhost:8080" or "sivadurga.in"
+    scheme = "https" if (request.is_secure or request.headers.get("X-Forwarded-Proto") == "https") else request.scheme
+
+    # If domain or external address, use it directly
+    if not any(local in req_host for local in ("localhost", "127.0.0.1", "0.0.0.0")):
+        return f"{scheme}://{req_host}"
+
+    # Local development: resolve LAN Wi-Fi IP so phones on the same network can load it
+    port_part = ""
+    if ":" in req_host:
+        port_part = ":" + req_host.split(":")[1]
+    
+    lan_ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        lan_ip = "127.0.0.1"
+
+    return f"{scheme}://{lan_ip}{port_part}"
+
+
+@app.route("/api/bulk_capture/session/create", methods=["POST"])
+@login_required
+def api_bulk_capture_session_create():
+    """
+    Creates a new mobile pairing capture session.
+    Returns session_id, upload_url, and high-compatibility QR code image.
+    The QR code encodes a direct, standard HTTP/HTTPS web link.
+    """
+    _cleanup_bulk_capture_sessions()
+
+    session_id = secrets.token_urlsafe(16)
+    base_url = _get_reachable_mobile_host(request)
+    mobile_capture_url = f"{base_url}/bulk_capture/{session_id}"
+
+    qr_base64 = ""
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=None,  # Auto-fit version based on URL length
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=3,
+        )
+        qr.add_data(mobile_capture_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#1a1a2e", back_color="#ffffff")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        qr_base64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as qr_err:
+        logger.warning(f"Could not generate QR code with qrcode lib: {qr_err}")
+
+    session_data = {
+        "session_id": session_id,
+        "mobile_capture_url": mobile_capture_url,
+        "qr_code": qr_base64,
+        "status": "waiting",  # waiting | connected | completed
+        "created_at": datetime.now(timezone.utc),
+        "user_id": session.get("user_id"),
+        "employee_id": session.get("employee_id") or session.get("eid"),
+        "images": [],
+        "device_info": None,
+    }
+
+    with _BULK_CAPTURE_LOCK:
+        _BULK_CAPTURE_SESSIONS[session_id] = session_data
+
+    logger.info(f"Bulk capture session created: {session_id} (URL: {mobile_capture_url})")
+
+    return jsonify(
+        success=True,
+        session_id=session_id,
+        mobile_capture_url=mobile_capture_url,
+        qr_code=qr_base64,
+        expires_in=_BULK_SESSION_TTL_SECONDS,
+    )
+
+
+@app.route("/bulk_capture/<session_id>", methods=["GET"])
+def view_bulk_capture_mobile(session_id):
+    """
+    Mobile Web Document Scanner page.
+    Opened directly when scanning the QR code from ANY mobile phone browser.
+    Validates that the session is still active and valid.
+    """
+    _cleanup_bulk_capture_sessions()
+
+    with _BULK_CAPTURE_LOCK:
+        sdata = _BULK_CAPTURE_SESSIONS.get(session_id)
+
+    if not sdata:
+        return render_template(
+            "error_generic.html" if os.path.exists(os.path.join(app.root_path, "templates", "error_generic.html")) else "login.html",
+            error_message="This capture session has expired or was closed on desktop. Please scan a new QR code from the Bulk Payments window."
+        ) if False else (
+            f"<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+            f"<title>Session Expired</title><style>body{{font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:32px;text-align:center;}}"
+            f".card{{background:#1e293b;border-radius:14px;padding:24px;border:1px solid rgba(255,255,255,0.1);max-width:400px;margin:40px auto;}}"
+            f"h2{{color:#ef4444;margin-bottom:12px;}}p{{color:#94a3b8;font-size:14px;line-height:1.5;}}</style></head>"
+            f"<body><div class='card'><h2>⚠️ Session Expired</h2>"
+            f"<p>This capture session is no longer active or was closed on the computer.<br><br>Please click <strong>Capture with Phone</strong> in Bulk Payments to generate a fresh QR code.</p>"
+            f"</div></body></html>"
+        ), 404
+
+    # Mark as connected
+    with _BULK_CAPTURE_LOCK:
+        if sdata.get("status") == "waiting":
+            sdata["status"] = "connected"
+            sdata["device_info"] = {
+                "name": "Mobile Browser",
+                "connected_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+    return render_template(
+        "bulk_capture_mobile.html",
+        session_id=session_id,
+        code=sdata.get("code", "")
+    )
+
+
+@csrf.exempt
+@app.route("/api/bulk_capture/mobile_ping/<session_id>", methods=["POST"])
+def api_bulk_capture_mobile_ping(session_id):
+    """
+    Notifies desktop that the mobile user has opened the scanner page.
+    """
+    with _BULK_CAPTURE_LOCK:
+        sdata = _BULK_CAPTURE_SESSIONS.get(session_id)
+        if not sdata:
+            return jsonify(error="Session not found"), 404
+        sdata["status"] = "connected"
+        sdata["device_info"] = {
+            "name": "Mobile Phone",
+            "connected_at": datetime.now(timezone.utc).isoformat(),
+        }
+    return jsonify(success=True)
+
+
+@csrf.exempt
+@app.route("/api/bulk_capture/mobile_upload", methods=["POST"])
+def api_bulk_capture_mobile_upload():
+    """
+    Receives processed document page images from the mobile web page.
+    Appends them to the capture session and updates status to 'completed'.
+    """
+    _cleanup_bulk_capture_sessions()
+
+    session_id = request.form.get("session_id", "").strip()
+    with _BULK_CAPTURE_LOCK:
+        sdata = _BULK_CAPTURE_SESSIONS.get(session_id)
+        if not sdata:
+            return jsonify(error="Session expired or not found. Please scan a new QR code."), 404
+
+    files = request.files.getlist("images")
+    if not files and "image" in request.files:
+        files = [request.files["image"]]
+
+    if not files:
+        return jsonify(error="No image files received"), 400
+
+    saved_images = []
+    for f in files:
+        if f and f.filename:
+            content = f.read()
+            if len(content) > 0:
+                saved_images.append({
+                    "filename": f.filename,
+                    "mimetype": f.mimetype or "image/jpeg",
+                    "bytes": content,
+                })
+
+    if not saved_images:
+        return jsonify(error="Uploaded images were empty"), 400
+
+    with _BULK_CAPTURE_LOCK:
+        sdata["images"].extend(saved_images)
+        sdata["status"] = "completed"
+
+    logger.info(
+        f"Mobile web capture upload completed for session {session_id}: "
+        f"{len(saved_images)} new images (Total: {len(sdata['images'])})"
+    )
+
+    return jsonify(
+        success=True,
+        session_id=session_id,
+        uploaded_count=len(saved_images),
+        total_images=len(sdata["images"]),
+        status="completed",
+    )
+
+
+@app.route("/api/bulk_capture/session/status/<session_id>", methods=["GET"])
+@login_required
+def api_bulk_capture_session_status(session_id):
+    """
+    Polled by the desktop web browser to check capture session status.
+    """
+    _cleanup_bulk_capture_sessions()
+
+    with _BULK_CAPTURE_LOCK:
+        sdata = _BULK_CAPTURE_SESSIONS.get(session_id)
+
+    if not sdata:
+        return jsonify(success=False, error="Session expired or not found"), 404
+
+    image_list = [
+        {
+            "index": idx,
+            "filename": img.get("filename", f"page_{idx + 1}.jpg"),
+            "size": len(img.get("bytes", b"")),
+            "url": f"/api/bulk_capture/session/{session_id}/image/{idx}",
+        }
+        for idx, img in enumerate(sdata.get("images", []))
+    ]
+
+    return jsonify(
+        success=True,
+        session_id=session_id,
+        code=sdata.get("code"),
+        mobile_capture_url=sdata.get("mobile_capture_url"),
+        status=sdata.get("status", "waiting"),
+        image_count=len(image_list),
+        images=image_list,
+        device_info=sdata.get("device_info"),
+    )
+
+
+@app.route("/api/bulk_capture/session/<session_id>/image/<int:index>", methods=["GET"])
+@login_required
+def api_bulk_capture_session_image(session_id, index):
+    """
+    Serves a specific scanned page image from the capture session.
+    """
+    with _BULK_CAPTURE_LOCK:
+        sdata = _BULK_CAPTURE_SESSIONS.get(session_id)
+        if not sdata:
+            return jsonify(error="Session not found"), 404
+
+        images = sdata.get("images", [])
+        if index < 0 or index >= len(images):
+            return jsonify(error="Image index out of bounds"), 404
+
+        img = images[index]
+        img_bytes = img.get("bytes")
+        mimetype = img.get("mimetype", "image/jpeg")
+        filename = img.get("filename", f"page_{index + 1}.jpg")
+
+    return send_file(
+        io.BytesIO(img_bytes),
+        mimetype=mimetype,
+        as_attachment=False,
+        download_name=filename,
+    )
+
+
+@app.route("/api/bulk_capture/session/cancel/<session_id>", methods=["POST"])
+@login_required
+def api_bulk_capture_session_cancel(session_id):
+    """
+    Cancels and removes a capture session immediately when user closes modal on desktop.
+    """
+    with _BULK_CAPTURE_LOCK:
+        _BULK_CAPTURE_SESSIONS.pop(session_id, None)
+    return jsonify(success=True)
+
+
+# --- Simulation / Testing Endpoint for Developers ---
+
+@app.route("/api/bulk_capture/simulate_upload/<session_id>", methods=["POST"])
+@login_required
+def api_bulk_capture_simulate_upload(session_id):
+    """
+    Developer helper endpoint to simulate mobile upload of 2 test ledger page images.
+    Allows instant testing of web pairing flow right from the browser.
+    """
+    with _BULK_CAPTURE_LOCK:
+        session_obj = _BULK_CAPTURE_SESSIONS.get(session_id)
+        if not session_obj:
+            return jsonify(error="Session not found"), 404
+
+    from PIL import Image, ImageDraw
+
+    def create_mock_ledger_page(page_no):
+        img = Image.new("RGB", (600, 800), color="#ffffff")
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([(20, 20), (580, 780)], outline="#2563eb", width=3)
+        draw.text((40, 40), f"SD FINANCE LEDGER - PAGE {page_no}", fill="#1a1a2e")
+        draw.text((40, 80), f"Captured via Standalone Mobile Web Scanner", fill="#6b7280")
+        y = 130
+        for r in range(1, 12):
+            draw.line([(40, y), (560, y)], fill="#e5e7eb", width=1)
+            draw.text((50, y + 8), f"Entry {((page_no - 1) * 20) + r}: Customer {100 + r}", fill="#1a1a2e")
+            draw.text((420, y + 8), f"Rs. {r * 150}", fill="#16a34a")
+            y += 45
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+
+    p1 = create_mock_ledger_page(1)
+    p2 = create_mock_ledger_page(2)
+
+    with _BULK_CAPTURE_LOCK:
+        session_obj["status"] = "completed"
+        session_obj["device_info"] = {
+            "name": "Simulated Mobile Phone",
+            "connected_at": datetime.now(timezone.utc).isoformat(),
+        }
+        session_obj["images"] = [
+            {"filename": "scanned_page_1.jpg", "mimetype": "image/jpeg", "bytes": p1},
+            {"filename": "scanned_page_2.jpg", "mimetype": "image/jpeg", "bytes": p2},
+        ]
+
+    return jsonify(
+        success=True,
+        message="Simulated 2 scanned pages uploaded successfully!",
+        session_id=session_id,
+        image_count=2,
+    )
 
 
 

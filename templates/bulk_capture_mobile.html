@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smart Counting — Document Scanner</title>
+  <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --text-secondary: #64748b;
+      --primary: #1a4d2e;
+      --primary-hover: #2d6a4f;
+      --primary-light: #e8f5e9;
+      --border: #e2e8f0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: var(--surface);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #16a34a;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      max-width: 500px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 10px;
+    }
+    .filter-pill {
+      flex: 1;
+      padding: 8px 6px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .filter-pill.active {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    /* Real clickable action cards (Container has the real input positioned over it) */
+    .action-card-wrap {
+      position: relative;
+      background: var(--surface);
+      border: 2px dashed #cbd5e1;
+      border-radius: 16px;
+      padding: 26px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .action-card-wrap:active {
+      background: #f8fafc;
+      border-color: var(--primary);
+    }
+    /* FULL INVISIBLE INPUT OVERLAY: 100% RELIABLE ON MOBILE SAFARI/CHROME */
+    .invisible-file-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 10;
+      font-size: 100px;
+    }
+    .camera-icon-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 6px 16px rgba(26,77,46,0.25);
+    }
+    .camera-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .camera-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .gallery-btn-wrap {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+    .gallery-fake-btn {
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      pointer-events: none;
+    }
+    /* Scanned Pages Section */
+    .pages-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pages-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .pages-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .page-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .page-thumb-wrap {
+      width: 100%;
+      height: 180px;
+      background: #f1f5f9;
+      position: relative;
+      overflow: hidden;
+    }
+    .page-thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .page-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .page-actions {
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      border-top: 1px solid #f1f5f9;
+    }
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px;
+    }
+    /* Sticky footer */
+    .submit-bar {
+      position: sticky;
+      bottom: 0;
+      background: var(--surface);
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+      margin-top: auto;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.04);
+    }
+    .add-more-wrap {
+      position: relative;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+    .add-more-fake-btn {
+      padding: 14px 18px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .submit-btn {
+      flex: 1;
+      padding: 14px;
+      background: var(--primary);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(26,77,46,0.25);
+    }
+    .submit-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    /* Overlays */
+    .overlay-screen {
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      gap: 14px;
+    }
+    .overlay-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #e8f5e9;
+      color: #16a34a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand-title">
+      <i class="fas fa-file-invoice"></i>
+      <span>Smart Counting</span>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span>Connected to Desktop</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Document Enhancement Filters -->
+    <div class="filter-pills">
+      <button type="button" class="filter-pill active" data-filter="scan" onclick="setScanFilter('scan', this)">
+        <i class="fas fa-magic"></i> Clean B&amp;W
+      </button>
+      <button type="button" class="filter-pill" data-filter="contrast" onclick="setScanFilter('contrast', this)">
+        <i class="fas fa-adjust"></i> High Contrast
+      </button>
+      <button type="button" class="filter-pill" data-filter="gray" onclick="setScanFilter('gray', this)">
+        <i class="fas fa-moon"></i> Grayscale
+      </button>
+      <button type="button" class="filter-pill" data-filter="original" onclick="setScanFilter('original', this)">
+        <i class="fas fa-image"></i> Original
+      </button>
+    </div>
+
+    <!-- Snap Button Container with Real Direct Invisible File Input Overlay -->
+    <div class="action-card-wrap">
+      <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" class="invisible-file-input" onchange="handleFileInput(this)">
+      <div class="camera-icon-circle">
+        <i class="fas fa-camera"></i>
+      </div>
+      <div>
+        <div class="camera-title">Tap to Snap Page</div>
+        <div class="camera-sub">Cleans paper background &amp; sharpens handwriting</div>
+      </div>
+    </div>
+
+    <!-- Library Picker Container with Real Direct Invisible File Input Overlay -->
+    <div style="display:flex; justify-content:center;">
+      <div class="gallery-btn-wrap">
+        <input type="file" id="galleryInput" accept="image/*" multiple class="invisible-file-input" onchange="handleFileInput(this)">
+        <div class="gallery-fake-btn">
+          <i class="fas fa-images"></i> Choose from photo library
+        </div>
+      </div>
+    </div>
+
+    <!-- Scanned Pages -->
+    <div class="pages-section" id="pagesSection" style="display: none;">
+      <div class="pages-header">
+        <span>Captured Pages (<span id="pagesListCount">0</span>)</span>
+        <button type="button" onclick="clearAllScannedPages()" style="background:none; border:none; color:#ef4444; font-size:12px; font-weight:600; cursor:pointer;">
+          Clear All
+        </button>
+      </div>
+      <div class="pages-grid" id="pagesGrid"></div>
+    </div>
+  </main>
+
+  <div class="submit-bar">
+    <div class="add-more-wrap">
+      <input type="file" accept="image/*" capture="environment" class="invisible-file-input" onchange="handleFileInput(this)">
+      <div class="add-more-fake-btn">
+        <i class="fas fa-plus"></i> Add
+      </div>
+    </div>
+    <button type="button" class="submit-btn" id="uploadToDesktopBtn" onclick="submitScannedPagesToDesktop()" disabled>
+      <i class="fas fa-paper-plane"></i> Send to Desktop (<span id="btnPageCount">0</span>)
+    </button>
+  </div>
+
+  <!-- Processing Spinner Overlay -->
+  <div class="overlay-screen" id="processingOverlay">
+    <div style="width: 44px; height: 44px; border: 3px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+    <div style="font-size: 15px; font-weight: 700; color: var(--text); margin-top: 10px;" id="overlayStatusTitle">Optimizing Page...</div>
+    <div style="font-size: 12px; color: var(--text-secondary);" id="overlayStatusSub">Enhancing contrast for clean AI extraction</div>
+  </div>
+
+  <!-- Success Completed Screen -->
+  <div class="overlay-screen" id="successOverlay">
+    <div class="overlay-icon">
+      <i class="fas fa-check"></i>
+    </div>
+    <h2 style="font-size: 18px; font-weight: 700; color: var(--text);">Sent to Desktop!</h2>
+    <p style="font-size: 13px; color: var(--text-secondary); max-width: 280px;" id="successOverlayMsg">
+      Your scanned pages are now ready on your computer. Click "Process with AI" on the desktop screen.
+    </p>
+    <button type="button" onclick="window.close()" style="margin-top: 8px; padding: 10px 20px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; font-weight: 600;">
+      Close Window
+    </button>
+  </div>
+
+  <script>
+    const SESSION_ID = "{{ session_id }}";
+    let _activeFilter = 'scan';
+    let _capturedPages = []; // Array of { blob, dataUrl, filter, filename }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetch('/api/bulk_capture/mobile_ping/' + SESSION_ID, { method: 'POST' }).catch(() => {});
+    });
+
+    function setScanFilter(filterType, btn) {
+      _activeFilter = filterType;
+      document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    /**
+     * Called directly via onchange attribute from input elements
+     */
+    function handleFileInput(inputEl) {
+      if (inputEl && inputEl.files && inputEl.files.length > 0) {
+        const fileList = Array.from(inputEl.files);
+        processIncomingFiles(fileList);
+        inputEl.value = '';
+      }
+    }
+
+    /**
+     * Processes files with instant UI attachment and non-blocking background enhancement
+     */
+    function processIncomingFiles(files) {
+      if (!files || !files.length) return;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // 1. Create instant thumbnail URL
+        let initialUrl = '';
+        try {
+          initialUrl = URL.createObjectURL(file);
+        } catch (e) {
+          initialUrl = '';
+        }
+
+        const pageObj = {
+          blob: file,
+          dataUrl: initialUrl,
+          filter: _activeFilter,
+          filename: 'page_' + (_capturedPages.length + 1) + '.jpg'
+        };
+
+        // 2. ATTACH IMMEDIATELY - User sees the card right away!
+        _capturedPages.push(pageObj);
+        renderScannedPages();
+
+        // 3. Fallback to FileReader if createObjectURL is empty
+        if (!initialUrl) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            pageObj.dataUrl = e.target.result;
+            renderScannedPages();
+          };
+          reader.readAsDataURL(file);
+        }
+
+        // 4. Background Enhancement (Clean B&W / Contrast)
+        if (_activeFilter !== 'original') {
+          processBackgroundContrast(pageObj, file, _activeFilter);
+        }
+      }
+    }
+
+    /**
+     * Non-blocking background canvas contrast enhancement
+     */
+    function processBackgroundContrast(pageObj, rawFile, filterMode) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1800;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+
+            if (filterMode === 'scan') {
+              for (let i = 0; i < data.length; i += 4) {
+                let lum = (0.299 * data[i]) + (0.587 * data[i + 1]) + (0.114 * data[i + 2]);
+                if (lum > 165) lum = 255;
+                else if (lum < 95) lum = lum * 0.7;
+                else lum = (lum - 95) * (255 / (165 - 95));
+                data[i] = lum;
+                data[i + 1] = lum;
+                data[i + 2] = lum;
+              }
+            } else if (filterMode === 'contrast') {
+              const contrast = 1.4;
+              const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+              for (let i = 0; i < data.length; i += 4) {
+                data[i] = factor * (data[i] - 128) + 128;
+                data[i + 1] = factor * (data[i + 1] - 128) + 128;
+                data[i + 2] = factor * (data[i + 2] - 128) + 128;
+              }
+            } else if (filterMode === 'gray') {
+              for (let i = 0; i < data.length; i += 4) {
+                let lum = (0.299 * data[i]) + (0.587 * data[i + 1]) + (0.114 * data[i + 2]);
+                data[i] = lum;
+                data[i + 1] = lum;
+                data[i + 2] = lum;
+              }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            canvas.toBlob(function(blob) {
+              if (blob) {
+                pageObj.blob = blob;
+                pageObj.dataUrl = URL.createObjectURL(blob);
+                renderScannedPages();
+              }
+            }, 'image/jpeg', 0.88);
+          } catch(err) {
+            console.warn('Contrast enhancement skipped, keeping raw photo:', err);
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(rawFile);
+    }
+
+    function renderScannedPages() {
+      const grid = document.getElementById('pagesGrid');
+      const section = document.getElementById('pagesSection');
+      const submitBtn = document.getElementById('uploadToDesktopBtn');
+      const pagesListCount = document.getElementById('pagesListCount');
+      const btnPageCount = document.getElementById('btnPageCount');
+
+      const count = _capturedPages.length;
+      if (pagesListCount) pagesListCount.textContent = count;
+      if (btnPageCount) btnPageCount.textContent = count;
+
+      if (count === 0) {
+        if (section) section.style.display = 'none';
+        if (submitBtn) submitBtn.disabled = true;
+        if (grid) grid.innerHTML = '';
+        return;
+      }
+
+      if (section) section.style.display = 'flex';
+      if (submitBtn) submitBtn.disabled = false;
+      if (grid) grid.innerHTML = '';
+
+      _capturedPages.forEach((page, idx) => {
+        const card = document.createElement('div');
+        card.className = 'page-card';
+        card.innerHTML = [
+          '<div class="page-thumb-wrap">',
+          '  <img src="' + (page.dataUrl || '') + '" alt="Page ' + (idx + 1) + '" />',
+          '  <span class="page-badge">Page ' + (idx + 1) + '</span>',
+          '</div>',
+          '<div class="page-actions">',
+          '  <span style="font-size:11px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">' + (page.filter || 'scan') + '</span>',
+          '  <button type="button" class="delete-btn" onclick="removePage(' + idx + ')" title="Delete Page">',
+          '    <i class="fas fa-trash-alt"></i>',
+          '  </button>',
+          '</div>'
+        ].join('');
+        grid.appendChild(card);
+      });
+    }
+
+    function removePage(idx) {
+      if (idx >= 0 && idx < _capturedPages.length) {
+        if (_capturedPages[idx].dataUrl && _capturedPages[idx].dataUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(_capturedPages[idx].dataUrl);
+        }
+        _capturedPages.splice(idx, 1);
+        renderScannedPages();
+      }
+    }
+
+    function clearAllScannedPages() {
+      if (confirm('Clear all captured pages?')) {
+        _capturedPages.forEach(p => {
+          if (p.dataUrl && p.dataUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(p.dataUrl);
+          }
+        });
+        _capturedPages = [];
+        renderScannedPages();
+      }
+    }
+
+    async function submitScannedPagesToDesktop() {
+      if (!_capturedPages.length) return;
+
+      showOverlay('Sending to Desktop...', 'Uploading ' + _capturedPages.length + ' page(s)');
+
+      const formData = new FormData();
+      formData.append('session_id', SESSION_ID);
+      _capturedPages.forEach((p, idx) => {
+        formData.append('images', p.blob, 'page_' + (idx + 1) + '.jpg');
+      });
+
+      try {
+        const resp = await fetch('/api/bulk_capture/mobile_upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.error || 'Desktop session expired or not found');
+        }
+
+        hideOverlay();
+        document.getElementById('successOverlay').style.display = 'flex';
+        document.getElementById('successOverlayMsg').textContent = 
+          'Successfully sent ' + _capturedPages.length + ' page(s) to your desktop! Click "Process with AI" on your computer.';
+
+      } catch (err) {
+        hideOverlay();
+        alert('Upload Error: ' + err.message);
+      }
+    }
+
+    function showOverlay(title, sub) {
+      const overlay = document.getElementById('processingOverlay');
+      document.getElementById('overlayStatusTitle').textContent = title;
+      document.getElementById('overlayStatusSub').textContent = sub;
+      overlay.style.display = 'flex';
+    }
+
+    function hideOverlay() {
+      document.getElementById('processingOverlay').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
