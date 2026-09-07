@@ -72,6 +72,19 @@ table.customer-table tbody tr.checked-row td {
     background-color: rgba(239, 68, 68, 0.06);
   }
 }
+
+@media print {
+  /* Customer page print font weight override */
+  body, table, th, td, span, div, p, h1, h2, h3, h4, h5, h6, input, label, strong, b {
+    font-weight: 700 !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table th, table td {
+    border: 1.5px solid #000000 !important;
+  }
+}
 </style>
 <h2 class="page-title">Customers Table</h2>
 <div class="raised-box">

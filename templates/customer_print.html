@@ -9,11 +9,20 @@
         margin: 5mm; /* Reduced margin */
     }
 
+    * {
+        font-weight: 700 !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
     html, body {
         font-family: 'Arial', sans-serif;
         background: #fff;
         margin: 0;
         padding: 0;
+        font-weight: 700 !important;
+        color: #000000 !important;
     }
 
     body {
@@ -34,19 +43,21 @@
     /* Headers */
     h1 {
         text-align: center;
-        font-size: 12pt; /* Reduced font size */
-        margin-bottom: 8pt; /* Reduced margin */
+        font-size: 13pt;
+        font-weight: 900 !important;
+        margin-bottom: 8pt;
         padding-top: 5pt;
     }
 
     .details-section {
-        margin-bottom: 10pt; /* Reduced margin */
+        margin-bottom: 10pt;
     }
 
     .details-section h2 {
-        font-size: 12pt; /* Reduced font size */
-        margin-bottom: 5pt; /* Reduced margin */
-        border-bottom: 1px solid #ccc;
+        font-size: 12pt;
+        font-weight: 800 !important;
+        margin-bottom: 5pt;
+        border-bottom: 1.5px solid #000;
         padding-bottom: 2pt;
     }
 
@@ -54,33 +65,44 @@
     .details-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(120mm, 1fr));
-        gap: 2pt 5mm; /* Reduced gap */
-        font-size: 12pt; /* Reduced font size */
+        gap: 2pt 5mm;
+        font-size: 12pt;
+        font-weight: 700 !important;
     }
 
     /* Loan Table */
     .loan-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 12pt; /* Reduced font size */
+        font-size: 12pt;
         margin-top: 8pt;
+        font-weight: 700 !important;
     }
 
     .loan-table th, .loan-table td {
-        border: 1px solid #ccc;
-        padding: 3pt 5pt; /* Reduced padding */
+        border: 1.5px solid #000;
+        padding: 3pt 5pt;
         text-align: left;
+        font-weight: 700 !important;
     }
 
     .loan-table th {
         background-color: #f0f0f0;
+        font-weight: 900 !important;
     }
 
     /* Print-specific styles */
     @media print {
+        * {
+            font-weight: 700 !important;
+            color: #000000 !important;
+        }
+
         body {
             background: white;
             padding: 0;
+            font-weight: 700 !important;
+            color: #000000 !important;
         }
 
         .print-container {
@@ -105,8 +127,9 @@
             position: fixed;
             bottom: 3mm;
             right: 5mm;
-            font-size: 12pt;
-            color: #666;
+            font-size: 11pt;
+            font-weight: 700 !important;
+            color: #000;
         }
     }
 </style>

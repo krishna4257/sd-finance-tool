@@ -440,19 +440,30 @@ document.addEventListener("DOMContentLoaded", function () {
     const tableEl = document.getElementById("customerTable");
     if (!tableEl || !tableBody) return;
     
+    // Retrieve rows in current visual/display order (reflecting active sort and filter)
+    let currentOrderedRows = [];
+    if (window.jQuery && $.fn.DataTable && $.fn.DataTable.isDataTable('#customerTable')) {
+      const dt = $('#customerTable').DataTable();
+      currentOrderedRows = dt.rows({ search: 'applied', order: 'applied' }).nodes().toArray();
+    } else {
+      currentOrderedRows = Array.from(tableBody.querySelectorAll("tr")).filter(tr => 
+        tr.style.display !== "none" && tr.id !== "tableLoaderRow"
+      );
+    }
+    
+    // Filter out loader or hidden rows
+    currentOrderedRows = currentOrderedRows.filter(tr => tr && tr.id !== "tableLoaderRow" && tr.style.display !== "none");
+
     const selectedCheckboxes = Array.from(tableBody.querySelectorAll("input[type='checkbox']:checked"));
-    let rowsToPrint = selectedCheckboxes.length > 0 
-      ? selectedCheckboxes.map(cb => cb.closest("tr")) 
-      : snapshot.filter(d => d.row.style.display !== "none").map(d => d.row);
-      
-    // Sort by ANO (ascending) for print layout order
-    rowsToPrint.sort((a, b) => {
-      const aCell = a.querySelector(".col-ano");
-      const bCell = b.querySelector(".col-ano");
-      const aVal = aCell ? (parseInt(aCell.textContent.trim()) || 0) : 0;
-      const bVal = bCell ? (parseInt(bCell.textContent.trim()) || 0) : 0;
-      return aVal - bVal;
-    });
+    let rowsToPrint = [];
+    if (selectedCheckboxes.length > 0) {
+      const selectedSet = new Set(selectedCheckboxes.map(cb => cb.closest("tr")).filter(Boolean));
+      // Filter the ordered rows preserving the exact on-screen table ordering
+      rowsToPrint = currentOrderedRows.filter(tr => selectedSet.has(tr));
+    } else {
+      // Print all currently displayed rows in exact on-screen table ordering
+      rowsToPrint = currentOrderedRows;
+    }
       
     const printCheckboxes = Array.from(document.querySelectorAll("#printColumnsSelector input[type='checkbox']:checked"));
     const colsToPrint = printCheckboxes.map(cb => ({
@@ -466,16 +477,77 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     
     let html = `
+    <!DOCTYPE html>
     <html>
     <head>
       <title>Print Customers</title>
+      <meta charset="utf-8">
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #1e293b; }
-        h2 { color: #1e3a8a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; font-size: 11px; }
-        th { background-color: #f8fafc; font-weight: bold; color: #475569; }
-        tr:nth-child(even) { background-color: #f8fafc; }
+        * {
+          box-sizing: border-box;
+          font-weight: 700 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          padding: 20px;
+          color: #000000 !important;
+          background: #ffffff !important;
+          font-weight: 700 !important;
+        }
+        h2 {
+          color: #000000 !important;
+          font-weight: 900 !important;
+          border-bottom: 2px solid #000000;
+          padding-bottom: 8px;
+          margin-bottom: 16px;
+          font-size: 18px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 10px;
+          font-weight: 700 !important;
+        }
+        th, td {
+          border: 1.5px solid #000000 !important;
+          padding: 8px 6px;
+          text-align: left;
+          font-size: 11px;
+          color: #000000 !important;
+          font-weight: 700 !important;
+          line-height: 1.3;
+        }
+        th {
+          background-color: #f1f5f9 !important;
+          font-weight: 900 !important;
+        }
+        tr:nth-child(even) td {
+          background-color: #f8fafc;
+        }
+        @media print {
+          @page {
+            margin: 8mm;
+          }
+          body {
+            padding: 0;
+            color: #000000 !important;
+          }
+          * {
+            font-weight: 700 !important;
+            color: #000000 !important;
+          }
+          th, td {
+            font-weight: 700 !important;
+            border: 1.5px solid #000000 !important;
+            color: #000000 !important;
+          }
+          th {
+            background-color: #f1f5f9 !important;
+            font-weight: 900 !important;
+          }
+        }
       </style>
     </head>
     <body>
@@ -498,9 +570,9 @@ document.addEventListener("DOMContentLoaded", function () {
     rowsToPrint.forEach(row => {
       html += "<tr>";
       colsToPrint.forEach(col => {
-        const cell = row.querySelector(`.col-${col.key}`);
+        const cell = row.querySelector(".col-" + col.key);
         const text = cell ? cell.textContent.trim() : "";
-        html += `<td>${text}</td>`;
+        html += "<td>" + text + "</td>";
       });
       html += "</tr>";
     });
@@ -515,7 +587,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const w = window.open("", "", "width=1000,height=700");
     w.document.write(html);
     w.document.close();
-    w.print();
+    w.focus();
+    setTimeout(() => {
+      w.print();
+    }, 250);
     
     cancelPrintLayout();
   };
