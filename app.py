@@ -5806,7 +5806,7 @@ def payment_day_stats():
                 SELECT
                     COUNT(*) AS expected_accounts
                 FROM (
-                    SELECT type, start_date, closed_at, vid FROM customer
+                    SELECT type, start_date, NULL::timestamptz AS closed_at, vid FROM customer
                     UNION ALL
                     SELECT type, start_date, closed_at, vid FROM closed_cust_account
                 ) c
@@ -6332,7 +6332,7 @@ def api_bulk_capture_session_create():
         import qrcode
         qr = qrcode.QRCode(
             version=None,  # Auto-fit version based on URL length
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            error_correction=qrcode.constants.ERROR_CORRECT_M, # type: ignore
             box_size=8,
             border=3,
         )
@@ -6340,7 +6340,7 @@ def api_bulk_capture_session_create():
         qr.make(fit=True)
         img = qr.make_image(fill_color="#1a1a2e", back_color="#ffffff")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="PNG") # type: ignore
         qr_base64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception as qr_err:
         logger.warning(f"Could not generate QR code with qrcode lib: {qr_err}")
