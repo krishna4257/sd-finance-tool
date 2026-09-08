@@ -5806,7 +5806,7 @@ def payment_day_stats():
                 SELECT
                     COUNT(*) AS expected_accounts
                 FROM (
-                    SELECT type, start_date, closed_at, vid FROM customer
+                    SELECT type, start_date, NULL::timestamptz AS closed_at, vid FROM customer
                     UNION ALL
                     SELECT type, start_date, closed_at, vid FROM closed_cust_account
                 ) c
