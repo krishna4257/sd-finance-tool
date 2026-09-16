@@ -462,7 +462,7 @@
                 <div>
                     Generate dynamic, temporary installation links for employees with levels <strong>J, m, s</strong>. 
                     For security, links are cryptographically signed, bound to the selected employee, and expire in 
-                    <strong>exactly 15 minutes</strong>.
+                    <strong>exactly 30 minutes</strong>.
                 </div>
             </div>
 
@@ -556,7 +556,7 @@
 
         <div id="countdownTimerCard" class="timer-alert-card">
             <i class="fas fa-clock"></i>
-            Expires in <strong id="countdownTimer">15:00</strong>
+            Expires in <strong id="countdownTimer">30:00</strong>
         </div>
     </div>
 </div>
@@ -610,11 +610,12 @@ function generateLink(eid, name) {
         },
         body: JSON.stringify({ employee_id: eid })
     })
-    .then(response => {
+    .then(async response => {
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error("HTTP error " + response.status);
+            throw new Error(data.error || ("Failed to generate link (HTTP " + response.status + ")"));
         }
-        return response.json();
+        return data;
     })
     .then(data => {
         if (data.success) {
@@ -634,7 +635,7 @@ function generateLink(eid, name) {
                     rawPhone = "91" + rawPhone;
                 }
 
-                const msg = `Siva Durga App Install Link:\n\n${data.url}\n\nNote: This link will expire in 15 minutes.`;
+                const msg = `Siva Durga App Install Link:\n\n${data.url}\n\nNote: This link will expire in 30 minutes.`;
                 const encodedMsg = encodeURIComponent(msg);
 
                 // Setup WhatsApp Link
@@ -659,18 +660,18 @@ function generateLink(eid, name) {
             const timerCard = document.getElementById("countdownTimerCard");
             if (timerCard) {
                 timerCard.className = "timer-alert-card";
-                timerCard.innerHTML = '<i class="fas fa-clock me-1"></i> Expires in <strong id="countdownTimer">15:00</strong>';
+                timerCard.innerHTML = '<i class="fas fa-clock me-1"></i> Expires in <strong id="countdownTimer">30:00</strong>';
             }
 
-            // Set countdown timer to 15 minutes (900 seconds)
-            startCountdown(900);
+            // Set countdown timer to 30 minutes (1800 seconds)
+            startCountdown(1800);
         } else {
             alert("Error: " + (data.error || "Failed to generate link."));
         }
     })
     .catch(error => {
         console.error("Error:", error);
-        alert("Failed to generate link.");
+        alert(error.message || "Failed to generate link.");
     });
 }
 
