@@ -15394,6 +15394,7 @@ def app_portal():
 
 
 @app.route("/app/portal/register", methods=["POST"])
+@csrf.exempt
 def app_portal_register():
     """
     POST /app/portal/register

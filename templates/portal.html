@@ -283,6 +283,7 @@
         {% if registration_mode %}
         <!-- Step 1: Self Registration Form -->
         <form action="{{ url_for('app_portal_register') }}" method="POST" id="regForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="token" value="{{ token }}">
 
             <div class="form-group">
