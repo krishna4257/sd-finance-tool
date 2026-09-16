@@ -227,3 +227,4 @@ python_files/*
 # Self-hosted APK releases — binaries are never committed to git
 apk_releases/*.apk
 apk_releases/*.tmp
+!apk_releases/version.json

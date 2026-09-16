@@ -15206,6 +15206,8 @@ def admin_app_releases():
 
 # ── Admin: generate private download link ────────────────────────────────────
 
+# ── Admin: generate private download link ────────────────────────────────────
+
 @app.route("/admin/generate_download_link", methods=["POST"])
 def generate_download_link():
     """
@@ -15213,7 +15215,7 @@ def generate_download_link():
     Requires admin web session (level: admin/mgmt/superadmin).
     Expects JSON body:
       - employee_id: int
-    Generates a cryptographically signed token valid for 2 minutes.
+    Generates a cryptographically signed token valid for 30 minutes.
     """
     if session.get("level") not in ("admin", "mgmt", "superadmin"):
         return jsonify({"error": "admin access required"}), 403
@@ -15234,18 +15236,10 @@ def generate_download_link():
         if not emp[1]:
             return jsonify({"error": "employee account is disabled"}), 400
 
-        # Find corresponding user account id
-        cur.execute("SELECT id FROM users WHERE employee_id = %s", (employee_id,))
-        user_row = cur.fetchone()
-        if not user_row:
-            return jsonify({"error": "user account not associated with this employee"}), 404
-        user_id = user_row[0]
-
-        # Generate signed token with 15-minute expiration
-        expiry = (datetime.now(timezone.utc) + timedelta(seconds=900)).isoformat()
+        # Generate signed token with 30-minute expiration (1800 seconds)
+        expiry = (datetime.now(timezone.utc) + timedelta(seconds=1800)).isoformat()
         token_payload = {
             "eid": int(employee_id),
-            "uid": int(user_id),
             "exp": expiry
         }
         signed_token = serializer.dumps(token_payload)
@@ -15279,97 +15273,237 @@ def generate_download_link():
         conn.close()
 
 
-# ── App Download Portal landing page ──────────────────────────────────────────
+# ── App Download Portal landing & self-registration ────────────────────────────
 
 @app.route("/app/portal", methods=["GET"])
 def app_portal():
     """
     GET /app/portal?token=<signed_token> (or session fallback)
-    Secured landing page that allows download of the APK.
+    Secured landing page that allows employee self-registration and APK download.
     """
     token = request.args.get("token")
-    
-    # 1. Parse token if present
+    token_eid = None
+
     if token:
         try:
             payload = serializer.loads(token)
-            eid = int(payload.get("eid"))
-            uid = int(payload.get("uid"))
+            token_eid = int(payload.get("eid"))
             exp_str = payload.get("exp")
             
             # Check expiration
             exp_dt = datetime.fromisoformat(exp_str)
             if datetime.now(timezone.utc) > exp_dt:
-                flash("This installation link has expired. Request a new link from your administrator.", "danger")
+                flash("This installation link has expired (links are valid for 30 minutes). Please request a new link from your administrator.", "danger")
                 return redirect(url_for("login"))
                 
-            # If valid, cache in session
-            session["download_token_eid"] = eid
-            session["download_token_uid"] = uid
+            # Cache valid token in session
+            session["download_token_eid"] = token_eid
             session["download_token_expiry"] = exp_str
+            session["download_token_str"] = token
             
         except Exception as e:
             logger.warning("app_portal: invalid token signature: %s", e)
-            flash("Invalid link. Please contact your administrator.", "danger")
+            flash("Invalid or corrupted installation link. Please contact your administrator.", "danger")
             return redirect(url_for("login"))
+    else:
+        token_eid = session.get("download_token_eid")
+        exp_str = session.get("download_token_expiry")
+        token = session.get("download_token_str")
+        if token_eid and exp_str:
+            try:
+                exp_dt = datetime.fromisoformat(exp_str)
+                if datetime.now(timezone.utc) > exp_dt:
+                    session.pop("download_token_eid", None)
+                    session.pop("download_token_expiry", None)
+                    session.pop("download_token_str", None)
+                    flash("This installation link has expired. Please request a new link.", "danger")
+                    return redirect(url_for("login"))
+            except Exception:
+                token_eid = None
 
-    # 2. Authenticate the session
     user_id = session.get("user_id")
     user_level = session.get("level")
-    employee_id = session.get("employee_id")
+    session_eid = session.get("employee_id")
 
-    # If not logged in, redirect to login page, preserving link validation state
-    if not user_id:
-        if token:
-            flash("Please log in to complete your app installation.", "info")
-            return redirect(url_for("login", token=token))
-        else:
-            flash("Web access denied.", "danger")
-            return redirect(url_for("login"))
-
-    # 3. Check access rights
-    # Admins and Mgmt can ALWAYS access the download portal
     if user_level in ("admin", "mgmt", "superadmin"):
         session["download_authorized"] = True
-    else:
-        # For J, m, s, verify their current session matches the token context
-        allowed = False
-        token_eid = session.get("download_token_eid")
-        token_exp = session.get("download_token_expiry")
-        
-        if token_eid and token_exp:
-            try:
-                exp_dt = datetime.fromisoformat(token_exp)
-                if datetime.now(timezone.utc) < exp_dt and int(token_eid) == int(eid):
-                    allowed = True
-            except Exception as e:
-                logger.error("app_portal verification exception: %s", e)
-        
-        if not allowed:
-            session.clear()
-            flash("Web access denied. Request a temporary installation link from your administrator.", "danger")
+
+    if not token_eid and not user_id:
+        flash("Web access denied. A valid installation link is required.", "danger")
+        return redirect(url_for("login"))
+
+    target_eid = token_eid or session_eid
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT eid, name, phone_number, level, is_active FROM employee WHERE eid = %s", (target_eid,))
+        emp_row = cur.fetchone()
+        if not emp_row or not emp_row[4]:
+            flash("Employee account not found or disabled.", "danger")
             return redirect(url_for("login"))
-            
+
+        emp_data = {
+            "eid": emp_row[0],
+            "name": emp_row[1],
+            "phone": emp_row[2] or "N/A",
+            "level": emp_row[3] or "staff"
+        }
+
+        # Check if user account already exists for this employee
+        cur.execute("SELECT id, username FROM users WHERE employee_id = %s", (target_eid,))
+        user_row = cur.fetchone()
+
+        version_data = _read_version_json() or {}
+        apk_size = "Unknown"
+        if version_data:
+            version = version_data.get("latest_version")
+            apk_path = os.path.join(APK_DIR, f"sdfin-{version}.apk")
+            if os.path.isfile(apk_path):
+                size_mb = os.path.getsize(apk_path) / (1024 * 1024)
+                apk_size = f"{size_mb:.1f} MB"
+
+        # If user account does not exist, render Self-Registration state
+        if not user_row:
+            return render_template(
+                "portal.html",
+                registration_mode=True,
+                employee=emp_data,
+                token=token or "",
+                version=version_data.get("latest_version", "N/A"),
+                size=apk_size,
+                notes=version_data.get("release_notes", "No release notes available.")
+            )
+
+        # If user account exists, authorize download
+        session["download_authorized"] = True
+        return render_template(
+            "portal.html",
+            registration_mode=False,
+            employee=emp_data,
+            user_account=user_row[1],
+            version=version_data.get("latest_version", "N/A"),
+            size=apk_size,
+            notes=version_data.get("release_notes", "No release notes available."),
+            released_at=version_data.get("released_at", ""),
+            force_update=version_data.get("force_update", False)
+        )
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route("/app/portal/register", methods=["POST"])
+def app_portal_register():
+    """
+    POST /app/portal/register
+    Allows employee to create their username and password via link.
+    """
+    token = request.form.get("token") or session.get("download_token_str")
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+    confirm_password = request.form.get("confirm_password") or ""
+
+    if not token:
+        flash("Installation link token missing.", "danger")
+        return redirect(url_for("login"))
+
+    try:
+        payload = serializer.loads(token)
+        eid = int(payload.get("eid"))
+        exp_str = payload.get("exp")
+        exp_dt = datetime.fromisoformat(exp_str)
+        if datetime.now(timezone.utc) > exp_dt:
+            flash("This installation link has expired. Request a new link from your administrator.", "danger")
+            return redirect(url_for("login"))
+    except Exception as e:
+        logger.warning("app_portal_register: invalid token: %s", e)
+        flash("Invalid or corrupted installation link.", "danger")
+        return redirect(url_for("login"))
+
+    if not username or len(username) < 3:
+        flash("Username must be at least 3 characters long.", "danger")
+        return redirect(url_for("app_portal", token=token))
+
+    if not password or len(password) < 4:
+        flash("Password must be at least 4 characters long.", "danger")
+        return redirect(url_for("app_portal", token=token))
+
+    if password != confirm_password:
+        flash("Passwords do not match.", "danger")
+        return redirect(url_for("app_portal", token=token))
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Check if username is already taken
+        cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
+        if cur.fetchone():
+            flash(f"Username '{username}' is already taken. Please choose another username.", "danger")
+            return redirect(url_for("app_portal", token=token))
+
+        # Verify employee exists and does not already have a user
+        cur.execute("SELECT eid, name, level, is_active FROM employee WHERE eid = %s", (eid,))
+        emp_row = cur.fetchone()
+        if not emp_row or not emp_row[3]:
+            flash("Employee account not found or disabled.", "danger")
+            return redirect(url_for("login"))
+
+        cur.execute("SELECT id FROM users WHERE employee_id = %s", (eid,))
+        if cur.fetchone():
+            flash("An account already exists for this employee. Please log in.", "info")
+            return redirect(url_for("app_portal", token=token))
+
+        # Create user account
+        hashed = generate_password_hash(password, method="pbkdf2:sha256")
+        cur.execute("""
+            INSERT INTO users (username, password_hash, employee_id)
+            VALUES (%s, %s, %s)
+            RETURNING id
+        """, (username, hashed, eid))
+        new_user_id = cur.fetchone()[0]
+
+        # Assign village access for assigned employee
+        cur.execute("SELECT vid FROM village WHERE emp1 = %s OR emp2 = %s", (eid, eid))
+        for v in cur.fetchall():
+            cur.execute("""
+                INSERT INTO user_village_access (user_id, village_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+            """, (new_user_id, v[0]))
+
+        conn.commit()
+
+        # Set session login
+        session["user_id"] = new_user_id
+        session["username"] = username
+        session["level"] = (emp_row[2] or "staff").lower()
+        session["employee_id"] = eid
         session["download_authorized"] = True
 
-    # 4. Fetch the latest release info
-    version_data = _read_version_json() or {}
-    apk_size = "Unknown"
-    if version_data:
-        version = version_data.get("latest_version")
-        apk_path = os.path.join(APK_DIR, f"sdfin-{version}.apk")
-        if os.path.isfile(apk_path):
-            size_mb = os.path.getsize(apk_path) / (1024 * 1024)
-            apk_size = f"{size_mb:.1f} MB"
+        audit_log(
+            action="user_self_registered_via_link",
+            entity_type="user",
+            entity_id=new_user_id,
+            details={
+                "username": username,
+                "employee_id": eid,
+                "employee_name": emp_row[1]
+            },
+            status="success"
+        )
 
-    return render_template(
-        "portal.html",
-        version=version_data.get("latest_version", "N/A"),
-        size=apk_size,
-        notes=version_data.get("release_notes", "No release notes available."),
-        released_at=version_data.get("released_at", ""),
-        force_update=version_data.get("force_update", False)
-    )
+        flash("Account created successfully! You can now download the app.", "success")
+        return redirect(url_for("app_portal", token=token))
+
+    except Exception as e:
+        conn.rollback()
+        logger.error("app_portal_register exception: %s", e)
+        flash(f"Failed to create account: {str(e)}", "danger")
+        return redirect(url_for("app_portal", token=token))
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ── Secure download stream endpoint ──────────────────────────────────────────

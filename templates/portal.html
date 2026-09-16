@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siva Durga App Installation</title>
+    <title>Siva Durga App Setup & Installation</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
     <style>
         body {
@@ -22,45 +23,108 @@
         .portal-card {
             max-width: 500px;
             width: 100%;
-            padding: 40px;
+            padding: 36px 32px;
             background: #ffffff;
             border-radius: 20px;
             border: 1px solid #e5e7eb;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
             text-align: center;
         }
         .logo-wrap {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
         .logo-wrap img {
-            max-width: 160px;
+            max-width: 150px;
             height: auto;
         }
         h2 {
             font-family: "Space Grotesk", sans-serif;
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            margin: 0 0 8px 0;
+            margin: 0 0 6px 0;
             color: #111827;
             letter-spacing: -0.02em;
         }
         .subtitle {
             color: #4b5563;
-            font-size: 14px;
-            margin-bottom: 30px;
+            font-size: 13.5px;
+            margin-bottom: 24px;
+        }
+        .emp-badge-card {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+        .emp-badge-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #166534;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .emp-detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+        .emp-detail-row:last-child {
+            margin-bottom: 0;
+        }
+        .emp-detail-label {
+            color: #4b5563;
+        }
+        .emp-detail-val {
+            font-weight: 600;
+            color: #111827;
+        }
+        .form-group {
+            text-align: left;
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .form-control-styled {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-family: inherit;
+            color: #111827;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .form-control-styled:focus {
+            border-color: #1a4d2e;
+            box-shadow: 0 0 0 3px rgba(26, 77, 46, 0.12);
         }
         .app-meta {
             background: #f9fafb;
             border: 1px solid #f3f4f6;
             border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 28px;
+            padding: 16px;
+            margin-bottom: 24px;
             text-align: left;
         }
         .meta-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-size: 13px;
         }
         .meta-row:last-child {
@@ -78,15 +142,15 @@
             font-size: 12px;
             color: #4b5563;
             border-top: 1px dashed #e5e7eb;
-            margin-top: 10px;
-            padding-top: 10px;
+            margin-top: 8px;
+            padding-top: 8px;
         }
         .download-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 100%;
-            padding: 14px 24px;
+            padding: 14px 20px;
             background: #1a4d2e;
             color: #ffffff;
             font-size: 15px;
@@ -97,6 +161,7 @@
             box-shadow: 0 4px 12px rgba(26, 77, 46, 0.15);
             border: none;
             cursor: pointer;
+            box-sizing: border-box;
         }
         .download-btn:hover {
             background: #143b23;
@@ -105,23 +170,23 @@
             transform: scale(0.98);
         }
         .instructions {
-            margin-top: 32px;
+            margin-top: 28px;
             text-align: left;
             border-top: 1px solid #e5e7eb;
-            padding-top: 24px;
+            padding-top: 20px;
         }
         .instructions h3 {
             font-family: "Space Grotesk", sans-serif;
-            font-size: 15px;
+            font-size: 14.5px;
             font-weight: 600;
-            margin: 0 0 14px 0;
+            margin: 0 0 12px 0;
             color: #111827;
         }
         .step {
             display: flex;
             align-items: flex-start;
-            margin-bottom: 14px;
-            font-size: 13px;
+            margin-bottom: 12px;
+            font-size: 12.5px;
             color: #4b5563;
             line-height: 1.5;
         }
@@ -139,27 +204,39 @@
             margin-right: 10px;
             margin-top: 2px;
         }
+        .alert-box {
+            margin-bottom: 20px;
+            font-size: 12.5px;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: left;
+            line-height: 1.4;
+        }
+        .alert-danger {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+        }
+        .alert-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
         .security-alert {
-            margin-top: 24px;
-            font-size: 11px;
+            margin-top: 20px;
+            font-size: 11.5px;
             color: #b45309;
             background: #fffbeb;
             border: 1px solid #fef3c7;
             border-radius: 8px;
-            padding: 10px;
+            padding: 10px 12px;
             text-align: left;
             line-height: 1.4;
-        }
-        .logout-link {
-            display: inline-block;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #9ca3af;
-            text-decoration: none;
-        }
-        .logout-link:hover {
-            color: #4b5563;
-            text-decoration: underline;
         }
     </style>
 </head>
@@ -170,27 +247,100 @@
         </div>
         
         <h2>Siva Durga Mobile App</h2>
-        <div class="subtitle">Secure Internal Distribution Portal</div>
+        <div class="subtitle">Secure Internal Distribution & Account Setup</div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
-              <div class="security-alert" style="margin-bottom: 20px; background: #fee2e2; border-color: #fecaca; color: #991b1b;">
-                  {{ message }}
+              <div class="alert-box alert-{{ category if category != 'error' else 'danger' }}">
+                  <i class="fas fa-info-circle me-1"></i> {{ message }}
               </div>
             {% endfor %}
           {% endif %}
         {% endwith %}
 
+        <!-- Employee Info Card -->
+        {% if employee %}
+        <div class="emp-badge-card">
+            <div class="emp-badge-title">
+                <i class="fas fa-id-card"></i> Verified Employee Details
+            </div>
+            <div class="emp-detail-row">
+                <span class="emp-detail-label">Employee Name:</span>
+                <span class="emp-detail-val">{{ employee.name }}</span>
+            </div>
+            <div class="emp-detail-row">
+                <span class="emp-detail-label">Mobile Number:</span>
+                <span class="emp-detail-val">{{ employee.phone }}</span>
+            </div>
+            <div class="emp-detail-row">
+                <span class="emp-detail-label">Role Level:</span>
+                <span class="emp-detail-val" style="text-transform: uppercase;">{{ employee.level }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if registration_mode %}
+        <!-- Step 1: Self Registration Form -->
+        <form action="{{ url_for('app_portal_register') }}" method="POST" id="regForm">
+            <input type="hidden" name="token" value="{{ token }}">
+
+            <div class="form-group">
+                <label for="username"><i class="fas fa-user me-1"></i> Choose Username</label>
+                <input type="text" id="username" name="username" class="form-control-styled" required placeholder="Enter username (min 3 characters)" autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label for="password"><i class="fas fa-lock me-1"></i> Choose Password</label>
+                <input type="password" id="password" name="password" class="form-control-styled" required placeholder="Enter password (min 4 characters)" autocomplete="new-password">
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password"><i class="fas fa-check-double me-1"></i> Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" class="form-control-styled" required placeholder="Re-enter password" autocomplete="new-password">
+                <small id="passMatchMsg" style="display:none; font-size:11.5px; margin-top:4px;"></small>
+            </div>
+
+            <button type="submit" class="download-btn">
+                <i class="fas fa-user-plus me-2"></i> Create Account & Proceed to Download
+            </button>
+        </form>
+
+        <script>
+            document.getElementById('regForm').addEventListener('submit', function(e) {
+                const p1 = document.getElementById('password').value;
+                const p2 = document.getElementById('confirm_password').value;
+                if (p1 !== p2) {
+                    e.preventDefault();
+                    const msg = document.getElementById('passMatchMsg');
+                    msg.style.display = 'block';
+                    msg.style.color = '#dc2626';
+                    msg.textContent = 'Passwords do not match. Please check again.';
+                }
+            });
+        </script>
+
+        <div class="security-alert">
+            <i class="fas fa-shield-alt me-1"></i> <strong>Security Notice:</strong> This installation link expires in 30 minutes. Creating your account binds it directly to your employee ID.
+        </div>
+
+        {% else %}
+        <!-- Step 2: Account Ready & APK Download State -->
         <div class="app-meta">
             <div class="meta-row">
-                <span class="meta-label">Version</span>
+                <span class="meta-label">App Version</span>
                 <span class="meta-value">v{{ version }}</span>
             </div>
             <div class="meta-row">
                 <span class="meta-label">File Size</span>
                 <span class="meta-value">{{ size }}</span>
             </div>
+            {% if user_account %}
+            <div class="meta-row">
+                <span class="meta-label">App Username</span>
+                <span class="meta-value" style="font-family: monospace;">{{ user_account }}</span>
+            </div>
+            {% endif %}
             {% if notes %}
             <div class="notes-box">
                 <strong>Release Notes:</strong><br>
@@ -200,35 +350,34 @@
         </div>
 
         <a href="{{ url_for("app_download_action") }}" class="download-btn">
-            Download Installation Package (APK)
+            <i class="fas fa-download me-2"></i> Download Installation Package (APK)
         </a>
 
         <div class="instructions">
-            <h3>How to Install the App</h3>
+            <h3><i class="fas fa-list-check me-1"></i> How to Install the App</h3>
             
             <div class="step">
                 <span class="step-num">1</span>
-                <span>Click the **Download** button above to save the installation file (`.apk`) to your device.</span>
+                <span>Click the <strong>Download</strong> button above to save the installation file (<code>.apk</code>) to your phone.</span>
             </div>
             <div class="step">
                 <span class="step-num">2</span>
-                <span>Open your browser\s download folder and tap the downloaded file.</span>
+                <span>Open your browser's download folder and tap the downloaded APK file.</span>
             </div>
             <div class="step">
                 <span class="step-num">3</span>
-                <span>If prompted, enable **"Allow installation of unknown apps"** in your phone settings. This is a normal security prompt for private internal apps.</span>
+                <span>If prompted, enable <strong>"Allow installation of unknown apps"</strong> in your phone settings.</span>
             </div>
             <div class="step">
                 <span class="step-num">4</span>
-                <span>Tap **Install** and log in using your employee username and password. Your hardware details will automatically bind on first login.</span>
+                <span>Tap <strong>Install</strong>, then open the app and log in with your created username and password.</span>
             </div>
         </div>
 
         <div class="security-alert">
-            <strong>Security Notice:</strong> This installation link is temporary and signed specifically for your account. Please complete your download within 2 minutes. Do not share or forward this page.
+            <i class="fas fa-shield-alt me-1"></i> <strong>Security Notice:</strong> This link is temporary and signed specifically for your employee account. Do not share or forward this link.
         </div>
-
-        <a href="{{ url_for("logout") }}" class="logout-link">Log out from session</a>
+        {% endif %}
     </div>
 </body>
 </html>
