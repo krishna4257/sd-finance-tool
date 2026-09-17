@@ -1,0 +1,2651 @@
+{% extends "chit/base.html" %}
+
+{% block title %}{{ member_name|default('Subscriber Details') }} – Siva Durga Chit Fund{% endblock %}
+
+{% block extra_head %}
+<style>
+  .card-shadow card-shine dark:shadow-none {
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  }
+  .money-fig {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .payment-mint-box {
+    background-color: #f0fdf4;
+    border: 1px solid #dcfce7;
+  }
+  .dark .payment-mint-box {
+    background-color: rgba(6, 78, 59, 0.2);
+    border: 1px solid rgba(6, 78, 59, 0.3);
+  }
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #printableStatement, #printableStatement * {
+      visibility: visible;
+    }
+    #printableStatement {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      display: block !important;
+    }
+  @keyframes gentle-breath {
+    0%, 100% {
+      transform: scaleY(1);
+      filter: brightness(1);
+    }
+    50% {
+      transform: scaleY(1.08);
+      filter: brightness(1.2);
+    }
+  }
+  .animate-breath {
+    animation: gentle-breath 3s ease-in-out infinite;
+    transform-origin: bottom;
+  }
+  .animate-pulse-fast {
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-3xl mx-auto w-full space-y-6 pt-3 pb-24">
+
+  <!-- ==================== TOP NAVIGATION ROW ==================== -->
+  <div class="flex items-center justify-between">
+    <!-- Back Button -->
+    <a href="/chit/members" class="h-9 w-9 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:bg-chitDark-elevated transition-colors" title="Back to Members">
+      <i data-lucide="arrow-left" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+    </a>
+
+    <!-- Right Actions: + Pay and Three-Dots Menu -->
+    <div class="flex items-center gap-2 relative">
+      <button type="button" onclick="openRecordPaymentModal()" class="h-9 px-4 rounded-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs transition-all shadow-xs card-shine dark:shadow-none flex items-center gap-1.5 active:scale-95">
+        <i data-lucide="plus" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+        <span>Pay</span>
+      </button>
+
+      <!-- Three Dots Trigger -->
+      <div class="relative">
+        <button type="button" id="btnThreeDots" onclick="toggleOptionsMenu(event)" class="h-9 w-9 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated transition-colors">
+          <i data-lucide="more-vertical" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="optionsDropdown" class="hidden absolute right-0 mt-2 w-52 bg-white dark:bg-chitDark-surface rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700/50 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-100 text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <button type="button" onclick="handleMenuSelectTab('payments')" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 dark:bg-chitDark-bg text-left transition-colors">
+            <i data-lucide="clock" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 w-4"></i>
+            <span>Payment history</span>
+          </button>
+
+          <a id="editProfileMenuLink" href="/chit/members/{{ member_id }}/edit" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 dark:bg-chitDark-bg text-left transition-colors">
+            <i data-lucide="pencil" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 w-4"></i>
+            <span>Edit profile</span>
+          </a>
+
+          <button type="button" onclick="openPortalAccessModal()" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 dark:bg-chitDark-bg text-left transition-colors">
+            <i data-lucide="globe" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 w-4"></i>
+            <span>Portal access</span>
+          </button>
+
+          <button type="button" onclick="generateStatementPDF()" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 dark:bg-chitDark-bg text-left transition-colors">
+            <i data-lucide="file-down" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 w-4"></i>
+            <span>Statement (PDF)</span>
+          </button>
+
+          <button type="button" onclick="openManageLinksModal()" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 dark:bg-chitDark-bg text-left transition-colors">
+            <i data-lucide="link" class="w-4 h-4 stroke-[1.8] text-indigo-500 w-4"></i>
+            <span>Link / Manage Accounts</span>
+          </button>
+
+          <button type="button" onclick="toggleMemberDefaultStatus()" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-left transition-colors font-semibold">
+            <i data-lucide="alert-triangle" class="w-4 h-4 stroke-[1.8] text-rose-500 w-4"></i>
+            <span id="toggleDefaultActionText">Mark as Defaulted</span>
+          </button>
+
+          <div class="h-px bg-slate-100 dark:bg-chitDark-elevated my-1"></div>
+
+          <button type="button" onclick="confirmDeleteMember()" class="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-rose-600 hover:bg-rose-50 text-left transition-colors font-bold">
+            <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8] text-rose-500 w-4"></i>
+            <span>Delete member</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOP HORIZONTAL LINKED ACCOUNTS BAR ==================== -->
+  <div id="linkedAccountsBarContainer" class="hidden">
+    <div class="bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/60 p-2 sm:p-2.5 shadow-xs transition-all">
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="navigateLinkedMember(-1)" aria-label="Previous linked account" 
+                class="h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer" title="Previous member">
+          <i data-lucide="chevron-left" class="w-4 h-4 stroke-[2]"></i>
+        </button>
+        
+        <div id="linkedMembersPills" class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 scroll-smooth max-w-full">
+          <!-- Populated by renderLinkedMembersBar -->
+        </div>
+
+        <button type="button" onclick="navigateLinkedMember(1)" aria-label="Next linked account" 
+                class="h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer" title="Next member">
+          <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2]"></i>
+        </button>
+
+        <button type="button" onclick="openManageLinksModal()" class="h-8 px-2.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 text-xs font-bold shrink-0 flex items-center gap-1 transition-all" title="Manage linked accounts">
+          <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+          <span class="text-[11px] hidden sm:inline">Manage</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TILE 2: OVERALL ANALYTICS BIG CARD ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] border border-slate-200 dark:border-slate-700/50 p-6 md:p-8 card-shadow card-shine dark:shadow-none space-y-6">
+    
+    <!-- Member Name & Badges -->
+    <div class="space-y-3">
+      <div class="flex items-center gap-3.5">
+        <div id="memberAvatarDisplay" class="h-11 w-11 rounded-2xl bg-emerald-600 text-white dark:text-slate-900 font-extrabold text-base flex items-center justify-center shrink-0 shadow-2xs card-shine dark:shadow-none">
+          A
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h1 id="memberNameDisplay" class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+              Loading...
+            </h1>
+            <span id="memberCustomerIdDisplay" class="px-2.5 py-0.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-mono font-extrabold text-xs hidden"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pill Tags -->
+      <div class="flex items-center gap-2 flex-wrap text-xs">
+        <span id="badgeActiveChits" class="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 font-semibold inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+          <span id="activeChitsCountText">0 active chits</span>
+        </span>
+
+        <span id="badgeNetBalance" class="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 font-semibold inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none">
+          <i data-lucide="trending-down" class="w-4 h-4 stroke-[1.8] text-slate-500 dark:text-slate-400 text-[11px]"></i>
+          <span id="netBalanceText">₹0 net</span>
+        </span>
+
+        <span id="badgePortalStatus" class="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 font-semibold inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none">
+          <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+          <span>Portal · Off</span>
+        </span>
+
+        <span id="badgeDefaulted" class="hidden px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800/80 text-rose-700 dark:text-rose-300 font-extrabold inline-flex items-center gap-1.5 shadow-2xs">
+          <span class="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+          <span id="defaultedBadgeText">DEFAULTED</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Due Now Highlight Banner Box -->
+    <div id="dueNowContainer">
+      <!-- Rendered via JS -->
+    </div>
+
+    <!-- 3 Metrics: PAID IN, PAID OUT, TO GO -->
+    <div class="grid grid-cols-3 gap-4 pt-1">
+      <div>
+        <div class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <i data-lucide="arrow-down-left" class="w-4 h-4 stroke-[1.8] text-emerald-600 text-[10px]"></i>
+          <span>PAID IN</span>
+        </div>
+        <p class="text-xl md:text-2xl font-extrabold text-emerald-700 money-fig tracking-tight mt-0.5" id="paidInDisplay">
+          ₹0
+        </p>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <i data-lucide="arrow-up-right" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 text-[10px]"></i>
+          <span>PAID OUT</span>
+        </div>
+        <p class="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-slate-200 money-fig tracking-tight mt-0.5" id="paidOutDisplay">
+          —
+        </p>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <i data-lucide="clock" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500 text-[10px]"></i>
+          <span>TO GO</span>
+        </div>
+        <p class="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-slate-200 money-fig tracking-tight mt-0.5" id="toGoDisplay">
+          ₹0
+        </p>
+        <p class="text-[11px] font-medium text-slate-400 dark:text-slate-500" id="toGoMonthsSubtext">0 mo</p>
+      </div>
+    </div>
+
+    <!-- Overall Months Progress Bar -->
+    <div class="space-y-1.5 pt-1">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-semibold text-slate-500 dark:text-slate-400" id="progressMonthsLabel">0 of 0 months paid</span>
+        <span class="font-extrabold text-slate-800 dark:text-slate-200" id="progressPercentDisplay">0%</span>
+      </div>
+      <div class="h-2 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full overflow-hidden flex">
+        <div id="overallProgressBar" class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== 5 SEGMENTED VIEWS TABS ==================== -->
+  <div class="bg-slate-100 dark:bg-chitDark-elevated/90 p-1.5 rounded-2xl flex items-center gap-1 border border-slate-200 dark:border-slate-700/50 shadow-2xs card-shine dark:shadow-none">
+    <button type="button" onclick="switchTab('chits')" id="tabBtn-chits" 
+            class="flex-1 py-2 text-xs font-bold text-center rounded-xl transition-all shadow-xs card-shine dark:shadow-none bg-white dark:bg-chitDark-surface text-slate-900 dark:text-slate-100 cursor-pointer">
+      Chits
+    </button>
+    <button type="button" onclick="switchTab('payments')" id="tabBtn-payments" 
+            class="flex-1 py-2 text-xs font-semibold text-center rounded-xl transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 cursor-pointer">
+      Payments
+    </button>
+    <button type="button" onclick="switchTab('payouts')" id="tabBtn-payouts" 
+            class="flex-1 py-2 text-xs font-semibold text-center rounded-xl transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 cursor-pointer">
+      Payouts
+    </button>
+    <button type="button" onclick="switchTab('loans')" id="tabBtn-loans" 
+            class="flex-1 py-2 text-xs font-semibold text-center rounded-xl transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 cursor-pointer">
+      Loans
+    </button>
+    <button type="button" onclick="switchTab('activity')" id="tabBtn-activity" 
+            class="flex-1 py-2 text-xs font-semibold text-center rounded-xl transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 cursor-pointer">
+      Activity
+    </button>
+  </div>
+
+  <!-- ==================== TAB 1: CHITS VIEW ==================== -->
+  <div id="tabContent-chits" class="space-y-4">
+    <div class="flex items-center justify-between px-1">
+      <p class="text-xs font-semibold text-slate-400 dark:text-slate-500" id="chitsCountHeader">
+        0 chit groups
+      </p>
+    </div>
+
+    <!-- Chit Cards Container -->
+    <div class="space-y-4" id="chitsListContainer">
+      <p class="text-xs text-slate-400 dark:text-slate-500 py-8 text-center">Loading chit groups...</p>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: PAYMENTS VIEW ==================== -->
+  <div id="tabContent-payments" class="hidden space-y-5">
+    
+    <!-- Search Bar -->
+    <div class="relative">
+      <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs"></i>
+      <input type="text" id="paymentsSearchInput" oninput="filterMemberPayments()" 
+             placeholder="Search amount, chit, method, notes..." 
+             class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-300 shadow-xs card-shine dark:shadow-none">
+    </div>
+
+    <!-- Filters Row -->
+    <div class="flex items-center gap-2.5">
+      <div class="relative">
+        <select id="filterChitSelect" onchange="filterMemberPayments()" class="h-9 px-3 pr-8 rounded-xl bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-2xs card-shine dark:shadow-none appearance-none focus:outline-none">
+          <option value="all">All chits</option>
+        </select>
+        <i data-lucide="chevron-down" class="w-4 h-4 stroke-[1.8] absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-[10px] pointer-events-none"></i>
+      </div>
+
+      <div class="relative">
+        <select id="filterTypeSelect" onchange="filterMemberPayments()" class="h-9 px-3 pr-8 rounded-xl bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-2xs card-shine dark:shadow-none appearance-none focus:outline-none">
+          <option value="all">All types</option>
+          <option value="Cash">Cash</option>
+          <option value="UPI">UPI</option>
+          <option value="Bank">Bank Transfer</option>
+          <option value="Cheque">Cheque</option>
+        </select>
+        <i data-lucide="chevron-down" class="w-4 h-4 stroke-[1.8] absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-[10px] pointer-events-none"></i>
+      </div>
+    </div>
+
+    <!-- Dynamic Monthly Collection Graph Widget -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-5 card-shadow card-shine dark:shadow-none space-y-3">
+      <div class="flex items-baseline justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500" id="chartHeaderTitle">COLLECTED TIMELINE</p>
+          <p class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 money-fig tracking-tight" id="chartTotalDisplay">₹0</p>
+        </div>
+        <div class="flex items-center gap-2.5 text-[10px] font-bold">
+          <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><span class="h-2 w-2 rounded-full bg-emerald-500 shadow-2xs"></span> Paid</span>
+          <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><span class="h-2 w-2 rounded-full bg-amber-400 shadow-2xs"></span> Due</span>
+          <span class="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500"><span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700"></span> Future</span>
+        </div>
+      </div>
+
+      <!-- Segmented Dynamic Months Bar & Legend -->
+      <div class="pt-2" id="dynamicCollectionChartContainer">
+        <!-- Injected dynamically via renderMonthlyCollectionGraph -->
+      </div>
+    </div>
+
+    <!-- 3 Stat Tiles: Collected, Payouts, Penalties -->
+    <div class="grid grid-cols-3 gap-3">
+      <div class="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 rounded-2xl p-4 shadow-2xs card-shine dark:shadow-none">
+        <p class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Collected</p>
+        <p class="text-lg md:text-xl font-extrabold text-emerald-700 dark:text-emerald-400 money-fig mt-0.5" id="tileCollectedDisplay">₹0</p>
+      </div>
+
+      <div class="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800/40 rounded-2xl p-4 shadow-2xs card-shine dark:shadow-none">
+        <p class="text-xs font-semibold text-amber-800 dark:text-amber-300">Payouts</p>
+        <p class="text-lg md:text-xl font-extrabold text-amber-700 dark:text-amber-400 money-fig mt-0.5" id="tilePayoutsDisplay">₹0</p>
+      </div>
+
+      <div class="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-800/40 rounded-2xl p-4 shadow-2xs card-shine dark:shadow-none">
+        <p class="text-xs font-semibold text-rose-800 dark:text-rose-300">Penalties</p>
+        <p class="text-lg md:text-xl font-extrabold text-rose-700 dark:text-rose-400 money-fig mt-0.5" id="tilePenaltiesDisplay">₹0</p>
+      </div>
+    </div>
+
+    <!-- History Header & Record Button -->
+    <div class="flex items-center justify-between px-1 pt-1">
+      <p class="text-xs font-semibold text-slate-400 dark:text-slate-500" id="paymentsCountLabel">0 payments</p>
+      <button type="button" onclick="openRecordPaymentModal()" class="border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-slate-50 dark:bg-chitDark-bg transition-colors inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none">
+        <i data-lucide="plus" class="w-4 h-4 stroke-[1.8] text-[10px]"></i>
+        <span>Record</span>
+      </button>
+    </div>
+
+    <!-- Payments List -->
+    <div class="space-y-3" id="paymentsHistoryList">
+      <!-- Rendered via JS -->
+    </div>
+
+  </div>
+
+  <!-- ==================== TAB 3: PAYOUTS VIEW ==================== -->
+  <div id="tabContent-payouts" class="hidden space-y-5">
+    
+    <!-- Payouts Top Banner Summary -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[28px] border border-slate-200 dark:border-slate-700/50 p-6 card-shadow card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ON-DEMAND PAYOUT STATUS</p>
+          <h3 class="text-lg font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">Siva Durga Fixed Payout Chart</h3>
+        </div>
+        <span class="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+          No Auction · Fixed Chart
+        </span>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        Subscribers receive payouts on-demand based on their chit scheme schedule. Payments continue according to the plan installments for all remaining months.
+      </p>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+        <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-3.5 border border-slate-100 dark:border-slate-800">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">TOTAL TAKEN</p>
+          <p class="text-base md:text-lg font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="payoutsTotalTakenDisplay">₹0</p>
+        </div>
+
+        <div class="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-3.5 border border-emerald-100 dark:border-emerald-800/40">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">CURRENT ELIGIBLE</p>
+          <p class="text-base md:text-lg font-extrabold text-emerald-800 dark:text-emerald-200 money-fig mt-0.5" id="payoutsEligibleDisplay">₹0</p>
+        </div>
+
+        <div class="bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl p-3.5 border border-amber-100 dark:border-amber-800/40 col-span-2 md:col-span-1">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">CHIT LOSS SAVED</p>
+          <p class="text-base md:text-lg font-extrabold text-amber-800 dark:text-amber-200 money-fig mt-0.5" id="payoutsLossDisplay">₹0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payout Groups List -->
+    <div class="space-y-4" id="payoutsListContainer">
+      <!-- Rendered via JS -->
+    </div>
+
+  </div>
+
+  <!-- ==================== TAB 4: ACTIVITY VIEW ==================== -->
+  <div id="tabContent-activity" class="hidden space-y-4">
+    <div class="px-1">
+      <p class="text-xs font-semibold text-slate-400 dark:text-slate-500">Subscriber Activity Timeline</p>
+    </div>
+
+    <div class="space-y-3" id="activityListContainer">
+      <!-- Rendered via JS -->
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: LOANS VIEW ==================== -->
+  <div id="tabContent-loans" class="hidden space-y-5">
+    
+    <!-- Loans Top Banner Summary (Designed identically to Payouts Section) -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[28px] border border-slate-200 dark:border-slate-700/50 p-6 card-shadow card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">MEMBER LOANS &amp; CREDIT</p>
+          <h3 class="text-lg font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">Annual Compounding Credit Facility</h3>
+        </div>
+        <span class="text-xs font-semibold px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
+          Auto-Settled with Chit Payout
+        </span>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        Credit extended to enrolled subscribers compounds annually at agreed rates. Payoff balance updates daily and automatically settles against the member's chit payout or via direct cash repayments.
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-3.5 border border-slate-100 dark:border-slate-800">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ACTIVE PRINCIPAL</p>
+          <p class="text-base md:text-lg font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="mLoanPrincipal">₹0</p>
+        </div>
+
+        <div class="bg-cyan-50/70 dark:bg-cyan-950/30 rounded-2xl p-3.5 border border-cyan-100 dark:border-cyan-800/40">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300">ACCRUED INTEREST</p>
+          <p class="text-base md:text-lg font-extrabold text-cyan-800 dark:text-cyan-200 money-fig mt-0.5" id="mLoanInterest">₹0</p>
+        </div>
+
+        <div class="bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl p-3.5 border border-amber-100 dark:border-amber-800/40">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">TOTAL PAYOFF DUES</p>
+          <p class="text-base md:text-lg font-extrabold text-amber-800 dark:text-amber-200 money-fig mt-0.5" id="mLoanTotalPayoff">₹0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Header Row with Count and Action -->
+    <div class="flex items-center justify-between px-1">
+      <div>
+        <p class="text-xs font-bold text-slate-900 dark:text-slate-100" id="memberLoansCountHeader">0 Loans</p>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500">Compounding yearly · Payoff balance updates daily</p>
+      </div>
+      <a id="btnTopDisburseLoan" href="/chit/loans" class="h-9 px-4 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs card-shine dark:shadow-none active:scale-95 cursor-pointer">
+        <i data-lucide="plus-circle" class="w-4 h-4 stroke-[2]"></i>
+        <span>Disburse New Loan</span>
+      </a>
+    </div>
+
+    <!-- Loans List Container -->
+    <div class="space-y-4" id="memberLoansContainer">
+      <p class="text-xs text-slate-400 py-8 text-center">Loading loans...</p>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: RECORD PAYMENT ==================== -->
+<div id="recordPaymentModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+    
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs">
+          <i data-lucide="plus" class="w-4 h-4 stroke-[1.8] "></i>
+        </div>
+        <div>
+          <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100" id="modalPaymentTitle">Record Payment</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500 font-medium" id="modalMemberSubtitle">Member</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeRecordPaymentModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+      </button>
+    </div>
+
+    <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+      <!-- Green Info Banner if all dues paid or pending alert -->
+      <div id="modalDuesBanner" class="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/40 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+        <i data-lucide="check-circle" class="w-4 h-4 stroke-[1.8] text-emerald-600 mt-0.5"></i>
+        <span id="modalBannerText">Ready to record installment payment.</span>
+      </div>
+
+      <!-- Member Capsule & Chit Pills -->
+      <div class="space-y-2">
+        <div class="flex items-center gap-2.5">
+          <div id="modalAvatar" class="h-7 w-7 rounded-full bg-emerald-600 text-white dark:text-slate-900 font-bold text-xs flex items-center justify-center">A</div>
+          <div>
+            <span class="text-xs font-bold text-slate-900 dark:text-slate-100" id="modalMemberName">Member</span>
+            <span class="text-[11px] text-slate-400 dark:text-slate-500 ml-1.5" id="modalChitDetails">Month 1</span>
+          </div>
+        </div>
+
+        <!-- Chit Groups Pills (if multiple enrolled) -->
+        <div id="modalChitPills" class="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- Form -->
+      <form id="recordPaymentForm" onsubmit="submitRecordPayment(event)" class="space-y-4">
+        <input type="hidden" id="modalInstallmentId">
+        <input type="hidden" id="modalMembershipId">
+        <input type="hidden" id="modalEditingPaymentId">
+
+      <!-- Large Currency Input -->
+      <div class="text-center pt-2">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">AMOUNT</label>
+        <div class="flex items-center justify-center text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100 money-fig">
+          <span class="text-slate-400 dark:text-slate-500 mr-1.5 text-2xl">₹</span>
+          <input type="number" step="0.01" min="1" id="modalAmountInput" required 
+                 class="w-56 text-center font-extrabold text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none border-b-2 border-slate-200 dark:border-slate-700/50 focus:border-emerald-500 py-1"
+                 placeholder="0">
+        </div>
+      </div>
+
+      <!-- Payment Method Pills -->
+      <div class="space-y-1.5">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">METHOD</label>
+        <div class="grid grid-cols-4 gap-2">
+          <button type="button" onclick="selectPaymentMethod('Cash')" id="methodBtn-Cash" 
+                  class="py-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all bg-slate-900 text-white border-slate-900 dark:bg-emerald-600 dark:text-white dark:border-emerald-500 shadow-xs">
+            <i data-lucide="banknote" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>Cash</span>
+          </button>
+          <button type="button" onclick="selectPaymentMethod('UPI')" id="methodBtn-UPI" 
+                  class="py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold flex flex-col items-center gap-1 transition-all">
+            <i data-lucide="smartphone" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>UPI</span>
+          </button>
+          <button type="button" onclick="selectPaymentMethod('Bank')" id="methodBtn-Bank" 
+                  class="py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold flex flex-col items-center gap-1 transition-all">
+            <i data-lucide="landmark" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>Bank</span>
+          </button>
+          <button type="button" onclick="selectPaymentMethod('Cheque')" id="methodBtn-Cheque" 
+                  class="py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold flex flex-col items-center gap-1 transition-all">
+            <i data-lucide="credit-card" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>Cheque</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Date Selection Pills -->
+      <div class="space-y-1.5">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">DATE</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" onclick="selectDateOption('today')" id="dateBtn-today" 
+                  class="py-2 rounded-xl border text-xs font-bold transition-all bg-slate-900 text-white border-slate-900 dark:bg-emerald-600 dark:text-white dark:border-emerald-500 shadow-xs">
+            Today
+          </button>
+          <button type="button" onclick="selectDateOption('yesterday')" id="dateBtn-yesterday" 
+                  class="py-2 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold transition-all">
+            Yesterday
+          </button>
+          <button type="button" onclick="selectDateOption('custom')" id="dateBtn-custom" 
+                  class="py-2 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold transition-all">
+            Custom
+          </button>
+        </div>
+        <input type="date" id="modalCustomDateInput" class="hidden w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs mt-1 text-slate-800 dark:text-slate-200">
+      </div>
+
+      <!-- Penalty or Note Input -->
+      <div class="space-y-1">
+        <input type="text" id="modalNoteInput" placeholder="Penalty or note (optional)..." 
+               class="w-full h-10 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-300">
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-2">
+        <button type="submit" id="modalSubmitBtn" 
+                class="w-full h-12 rounded-2xl bg-slate-900 text-white dark:bg-emerald-600 dark:text-white font-bold text-xs hover:bg-slate-800 dark:hover:bg-emerald-500 shadow-md active:scale-95 transition-all">
+          Record payment
+        </button>
+      </div>
+    </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== MODAL: EDIT SUBSCRIBER PROFILE ==================== -->
+<div id="editProfileModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-slate-800 max-h-[90vh] my-auto overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+    
+    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+      <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Edit Subscriber Profile</h3>
+      <button type="button" onclick="closeEditProfileModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+      </button>
+    </div>
+
+    <form id="editProfileForm" onsubmit="submitEditProfile(event)" class="space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Customer ID (5 Digits) *</label>
+          <input type="text" id="editCustomerId" maxlength="5" pattern="[0-9]{5}" required placeholder="e.g. 10001" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-slate-100 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Full Legal Name *</label>
+          <input type="text" id="editFullName" required class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Phone Number *</label>
+          <input type="tel" id="editPhone" required class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email Address</label>
+          <input type="email" id="editEmail" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Aadhaar (Last 4 digits)</label>
+          <input type="text" id="editAadhaarLast4" maxlength="4" placeholder="e.g. 5678" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200">
+        </div>
+        <div class="flex items-center pt-5">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="editPortalEnabled" class="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500">
+            <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Enable Member Portal</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Residential Address</label>
+        <textarea id="editAddress" rows="2" class="w-full p-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500"></textarea>
+      </div>
+
+      <!-- Nominee Section -->
+      <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">NOMINEE DETAILS</p>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Nominee Name</label>
+            <input type="text" id="editNomineeName" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Phone</label>
+            <input type="tel" id="editNomineePhone" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Relation</label>
+            <input type="text" id="editNomineeRelation" placeholder="Spouse / Son" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs">
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3">
+        <button type="submit" class="w-full h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:bg-slate-800 dark:bg-slate-200 shadow-md active:scale-95 transition-all">
+          Save Profile Changes
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- ==================== MODAL: RECORD PAYOUT ==================== -->
+<div id="recordPayoutModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+    
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold text-xs">
+          <i data-lucide="banknote" class="w-4 h-4 stroke-[1.8] "></i>
+        </div>
+        <div>
+          <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Record On-Demand Payout</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500 font-medium" id="payoutModalChitName">Chit Scheme</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeRecordPayoutModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+      </button>
+    </div>
+
+    <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+
+    <!-- Pre-selected Member Card -->
+    <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-3 border border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div id="payoutModalAvatar" class="h-8 w-8 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs">
+          U
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-900 dark:text-slate-100" id="payoutModalMemberName">Subscriber</p>
+          <p class="text-[10px] text-slate-400 dark:text-slate-500" id="payoutModalTicketTag">Ticket # · Available Shares</p>
+        </div>
+      </div>
+      <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">Eligible</span>
+    </div>
+
+    <form id="recordPayoutForm" onsubmit="submitRecordPayout(event)" class="space-y-3.5">
+      <input type="hidden" id="payoutMembershipId">
+
+      <!-- Select Month of Payout -->
+      <div class="space-y-1">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Select Month of Payout</label>
+        <select id="payoutMonthSelect" onchange="updatePayoutSchemeAmounts()" 
+                class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+      </div>
+
+      <!-- How many chits / shares payout? -->
+      <div class="space-y-1">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">How many chits / shares payout?</label>
+        <select id="memberPayoutShareCountSelect" onchange="updatePayoutSchemeAmounts()" 
+                class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+          <option value="1">1 chit (1.0x share)</option>
+        </select>
+      </div>
+
+      <!-- Dynamic Calculation Tile -->
+      <div class="bg-amber-50/90 dark:bg-amber-950/40 rounded-2xl p-4 border border-amber-200/90 dark:border-amber-800/50 space-y-2 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-700 dark:text-slate-300 font-medium">Payout Amount to Subscriber:</span>
+          <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig text-base" id="payoutPreviewAmount">₹0</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-700 dark:text-slate-300 font-medium">Chit Loss (Foreman & Group Bonus):</span>
+          <span class="font-bold text-amber-800 dark:text-amber-300 money-fig text-sm" id="payoutPreviewLoss">₹0</span>
+        </div>
+      </div>
+
+      <!-- Date & Method -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Payout Date</label>
+          <input type="date" id="payoutDateInput" required class="w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Payment Method</label>
+          <select id="payoutModeSelect" class="w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+            <option value="Cash">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="Cheque">Cheque</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Checkbox: Pay the payout now -->
+      <div>
+        <label class="flex items-center gap-2.5 cursor-pointer select-none p-2.5 bg-slate-50 dark:bg-chitDark-bg hover:bg-slate-100 dark:bg-chitDark-elevated/80 rounded-xl border border-slate-200 dark:border-slate-700/50 transition-colors">
+          <input type="checkbox" id="memberPayNowCheckbox" checked class="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500">
+          <div class="text-xs">
+            <span class="font-bold text-slate-800 dark:text-slate-200 block">Pay the payout now</span>
+            <span class="text-[11px] text-slate-400 dark:text-slate-500">Leave unchecked to record as an unpaid obligation</span>
+          </div>
+        </label>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Voucher / Transaction Reference</label>
+        <input type="text" id="payoutNotesInput" placeholder="Cheque #, UTR reference, or notes (optional)..." 
+               class="w-full h-10 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500">
+      </div>
+
+      <div class="pt-1">
+        <button type="submit" class="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white dark:text-slate-900 font-extrabold text-xs shadow-md active:scale-95 transition-all">
+          Confirm & Record Payout
+        </button>
+      </div>
+    </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== MODAL: PORTAL ACCESS ==================== -->
+<div id="portalAccessModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-sm md:max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 dark:border-slate-800 text-center my-auto animate-in fade-in zoom-in-95 duration-150">
+    <div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-chitDark-elevated text-slate-800 dark:text-slate-200 flex items-center justify-center mx-auto text-lg">
+      <i data-lucide="globe" class="w-4 h-4 stroke-[1.8] "></i>
+    </div>
+    <div>
+      <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Subscriber Portal Access</h3>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-1" id="portalPhoneDisplay">+91 00000 00000</p>
+    </div>
+    <div class="p-3 bg-slate-50 dark:bg-chitDark-bg rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 text-left">
+      <div class="flex justify-between">
+        <span class="text-slate-500 dark:text-slate-400">Access Status:</span>
+        <span class="font-bold text-emerald-600" id="portalStatusDisplay">Active</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500 dark:text-slate-400">Default PIN:</span>
+        <span class="font-mono font-bold text-slate-900 dark:text-slate-100">Last 4 digits of phone</span>
+      </div>
+    </div>
+    <button type="button" onclick="closePortalAccessModal()" class="w-full h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:bg-slate-800 dark:bg-slate-200 transition-colors">
+      Done
+    </button>
+  </div>
+</div>
+
+<!-- ==================== PRINTABLE STATEMENT (HIDDEN BY DEFAULT) ==================== -->
+<div id="printableStatement" class="hidden p-8 bg-white dark:bg-chitDark-surface max-w-3xl mx-auto space-y-6 text-slate-900 dark:text-slate-100">
+  <div class="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
+    <div>
+      <h2 class="text-2xl font-black tracking-tight">SIVA DURGA CHIT FUND</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Official Member Account Statement</p>
+    </div>
+    <div class="text-right text-xs">
+      <p class="font-bold" id="stmtDateDisplay">Date: Sep 14, 2026</p>
+      <p class="text-slate-500 dark:text-slate-400">Verified System Ledger</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-chitDark-bg p-4 rounded-xl border border-slate-200 dark:border-slate-700/50">
+    <div>
+      <p class="text-slate-500 dark:text-slate-400">Subscriber Name:</p>
+      <p class="font-bold text-sm" id="stmtMemberName">—</p>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">Phone:</p>
+      <p class="font-bold" id="stmtMemberPhone">—</p>
+    </div>
+    <div>
+      <p class="text-slate-500 dark:text-slate-400">Total Paid In:</p>
+      <p class="font-bold text-emerald-700" id="stmtPaidIn">—</p>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">Total Payout Received:</p>
+      <p class="font-bold text-amber-800" id="stmtPaidOut">—</p>
+    </div>
+  </div>
+
+  <div class="space-y-2">
+    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Enrolled Chits & Payment Ledger</h4>
+    <div id="stmtLedgerRows" class="text-xs divide-y divide-slate-200 border border-slate-200 dark:border-slate-700/50 rounded-xl">
+      <!-- Injected during print -->
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MANAGE LINKED ACCOUNTS MODAL ==================== -->
+<div id="manageLinksModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-slate-700/50 animate-in fade-in zoom-in-95 duration-150">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/40">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <i data-lucide="link" class="w-4 h-4 text-indigo-500"></i>
+          <span>Linked Subscriber Accounts</span>
+        </h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Family or associated accounts linked to this subscriber</p>
+      </div>
+      <button onclick="closeManageLinksModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <!-- Currently Linked Members -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Linked Accounts in this Group</h4>
+        <span id="modalLinkedCountBadge" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">0 accounts</span>
+      </div>
+      <div id="currentlyLinkedMembersList" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+        <p class="text-xs text-slate-400 py-3 text-center">Loading linked members...</p>
+      </div>
+    </div>
+
+    <div class="h-px bg-slate-100 dark:bg-chitDark-elevated"></div>
+
+    <!-- Link another subscriber -->
+    <div class="space-y-3">
+      <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Link Another Subscriber</h4>
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
+        <input type="text" id="candidateSearchInput" oninput="filterCandidatesList()" placeholder="Search subscriber by name, customer ID, or phone..."
+               class="w-full h-10 pl-9 pr-3 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-indigo-400">
+      </div>
+      <div id="candidateMembersList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+        <!-- Search candidate results -->
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/40 flex justify-end">
+      <button type="button" onclick="closeManageLinksModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors">
+        Done
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let MEMBER_ID = "{{ member_id }}";
+  let folioData = null;
+  let activeTab = 'chits';
+  let selectedMethod = 'Cash';
+  let selectedDateOpt = 'today';
+  let activePayoutGroup = null;
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 1. Initialize Page
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Check URL parameters for tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramTab = urlParams.get('tab');
+    if (paramTab && ['chits', 'payments', 'payouts', 'loans', 'activity'].includes(paramTab)) {
+      activeTab = paramTab;
+    }
+    await loadMemberFolio();
+    switchTab(activeTab);
+
+    // Close options menu on outside click
+    document.addEventListener('click', (e) => {
+      const dd = document.getElementById('optionsDropdown');
+      const btn = document.getElementById('btnThreeDots');
+      if (dd && !dd.contains(e.target) && !btn.contains(e.target)) {
+        dd.classList.add('hidden');
+      }
+    });
+  });
+
+  function toggleOptionsMenu(e) {
+    e.stopPropagation();
+    const dd = document.getElementById('optionsDropdown');
+    dd.classList.toggle('hidden');
+  }
+
+  function handleMenuSelectTab(tabName) {
+    const dd = document.getElementById('optionsDropdown');
+    if (dd) dd.classList.add('hidden');
+    switchTab(tabName);
+  }
+
+  // 2. Fetch Member Folio
+  async function loadMemberFolio(targetMemberId) {
+    const mId = targetMemberId || MEMBER_ID;
+    try {
+      const res = await fetch(`/chit/api/members/${mId}/folio`);
+      if (!res.ok) throw new Error('Failed to load folio');
+      folioData = await res.json();
+      renderMemberHeaderAndAnalytics(folioData);
+      renderLinkedMembersBar(folioData.linked_members || []);
+      renderChitsView(folioData.chits || []);
+      renderPaymentsView(folioData.payments || []);
+      renderPayoutsView(folioData.payouts || []);
+      renderActivityView(folioData.activity || []);
+      renderLoansView(folioData.loans || []);
+      populatePaymentFilterChits(folioData.chits || []);
+      renderMonthlyCollectionGraph(folioData);
+    } catch (e) {
+      console.error('Error loading folio:', e);
+      showToast('Error loading subscriber details');
+    }
+  }
+
+  // 3. Render Header & Analytics Tile
+  function renderMemberHeaderAndAnalytics(data) {
+    const m = data.member;
+    const a = data.analytics;
+
+    const editLink = document.getElementById('editProfileMenuLink');
+    if (editLink) editLink.href = `/chit/members/${m.id}/edit`;
+
+    document.getElementById('memberNameDisplay').textContent = m.full_name;
+    const cidEl = document.getElementById('memberCustomerIdDisplay');
+    if (cidEl) {
+      if (m.customer_id) {
+        cidEl.textContent = '#' + m.customer_id;
+        cidEl.classList.remove('hidden');
+      } else {
+        cidEl.classList.add('hidden');
+      }
+    }
+    document.getElementById('memberAvatarDisplay').textContent = (m.full_name || 'U').charAt(0).toUpperCase();
+
+    // Badges
+    document.getElementById('activeChitsCountText').textContent = `${a.active_chits_count} active chit${a.active_chits_count > 1 ? 's' : ''}`;
+    document.getElementById('netBalanceText').textContent = a.net_balance;
+    document.getElementById('badgePortalStatus').innerHTML = `
+      <span class="h-1.5 w-1.5 rounded-full ${a.portal_status === 'On' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+      <span>Portal · ${a.portal_status}</span>
+    `;
+
+    // Defaulted Subscriber Badge & Dropdown action text
+    const badgeDef = document.getElementById('badgeDefaulted');
+    const toggleDefText = document.getElementById('toggleDefaultActionText');
+    if (m.is_defaulted) {
+      if (badgeDef) {
+        badgeDef.classList.remove('hidden');
+        document.getElementById('defaultedBadgeText').textContent = 'DEFAULTED';
+      }
+      if (toggleDefText) toggleDefText.textContent = 'Clear Default Status';
+    } else {
+      if (badgeDef) badgeDef.classList.add('hidden');
+      if (toggleDefText) toggleDefText.textContent = 'Mark as Defaulted';
+    }
+
+    // Due Now Banner
+    const dueContainer = document.getElementById('dueNowContainer');
+    if (a.due_now && a.due_now.amount > 0) {
+      const d = a.due_now;
+      const isDef = Boolean(m.is_defaulted);
+      const breakdownItems = d.breakdown || [];
+      const hasBreakdown = breakdownItems.length > 1;
+
+      dueContainer.innerHTML = `
+        <div class="${isDef ? 'bg-rose-50/90 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/70' : 'bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/90 dark:border-amber-800/50'} rounded-2xl p-4 md:p-5 shadow-2xs card-shine dark:shadow-none space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <p class="text-[10px] font-extrabold uppercase tracking-wider ${isDef ? 'text-rose-700 dark:text-rose-300' : 'text-amber-800 dark:text-amber-300'}">
+                  ${isDef ? 'DEFAULTED SUBSCRIBER · ACCUMULATED DUE' : `DUE NOW · ${d.month_year.toUpperCase()}`}
+                </p>
+                ${isDef ? `
+                  <span class="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-600 text-white">
+                    ACTION REQUIRED
+                  </span>
+                ` : ''}
+              </div>
+              <p class="text-2xl md:text-3xl font-black text-slate-900 dark:text-slate-100 money-fig tracking-tight mt-0.5">
+                ${formatINR(d.amount)}
+              </p>
+              <div class="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                <span>${d.chit_name} · ${d.group_subtitle}</span>
+                <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold ${d.installment_type === 'fixed' ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">
+                  ${d.installment_type === 'fixed' ? 'Fixed Plan' : 'Incremental Plan'}
+                </span>
+                ${hasBreakdown ? `
+                  <button type="button" onclick="toggleMemberBreakdown()" class="text-[11px] font-bold ${isDef ? 'text-rose-700 dark:text-rose-300 hover:text-rose-900' : 'text-amber-800 dark:text-amber-300 hover:text-amber-900'} underline cursor-pointer inline-flex items-center gap-0.5">
+                    <span>View cycle breakdown (${breakdownItems.length}) ▾</span>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <button type="button" onclick="openRecordPaymentModal('${d.installment_id}', '${d.membership_id}', ${d.amount}, '${d.chit_name}')" 
+                    class="${isDef ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-900 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500'} text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs card-shine dark:shadow-none inline-flex items-center gap-1.5 active:scale-95">
+              <i data-lucide="plus" class="w-4 h-4 stroke-[2] text-xs"></i>
+              <span>Collect</span>
+            </button>
+          </div>
+
+          <!-- Itemized Breakdown Accordion -->
+          ${hasBreakdown ? `
+            <div id="memberDueBreakdownCard" class="hidden pt-3 border-t ${isDef ? 'border-rose-200/80 dark:border-rose-800/50' : 'border-amber-200/80 dark:border-amber-800/50'} space-y-1.5 text-xs">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex justify-between pb-1">
+                <span>Cycle</span>
+                <span>Due Amount</span>
+              </div>
+              ${breakdownItems.map(b => `
+                <div class="flex justify-between items-center py-0.5">
+                  <span class="flex items-center gap-2 font-medium ${b.is_closed ? 'text-rose-700 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}">
+                    <span class="h-1.5 w-1.5 rounded-full ${b.is_closed ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+                    <span>${b.tag || b.month_year}</span>
+                  </span>
+                  <span class="font-extrabold money-fig text-slate-900 dark:text-slate-100">${formatINR(b.amount)}</span>
+                </div>
+              `).join('')}
+              <div class="flex justify-between items-center font-black pt-1.5 border-t border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-100">
+                <span>Total Accumulated Due</span>
+                <span class="${isDef ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'} money-fig">${formatINR(d.amount)}</span>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else {
+      dueContainer.innerHTML = `
+        <div class="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/90 dark:border-emerald-800/50 rounded-2xl p-4 flex items-center justify-between shadow-2xs card-shine dark:shadow-none">
+          <div class="flex items-center gap-3">
+            <div class="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/60 flex items-center justify-center font-bold text-sm">
+              <i data-lucide="check" class="w-4 h-4 stroke-[2]"></i>
+            </div>
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">ALL DUES COLLECTED</p>
+              <p class="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">This subscriber is completely caught up with all current installments.</p>
+            </div>
+          </div>
+          <span class="text-xs font-black text-emerald-700 dark:text-emerald-400">✓ Up to date</span>
+        </div>
+      `;
+    }
+
+    // 3 Metrics
+    document.getElementById('paidInDisplay').textContent = formatINR(a.paid_in);
+    document.getElementById('paidOutDisplay').textContent = a.paid_out > 0 ? formatINR(a.paid_out) : '—';
+    document.getElementById('toGoDisplay').textContent = formatINR(a.to_go);
+    document.getElementById('toGoMonthsSubtext').textContent = `${a.to_go_months} mo`;
+
+    // Progress
+    document.getElementById('progressMonthsLabel').textContent = `${a.months_paid_count} of ${a.total_months_count} months paid`;
+    document.getElementById('progressPercentDisplay').textContent = `${a.progress_percent}%`;
+    document.getElementById('overallProgressBar').style.width = `${a.progress_percent}%`;
+  }
+
+  // 4. Tab Navigation
+  function switchTab(tabKey) {
+    activeTab = tabKey;
+    ['chits', 'payments', 'payouts', 'loans', 'activity'].forEach(k => {
+      const btn = document.getElementById(`tabBtn-${k}`);
+      const content = document.getElementById(`tabContent-${k}`);
+      if (btn && content) {
+        if (k === tabKey) {
+          btn.className = 'flex-1 py-2 text-xs font-bold text-center rounded-xl transition-all shadow-xs card-shine dark:shadow-none bg-white dark:bg-chitDark-surface text-slate-900 dark:text-slate-100 cursor-pointer';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'flex-1 py-2 text-xs font-semibold text-center rounded-xl transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 cursor-pointer';
+          content.classList.add('hidden');
+        }
+      }
+    });
+
+    // Update URL query string
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tabKey);
+    window.history.replaceState({}, '', url);
+  }
+
+  // 4b. Render Loans View (Tab 5)
+  function renderLoansView(loans) {
+    const container = document.getElementById('memberLoansContainer');
+    if (!container) return;
+    const countHeader = document.getElementById('memberLoansCountHeader');
+    const topDisburseBtn = document.getElementById('btnTopDisburseLoan');
+    if (topDisburseBtn) {
+      topDisburseBtn.href = `/chit/loans?action=disburse&member_id=${MEMBER_ID}`;
+    }
+
+    const activeLoans = (loans || []).filter(l => l.status === 'active');
+    
+    if (countHeader) {
+      countHeader.textContent = `${activeLoans.length} Active Loan${activeLoans.length === 1 ? '' : 's'}`;
+    }
+
+    let totPrincipal = 0;
+    let totInterest = 0;
+    let totPayoff = 0;
+
+    activeLoans.forEach(l => {
+      const c = l.calculation || {};
+      totPrincipal += (c.remaining_principal !== undefined ? c.remaining_principal : (l.principal - (l.repaid_principal || 0)));
+      totInterest += (c.accrued_interest || 0);
+      totPayoff += (c.total_payoff !== undefined ? c.total_payoff : (l.principal - (l.repaid_principal || 0)));
+    });
+
+    const pEl = document.getElementById('mLoanPrincipal');
+    const iEl = document.getElementById('mLoanInterest');
+    const poEl = document.getElementById('mLoanTotalPayoff');
+    if (pEl) pEl.textContent = formatINR(totPrincipal);
+    if (iEl) iEl.textContent = formatINR(totInterest);
+    if (poEl) poEl.textContent = formatINR(totPayoff);
+
+    // Empty state with prominent "Start New Loan" button
+    if (!loans || loans.length === 0) {
+      container.innerHTML = `
+        <div class="rounded-[28px] bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 p-10 md:p-14 text-center space-y-4 card-shadow card-shine dark:shadow-none">
+          <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs">
+            <i data-lucide="hand-coins" class="w-8 h-8 stroke-[1.8]"></i>
+          </div>
+          <div class="space-y-1.5">
+            <h4 class="text-base md:text-lg font-extrabold text-slate-900 dark:text-slate-100">No Loans on Record for this Member</h4>
+            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+              This subscriber currently has no active or past loans. You can disburse a compounding loan linked to their registered chit groups, auto-settled on chit payouts.
+            </p>
+          </div>
+          <div class="pt-2">
+            <a href="/chit/loans?action=disburse&member_id=${MEMBER_ID}" 
+               class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-md card-shine dark:shadow-none transition-all active:scale-95">
+              <i data-lucide="plus-circle" class="w-4 h-4 stroke-[2]"></i>
+              <span>Start New Loan</span>
+            </a>
+          </div>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+
+    container.innerHTML = loans.map(l => {
+      const isSettled = (l.status === 'settled');
+      const calc = l.calculation || {};
+      const statusBadge = isSettled
+        ? `<span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">Settled (${l.settlement_type === 'chit_payout_deduction' ? 'Chit Payout Deduction' : 'Repaid'})</span>`
+        : `<span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">Active · Accruing</span>`;
+
+      const loanCode = l.id.slice(0, 8).toUpperCase();
+      const remPrincipal = calc.remaining_principal !== undefined ? calc.remaining_principal : (l.principal - (l.repaid_principal || 0));
+      const accInterest = calc.accrued_interest || 0;
+      const totalPayoff = calc.total_payoff !== undefined ? calc.total_payoff : (remPrincipal + accInterest);
+      const totalRepaid = (l.repaid_principal || 0) + (l.repaid_interest || 0);
+      const daysElapsed = calc.days_elapsed || 0;
+      const yearsElapsed = (daysElapsed / 365.25).toFixed(2);
+
+      let capsuleBoxHtml = '';
+      if (isSettled) {
+        capsuleBoxHtml = `
+          <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-2.5 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500 dark:text-slate-400 font-medium">Settled Principal:</span>
+              <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig text-base">${formatINR(l.principal)}</span>
+            </div>
+            <div class="flex justify-between items-center text-[11px]">
+              <span class="text-slate-500 dark:text-slate-400">Settlement Method:</span>
+              <span class="font-bold text-slate-700 dark:text-slate-300">${l.settlement_type === 'chit_payout_deduction' ? 'Deducted from Chit Payout' : 'Direct Repayment'}</span>
+            </div>
+            ${l.settled_at ? `
+              <div class="flex justify-between items-center text-[11px] text-slate-400">
+                <span>Settled At:</span>
+                <span class="font-mono">${l.settled_at.split('T')[0]}</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      } else {
+        capsuleBoxHtml = `
+          <div class="bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl p-4 md:p-5 border border-amber-100 dark:border-amber-800/40 space-y-3 text-xs">
+            <div class="flex justify-between items-center flex-wrap gap-2">
+              <div>
+                <span class="text-slate-600 dark:text-slate-300 font-medium block">Total Payoff Dues (As of Today):</span>
+                <span class="text-[11px] text-slate-400">Compounding yearly · Updates daily</span>
+              </div>
+              <span class="font-black text-amber-600 dark:text-amber-400 money-fig text-lg sm:text-xl md:text-2xl">${formatINR(totalPayoff)}</span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2.5 border-t border-amber-200/60 dark:border-amber-800/50">
+              <div class="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-100/80 dark:border-amber-900/30">
+                <span class="text-[10px] font-bold uppercase text-slate-400 block">Remaining Principal</span>
+                <span class="font-extrabold text-xs text-slate-900 dark:text-slate-100 money-fig mt-0.5 block">${formatINR(remPrincipal)}</span>
+              </div>
+              <div class="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-100/80 dark:border-amber-900/30">
+                <span class="text-[10px] font-bold uppercase text-slate-400 block">Annual Rate</span>
+                <span class="font-extrabold text-xs text-slate-900 dark:text-slate-100 money-fig mt-0.5 block">${l.rate}% p.a.</span>
+              </div>
+              <div class="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-100/80 dark:border-amber-900/30">
+                <span class="text-[10px] font-bold uppercase text-cyan-600 dark:text-cyan-400 block">Accrued Compound Int.</span>
+                <span class="font-extrabold text-xs text-cyan-600 dark:text-cyan-400 money-fig mt-0.5 block">+${formatINR(accInterest)}</span>
+              </div>
+              <div class="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-100/80 dark:border-amber-900/30">
+                <span class="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">Total Repaid</span>
+                <span class="font-extrabold text-xs text-emerald-600 dark:text-emerald-400 money-fig mt-0.5 block">${formatINR(totalRepaid)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      const repaymentsHtml = (l.repayments && l.repayments.length > 0) ? `
+        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">Repayment History (${l.repayments.length})</span>
+          <div class="space-y-1.5 max-h-40 overflow-y-auto">
+            ${l.repayments.map(r => `
+              <div class="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-slate-500 dark:text-slate-400 text-[11px]">${r.date}</span>
+                  <span class="text-slate-400">·</span>
+                  <span class="font-semibold text-slate-700 dark:text-slate-300">${escapeHtml(r.mode)}</span>
+                  ${r.receipt_no ? `<span class="text-[10px] font-mono text-slate-400 bg-slate-200/60 dark:bg-slate-700/60 px-1.5 py-0.2 rounded">#${escapeHtml(r.receipt_no)}</span>` : ''}
+                </div>
+                <div class="text-right">
+                  <span class="font-bold money-fig text-emerald-600 dark:text-emerald-400">${formatINR(r.total)}</span>
+                  <span class="text-[10px] text-slate-400 block">P: ${formatINR(r.principal)} | Int: ${formatINR(r.interest)}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      return `
+        <div class="rounded-[24px] bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 p-5 md:p-6 card-shadow card-shine dark:shadow-none space-y-4">
+          <!-- Card Header -->
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2.5">
+              <span class="px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold text-xs font-mono">LOAN #${loanCode}</span>
+              <h4 class="font-extrabold text-base text-slate-900 dark:text-slate-100">Principal: ${formatINR(l.principal)}</h4>
+            </div>
+            ${statusBadge}
+          </div>
+
+          <!-- Disbursal Subtitle -->
+          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
+            <span class="inline-flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${l.disbursal_date}</span>
+            <span>·</span>
+            <span>${daysElapsed} days (${yearsElapsed} yrs)</span>
+            <span>·</span>
+            <span class="text-amber-600 dark:text-amber-400 font-semibold">${l.rate}% p.a. Compounding Yearly</span>
+          </div>
+
+          <!-- Capsule Box -->
+          ${capsuleBoxHtml}
+
+          <!-- Notes -->
+          ${l.notes ? `
+            <p class="text-xs text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-chitDark-bg px-3.5 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+              “${escapeHtml(l.notes)}”
+            </p>
+          ` : ''}
+
+          <!-- Repayments -->
+          ${repaymentsHtml}
+
+          <!-- Action Button -->
+          <div class="pt-1">
+            <a href="/chit/loans" class="w-full h-11 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-xs card-shine dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2">
+              <i data-lucide="arrow-up-right" class="w-4 h-4 stroke-[2]"></i>
+              <span>Manage Loan / Record Repayment</span>
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // 5. Render Chits View (Tab 1)
+  function renderChitsView(chits) {
+    const container = document.getElementById('chitsListContainer');
+    document.getElementById('chitsCountHeader').textContent = `${chits.length} chit group${chits.length > 1 ? 's' : ''}`;
+
+    if (chits.length === 0) {
+      container.innerHTML = `
+        <div class="bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-8 text-center text-xs text-slate-400 dark:text-slate-500">
+          Subscriber is not enrolled in any chit groups yet.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    chits.forEach(c => {
+      const isLifted = c.payout && c.payout.has_taken;
+      const card = document.createElement('div');
+      card.className = `rounded-[24px] bg-white dark:bg-chitDark-surface border ${isLifted ? 'border-amber-300 dark:border-amber-800/80 border-l-4 border-l-amber-500' : 'border-slate-200 dark:border-slate-700/50'} p-5 md:p-6 card-shadow card-shine dark:shadow-none space-y-4`;
+
+      // Dot track generation: green dot when paid, yellow dot when not paid, matching duration months!
+      const dotsHtml = c.dots.map(d => {
+        if (d.is_paid) {
+          return `<span title="Month ${d.month_index}: Paid" class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-2xs card-shine dark:shadow-none shrink-0"></span>`;
+        } else if (d.is_due) {
+          return `<span title="Month ${d.month_index}: Due" class="h-2.5 w-2.5 rounded-full bg-amber-400 border border-amber-500 shrink-0"></span>`;
+        } else {
+          return `<span title="Month ${d.month_index}: Future" class="h-2.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 shrink-0"></span>`;
+        }
+      }).join('');
+
+      // Month Capsule box
+      let monthBoxHtml = '';
+      if (c.current_month_card.is_paid) {
+        monthBoxHtml = `
+          <div class="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 flex items-center justify-between">
+            <span class="font-bold text-xs text-emerald-900">${c.current_month_card.month_year}</span>
+            <span class="text-xs font-bold text-emerald-700 money-fig flex items-center gap-1">
+              <i data-lucide="check" class="w-4 h-4 stroke-[1.8] text-[10px]"></i> Paid
+            </span>
+          </div>
+        `;
+      } else {
+        monthBoxHtml = `
+          <div class="bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 rounded-xl p-3 flex items-center justify-between">
+            <span class="font-bold text-xs text-amber-900 dark:text-amber-200">${c.current_month_card.month_year}</span>
+            <span class="text-xs font-bold text-amber-700 dark:text-amber-300 money-fig">
+              ${formatINR(c.current_month_card.pending_amount)} due
+            </span>
+          </div>
+        `;
+      }
+
+      // Payout status label: taken is red, not taken is green
+      let payoutDisplayHtml = '';
+      if (c.payout.has_taken) {
+        payoutDisplayHtml = `<span class="text-rose-600 dark:text-rose-400 font-extrabold flex items-center gap-1"><i data-lucide="check-circle" class="w-4 h-4 stroke-[1.8] text-[10px]"></i> ${c.payout.label || ('Taken in Month ' + c.payout.month_index)}</span>`;
+      } else {
+        payoutDisplayHtml = `<span class="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1"><i data-lucide="circle" class="w-4 h-4 stroke-[1.8] text-[8px]"></i> Not taken</span>`;
+      }
+
+      card.innerHTML = `
+        <!-- Top row: Group Name & Status Badge -->
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="font-extrabold text-base text-slate-900 dark:text-slate-100 truncate">
+            ${c.group_name} - ₹${Number(c.chit_total_value/100000).toFixed(0)}L · ${c.duration_months}M · ${c.duration_months} Months
+          </h3>
+          <div class="flex items-center gap-2">
+            ${isLifted ? `
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold shrink-0 bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/80">
+                Payout Disbursed (M${c.payout.month_index})
+              </span>
+            ` : ''}
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${
+              c.is_on_track 
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80' 
+                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80'
+            }">
+              ${c.is_on_track ? '✓ On track' : '! Due'}
+            </span>
+          </div>
+        </div>
+
+        <!-- Subtitle: Value, Duration, Ticket, Share, Plan -->
+        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
+          <span class="px-2 py-0.5 rounded-md bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold text-[11px]">A/C #${c.account_number || c.ticket_number}</span>
+          <span>₹${Number(c.chit_total_value/100000).toFixed(0)}L</span>
+          <span>·</span>
+          <span>${c.duration_months} mo</span>
+          <span>·</span>
+          <span>Ticket #${c.ticket_number}</span>
+          <span>·</span>
+          <span class="font-bold text-emerald-600">${c.share_units}x share</span>
+          <span>·</span>
+          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${c.installment_type === 'fixed' ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">
+            ${c.installment_type === 'fixed' ? 'Fixed (' + formatINR(c.fixed_installment_amount || c.monthly) + '/mo)' : 'Incremental'}
+          </span>
+        </div>
+
+        <!-- Progress Row & Dots -->
+        <div class="space-y-2 pt-1">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-500 dark:text-slate-400">
+              ${c.paid_months_count} of ${c.duration_months} paid · ${c.remaining_months_count} left
+            </span>
+            <span class="font-bold text-slate-700 dark:text-slate-300">${c.progress_percent}%</span>
+          </div>
+
+          <!-- Dot Track -->
+          <div class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+            ${dotsHtml}
+          </div>
+        </div>
+
+        <!-- Month Status Capsule -->
+        ${monthBoxHtml}
+
+        <!-- 3 Metrics row at bottom: Collected, Monthly, Payout -->
+        <div class="grid grid-cols-3 gap-3 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">COLLECTED</p>
+            <p class="text-sm md:text-base font-extrabold text-emerald-600 money-fig mt-0.5">
+              ${formatINR(c.collected)}
+            </p>
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">MONTHLY (${c.installment_type === 'fixed' ? 'FIXED' : 'CURR'})</p>
+            <p class="text-sm md:text-base font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5">
+              ${formatINR(c.monthly)}
+            </p>
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">PAYOUT</p>
+            <p class="text-xs md:text-sm mt-0.5 font-bold">
+              ${payoutDisplayHtml}
+            </p>
+          </div>
+        </div>
+
+        <!-- Action Link -->
+        <div class="text-center pt-2">
+          <button type="button" onclick="filterPaymentsByChit('${c.group_id}')" 
+                  class="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors inline-flex items-center gap-1.5">
+            <i data-lucide="folder-open" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>View payments &gt;</span>
+          </button>
+        </div>
+      `;
+
+      container.appendChild(card);
+      if(window.lucide) { lucide.createIcons(); }
+    });
+  }
+
+  // 6. Render Payments View (Tab 2)
+  function populatePaymentFilterChits(chits) {
+    const sel = document.getElementById('filterChitSelect');
+    sel.innerHTML = '<option value="all">All chits</option>';
+    chits.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.group_id;
+      opt.textContent = c.group_name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function filterPaymentsByChit(groupId) {
+    switchTab('payments');
+    const sel = document.getElementById('filterChitSelect');
+    if (sel) {
+      sel.value = groupId;
+      filterMemberPayments();
+    }
+  }
+
+  function renderPaymentsView(payments) {
+    const s = folioData?.payments_summary || { total_collected: 0, total_payouts: 0, total_penalties: 0 };
+    document.getElementById('chartTotalDisplay').textContent = formatINR(s.total_collected);
+    document.getElementById('tileCollectedDisplay').textContent = formatINR(s.total_collected);
+    document.getElementById('tilePayoutsDisplay').textContent = formatINR(s.total_payouts);
+    document.getElementById('tilePenaltiesDisplay').textContent = formatINR(s.total_penalties);
+
+    renderMonthlyCollectionGraph(folioData);
+    renderPaymentsList(payments);
+  }
+
+  function renderMonthlyCollectionGraph(data) {
+    const container = document.getElementById('dynamicCollectionChartContainer');
+    if (!container || !data) return;
+
+    const chits = data.chits || [];
+    const payments = data.payments || [];
+
+    let maxDuration = 0;
+    let maxCurMonth = 1;
+
+    chits.forEach(c => {
+      const dur = parseInt(c.duration_months, 10) || 20;
+      const cur = parseInt(c.current_month_index, 10) || 1;
+      if (dur > maxDuration) maxDuration = dur;
+      if (cur > maxCurMonth) maxCurMonth = cur;
+    });
+
+    if (maxDuration === 0) {
+      if (payments.length > 0) {
+        payments.forEach(p => {
+          const m = parseInt(p.month_index, 10) || 1;
+          if (m > maxDuration) maxDuration = m;
+        });
+      }
+      maxDuration = Math.max(2, maxDuration);
+    }
+
+    const displayMonthsCount = Math.max(2, maxDuration);
+
+    let monthDataMap = {};
+    for (let i = 1; i <= displayMonthsCount; i++) {
+      monthDataMap[i] = { paid: 0, due: 0, is_paid: false, is_due: false };
+    }
+
+    chits.forEach(c => {
+      (c.schedule_preview || []).forEach(s => {
+        const mIdx = parseInt(s.month_index, 10);
+        if (mIdx && monthDataMap[mIdx]) {
+          monthDataMap[mIdx].paid += parseFloat(s.payout || 0);
+          monthDataMap[mIdx].due += parseFloat(s.kattubadi || 0);
+        }
+      });
+    });
+
+    payments.forEach(p => {
+      const mIdx = parseInt(p.month_index, 10);
+      if (mIdx && monthDataMap[mIdx]) {
+        monthDataMap[mIdx].paid += parseFloat(p.amount || 0);
+      }
+    });
+
+    const isThin = displayMonthsCount > 8;
+    const isVeryThin = displayMonthsCount > 14;
+    const radiusClass = isVeryThin ? 'rounded-xs' : (isThin ? 'rounded-md' : 'rounded-xl');
+    const gapClass = isVeryThin ? 'gap-0.5' : (isThin ? 'gap-1' : 'gap-1.5');
+    const heightClass = 'h-10';
+
+    let barsHtml = '';
+    let labelsHtml = '';
+
+    for (let i = 1; i <= displayMonthsCount; i++) {
+      const mInfo = monthDataMap[i] || {};
+      const isPastOrCurrent = i <= maxCurMonth;
+      const hasPayments = mInfo.paid > 0 || (payments.some(p => p.month_index === i));
+      const isPaid = isPastOrCurrent && (hasPayments || (chits.length > 0 && i < maxCurMonth));
+      const isDue = isPastOrCurrent && !isPaid;
+
+      let pillBgClass = '';
+      let animClass = '';
+      let statusText = 'Upcoming';
+
+      if (isPaid) {
+        pillBgClass = 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.35)]';
+        animClass = 'animate-breath';
+        statusText = 'Paid';
+      } else if (isDue) {
+        pillBgClass = 'bg-gradient-to-t from-amber-500 via-amber-400 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.35)]';
+        animClass = 'animate-pulse-fast';
+        statusText = 'Due / Pending';
+      } else {
+        pillBgClass = 'bg-slate-200/90 dark:bg-chitDark-elevated/70 border border-slate-300/40 dark:border-slate-700/40';
+        animClass = '';
+        statusText = 'Future';
+      }
+
+      const fillHeight = isPaid ? '100%' : (isDue ? '65%' : '35%');
+
+      barsHtml += `
+        <div class="flex-1 h-full flex flex-col justify-end group/cylinder relative cursor-pointer">
+          <div class="w-full ${radiusClass} ${pillBgClass} ${animClass} transition-all duration-300 group-hover/cylinder:scale-y-110 group-hover/cylinder:-translate-y-0.5" style="height: ${fillHeight};"></div>
+          
+          <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover/cylinder:flex flex-col items-center z-30 pointer-events-none">
+            <div class="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap border border-slate-800 dark:border-slate-200">
+              Month M${i} · ${statusText}
+            </div>
+            <div class="w-2 h-2 bg-slate-900 dark:bg-slate-100 rotate-45 -mt-1"></div>
+          </div>
+        </div>
+      `;
+
+      let showLabel = true;
+      if (displayMonthsCount > 12) {
+        showLabel = (i === 1 || i === displayMonthsCount || i % 5 === 0 || i === maxCurMonth);
+      }
+
+      if (showLabel) {
+        labelsHtml += `<span class="${i === maxCurMonth ? 'text-slate-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-500'}">M${i}</span>`;
+      } else {
+        labelsHtml += `<span class="opacity-0">.</span>`;
+      }
+    }
+
+    container.innerHTML = `
+      <div class="${heightClass} w-full bg-slate-100/70 dark:bg-chitDark-elevated/40 rounded-xl overflow-hidden flex p-1 ${gapClass} items-end border border-slate-200/60 dark:border-slate-700/40">
+        ${barsHtml}
+      </div>
+      <div class="flex items-center justify-between text-[10px] font-bold uppercase mt-1.5 px-0.5 select-none">
+        ${labelsHtml}
+      </div>
+    `;
+  }
+
+  function renderPaymentsList(payments) {
+    const container = document.getElementById('paymentsHistoryList');
+    document.getElementById('paymentsCountLabel').textContent = `${payments.length} payment${payments.length > 1 ? 's' : ''}`;
+
+    if (payments.length === 0) {
+      container.innerHTML = `
+        <div class="py-8 text-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50">
+          No payment transactions found.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    payments.forEach(p => {
+      let dMonth = p.date_month;
+      let dDay = p.date_day;
+      if (!dMonth || dMonth === 'undefined') {
+        const d = p.payment_date ? new Date(p.payment_date) : (p.created_at ? new Date(p.created_at) : new Date());
+        dMonth = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        dDay = String(d.getDate()).padStart(2, '0');
+      }
+
+      const row = document.createElement('div');
+      row.className = 'bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-3.5 md:p-4 flex items-center justify-between gap-3 shadow-2xs card-shine dark:shadow-none transition-all hover:border-slate-300 dark:border-slate-600';
+      row.innerHTML = `
+        <!-- Left: Date Capsule with green strip -->
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="w-1 h-9 bg-emerald-500 rounded-full"></span>
+            <div class="text-center leading-tight">
+              <span class="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 block">${dMonth}</span>
+              <span class="text-sm font-extrabold text-slate-800 dark:text-slate-200 money-fig">${dDay}</span>
+            </div>
+          </div>
+
+          <!-- Middle: Chit & Method details -->
+          <div class="min-w-0">
+            <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">${p.group_name}</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+              Collection · ${p.month_tag} · ${p.payment_mode}
+            </p>
+          </div>
+        </div>
+
+        <!-- Right: Amount & Actions -->
+        <div class="flex items-center gap-3 shrink-0">
+          <span class="text-sm md:text-base font-extrabold text-emerald-600 money-fig">
+            ${formatINR(p.amount)}
+          </span>
+
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="sharePaymentReceipt('${p.id}', '${p.amount}', '${p.receipt_no}', '${p.group_name}')" 
+                    title="Share Receipt" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 text-slate-600 dark:text-slate-400 flex items-center justify-center transition-colors">
+              <i data-lucide="share-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+            </button>
+
+            <button type="button" onclick="openEditPaymentModal('${p.id}')" 
+                    title="Edit Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 text-slate-600 dark:text-slate-400 flex items-center justify-center transition-colors">
+              <i data-lucide="pencil" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+            </button>
+
+            <button type="button" onclick="handleDeletePayment('${p.id}', ${p.amount})" 
+                    title="Delete Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-rose-50 text-slate-400 dark:text-slate-500 hover:text-rose-600 flex items-center justify-center transition-colors">
+              <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+            </button>
+          </div>
+        </div>
+      `;
+      container.appendChild(row);
+    });
+  }
+
+  function filterMemberPayments() {
+    if (!folioData || !folioData.payments) return;
+    const q = document.getElementById('paymentsSearchInput').value.toLowerCase().trim();
+    const chitFilter = document.getElementById('filterChitSelect').value;
+    const typeFilter = document.getElementById('filterTypeSelect').value;
+
+    const filtered = folioData.payments.filter(p => {
+      const matchQ = !q || p.amount.toString().includes(q) || 
+                            p.group_name.toLowerCase().includes(q) || 
+                            p.payment_mode.toLowerCase().includes(q) || 
+                            (p.notes && p.notes.toLowerCase().includes(q));
+      const matchChit = chitFilter === 'all' || p.group_id === chitFilter;
+      const matchType = typeFilter === 'all' || p.payment_mode.toLowerCase() === typeFilter.toLowerCase();
+      return matchQ && matchChit && matchType;
+    });
+
+    renderPaymentsList(filtered);
+  }
+
+  // 7. Render Payouts View (Tab 3)
+  function renderPayoutsView(payouts) {
+    const container = document.getElementById('payoutsListContainer');
+    const summary = folioData?.analytics || {};
+
+    let totalTaken = 0;
+    let totalEligible = 0;
+    let totalLoss = 0;
+
+    payouts.forEach(p => {
+      if (p.has_lifted) {
+        totalTaken += p.payout_amount;
+        totalLoss += p.loss_amount;
+      } else {
+        totalEligible += p.current_month_eligible_payout;
+      }
+    });
+
+    document.getElementById('payoutsTotalTakenDisplay').textContent = formatINR(totalTaken);
+    document.getElementById('payoutsEligibleDisplay').textContent = formatINR(totalEligible);
+    document.getElementById('payoutsLossDisplay').textContent = formatINR(totalLoss);
+
+    if (payouts.length === 0) {
+      container.innerHTML = `
+        <div class="bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-8 text-center text-xs text-slate-400 dark:text-slate-500">
+          No chit enrollments found for payout tracking.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    payouts.forEach((po, idx) => {
+      const card = document.createElement('div');
+      card.className = 'rounded-[24px] bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 p-5 md:p-6 card-shadow card-shine dark:shadow-none space-y-4';
+
+      let statusHtml = '';
+      let actionBtnHtml = '';
+
+      if (po.has_lifted) {
+        statusHtml = `
+          <div class="flex items-center justify-between">
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40">
+              Taken in Month ${po.lifted_month_index}
+            </span>
+            <span class="text-xs font-semibold text-slate-400 dark:text-slate-500">Payout Disbursed</span>
+          </div>
+
+          <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">Chit Amount Received:</span>
+              <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig text-sm">${formatINR(po.payout_amount)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">Chit Loss Deducted:</span>
+              <span class="font-bold text-rose-600 dark:text-rose-400 money-fig">${formatINR(po.loss_amount)}</span>
+            </div>
+          </div>
+        `;
+      } else {
+        statusHtml = `
+          <div class="flex items-center justify-between">
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+              Not taken · Eligible for On-Demand Payout
+            </span>
+          </div>
+
+          <div class="bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-800/40 space-y-2 text-xs">
+            <div class="flex justify-between">
+              <span class="text-slate-600 dark:text-slate-300 font-medium">Eligible Payout (Current Month):</span>
+              <span class="font-extrabold text-emerald-800 dark:text-emerald-300 money-fig text-sm">${formatINR(po.current_month_eligible_payout)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-600 dark:text-slate-300 font-medium">Loss if taken this month:</span>
+              <span class="font-bold text-amber-800 dark:text-amber-300 money-fig">${formatINR(po.current_month_loss)}</span>
+            </div>
+          </div>
+        `;
+
+        actionBtnHtml = `
+          <button type="button" onclick="openRecordPayoutModal('${po.membership_id}', '${po.group_name}', ${po.current_month_eligible_payout})" 
+                  class="w-full h-11 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-xs card-shine dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2">
+            <i data-lucide="banknote" class="w-4 h-4 stroke-[1.8] "></i>
+            <span>Record / Disburse Payout</span>
+          </button>
+        `;
+      }
+
+      // 20-Month schedule preview
+      const scheduleRows = (po.schedule_preview || []).map(s => `
+        <tr class="border-b border-slate-100 dark:border-slate-800 ${s.month_index === po.lifted_month_index ? 'bg-rose-50/70 dark:bg-rose-950/30 font-bold' : ''}">
+          <td class="py-2 px-3">M${s.month_index}</td>
+          <td class="py-2 px-3 text-right money-fig text-rose-600 dark:text-rose-400">${formatINR(s.loss)}</td>
+          <td class="py-2 px-3 text-right money-fig font-bold text-emerald-700 dark:text-emerald-400">${formatINR(s.payout)}</td>
+          <td class="py-2 px-3 text-right money-fig text-slate-700 dark:text-slate-300">${formatINR(s.kattubadi)}</td>
+        </tr>
+      `).join('');
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-md bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold text-[11px]">A/C #${po.account_number || po.ticket_number}</span>
+            <h4 class="font-extrabold text-base text-slate-900 dark:text-slate-100">${po.group_name}</h4>
+          </div>
+          <span class="text-xs font-bold text-emerald-600">Ticket #${po.ticket_number} · ${po.share_units}x share</span>
+        </div>
+
+        ${statusHtml}
+        ${actionBtnHtml}
+
+        <!-- Expandable 20-Month Chart -->
+        <div class="pt-1">
+          <button type="button" onclick="togglePayoutSchedule('schedTable-${idx}')" 
+                  class="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors flex items-center gap-1.5">
+            <i data-lucide="layout-grid" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+            <span>View fixed 20-month payout chart &gt;</span>
+          </button>
+
+          <div id="schedTable-${idx}" class="hidden mt-3 overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-2xl">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-slate-50 dark:bg-chitDark-bg text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">
+                <tr>
+                  <th class="py-2.5 px-3">Month</th>
+                  <th class="py-2.5 px-3 text-right">Loss</th>
+                  <th class="py-2.5 px-3 text-right">Payout Given</th>
+                  <th class="py-2.5 px-3 text-right">Installment</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${scheduleRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(card);
+      if(window.lucide) { lucide.createIcons(); }
+    });
+  }
+
+  function togglePayoutSchedule(elemId) {
+    const el = document.getElementById(elemId);
+    if (el) el.classList.toggle('hidden');
+  }
+
+  // 8. Render Activity View (Tab 4)
+  function renderActivityView(activity) {
+    const container = document.getElementById('activityListContainer');
+    if (activity.length === 0) {
+      container.innerHTML = `
+        <div class="py-8 text-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50">
+          No activity logs recorded yet for this member.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    activity.forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-4 card-shadow card-shine dark:shadow-none flex items-start gap-3.5';
+
+      let iconBg = 'bg-emerald-100 text-emerald-700';
+      let icon = 'fa-receipt';
+      if (a.type === 'enrollment') {
+        iconBg = 'bg-sky-100 text-sky-700';
+        icon = 'fa-user-check';
+      } else if (a.type === 'payout') {
+        iconBg = 'bg-amber-100 text-amber-800';
+        icon = 'fa-hand-holding-dollar';
+      }
+
+      card.innerHTML = `
+        <div class="h-9 w-9 rounded-xl ${iconBg} flex items-center justify-center shrink-0 font-bold text-sm">
+          <i data-lucide="circle" class="w-4 h-4 stroke-[1.8] ${icon}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-2">
+            <h5 class="text-xs font-bold text-slate-900 dark:text-slate-100">${a.title}</h5>
+            ${a.amount ? `<span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 money-fig">${formatINR(a.amount)}</span>` : ''}
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${a.group_name || ''}</p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1.5">
+            <i data-lucide="clock" class="w-4 h-4 stroke-[1.8] text-[10px]"></i>
+            <span>${a.time_str || 'Recently'} · ${a.actor || 'CHINNA REDDY'}</span>
+          </p>
+        </div>
+      `;
+      container.appendChild(card);
+      if(window.lucide) { lucide.createIcons(); }
+    });
+  }
+
+  // 9. Record Payment Modal Logic
+  function openRecordPaymentModal(installmentId = null, membershipId = null, amount = null, chitName = null) {
+    document.getElementById('recordPaymentModal').classList.remove('hidden');
+    document.getElementById('modalEditingPaymentId').value = '';
+    document.getElementById('modalPaymentTitle').textContent = 'Record Payment';
+    document.getElementById('modalSubmitBtn').textContent = 'Record payment';
+
+    const m = folioData?.member || {};
+    document.getElementById('modalMemberSubtitle').textContent = m.full_name || 'Subscriber';
+    document.getElementById('modalMemberName').textContent = m.full_name || 'Subscriber';
+    document.getElementById('modalAvatar').textContent = (m.full_name || 'U').charAt(0).toUpperCase();
+
+    // Chit pills in modal
+    const chits = folioData?.chits || [];
+    const pillsContainer = document.getElementById('modalChitPills');
+    pillsContainer.innerHTML = '';
+
+    let selectedChit = chits[0];
+    if (membershipId) {
+      const match = chits.find(c => c.membership_id === membershipId);
+      if (match) selectedChit = match;
+    }
+
+    chits.forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isSel = selectedChit && selectedChit.membership_id === c.membership_id;
+      btn.className = `px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all shadow-xs ${
+        isSel ? 'bg-slate-900 text-white border border-slate-900 dark:bg-emerald-600 dark:border-emerald-500 dark:text-white font-bold' : 'bg-white dark:bg-chitDark-elevated/80 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated'
+      }`;
+      btn.textContent = `${c.group_name} · M${c.current_month_index}`;
+      btn.onclick = () => selectModalChit(c);
+      pillsContainer.appendChild(btn);
+    });
+
+    if (selectedChit) {
+      selectModalChit(selectedChit, installmentId, amount);
+    }
+    selectPaymentMethod('Cash');
+    selectDateOption('today');
+  }
+
+  function selectModalChit(chit, explicitInstId = null, explicitAmount = null) {
+    document.getElementById('modalMembershipId').value = chit.membership_id;
+    document.getElementById('modalInstallmentId').value = explicitInstId || chit.current_month_card.installment_id || '';
+    document.getElementById('modalChitDetails').textContent = `${chit.group_name} · ${chit.current_month_card.month_year}`;
+
+    const amt = explicitAmount !== null ? explicitAmount : (chit.current_month_card.pending_amount || chit.monthly || 0);
+    document.getElementById('modalAmountInput').value = amt > 0 ? amt : '';
+
+    // Update banner
+    const banner = document.getElementById('modalDuesBanner');
+    const bannerText = document.getElementById('modalBannerText');
+    if (chit.current_month_card.is_paid) {
+      banner.className = 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-200';
+      bannerText.textContent = `All dues collected for ${chit.current_month_card.month_year}. Record only an extra or advance payment here.`;
+    } else {
+      banner.className = 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200';
+      bannerText.textContent = `Pending due for ${chit.current_month_card.month_year}: ${formatINR(chit.current_month_card.pending_amount)}`;
+    }
+
+    // Refresh pill buttons styling
+    const chits = folioData?.chits || [];
+    const pillsContainer = document.getElementById('modalChitPills');
+    Array.from(pillsContainer.children).forEach((btn, idx) => {
+      if (chits[idx] && chits[idx].membership_id === chit.membership_id) {
+        btn.className = 'px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all shadow-xs bg-slate-900 text-white border border-slate-900 dark:bg-emerald-600 dark:border-emerald-500 dark:text-white';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all shadow-xs bg-white dark:bg-chitDark-elevated/80 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated';
+      }
+    });
+  }
+
+  function closeRecordPaymentModal() {
+    document.getElementById('recordPaymentModal').classList.add('hidden');
+  }
+
+  function selectPaymentMethod(mode) {
+    selectedMethod = mode;
+    ['Cash', 'UPI', 'Bank', 'Cheque'].forEach(m => {
+      const btn = document.getElementById(`methodBtn-${m}`);
+      if (m === mode) {
+        btn.className = 'py-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all bg-slate-900 text-white border-slate-900 dark:bg-emerald-600 dark:text-white dark:border-emerald-500 shadow-xs';
+      } else {
+        btn.className = 'py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold flex flex-col items-center gap-1 transition-all';
+      }
+    });
+  }
+
+  function selectDateOption(opt) {
+    selectedDateOpt = opt;
+    ['today', 'yesterday', 'custom'].forEach(o => {
+      const btn = document.getElementById(`dateBtn-${o}`);
+      if (btn) {
+        if (o === opt) {
+          btn.className = 'py-2.5 rounded-xl border text-xs font-bold transition-all bg-slate-900 text-white border-slate-900 dark:bg-emerald-600 dark:text-white dark:border-emerald-500 shadow-xs flex items-center justify-center gap-1.5';
+        } else {
+          btn.className = 'py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-elevated/80 dark:hover:bg-chitDark-elevated text-xs font-bold transition-all flex items-center justify-center gap-1.5';
+        }
+      }
+    });
+
+    const customInput = document.getElementById('modalCustomDateInput');
+    if (opt === 'custom') {
+      customInput.classList.remove('hidden');
+      if (!customInput.value) customInput.valueAsDate = new Date();
+    } else {
+      customInput.classList.add('hidden');
+    }
+  }
+
+  async function submitRecordPayment(e) {
+    e.preventDefault();
+    const editId = document.getElementById('modalEditingPaymentId').value;
+    const installmentId = document.getElementById('modalInstallmentId').value;
+    const membershipId = document.getElementById('modalMembershipId').value;
+    const amount = parseFloat(document.getElementById('modalAmountInput').value) || 0;
+    const notes = document.getElementById('modalNoteInput').value;
+
+    let pDate = new Date().toISOString().split('T')[0];
+    if (selectedDateOpt === 'yesterday') {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      pDate = d.toISOString().split('T')[0];
+    } else if (selectedDateOpt === 'custom') {
+      pDate = document.getElementById('modalCustomDateInput').value || pDate;
+    }
+
+    try {
+      let res;
+      if (editId) {
+        // Edit existing payment
+        res = await fetch(`/chit/api/payments/${editId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount, payment_mode: selectedMethod, payment_date: pDate, notes })
+        });
+      } else {
+        // Record new payment
+        res = await fetch('/chit/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            installment_id: installmentId,
+            membership_id: membershipId,
+            amount: amount,
+            payment_mode: selectedMethod,
+            payment_date: pDate,
+            notes: notes
+          })
+        });
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save payment');
+
+      closeRecordPaymentModal();
+      showToast(editId ? 'Payment updated successfully' : 'Payment recorded successfully');
+      await loadMemberFolio();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Error processing payment');
+    }
+  }
+
+  // 10. Edit & Delete Payment
+  async function openEditPaymentModal(paymentId) {
+    try {
+      const res = await fetch(`/chit/api/payments/${paymentId}`);
+      const p = await res.json();
+      openRecordPaymentModal(p.installment_id, p.membership_id, p.amount, p.group_name);
+      document.getElementById('modalEditingPaymentId').value = p.id;
+      document.getElementById('modalPaymentTitle').textContent = 'Edit Payment';
+      document.getElementById('modalSubmitBtn').textContent = 'Update payment';
+      document.getElementById('modalNoteInput').value = p.notes || '';
+      selectPaymentMethod(p.payment_mode || 'Cash');
+    } catch (e) {
+      showToast('Failed to load payment details');
+    }
+  }
+
+  async function handleDeletePayment(paymentId, amount) {
+    if (!confirm(`Are you sure you want to delete this payment of ₹${amount}? Dues will be restored.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/chit/api/payments/${paymentId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete payment');
+      showToast('Payment deleted and dues reversed');
+      await loadMemberFolio();
+    } catch (e) {
+      showToast(e.message || 'Error deleting payment');
+    }
+  }
+
+  function sharePaymentReceipt(paymentId, amount, receiptNo, groupName) {
+    const m = folioData?.member || {};
+    const text = `*Siva Durga Chit Fund Receipt*\nSubscriber: ${m.full_name}\nReceipt No: ${receiptNo}\nChit: ${groupName}\nAmount Paid: ₹${amount}\nStatus: Confirmed\nThank you!`;
+    if (navigator.share) {
+      navigator.share({ title: 'Payment Receipt', text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text);
+      showToast('Receipt copied to clipboard for WhatsApp sharing');
+    }
+  }
+
+  // 11. Edit Profile Page Navigation
+  function openEditProfileModal() {
+    window.location.href = `/chit/members/${memberId}/edit`;
+  }
+
+  function closeEditProfileModal() {
+    document.getElementById('editProfileModal').classList.add('hidden');
+  }
+
+  async function submitEditProfile(e) {
+    e.preventDefault();
+    const custId = (document.getElementById('editCustomerId')?.value || '').trim();
+    if (custId && !/^\d{5}$/.test(custId)) {
+      alert('Customer ID must be exactly 5 numeric digits (e.g. 10001)');
+      return;
+    }
+
+    const payload = {
+      customer_id: custId,
+      full_name: document.getElementById('editFullName').value,
+      phone: document.getElementById('editPhone').value,
+      email: document.getElementById('editEmail').value,
+      govt_id_last4: document.getElementById('editAadhaarLast4').value,
+      address: document.getElementById('editAddress').value,
+      member_portal_enabled: document.getElementById('editPortalEnabled').checked,
+      nominee_name: document.getElementById('editNomineeName').value,
+      nominee_phone: document.getElementById('editNomineePhone').value,
+      nominee_relation: document.getElementById('editNomineeRelation').value
+    };
+
+    try {
+      const res = await fetch(`/chit/api/members/${MEMBER_ID}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+      closeEditProfileModal();
+      showToast('Profile updated successfully');
+      await loadMemberFolio();
+    } catch (err) {
+      showToast(err.message || 'Error saving profile');
+    }
+  }
+
+  // 12. Payout Modal Handlers
+  function openRecordPayoutModal(membershipId, groupName, defaultAmount) {
+    activePayoutGroup = folioData?.payouts.find(p => p.membership_id === membershipId);
+    if (!activePayoutGroup) return;
+
+    document.getElementById('payoutMembershipId').value = membershipId;
+    document.getElementById('payoutModalChitName').textContent = groupName;
+    document.getElementById('payoutDateInput').valueAsDate = new Date();
+    document.getElementById('memberPayNowCheckbox').checked = true;
+    document.getElementById('payoutNotesInput').value = '';
+
+    const m = folioData?.member || {};
+    document.getElementById('payoutModalMemberName').textContent = m.full_name || 'Subscriber';
+    document.getElementById('payoutModalAvatar').textContent = (m.full_name || 'U').charAt(0).toUpperCase();
+    document.getElementById('payoutModalTicketTag').textContent = `Ticket #${activePayoutGroup.ticket_number} · ${activePayoutGroup.share_units}x share available`;
+
+    // Populate share count dropdown (1 to available shares)
+    const shareSel = document.getElementById('memberPayoutShareCountSelect');
+    shareSel.innerHTML = '';
+    const maxShares = parseFloat(activePayoutGroup.share_units || 1.0);
+    const maxInt = Math.max(1, Math.floor(maxShares));
+    for (let i = 1; i <= maxInt; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${i} chit${i > 1 ? 's' : ''} (${i}.0x share)`;
+      shareSel.appendChild(opt);
+    }
+    if (maxShares % 1 !== 0) {
+      const opt = document.createElement('option');
+      opt.value = maxShares;
+      opt.textContent = `${maxShares} chits (${maxShares}x share)`;
+      shareSel.appendChild(opt);
+    }
+
+    // Determine default month: current_month_index if active, or last month (duration_months) if ended
+    const curM = activePayoutGroup.current_month_index || 1;
+    const dur = activePayoutGroup.duration_months || 20;
+    const defaultM = (curM > dur) ? dur : curM;
+
+    // Populate month dropdown
+    const select = document.getElementById('payoutMonthSelect');
+    select.innerHTML = '';
+    const origShares = parseFloat(activePayoutGroup.share_units || 1.0);
+    (activePayoutGroup.schedule_preview || []).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.month_index;
+      const baseP = s.payout / (origShares || 1.0);
+      opt.textContent = `Month ${s.month_index} · Base Payout: ${formatINR(baseP)}`;
+      if (s.month_index === defaultM) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+
+    select.value = defaultM;
+    updatePayoutSchemeAmounts();
+    document.getElementById('recordPayoutModal').classList.remove('hidden');
+  }
+
+  function updatePayoutSchemeAmounts() {
+    if (!activePayoutGroup) return;
+    const mIdx = parseInt(document.getElementById('payoutMonthSelect').value) || 1;
+    const shares = parseFloat(document.getElementById('memberPayoutShareCountSelect').value) || 1.0;
+    const origShares = parseFloat(activePayoutGroup.share_units || 1.0);
+    const match = (activePayoutGroup.schedule_preview || []).find(s => s.month_index === mIdx);
+    if (match) {
+      const basePayout = match.payout / (origShares || 1.0);
+      const baseLoss = match.loss / (origShares || 1.0);
+      document.getElementById('payoutPreviewAmount').textContent = formatINR(basePayout * shares);
+      document.getElementById('payoutPreviewLoss').textContent = formatINR(baseLoss * shares);
+    }
+  }
+
+  function closeRecordPayoutModal() {
+    document.getElementById('recordPayoutModal').classList.add('hidden');
+  }
+
+  async function submitRecordPayout(e) {
+    e.preventDefault();
+    const membershipId = document.getElementById('payoutMembershipId').value;
+    const monthIndex = parseInt(document.getElementById('payoutMonthSelect').value) || 1;
+    const shareCount = parseFloat(document.getElementById('memberPayoutShareCountSelect').value) || 1.0;
+    const payoutDate = document.getElementById('payoutDateInput').value;
+    const paymentMode = document.getElementById('payoutModeSelect').value;
+    const payNow = document.getElementById('memberPayNowCheckbox').checked;
+    const notes = document.getElementById('payoutNotesInput').value.trim();
+
+    try {
+      const res = await fetch(`/chit/api/members/${MEMBER_ID}/payout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          membership_id: membershipId,
+          month_index: monthIndex,
+          share_count: shareCount,
+          payout_date: payoutDate,
+          payment_mode: paymentMode,
+          pay_now: payNow,
+          notes: notes
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to record payout');
+
+      closeRecordPayoutModal();
+      showToast('On-demand payout recorded successfully');
+      await loadMemberFolio();
+    } catch (err) {
+      showToast(err.message || 'Error processing payout');
+    }
+  }
+
+  // 13. Portal Access Modal
+  function openPortalAccessModal() {
+    document.getElementById('optionsDropdown').classList.add('hidden');
+    document.getElementById('portalAccessModal').classList.remove('hidden');
+    const m = folioData?.member || {};
+    document.getElementById('portalPhoneDisplay').textContent = m.phone ? `+91 ${m.phone}` : 'No phone registered';
+    document.getElementById('portalStatusDisplay').textContent = m.member_portal_enabled ? 'Active' : 'Disabled';
+  }
+
+  function closePortalAccessModal() {
+    document.getElementById('portalAccessModal').classList.add('hidden');
+  }
+
+  // 14. Printable Statement
+  function generateStatementPDF() {
+    document.getElementById('optionsDropdown').classList.add('hidden');
+    const m = folioData?.member || {};
+    const a = folioData?.analytics || {};
+
+    document.getElementById('stmtMemberName').textContent = m.full_name;
+    document.getElementById('stmtMemberPhone').textContent = m.phone;
+    document.getElementById('stmtPaidIn').textContent = formatINR(a.paid_in);
+    document.getElementById('stmtPaidOut').textContent = a.paid_out > 0 ? formatINR(a.paid_out) : 'None';
+    document.getElementById('stmtDateDisplay').textContent = `Date: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+    const rowsContainer = document.getElementById('stmtLedgerRows');
+    rowsContainer.innerHTML = '';
+
+    (folioData?.payments || []).forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'p-3 flex justify-between items-center text-xs';
+      div.innerHTML = `
+        <div>
+          <span class="font-bold text-slate-800 dark:text-slate-200">${p.group_name}</span> · ${p.month_tag}
+          <p class="text-[11px] text-slate-400 dark:text-slate-500">Mode: ${p.payment_mode} · Receipt: ${p.receipt_no}</p>
+        </div>
+        <div class="text-right font-extrabold money-fig text-emerald-700">
+          ${formatINR(p.amount)}
+        </div>
+      `;
+      rowsContainer.appendChild(div);
+      if(window.lucide) { lucide.createIcons(); }
+    });
+
+    window.print();
+  }
+
+  // 14b. Toggle Member Default Status
+  async function toggleMemberDefaultStatus() {
+    document.getElementById('optionsDropdown').classList.add('hidden');
+    const m = folioData?.member || {};
+    const isCurDef = Boolean(m.is_defaulted);
+    const actionName = isCurDef ? 'Clear default status for' : 'Mark as DEFAULTED for';
+    if (!confirm(`${actionName} subscriber "${m.full_name}"?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/chit/api/members/${MEMBER_ID}/toggle-default`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_defaulted: !isCurDef,
+          reason: !isCurDef ? 'Marked manually by admin' : ''
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update default status');
+      showToast(!isCurDef ? 'Subscriber marked as defaulted' : 'Default status cleared');
+      await loadMemberFolio();
+    } catch (e) {
+      alert('Error updating status: ' + e.message);
+    }
+  }
+
+  function toggleMemberBreakdown() {
+    const el = document.getElementById('memberDueBreakdownCard');
+    if (el) el.classList.toggle('hidden');
+  }
+
+  // 15. Delete Member Confirmation
+  async function confirmDeleteMember() {
+    document.getElementById('optionsDropdown').classList.add('hidden');
+    const m = folioData?.member || {};
+    if (!confirm(`Are you sure you want to permanently delete subscriber "${m.full_name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/chit/api/members/${MEMBER_ID}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete subscriber');
+      alert('Subscriber deleted successfully.');
+      window.location.href = '/chit/members';
+    } catch (err) {
+      alert(err.message || 'Error deleting member');
+    }
+  }
+
+  function scrollLinkedPills(delta) {
+    const container = document.getElementById('linkedMembersPills');
+    if (container) {
+      container.scrollBy({ left: delta, behavior: 'smooth' });
+    }
+  }
+
+  // ==================== LINKED ACCOUNTS ====================
+  let currentLinkedMembersList = [];
+
+  async function switchMemberFolio(targetMemberId) {
+    if (!targetMemberId || targetMemberId === MEMBER_ID) return;
+    MEMBER_ID = targetMemberId;
+    window.history.pushState({ memberId: targetMemberId }, '', `/chit/members/${targetMemberId}`);
+    await loadMemberFolio(targetMemberId);
+  }
+
+  function navigateLinkedMember(delta) {
+    if (!currentLinkedMembersList || currentLinkedMembersList.length === 0) return;
+    const curIdx = currentLinkedMembersList.findIndex(m => m.is_current);
+    if (curIdx !== -1) {
+      const nextIdx = curIdx + delta;
+      if (nextIdx >= 0 && nextIdx < currentLinkedMembersList.length) {
+        switchMemberFolio(currentLinkedMembersList[nextIdx].id);
+      }
+    }
+  }
+
+  window.addEventListener('popstate', (e) => {
+    const parts = window.location.pathname.split('/');
+    const lastPart = parts[parts.length - 1];
+    if (lastPart && lastPart !== MEMBER_ID) {
+      MEMBER_ID = lastPart;
+      loadMemberFolio(lastPart);
+    }
+  });
+
+  function renderLinkedMembersBar(linkedMembers) {
+    currentLinkedMembersList = linkedMembers || [];
+    const container = document.getElementById('linkedAccountsBarContainer');
+    const pills = document.getElementById('linkedMembersPills');
+    if (!container || !pills) return;
+
+    if (!linkedMembers || linkedMembers.length <= 1) {
+      container.classList.add('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    pills.innerHTML = '';
+
+    let activePillEl = null;
+
+    linkedMembers.forEach(m => {
+      const isCurrent = m.is_current;
+      if (isCurrent) {
+        const activePill = document.createElement('div');
+        activePill.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 flex items-center gap-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm border border-slate-900 dark:border-white select-none active-linked-pill';
+        activePill.innerHTML = `
+          <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>${m.full_name}</span>
+          ${m.customer_id ? `<span class="text-[10px] font-mono opacity-80">#${m.customer_id}</span>` : ''}
+          <span class="text-[9px] uppercase tracking-wider bg-white/20 dark:bg-black/10 px-1.5 py-0.5 rounded font-black">Current</span>
+        `;
+        pills.appendChild(activePill);
+        activePillEl = activePill;
+      } else {
+        const linkPill = document.createElement('button');
+        linkPill.type = 'button';
+        linkPill.onclick = () => switchMemberFolio(m.id);
+        linkPill.className = 'px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 flex items-center gap-2 bg-white dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-surface hover:border-indigo-300 dark:hover:border-indigo-600 transition-all shadow-2xs select-none group cursor-pointer';
+        linkPill.innerHTML = `
+          <span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 group-hover:bg-indigo-500 transition-colors"></span>
+          <span class="font-bold group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${m.full_name}</span>
+          ${m.customer_id ? `<span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">#${m.customer_id}</span>` : ''}
+          ${m.active_chits_count ? `<span class="text-[10px] text-slate-400 dark:text-slate-500">(${m.active_chits_count})</span>` : ''}
+        `;
+        pills.appendChild(linkPill);
+      }
+    });
+
+    if (activePillEl) {
+      setTimeout(() => {
+        activePillEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 50);
+    }
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  let modalLinkedData = null;
+
+  async function openManageLinksModal() {
+    const modal = document.getElementById('manageLinksModal');
+    modal.classList.remove('hidden');
+    const optDropdown = document.getElementById('optionsDropdown');
+    if (optDropdown) optDropdown.classList.add('hidden');
+    await refreshManageLinksModal();
+  }
+
+  function closeManageLinksModal() {
+    document.getElementById('manageLinksModal').classList.add('hidden');
+  }
+
+  async function refreshManageLinksModal() {
+    const currentList = document.getElementById('currentlyLinkedMembersList');
+    const countBadge = document.getElementById('modalLinkedCountBadge');
+    currentList.innerHTML = '<p class="text-xs text-slate-400 py-3 text-center">Loading linked members...</p>';
+    try {
+      const res = await fetch(`/chit/api/members/${MEMBER_ID}/linked-accounts`);
+      modalLinkedData = await res.json();
+      
+      const members = modalLinkedData.linked_members || [];
+      if (countBadge) countBadge.textContent = `${members.length} account${members.length === 1 ? '' : 's'}`;
+
+      if (members.length <= 1) {
+        currentList.innerHTML = `
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-chitDark-elevated text-xs text-slate-500 dark:text-slate-400 text-center">
+            No other subscribers are linked to this profile yet.
+          </div>
+        `;
+      } else {
+        currentList.innerHTML = '';
+        members.forEach(m => {
+          const isThisMember = m.id === MEMBER_ID;
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-chitDark-elevated border border-slate-200/60 dark:border-slate-700/50';
+          row.innerHTML = `
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="h-8 w-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0">
+                ${(m.full_name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">${m.full_name}</span>
+                  ${m.customer_id ? `<span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">#${m.customer_id}</span>` : ''}
+                  ${isThisMember ? `<span class="text-[9px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded">This Profile</span>` : ''}
+                </div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">${m.phone || 'No phone'}</span>
+              </div>
+            </div>
+            ${!isThisMember ? `
+              <button type="button" onclick="unlinkMemberFromGroup('${m.id}')" class="px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold transition-colors">
+                Unlink
+              </button>
+            ` : ''}
+          `;
+          currentList.appendChild(row);
+        });
+      }
+
+      filterCandidatesList();
+    } catch (e) {
+      console.error(e);
+      currentList.innerHTML = '<p class="text-xs text-rose-500 py-3 text-center">Failed to load linked accounts</p>';
+    }
+  }
+
+  function filterCandidatesList() {
+    const list = document.getElementById('candidateMembersList');
+    if (!modalLinkedData) return;
+    const q = (document.getElementById('candidateSearchInput').value || '').toLowerCase().trim();
+    const candidates = (modalLinkedData.candidates || []).filter(c => {
+      if (c.is_linked) return false;
+      return (c.full_name && c.full_name.toLowerCase().includes(q)) ||
+             (c.customer_id && c.customer_id.toLowerCase().includes(q)) ||
+             (c.phone && c.phone.toLowerCase().includes(q));
+    });
+
+    if (candidates.length === 0) {
+      list.innerHTML = '<p class="text-xs text-slate-400 py-3 text-center">No matching subscribers found to link</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    candidates.slice(0, 10).forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-chitDark-elevated border border-slate-100 dark:border-slate-800 transition-colors';
+      row.innerHTML = `
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">
+            ${(c.full_name || 'U').charAt(0).toUpperCase()}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">${c.full_name}</span>
+              ${c.customer_id ? `<span class="text-[10px] font-mono text-slate-400">#${c.customer_id}</span>` : ''}
+            </div>
+            <span class="text-[10px] text-slate-400">${c.phone || 'No phone'}</span>
+          </div>
+        </div>
+        <button type="button" onclick="linkMemberToThisAccount('${c.id}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-bold text-xs transition-colors shrink-0 flex items-center gap-1">
+          <i data-lucide="plus" class="w-3 h-3"></i>
+          <span>Link</span>
+        </button>
+      `;
+      list.appendChild(row);
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+
+  async function linkMemberToThisAccount(candidateId) {
+    try {
+      const res = await fetch('/chit/api/members/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_ids: [MEMBER_ID, candidateId] })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to link');
+      showToast('Subscriber linked successfully!');
+      await refreshManageLinksModal();
+      await loadMemberFolio();
+    } catch (e) {
+      showToast(e.message || 'Failed to link subscriber');
+    }
+  }
+
+  async function unlinkMemberFromGroup(targetMemberId) {
+    try {
+      const res = await fetch(`/chit/api/members/${targetMemberId}/unlink`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to unlink');
+      showToast('Subscriber unlinked');
+      await refreshManageLinksModal();
+      await loadMemberFolio();
+    } catch (e) {
+      showToast(e.message || 'Failed to unlink subscriber');
+    }
+  }
+
+  // Simple Toast notification
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'fixed bottom-6 right-6 z-50 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150';
+    t.innerHTML = `<i data-lucide="info" class="w-4 h-4 stroke-[1.8] text-emerald-400"></i> <span>${msg}</span>`;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+</script>
+{% endblock %}

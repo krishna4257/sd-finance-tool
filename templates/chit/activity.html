@@ -1,0 +1,85 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Activity – ChitBase{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-8 max-w-3xl mx-auto w-full space-y-6">
+
+  <!-- Header matching Screenshot 4 -->
+  <div class="flex items-center gap-3">
+    <a href="/chit/dashboard" class="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] transition-colors">
+      <i data-lucide="arrow-left" class="w-4 h-4 stroke-[1.8]"></i>
+    </a>
+    <div>
+      <h1 class="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">Activity</h1>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5"><span id="activityEventCount">2</span> events loaded</p>
+    </div>
+  </div>
+
+  <!-- Activity Tabs matching Screenshot 4 -->
+  <div class="flex items-center gap-2 border-b border-slate-200/80 dark:border-slate-700/50 pb-2 text-xs font-semibold">
+    <button class="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold">Team activity</button>
+    <button class="px-3 py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Member logins</button>
+  </div>
+
+  <!-- Filter Pills matching Screenshot 4 -->
+  <div class="flex items-center gap-1.5 flex-wrap text-xs">
+    <button class="px-3 py-1 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold">All 2</button>
+    <button class="px-3 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-semibold border border-transparent dark:border-slate-700/50">Payments 1</button>
+    <button class="px-3 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-semibold border border-transparent dark:border-slate-700/50">Members 0</button>
+    <button class="px-3 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-semibold border border-transparent dark:border-slate-700/50">Chit Groups 1</button>
+    <button class="px-3 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-semibold border border-transparent dark:border-slate-700/50">Months 0</button>
+    <button class="px-3 py-1 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-semibold border border-transparent dark:border-slate-700/50">Auctions 0</button>
+  </div>
+
+  <!-- Feed matching Screenshot 4 -->
+  <div class="space-y-4 pt-2">
+    <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">TODAY</p>
+
+    <div class="cb-card card-shine bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 shadow-sm divide-y divide-slate-100 dark:divide-slate-800/50 p-2">
+      <!-- Item 1: Payment recorded -->
+      <div class="p-3.5 flex items-start gap-3">
+        <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center font-bold text-[10px] select-none shrink-0 mt-0.5">
+          CR
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-slate-900 dark:text-slate-100">
+            <span class="text-emerald-700 dark:text-emerald-400 money-fig font-extrabold">₹25,000</span> recorded — Aaa
+          </p>
+          <div class="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+            <span class="font-semibold text-slate-600 dark:text-slate-400">CHINNA REDDY</span>
+            <span>·</span>
+            <span>Chit 1 - ₹5L · 20M · 20 Months</span>
+          </div>
+        </div>
+        <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0">2:47 pm</span>
+      </div>
+
+      <!-- Item 2: Chit Group created -->
+      <div class="p-3.5 flex items-start gap-3">
+        <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 text-white flex items-center justify-center font-bold text-[10px] select-none shrink-0 mt-0.5">
+          CR
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-slate-900 dark:text-slate-100">Chit group created</p>
+          <div class="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+            <span class="font-semibold text-slate-600 dark:text-slate-400">CHINNA REDDY</span>
+            <span>·</span>
+            <span>Chit 1 - ₹5L · 20M · 20 Months</span>
+          </div>
+        </div>
+        <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0">9:11 am</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,1032 @@
+{% extends "chit/base.html" %}
+
+{% block title %}New Chit Scheme – Siva Durga Chit Fund{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-3xl mx-auto w-full space-y-6">
+
+  <!-- Header with Breadcrumbs matching ChitBase -->
+  <div class="space-y-3">
+    <div class="flex items-center gap-2">
+      <a href="/chit/groups" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 flex items-center gap-1">
+        <i data-lucide="arrow-left" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+        <span>Back</span>
+      </a>
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <h1 class="text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">New Chit Scheme</h1>
+    </div>
+
+    <!-- 3-Step Wizard Navigation Indicator -->
+    <div class="grid grid-cols-3 gap-2 pt-1">
+      <div id="stepTab1" class="border-t-2 border-slate-900 dark:border-slate-100 pt-2 transition-colors">
+        <p class="text-[10px] font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">1. Basic Info</p>
+        <p class="text-xs font-semibold text-slate-700 dark:text-slate-300" id="stepSub1">Active step</p>
+      </div>
+      <div id="stepTab2" class="border-t-2 border-slate-200 dark:border-slate-700/50 pt-2 transition-colors">
+        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">2. Assign Members</p>
+        <p class="text-xs font-semibold text-slate-400 dark:text-slate-500" id="stepSub2">Pending</p>
+      </div>
+      <div id="stepTab3" class="border-t-2 border-slate-200 dark:border-slate-700/50 pt-2 transition-colors">
+        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">3. Monthly Plan</p>
+        <p class="text-xs font-semibold text-slate-400 dark:text-slate-500" id="stepSub3">Pending</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== STEP 1: BASIC INFO ==================== -->
+  <div id="wizardStep1" class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm dark:shadow-none space-y-6">
+    <div>
+      <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Start with the basics</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">The size, value, and name of your chit — you'll set the members and schedule next.</p>
+    </div>
+
+    <!-- Scheme Type -->
+    <div class="space-y-2">
+      <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Which kind of chit is this?</label>
+      <div class="p-3.5 rounded-2xl border-2 border-slate-900 dark:border-slate-100 bg-slate-50/50 dark:bg-chitDark-elevated flex items-start gap-3">
+        <input type="radio" name="schemeType" value="fixed" checked class="mt-1 text-slate-900 focus:ring-slate-900 dark:text-slate-100 dark:focus:ring-slate-100 dark:bg-chitDark-elevated dark:border-slate-700/50">
+        <div>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100">Fixed / Company Chit</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">You fix every month's prize and installment up front (Siva Durga Model).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Standard Presets matching ChitBase -->
+    <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+      <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Start from a standard schedule</label>
+      <p class="text-[11px] text-slate-400 dark:text-slate-500">Pick your chit size — we'll calculate the entire schedule automatically.</p>
+      
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+        <button type="button" onclick="applyPreset(500000, 20)" data-preset-key="500000_20" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹5 Lakh · 20M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">20 members · 20 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹17,500–₹25,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(500000, 25)" data-preset-key="500000_25" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹5 Lakh · 25M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">25 members · 25 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹13,250–₹20,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(1000000, 20)" data-preset-key="1000000_20" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹10 Lakh · 20M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">20 members · 20 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹35,000–₹50,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(1000000, 25)" data-preset-key="1000000_25" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹10 Lakh · 25M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">25 members · 25 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹26,500–₹40,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(1500000, 20)" data-preset-key="1500000_20" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹15 Lakh · 20M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">20 members · 20 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹52,500–₹75,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(1500000, 25)" data-preset-key="1500000_25" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹15 Lakh · 25M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">25 members · 25 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹39,750–₹60,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(2000000, 20)" data-preset-key="2000000_20" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹20 Lakh · 20M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">20 members · 20 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹70,000–₹1,00,000/mo</p>
+        </button>
+
+        <button type="button" onclick="applyPreset(2000000, 25)" data-preset-key="2000000_25" class="preset-card-btn relative p-3 rounded-2xl border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface text-left transition-all hover:shadow-sm dark:hover:bg-white/[0.05] group">
+          <span class="preset-badge absolute top-2.5 right-2.5 text-slate-900 dark:text-slate-100 hidden"><i data-lucide="check-circle" class="w-3.5 h-3.5 stroke-[1.8]"></i></span>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">₹20 Lakh · 25M</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">25 members · 25 mo</p>
+          <p class="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-1">₹53,000–₹80,000/mo</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- Steppers for Members and Duration -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+      <div class="space-y-2">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Members *</label>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="adjustInput('inputMembers', -1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">-</button>
+          <input type="number" id="inputMembers" value="20" min="2" max="100" class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl dark:placeholder:text-slate-500">
+          <button type="button" onclick="adjustInput('inputMembers', 1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">+</button>
+        </div>
+        <div class="flex items-center gap-1.5 pt-1">
+          <button type="button" onclick="setMembers(10)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">10</button>
+          <button type="button" onclick="setMembers(20)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">20</button>
+          <button type="button" onclick="setMembers(25)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">25</button>
+          <button type="button" onclick="setMembers(50)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">50</button>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Duration (Months) *</label>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="adjustInput('inputMonths', -1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">-</button>
+          <input type="number" id="inputMonths" value="20" min="2" max="100" class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl dark:placeholder:text-slate-500">
+          <button type="button" onclick="adjustInput('inputMonths', 1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">+</button>
+        </div>
+        <div class="flex items-center gap-1.5 pt-1">
+          <button type="button" onclick="setMonths(10)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">10</button>
+          <button type="button" onclick="setMonths(20)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">20</button>
+          <button type="button" onclick="setMonths(25)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">25</button>
+          <button type="button" onclick="setMonths(50)" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">50</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Month -->
+    <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Start Month *</label>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="setStartMonthQuick(0)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">This month</button>
+          <button type="button" onclick="setStartMonthQuick(1)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">Next month</button>
+        </div>
+      </div>
+      <input type="month" id="inputStartMonth" required class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100">
+    </div>
+
+    <!-- Total Value & Quick Chips -->
+    <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+      <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Total Chit Value — Prize Pot *</label>
+      <div class="relative">
+        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 font-bold">₹</span>
+        <input type="number" id="inputPotValue" value="500000" step="10000" required oninput="recalcWizardPreview()"
+               class="w-full h-11 pl-8 pr-4 text-base font-extrabold text-slate-900 dark:text-slate-100 money-fig bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl dark:placeholder:text-slate-500 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100">
+      </div>
+      <div class="flex items-center gap-2 pt-1 flex-wrap">
+        <button type="button" onclick="setPotValue(500000)" class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">₹5,00,000</button>
+        <button type="button" onclick="setPotValue(1000000)" class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">₹10,00,000</button>
+        <button type="button" onclick="setPotValue(1500000)" class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">₹15,00,000</button>
+        <button type="button" onclick="setPotValue(2000000)" class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">₹20,00,000</button>
+      </div>
+    </div>
+
+    <!-- Name & Status -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Chit Name *</label>
+        <input type="text" id="inputChitName" required class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+        <select id="inputStatus" class="w-full h-11 px-3 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100">
+          <option value="Active" selected>Active (Use for current collections)</option>
+          <option value="Draft">Draft (Keep out of active tracking)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Summary Box matching ChitBase -->
+    <div class="bg-slate-900 dark:bg-slate-800 rounded-2xl p-4 text-white grid grid-cols-3 gap-3 text-center dark:border dark:border-slate-700/50">
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PRIZE POT</p>
+        <p class="text-sm font-extrabold money-fig mt-0.5" id="prevPrizePot">₹5,00,000</p>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">MEMBERS</p>
+        <p class="text-sm font-extrabold money-fig mt-0.5" id="prevMembers">20</p>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DURATION</p>
+        <p class="text-sm font-extrabold money-fig mt-0.5" id="prevDuration">20 mo</p>
+      </div>
+    </div>
+
+    <!-- Bottom Buttons -->
+    <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700/50">
+      <a href="/chit/groups" class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Cancel</a>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="saveAsDraft()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/[0.05]">Save Draft</button>
+        <button type="button" onclick="goToStep(2)" class="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-md">Choose Members -></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== STEP 2: ASSIGN MEMBERS ==================== -->
+  <div id="wizardStep2" class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm dark:shadow-none space-y-6 hidden">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Assign Members</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Fill <span id="targetSharesLabel">20</span> shares — one each, or subscribers holding fractional/multi shares (0.5x, 1x, 2x).</p>
+      </div>
+      <div class="text-right">
+        <span class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig" id="sharesCounterDisplay">0 / 20</span>
+        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider" id="sharesRemainingLabel">20 more to go</p>
+      </div>
+    </div>
+
+    <!-- Search & Quick Selection -->
+    <div class="space-y-3">
+      <div class="flex items-center gap-2">
+        <div class="flex-1 relative">
+          <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-3.5 h-3.5 stroke-[1.8]"></i>
+          <input type="text" id="wizardMemberSearch" oninput="filterWizardMembers()" placeholder="Search customer by name or phone..."
+                 class="w-full h-10 pl-9 pr-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs dark:text-slate-100 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100">
+        </div>
+        <button type="button" onclick="selectAllAvailableMembers()" class="px-3 h-10 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]">Select All</button>
+        <button type="button" onclick="toggleQuickAddBox()" class="px-3 h-10 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.05]">+ Quick Add</button>
+      </div>
+
+      <!-- Quick Add New Subscribers Inline Grid -->
+      <div id="quickAddBox" class="hidden p-4 rounded-2xl bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Add new subscribers directly (with unique Account Numbers):</p>
+          <span class="text-[10px] text-slate-400 dark:text-slate-500">Account # must be unique</span>
+        </div>
+        <div id="quickAddRowsContainer" class="space-y-2">
+          <!-- Multi-row entries -->
+        </div>
+        <div class="flex justify-between items-center pt-2">
+          <button type="button" onclick="addQuickAddRow()" class="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline">+ Add another row</button>
+          <button type="button" onclick="saveQuickAddMembers()" class="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors">Create & Select</button>
+        </div>
+      </div>
+
+      <!-- Available Member Chips: Capped at 2 rows with clean scrollbar -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+          <span>SELECT CUSTOMERS (CLICK TO ENROLL):</span>
+          <span id="availableCountBadge">Loading...</span>
+        </div>
+        <div id="availableMembersChips" class="max-h-24 overflow-y-auto p-2 border border-slate-200 dark:border-slate-700/50 rounded-2xl bg-slate-50/50 dark:bg-chitDark-elevated flex flex-wrap gap-2 transition-all">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Assigned Member Cards with Steppers matching ChitBase -->
+    <div class="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <p class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">SELECTED SUBSCRIBERS — SET ACCOUNT # & SHARES</p>
+        <span class="text-[11px] text-slate-400 dark:text-slate-500">Account numbers cannot repeat</span>
+      </div>
+
+      <!-- Bulk Installment Plan Action Bar -->
+      <div class="flex items-center justify-between flex-wrap gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-chitDark-elevated/60 border border-slate-200/80 dark:border-slate-700/50">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300">Bulk Plan:</span>
+          <button type="button" onclick="setAllMembersInstallmentType('incremental')" class="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-colors">
+            All Incremental
+          </button>
+          <button type="button" onclick="setAllMembersInstallmentType('fixed')" class="px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-colors">
+            All Fixed
+          </button>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono" id="groupFixedAmountHint">Fixed: ₹212.15/mo</span>
+      </div>
+
+      <!-- Duplicate Account Number Warning Alert -->
+      <div id="accountDuplicateWarning" class="hidden p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-xs font-semibold flex items-start gap-2.5 animate-in fade-in">
+        <i data-lucide="alert-triangle" class="text-rose-600 dark:text-rose-500 mt-0.5 shrink-0 w-4 h-4 stroke-[1.8]"></i>
+        <div class="flex-1" id="accountDuplicateWarningText">
+          <p class="font-bold">Duplicate Account Number Detected!</p>
+          <p class="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">Inside this chit group, each subscriber must have a unique account number. Please resolve duplicates before proceeding.</p>
+        </div>
+      </div>
+
+      <div id="assignedMembersList" class="space-y-2.5">
+        <p class="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">No members assigned yet. Click from the list above.</p>
+      </div>
+    </div>
+
+    <!-- Bottom Buttons -->
+    <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700/50">
+      <button type="button" onclick="goToStep(1)" class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Back</button>
+      <button type="button" id="btnGoToStep3" onclick="handleGoToStep3()" class="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">Set Monthly Plan -></button>
+    </div>
+  </div>
+
+  <!-- ==================== STEP 3: MONTHLY PLAN ==================== -->
+  <div id="wizardStep3" class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm dark:shadow-none space-y-6 hidden">
+    <div>
+      <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Set up the money</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pre-calculated fixed schedule based on Siva Durga Chit Fund physical chart.</p>
+    </div>
+
+    <!-- Margin Breakdown Summary Card matching ChitBase -->
+    <div class="cb-card bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 p-5 space-y-3">
+      <div class="flex items-center justify-between text-xs font-bold text-emerald-950 dark:text-emerald-300">
+        <span>Your Margin on This Scheme</span>
+        <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 text-[10px]">3% Commission</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white dark:bg-chitDark-surface rounded-2xl p-3 border border-emerald-100 dark:border-emerald-800/30 shadow-sm text-center">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">COLLECTED</p>
+          <p class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="planCollected">₹84,860</p>
+        </div>
+        <div class="bg-white dark:bg-chitDark-surface rounded-2xl p-3 border border-emerald-100 dark:border-emerald-800/30 shadow-sm text-center">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">PAYOUT</p>
+          <p class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="planPrizes">₹81,860</p>
+        </div>
+        <div class="bg-emerald-600 dark:bg-emerald-700 rounded-2xl p-3 text-white shadow-sm text-center">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-100">YOU KEEP</p>
+          <p class="text-sm font-extrabold money-fig mt-0.5" id="planYouKeep">₹3,000</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedule Preview Table -->
+    <div class="cb-card bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 overflow-hidden">
+      <div class="p-3.5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-chitDark-elevated flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+        <span>Monthly Installment & Prize Breakdown</span>
+        <span class="text-[11px] text-slate-400 dark:text-slate-500">Fixed for all months</span>
+      </div>
+      <div class="max-h-72 overflow-y-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 dark:bg-chitDark-elevated text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50">
+            <tr>
+              <th class="py-2.5 px-3.5 text-center">Month</th>
+              <th class="py-2.5 px-3.5 text-right">Installment Due</th>
+              <th class="py-2.5 px-3.5 text-right">Prize Payout</th>
+              <th class="py-2.5 px-3.5 text-right">Bonus</th>
+              <th class="py-2.5 px-3.5 text-center">Recipient</th>
+            </tr>
+          </thead>
+          <tbody id="planTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50 font-medium">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Bottom Action -->
+    <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700/50">
+      <button type="button" onclick="goToStep(2)" class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Back</button>
+      <button type="button" id="btnSubmitNewGroup" onclick="submitNewGroup()" class="px-6 py-3 rounded-2xl bg-emerald-600 dark:bg-emerald-500 text-white text-xs font-extrabold hover:bg-emerald-700 dark:hover:bg-emerald-600 shadow-lg shadow-emerald-700/20 active:scale-95 transition-all">
+        Create Chit Scheme
+      </button>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let currentStep = 1;
+  let allDirectoryMembers = [];
+  let assignedMembers = []; // { member_id, full_name, phone, share_units }
+  let generatedPlanSchedule = [];
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function updatePresetHighlight() {
+    const pot = parseFloat(document.getElementById('inputPotValue').value) || 0;
+    const dur = parseInt(document.getElementById('inputMonths').value) || 0;
+    const currentKey = `${pot}_${dur}`;
+
+    document.querySelectorAll('.preset-card-btn').forEach(btn => {
+      const bKey = btn.getAttribute('data-preset-key');
+      const isMatch = (bKey === currentKey);
+      if (isMatch) {
+        btn.classList.add('border-2', 'border-slate-900', 'bg-slate-50', 'ring-2', 'ring-slate-900/10', 'shadow-sm', 'dark:border-slate-100', 'dark:bg-chitDark-elevated', 'dark:ring-slate-100/10');
+        btn.classList.remove('border-slate-200', 'bg-white', 'dark:border-slate-700/40', 'dark:bg-chitDark-surface');
+      } else {
+        btn.classList.remove('border-2', 'border-slate-900', 'bg-slate-50', 'ring-2', 'ring-slate-900/10', 'shadow-sm', 'dark:border-slate-100', 'dark:bg-chitDark-elevated', 'dark:ring-slate-100/10');
+        btn.classList.add('border-slate-200', 'bg-white', 'dark:border-slate-700/40', 'dark:bg-chitDark-surface');
+      }
+      const badge = btn.querySelector('.preset-badge');
+      if (badge) badge.classList.toggle('hidden', !isMatch);
+    });
+  }
+
+  function applyPreset(pot, dur) {
+    setPotValue(pot);
+    setMembers(dur);
+    setMonths(dur);
+    updatePresetHighlight();
+  }
+
+  function adjustInput(id, delta) {
+    const el = document.getElementById(id);
+    el.value = Math.max(2, (parseInt(el.value) || 20) + delta);
+    recalcWizardPreview();
+  }
+
+  function setMembers(val) {
+    document.getElementById('inputMembers').value = val;
+    recalcWizardPreview();
+  }
+
+  function setMonths(val) {
+    document.getElementById('inputMonths').value = val;
+    recalcWizardPreview();
+  }
+
+  function setPotValue(val) {
+    document.getElementById('inputPotValue').value = val;
+    recalcWizardPreview();
+  }
+
+  function setStartMonthQuick(offset) {
+    const now = new Date();
+    now.setMonth(now.getMonth() + offset);
+    document.getElementById('inputStartMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}`;
+  }
+
+  let currentDefaultInstallmentType = 'incremental';
+
+  function getFixedMonthlyBase() {
+    const pot = parseFloat(document.getElementById('inputPotValue').value) || 5000;
+    const dur = parseInt(document.getElementById('inputMonths').value) || 20;
+    const mult = pot / 5000.0;
+    if (dur === 20) return 212.15 * mult;
+    if (dur === 25) return 164.90 * mult;
+    return (pot / dur);
+  }
+
+  function updateFixedBadgeHints() {
+    const fixedAmt = getFixedMonthlyBase();
+    const b1 = document.getElementById('step1FixedFigBadge');
+    if (b1) b1.textContent = `${formatINR(fixedAmt)}/mo`;
+    const b2 = document.getElementById('groupFixedAmountHint');
+    if (b2) b2.textContent = `Fixed: ${formatINR(fixedAmt)}/mo`;
+  }
+
+  function setDefaultInstallmentPlan(type) {
+    currentDefaultInstallmentType = type;
+    setAllMembersInstallmentType(type);
+  }
+
+  function setAllMembersInstallmentType(type) {
+    currentDefaultInstallmentType = type;
+    assignedMembers.forEach(m => m.installment_type = type);
+    renderAssignedMembers();
+  }
+
+  function updateAssignedMemberInstallmentType(idx, type) {
+    if (assignedMembers[idx]) {
+      assignedMembers[idx].installment_type = type;
+      renderAssignedMembers();
+    }
+  }
+
+  function recalcWizardPreview() {
+    const pot = parseFloat(document.getElementById('inputPotValue').value) || 500000;
+    const members = parseInt(document.getElementById('inputMembers').value) || 20;
+    const dur = parseInt(document.getElementById('inputMonths').value) || 20;
+
+    document.getElementById('prevPrizePot').textContent = formatINR(pot);
+    document.getElementById('prevMembers').textContent = members;
+    document.getElementById('prevDuration').textContent = `${dur} mo`;
+
+    const nameInput = document.getElementById('inputChitName');
+    nameInput.value = `Siva Durga ${dur}M · ₹${Number(pot).toLocaleString('en-IN')} Chit`;
+
+    document.getElementById('targetSharesLabel').textContent = members;
+    updatePresetHighlight();
+    updateFixedBadgeHints();
+  }
+
+  function goToStep(step) {
+    currentStep = step;
+    [1, 2, 3].forEach(s => {
+      document.getElementById(`wizardStep${s}`).classList.toggle('hidden', s !== step);
+      const tab = document.getElementById(`stepTab${s}`);
+      const sub = document.getElementById(`stepSub${s}`);
+      if (s === step) {
+        tab.className = 'border-t-2 border-slate-900 dark:border-slate-100 pt-2 transition-colors';
+        sub.textContent = 'Active step';
+        sub.className = 'text-xs font-semibold text-slate-700 dark:text-slate-300';
+      } else if (s < step) {
+        tab.className = 'border-t-2 border-emerald-500 pt-2 transition-colors';
+        sub.textContent = 'Completed';
+        sub.className = 'text-xs font-semibold text-emerald-600 dark:text-emerald-400';
+      } else {
+        tab.className = 'border-t-2 border-slate-200 dark:border-slate-700/50 pt-2 transition-colors';
+        sub.textContent = 'Pending';
+        sub.className = 'text-xs font-semibold text-slate-400 dark:text-slate-500';
+      }
+    });
+
+    if (step === 2) {
+      loadDirectoryMembers();
+      renderAssignedMembers();
+    } else if (step === 3) {
+      generateStep3Plan();
+    }
+  }
+
+  // Step 2 Logic
+  async function loadDirectoryMembers() {
+    try {
+      const res = await fetch('/chit/api/members');
+      allDirectoryMembers = await res.json();
+      filterWizardMembers();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function filterWizardMembers() {
+    const q = (document.getElementById('wizardMemberSearch')?.value || '').trim().toLowerCase();
+    let list = allDirectoryMembers;
+    if (q) {
+      list = allDirectoryMembers.filter(m => 
+        (m.customer_id && m.customer_id.toLowerCase().includes(q)) ||
+        (m.name && m.name.toLowerCase().includes(q)) || 
+        (m.phone && m.phone.toLowerCase().includes(q))
+      );
+    }
+    renderAvailableMembersChips(list);
+  }
+
+  function suggestNextAccountNumber() {
+    const existing = new Set(assignedMembers.map(m => String(m.account_number || '').trim()));
+    let n = 1;
+    while (existing.has(String(n))) {
+      n++;
+    }
+    return String(n);
+  }
+
+  function renderAvailableMembersChips(members) {
+    const container = document.getElementById('availableMembersChips');
+    const badge = document.getElementById('availableCountBadge');
+    if (badge) badge.textContent = `${members.length} found`;
+    container.innerHTML = '';
+    
+    if (members.length === 0) {
+      container.innerHTML = '<p class="text-[11px] text-slate-400 dark:text-slate-500 py-2 w-full text-center">No matching subscribers found.</p>';
+      return;
+    }
+
+    members.forEach(m => {
+      const isSelected = assignedMembers.some(am => am.member_id === m.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 ${
+        isSelected ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-white/[0.05]'
+      }`;
+      btn.innerHTML = `
+        <i data-lucide="${isSelected ? 'check' : 'plus'}" class="w-3 h-3 stroke-[1.8] opacity-70"></i>
+        ${m.customer_id ? `<span class="font-mono text-[10px] opacity-75 font-extrabold">#${m.customer_id}</span>` : ''}
+        <span>${m.name}</span>
+        ${m.phone && m.phone !== '—' ? `<span class="text-[10px] opacity-60 font-mono">(${m.phone.slice(-4)})</span>` : ''}
+      `;
+      btn.onclick = () => toggleSelectMember(m);
+      container.appendChild(btn);
+    });
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  function toggleSelectMember(m) {
+    const idx = assignedMembers.findIndex(am => am.member_id === m.id);
+    if (idx >= 0) {
+      assignedMembers.splice(idx, 1);
+    } else {
+      assignedMembers.push({
+        member_id: m.id,
+        customer_id: m.customer_id || '',
+        full_name: m.name,
+        phone: m.phone,
+        share_units: 1.0,
+        installment_type: currentDefaultInstallmentType || 'incremental',
+        account_number: suggestNextAccountNumber()
+      });
+    }
+    renderAssignedMembers();
+    renderAvailableMembersChips(allDirectoryMembers);
+  }
+
+  function selectAllAvailableMembers() {
+    const target = parseInt(document.getElementById('inputMembers').value) || 20;
+    allDirectoryMembers.slice(0, target).forEach(m => {
+      if (!assignedMembers.some(am => am.member_id === m.id)) {
+        assignedMembers.push({
+          member_id: m.id,
+          customer_id: m.customer_id || '',
+          full_name: m.name,
+          phone: m.phone,
+          share_units: 1.0,
+          installment_type: currentDefaultInstallmentType || 'incremental',
+          account_number: suggestNextAccountNumber()
+        });
+      }
+    });
+    renderAssignedMembers();
+    renderAvailableMembersChips(allDirectoryMembers);
+  }
+
+  function renderAssignedMembers() {
+    const container = document.getElementById('assignedMembersList');
+    const targetShares = parseInt(document.getElementById('inputMembers').value) || 20;
+    const pot = parseFloat(document.getElementById('inputPotValue').value) || 5000;
+    const baseMonthly = pot / targetShares;
+    const fixedBase = getFixedMonthlyBase();
+
+    let filled = 0.0;
+    assignedMembers.forEach(m => filled += m.share_units);
+
+    document.getElementById('sharesCounterDisplay').textContent = `${filled} / ${targetShares} shares`;
+    const remaining = Math.max(0, targetShares - filled);
+    document.getElementById('sharesRemainingLabel').textContent = `${remaining} more to go`;
+
+    if (assignedMembers.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">No subscribers selected yet.</p>';
+      validateAccountNumbers();
+      return;
+    }
+
+    container.innerHTML = '';
+    assignedMembers.forEach((m, idx) => {
+      if (!m.account_number) m.account_number = String(idx + 1);
+      if (!m.installment_type) m.installment_type = currentDefaultInstallmentType || 'incremental';
+      const isFixed = m.installment_type === 'fixed';
+      const row = document.createElement('div');
+      row.className = 'p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap shadow-2xs';
+      row.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+            ${m.full_name.charAt(0).toUpperCase()}
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+              ${m.customer_id ? `<span class="text-slate-500 font-mono font-bold">#${m.customer_id}</span> ` : ''}${m.full_name}
+            </p>
+            <p class="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+              ${isFixed ? `Pays fixed <span class="font-bold text-indigo-600 dark:text-indigo-400">${formatINR(fixedBase * m.share_units)}/mo</span>` : `Pays ≈ <span class="font-semibold">${formatINR(baseMonthly * m.share_units)}/mo</span>`} · ${m.phone || 'No phone'}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+          <!-- Installment Plan Selector -->
+          <div class="flex items-center gap-1 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl px-2 py-1">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Plan</span>
+            <select onchange="updateAssignedMemberInstallmentType(${idx}, this.value)" 
+                    class="h-7 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-lg px-1 focus:outline-none cursor-pointer">
+              <option value="incremental" ${!isFixed ? 'selected' : ''}>Incremental</option>
+              <option value="fixed" ${isFixed ? 'selected' : ''}>Fixed (${formatINR(fixedBase * m.share_units)})</option>
+            </select>
+          </div>
+
+          <!-- Account # Input with real-time duplicate indicator -->
+          <div id="accBox_${idx}" class="flex items-center gap-1 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl px-2 py-1 transition-all">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">A/C #</span>
+            <input type="text" id="accInput_${idx}" value="${m.account_number || ''}" 
+                   oninput="updateAssignedMemberAccount(${idx}, this.value)"
+                   placeholder="1"
+                   class="w-16 h-7 text-center text-xs font-mono font-extrabold text-slate-900 dark:text-slate-100 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100 transition-all dark:placeholder:text-slate-500">
+          </div>
+
+          <!-- Share Multiplier -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl p-1">
+            <button type="button" onclick="adjustMemberShare(${idx}, -0.5)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">-</button>
+            <span class="w-8 text-center text-xs font-extrabold dark:text-slate-100">${m.share_units}x</span>
+            <button type="button" onclick="adjustMemberShare(${idx}, 0.5)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">+</button>
+          </div>
+
+          <!-- Remove -->
+          <button type="button" onclick="removeAssignedMember(${idx})" class="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 text-xs p-1" title="Remove">
+            <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8]"></i>
+          </button>
+        </div>
+      `;
+      container.appendChild(row);
+    });
+
+    if (window.lucide) { lucide.createIcons(); }
+    validateAccountNumbers();
+  }
+
+  function updateAssignedMemberAccount(idx, val) {
+    assignedMembers[idx].account_number = String(val || '').trim();
+    validateAccountNumbers();
+  }
+
+  function validateAccountNumbers() {
+    const counts = {};
+    assignedMembers.forEach(m => {
+      const acc = String(m.account_number || '').trim();
+      if (acc) {
+        counts[acc] = (counts[acc] || 0) + 1;
+      }
+    });
+
+    let hasDuplicates = false;
+    let hasEmpty = false;
+    const duplicateAccs = new Set();
+
+    assignedMembers.forEach((m, idx) => {
+      const acc = String(m.account_number || '').trim();
+      const inputEl = document.getElementById(`accInput_${idx}`);
+      const boxEl = document.getElementById(`accBox_${idx}`);
+      
+      if (!acc) {
+        hasEmpty = true;
+        if (boxEl) {
+          boxEl.className = 'flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700/50 rounded-xl px-2 py-1 transition-all';
+        }
+        if (inputEl) {
+          inputEl.className = 'w-16 h-7 text-center text-xs font-mono font-extrabold text-amber-900 dark:text-amber-400 bg-white dark:bg-chitDark-surface border border-amber-300 dark:border-amber-700/50 rounded-lg focus:outline-none';
+        }
+      } else if (counts[acc] > 1) {
+        hasDuplicates = true;
+        duplicateAccs.add(acc);
+        if (boxEl) {
+          boxEl.className = 'flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-500 dark:border-rose-500 rounded-xl px-2 py-1 ring-2 ring-rose-200 dark:ring-rose-900/50 transition-all';
+        }
+        if (inputEl) {
+          inputEl.className = 'w-16 h-7 text-center text-xs font-mono font-extrabold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-300 dark:border-rose-700/50 rounded-lg focus:outline-none';
+        }
+      } else {
+        if (boxEl) {
+          boxEl.className = 'flex items-center gap-1 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl px-2 py-1 transition-all';
+        }
+        if (inputEl) {
+          inputEl.className = 'w-16 h-7 text-center text-xs font-mono font-extrabold text-slate-900 dark:text-slate-100 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100 transition-all';
+        }
+      }
+    });
+
+    const warnBanner = document.getElementById('accountDuplicateWarning');
+    const warnText = document.getElementById('accountDuplicateWarningText');
+    const btnStep3 = document.getElementById('btnGoToStep3');
+
+    if (hasDuplicates) {
+      const dupList = Array.from(duplicateAccs).map(a => `'${a}'`).join(', ');
+      if (warnBanner) warnBanner.classList.remove('hidden');
+      if (warnText) {
+        warnText.innerHTML = `<p class="font-bold">Duplicate Account Number (${dupList}) Detected!</p><p class="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">Every customer inside this chit group must have a unique account number. Please ensure no two members share the same account number.</p>`;
+      }
+      if (btnStep3) btnStep3.disabled = true;
+      return false;
+    } else if (hasEmpty) {
+      if (warnBanner) warnBanner.classList.remove('hidden');
+      if (warnText) {
+        warnText.innerHTML = `<p class="font-bold">Missing Account Number!</p><p class="text-[11px] text-amber-700 dark:text-amber-500 mt-0.5">Every subscriber in this group must be assigned an Account Number.</p>`;
+      }
+      if (btnStep3) btnStep3.disabled = true;
+      return false;
+    } else {
+      if (warnBanner) warnBanner.classList.add('hidden');
+      if (btnStep3) btnStep3.disabled = false;
+      return true;
+    }
+  }
+
+  function handleGoToStep3() {
+    if (assignedMembers.length === 0) {
+      alert('Please assign at least one subscriber before proceeding.');
+      return;
+    }
+    if (!validateAccountNumbers()) {
+      alert('Please resolve duplicate or empty account numbers before continuing to the Monthly Plan.');
+      return;
+    }
+    goToStep(3);
+  }
+
+  function adjustMemberShare(idx, delta) {
+    assignedMembers[idx].share_units = Math.max(0.5, assignedMembers[idx].share_units + delta);
+    renderAssignedMembers();
+  }
+
+  function removeAssignedMember(idx) {
+    assignedMembers.splice(idx, 1);
+    renderAssignedMembers();
+    renderAvailableMembersChips(allDirectoryMembers);
+  }
+
+  function toggleQuickAddBox() {
+    const box = document.getElementById('quickAddBox');
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden') && document.getElementById('quickAddRowsContainer').children.length === 0) {
+      addQuickAddRow();
+    }
+  }
+
+  function addQuickAddRow() {
+    const c = document.getElementById('quickAddRowsContainer');
+    const row = document.createElement('div');
+    row.className = 'grid grid-cols-12 gap-2 items-center';
+
+    // Find next suggested account number
+    const existing = new Set(assignedMembers.map(m => String(m.account_number || '').trim()));
+    document.querySelectorAll('.quick-add-account').forEach(inp => {
+      if (inp.value.trim()) existing.add(inp.value.trim());
+    });
+    let nextAcc = 1;
+    while (existing.has(String(nextAcc))) {
+      nextAcc++;
+    }
+
+    const fixedBase = getFixedMonthlyBase();
+
+    row.innerHTML = `
+      <div class="col-span-4">
+        <input type="text" placeholder="Full Name *" class="w-full h-9 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs dark:text-slate-100 dark:placeholder:text-slate-500 quick-add-name font-semibold focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100">
+      </div>
+      <div class="col-span-3">
+        <input type="tel" placeholder="Phone (optional)" class="w-full h-9 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs dark:text-slate-100 dark:placeholder:text-slate-500 quick-add-phone font-mono focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100">
+      </div>
+      <div class="col-span-2 flex items-center gap-1 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl px-2 h-9">
+        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">A/C #</span>
+        <input type="text" value="${nextAcc}" placeholder="1" class="w-full h-7 text-center font-mono font-bold text-xs dark:text-slate-100 dark:bg-chitDark-surface quick-add-account focus:outline-none dark:placeholder:text-slate-500">
+      </div>
+      <div class="col-span-3">
+        <select class="w-full h-9 px-2 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 quick-add-plan focus:outline-none">
+          <option value="incremental" selected>Incremental</option>
+          <option value="fixed">Fixed (${formatINR(fixedBase)})</option>
+        </select>
+      </div>
+    `;
+    c.appendChild(row);
+  }
+
+  function saveQuickAddMembers() {
+    const names = document.querySelectorAll('.quick-add-name');
+    const phones = document.querySelectorAll('.quick-add-phone');
+    const accounts = document.querySelectorAll('.quick-add-account');
+    const plans = document.querySelectorAll('.quick-add-plan');
+
+    const newEntries = [];
+    const seenInBatch = new Set();
+    const existingAccounts = new Set(assignedMembers.map(m => String(m.account_number || '').trim()));
+
+    for (let idx = 0; idx < names.length; idx++) {
+      const val = names[idx].value.trim();
+      if (!val) continue;
+      const phoneVal = phones[idx].value.trim();
+      let accVal = (accounts[idx] ? accounts[idx].value : '').trim();
+      const planVal = (plans[idx] ? plans[idx].value : 'incremental') || 'incremental';
+
+      if (!accVal) {
+        let n = 1;
+        while (existingAccounts.has(String(n)) || seenInBatch.has(String(n))) {
+          n++;
+        }
+        accVal = String(n);
+      }
+
+      if (existingAccounts.has(accVal) || seenInBatch.has(accVal)) {
+        alert(`Account number '${accVal}' is repeated. Each subscriber in this scheme must have a unique account number.`);
+        return;
+      }
+      seenInBatch.add(accVal);
+
+      newEntries.push({
+        member_id: null,
+        customer_id: '',
+        full_name: val,
+        phone: phoneVal,
+        share_units: 1.0,
+        installment_type: planVal,
+        account_number: accVal
+      });
+    }
+
+    if (newEntries.length === 0) {
+      alert('Please enter a subscriber name to add.');
+      return;
+    }
+
+    newEntries.forEach(item => assignedMembers.push(item));
+    document.getElementById('quickAddRowsContainer').innerHTML = '';
+    toggleQuickAddBox();
+    renderAssignedMembers();
+  }
+
+  // Step 3 Logic
+  function generateStep3Plan() {
+    const pot = parseFloat(document.getElementById('inputPotValue').value) || 500000;
+    const dur = parseInt(document.getElementById('inputMonths').value) || 20;
+    const startM = document.getElementById('inputStartMonth').value;
+
+    const multiplier = pot / 5000.0;
+    const comm = pot * 0.03;
+    const baseInst = pot / dur;
+    const baseBonuses = (dur === 25 ? [67.5,65,62.5,60,57.5,55,52.5,50,47.5,45,42,39,36,33,30,27,24,21,18,15,12,9,6,3,0] :
+                                      [75,71.5,68,64,60,56,52,48,44,40,36,32,28,24,20,16,12,7.5,3,0]);
+
+    generatedPlanSchedule = [];
+    let singleShareCollected = 0.0;
+    let maxPayoutSingle = 0.0;
+    const desiredShares = parseFloat(document.getElementById('inputMembers').value) || dur;
+
+    const tbody = document.getElementById('planTableBody');
+    tbody.innerHTML = '';
+
+    for (let i = 1; i <= dur; i++) {
+      const bon = (baseBonuses[Math.min(i-1, baseBonuses.length-1)] * multiplier);
+      const katt = baseInst - bon;
+      const loss = (bon * dur) + comm;
+      const prize = pot - loss;
+
+      singleShareCollected += katt;
+      if (i === dur) {
+        maxPayoutSingle = prize;
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="py-2.5 px-3.5 text-center font-bold dark:text-slate-300">M${i}</td>
+        <td class="py-2.5 px-3.5 text-right font-bold text-slate-900 dark:text-slate-100 money-fig">${formatINR(katt)}</td>
+        <td class="py-2.5 px-3.5 text-right font-extrabold text-amber-700 dark:text-amber-500 money-fig">${formatINR(prize)}</td>
+        <td class="py-2.5 px-3.5 text-right font-bold text-emerald-600 dark:text-emerald-400 money-fig">${formatINR(bon)}</td>
+        <td class="py-2.5 px-3.5 text-center">
+          <span class="text-slate-400 dark:text-slate-500 text-[11px]">Subscriber</span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    const totCollect = singleShareCollected * desiredShares;
+    const totPayout = maxPayoutSingle * desiredShares;
+    const youKeep = (pot * 0.03) * desiredShares;
+
+    document.getElementById('planCollected').textContent = formatINR(totCollect);
+    document.getElementById('planPrizes').textContent = formatINR(totPayout);
+    document.getElementById('planYouKeep').textContent = formatINR(youKeep);
+  }
+
+  async function submitNewGroup() {
+    const btn = document.getElementById('btnSubmitNewGroup');
+    btn.disabled = true;
+    btn.textContent = 'Creating Scheme...';
+
+    // Validate per-group uniqueness of Account Numbers
+    const seenAccounts = new Set();
+    for (let i = 0; i < assignedMembers.length; i++) {
+      const acc = String(assignedMembers[i].account_number || '').trim();
+      if (!acc) {
+        alert(`Subscriber #${i+1} (${assignedMembers[i].full_name}) is missing an Account Number. Please assign one.`);
+        btn.disabled = false;
+        btn.textContent = 'Create Chit Scheme';
+        return;
+      }
+      if (seenAccounts.has(acc)) {
+        alert(`Account number '${acc}' is repeated. Inside this scheme, each subscriber must have a unique account number.`);
+        btn.disabled = false;
+        btn.textContent = 'Create Chit Scheme';
+        return;
+      }
+      seenAccounts.add(acc);
+    }
+
+    const payload = {
+      name: document.getElementById('inputChitName').value,
+      chit_total_value: parseFloat(document.getElementById('inputPotValue').value),
+      duration_months: parseInt(document.getElementById('inputMonths').value),
+      total_members: parseInt(document.getElementById('inputMembers').value) || 20,
+      commission_percent: 3.0,
+      start_month_year: document.getElementById('inputStartMonth').value,
+      status: document.getElementById('inputStatus').value,
+      default_installment_type: currentDefaultInstallmentType || 'incremental',
+      is_month1_company_month: false,
+      members: assignedMembers
+    };
+
+    try {
+      const res = await fetch('/chit/api/chitgroups/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Created ${data.name}! Redirecting...`);
+        setTimeout(() => window.location.href = '/chit/dashboard', 1000);
+      } else {
+        alert(data.error || 'Failed to create scheme');
+        btn.disabled = false;
+        btn.textContent = 'Create Chit Scheme';
+      }
+    } catch (e) {
+      alert('Network error creating scheme');
+      btn.disabled = false;
+      btn.textContent = 'Create Chit Scheme';
+    }
+  }
+
+  function saveAsDraft() {
+    document.getElementById('inputStatus').value = 'Draft';
+    submitNewGroup();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setStartMonthQuick(0);
+    recalcWizardPreview();
+  });
+</script>
+{% endblock %}

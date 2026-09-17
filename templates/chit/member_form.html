@@ -1,0 +1,437 @@
+{% extends "chit/base.html" %}
+
+{% block title %}{% if is_edit %}Edit Member – Siva Durga Chit Fund{% else %}New Member – Siva Durga Chit Fund{% endif %}{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-2xl mx-auto w-full space-y-6 pb-28 pt-2">
+
+  <!-- Header matching ChitBase -->
+  <div class="flex items-center gap-3.5">
+    <a href="{% if is_edit %}/chit/members/{{ member_id }}{% else %}/chit/members{% endif %}" 
+       class="h-9 w-9 rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-chitDark-bg transition-colors shadow-2xs card-shine dark:shadow-none" 
+       title="Go back">
+      <i data-lucide="arrow-left" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+    </a>
+
+    <!-- Avatar circle with initials -->
+    <div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center relative select-none shadow-2xs card-shine dark:shadow-none">
+      <span id="avatarInitials">{% if is_edit %}--{% else %}NM{% endif %}</span>
+      <span class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-white dark:bg-chitDark-surface border border-slate-300 dark:border-slate-600 flex items-center justify-center text-[8px] text-slate-500 dark:text-slate-400 shadow-2xs card-shine dark:shadow-none">
+        <i data-lucide="camera" class="w-4 h-4 stroke-[1.8] "></i>
+      </span>
+    </div>
+
+    <!-- Title / Subtitle -->
+    <div>
+      <p id="headerBadge" class="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+        {% if is_edit %}EDIT MEMBER{% else %}NEW MEMBER{% endif %}
+      </p>
+      <h1 class="text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+        Member Profile
+      </h1>
+    </div>
+  </div>
+
+  <form id="memberProfileForm" onsubmit="submitMemberForm(event)" class="space-y-5">
+    
+    <!-- 1. IDENTITY CARD -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[24px] border border-slate-200 dark:border-slate-700/50 p-6 shadow-xs card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+        <i data-lucide="user" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+        <span>IDENTITY</span>
+      </div>
+
+      <!-- Customer ID -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+            Customer ID
+          </label>
+          <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 inline-flex items-center gap-1">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            <span>System Generated (Auto)</span>
+          </span>
+        </div>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 font-mono font-bold text-xs">#</span>
+          <input type="text" id="inputCustomerId" readonly tabindex="-1"
+                 placeholder="Auto-generating..."
+                 class="w-full h-11 pl-8 pr-4 bg-slate-100/80 dark:bg-chitDark-elevated/70 border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-mono font-extrabold text-slate-700 dark:text-slate-300 cursor-not-allowed select-none">
+        </div>
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Unique 5-digit identifier automatically generated and assigned by the system.</p>
+      </div>
+
+      <!-- Full Name -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Full Name <span class="text-rose-500">*</span>
+        </label>
+        <input type="text" id="inputFullName" required oninput="onNameInput(this.value)"
+               placeholder="e.g. Ravi Kumar"
+               class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+      </div>
+    </div>
+
+    <!-- 2. CONTACT CARD -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[24px] border border-slate-200 dark:border-slate-700/50 p-6 shadow-xs card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+        <i data-lucide="phone" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+        <span>CONTACT</span>
+      </div>
+
+      <!-- Phone Number -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Phone Number <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+        </label>
+        <div class="flex rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden focus-within:ring-2 focus-within:ring-slate-900 focus-within:border-transparent transition-all">
+          <div class="flex items-center gap-1 px-3.5 bg-slate-50 dark:bg-chitDark-bg border-r border-slate-200 dark:border-slate-700/50 text-xs font-bold text-slate-700 dark:text-slate-300 select-none">
+            <span class="text-slate-500 dark:text-slate-400">IN</span>
+            <span class="text-slate-900 dark:text-slate-100 font-mono">+91</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 stroke-[1.8] text-[9px] text-slate-400 dark:text-slate-500 ml-1"></i>
+          </div>
+          <input type="tel" id="inputPhone" maxlength="10" placeholder="98765 43210"
+                 class="w-full h-11 px-3.5 bg-white dark:bg-chitDark-surface text-xs font-mono font-semibold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Email -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Email <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+        </label>
+        <div class="relative">
+          <i data-lucide="mail" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs"></i>
+          <input type="email" id="inputEmail" placeholder="you@example.com"
+                 class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+        </div>
+      </div>
+
+      <!-- Address -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Address <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+        </label>
+        <div class="relative">
+          <i data-lucide="map-pin" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs"></i>
+          <input type="text" id="inputAddress" placeholder="Street, City"
+                 class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. GOVERNMENT ID CARD (Collapsible Accordion) -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[24px] border border-slate-200 dark:border-slate-700/50 p-6 shadow-xs card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleGovtIdSection()">
+        <div class="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          <i data-lucide="globe" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+          <span>GOVERNMENT ID</span>
+        </div>
+        <div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-400 flex items-center gap-1.5 transition-colors">
+          <span>Optional</span>
+          <i id="govtIdChevron" data-lucide="chevron-up" class="w-3 h-3 stroke-[2] transition-transform duration-200"></i>
+        </div>
+      </div>
+
+      <div id="govtIdContent" class="space-y-3 pt-1">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">ID Type</label>
+          <div class="flex items-center gap-2 flex-wrap" id="idTypeChipsContainer">
+            <button type="button" onclick="selectIdType('Aadhaar')" data-idtype="Aadhaar"
+                    class="id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 shadow-2xs card-shine dark:shadow-none transition-all">
+              Aadhaar
+            </button>
+            <button type="button" onclick="selectIdType('PAN')" data-idtype="PAN"
+                    class="id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:border-slate-600 transition-all">
+              PAN
+            </button>
+            <button type="button" onclick="selectIdType('Voter ID')" data-idtype="Voter ID"
+                    class="id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:border-slate-600 transition-all">
+              Voter ID
+            </button>
+            <button type="button" onclick="selectIdType('Driving License')" data-idtype="Driving License"
+                    class="id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:border-slate-600 transition-all">
+              Driving License
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" id="idNumberLabel">
+            Aadhaar Number
+          </label>
+          <input type="text" id="inputGovtIdNumber" placeholder="Enter 12-digit Aadhaar Number"
+                 class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-mono font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. NOMINEE & PORTAL ACCESS CARD -->
+    <div class="bg-white dark:bg-chitDark-surface rounded-[24px] border border-slate-200 dark:border-slate-700/50 p-6 shadow-xs card-shine dark:shadow-none space-y-4">
+      <div class="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+        <i data-lucide="shield-check" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+        <span>NOMINEE & PORTAL</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Nominee Name <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+          </label>
+          <input type="text" id="inputNomineeName" placeholder="e.g. Lakshmi Devi"
+                 class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Nominee Phone <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+          </label>
+          <input type="tel" id="inputNomineePhone" maxlength="10" placeholder="98765 43210"
+                 class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-mono font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Nominee Relationship <span class="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+        </label>
+        <input type="text" id="inputNomineeRelation" placeholder="e.g. Spouse, Mother, Son"
+               class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
+      </div>
+
+      <!-- Member Portal Access Toggle -->
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Member Portal Access</p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500">Allow this subscriber to view their live passbook & receipts</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="inputPortalEnabled" checked class="sr-only peer">
+          <div class="w-11 h-6 bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-chitDark-surface after:border-slate-300 dark:border-slate-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-900 dark:bg-white"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- 5. FLOATING / FIXED BOTTOM ACTION BAR matching ChitBase -->
+    <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-white dark:bg-chitDark-surface/95 backdrop-blur-md p-1.5 rounded-full border border-slate-200 dark:border-slate-700/50 shadow-xl">
+      <button type="button" onclick="handleCancel()"
+              class="px-5 py-2.5 rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-50 dark:bg-chitDark-bg transition-colors flex items-center gap-1.5 active:scale-95 shadow-2xs card-shine dark:shadow-none">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-xs text-slate-400 dark:text-slate-500"></i>
+        <span>Cancel</span>
+      </button>
+
+      <button type="submit" id="btnSubmitMember"
+              class="px-7 py-2.5 rounded-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs transition-all shadow-md flex items-center gap-2 active:scale-95">
+        <i data-lucide="check" class="w-4 h-4 stroke-[1.8] text-xs"></i>
+        <span id="submitBtnText">{% if is_edit %}Save Changes{% else %}Add Member{% endif %}</span>
+      </button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const isEditMode = {{ 'true' if is_edit else 'false' }};
+  const memberId = "{{ member_id or '' }}";
+  let selectedIdType = 'Aadhaar';
+  let isGovtIdCollapsed = false;
+
+  function onNameInput(val) {
+    const trimmed = (val || '').trim();
+    const initialsEl = document.getElementById('avatarInitials');
+    if (!trimmed) {
+      initialsEl.textContent = isEditMode ? '--' : 'NM';
+      return;
+    }
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      initialsEl.textContent = (parts[0][0] + parts[1][0]).toUpperCase();
+    } else {
+      initialsEl.textContent = parts[0].slice(0, 2).toUpperCase();
+    }
+  }
+
+  function toggleGovtIdSection() {
+    isGovtIdCollapsed = !isGovtIdCollapsed;
+    const content = document.getElementById('govtIdContent');
+    const chevron = document.getElementById('govtIdChevron');
+    if (isGovtIdCollapsed) {
+      content.classList.add('hidden');
+      chevron.setAttribute('data-lucide', 'chevron-down');
+      if (window.lucide) lucide.createIcons();
+    } else {
+      content.classList.remove('hidden');
+      chevron.setAttribute('data-lucide', 'chevron-up');
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+
+  function selectIdType(type) {
+    selectedIdType = type;
+    document.querySelectorAll('.id-type-btn').forEach(btn => {
+      const match = (btn.getAttribute('data-idtype') === type);
+      if (match) {
+        btn.className = 'id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 shadow-2xs card-shine dark:shadow-none transition-all';
+      } else {
+        btn.className = 'id-type-btn px-4 py-1.5 rounded-full border text-xs font-semibold bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:border-slate-600 transition-all';
+      }
+    });
+
+    const lbl = document.getElementById('idNumberLabel');
+    const input = document.getElementById('inputGovtIdNumber');
+    if (type === 'Aadhaar') {
+      lbl.textContent = 'Aadhaar Number';
+      input.placeholder = 'Enter 12-digit Aadhaar Number';
+    } else if (type === 'PAN') {
+      lbl.textContent = 'PAN Card Number';
+      input.placeholder = 'e.g. ABCDE1234F';
+    } else if (type === 'Voter ID') {
+      lbl.textContent = 'Voter ID (EPIC) Number';
+      input.placeholder = 'Enter Voter ID Number';
+    } else if (type === 'Driving License') {
+      lbl.textContent = 'Driving License Number';
+      input.placeholder = 'Enter Driving License Number';
+    }
+  }
+
+  function handleCancel() {
+    if (isEditMode && memberId) {
+      window.location.href = `/chit/members/${memberId}`;
+    } else {
+      window.location.href = '/chit/members';
+    }
+  }
+
+  async function loadNextCustomerId() {
+    try {
+      const res = await fetch('/chit/api/members/next-id');
+      const data = await res.json();
+      if (data.next_id) {
+        const input = document.getElementById('inputCustomerId');
+        if (!input.value) {
+          input.value = data.next_id;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load next customer ID:', e);
+    }
+  }
+
+  async function loadExistingMember() {
+    if (!memberId) return;
+    try {
+      const res = await fetch(`/chit/api/members/${memberId}`);
+      if (!res.ok) {
+        alert('Could not find member profile.');
+        window.location.href = '/chit/members';
+        return;
+      }
+      const m = await res.json();
+      document.getElementById('inputCustomerId').value = m.customer_id || '';
+      document.getElementById('inputFullName').value = m.full_name || '';
+      onNameInput(m.full_name || '');
+      document.getElementById('inputPhone').value = m.phone || '';
+      document.getElementById('inputEmail').value = m.email || '';
+      document.getElementById('inputAddress').value = m.address || '';
+      
+      const idType = m.govt_id_type || 'Aadhaar';
+      selectIdType(idType);
+      document.getElementById('inputGovtIdNumber').value = m.govt_id_number || m.govt_id_last4 || '';
+
+      document.getElementById('inputNomineeName').value = m.nominee_name || '';
+      document.getElementById('inputNomineePhone').value = m.nominee_phone || '';
+      document.getElementById('inputNomineeRelation').value = m.nominee_relation || '';
+      document.getElementById('inputPortalEnabled').checked = m.member_portal_enabled;
+    } catch (e) {
+      console.error('Failed to load member profile:', e);
+    }
+  }
+
+  async function submitMemberForm(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitMember');
+    const btnText = document.getElementById('submitBtnText');
+
+    const custId = (document.getElementById('inputCustomerId').value || '').trim();
+    const fullName = (document.getElementById('inputFullName').value || '').trim();
+    const phone = (document.getElementById('inputPhone').value || '').trim();
+    const email = (document.getElementById('inputEmail').value || '').trim();
+    const address = (document.getElementById('inputAddress').value || '').trim();
+    const govtIdNumber = (document.getElementById('inputGovtIdNumber').value || '').trim();
+    const nomineeName = (document.getElementById('inputNomineeName').value || '').trim();
+    const nomineePhone = (document.getElementById('inputNomineePhone').value || '').trim();
+    const nomineeRelation = (document.getElementById('inputNomineeRelation').value || '').trim();
+    const portalEnabled = document.getElementById('inputPortalEnabled').checked;
+
+    if (!fullName) {
+      alert('Full Name is required');
+      document.getElementById('inputFullName').focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btnText.textContent = isEditMode ? 'Saving Changes...' : 'Adding Member...';
+
+    const payload = {
+      customer_id: custId,
+      full_name: fullName,
+      phone: phone,
+      email: email,
+      address: address,
+      govt_id_type: selectedIdType,
+      govt_id_number: govtIdNumber,
+      govt_id_last4: govtIdNumber ? (govtIdNumber.length >= 4 ? govtIdNumber.slice(-4) : govtIdNumber) : '',
+      nominee_name: nomineeName,
+      nominee_phone: nomineePhone,
+      nominee_relation: nomineeRelation,
+      member_portal_enabled: portalEnabled,
+      portal_enabled: portalEnabled
+    };
+
+    const url = isEditMode ? `/chit/api/members/${memberId}` : '/chit/api/members';
+    const method = isEditMode ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        alert(data.error || 'Failed to save member profile');
+        btn.disabled = false;
+        btnText.textContent = isEditMode ? 'Save Changes' : 'Add Member';
+        return;
+      }
+
+      // Success
+      if (isEditMode) {
+        window.location.href = `/chit/members/${memberId}`;
+      } else {
+        window.location.href = data.id ? `/chit/members/${data.id}` : '/chit/members';
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error while saving subscriber profile');
+      btn.disabled = false;
+      btnText.textContent = isEditMode ? 'Save Changes' : 'Add Member';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (isEditMode) {
+      loadExistingMember();
+    } else {
+      loadNextCustomerId();
+    }
+  });
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+</script>
+{% endblock %}
