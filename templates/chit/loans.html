@@ -1,0 +1,933 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Member Loans & Credit — Siva Durga Chit Fund{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media print {
+    aside, #searchBackdrop, #searchPalette, #themeToggleBtn, .no-print, .modal-backdrop {
+      display: none !important;
+    }
+    #loanStatementPrintArea {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      background: white !important;
+      color: black !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6 pb-24">
+
+  <!-- ==================== PAGE HEADER ==================== -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2.5">
+        <h1 class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">Member Loans &amp; Credit</h1>
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 uppercase tracking-wide">
+          Annual Compounding
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+        Credit facility exclusively for registered subscribers inside active chit groups · Compounded annually
+      </p>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="openDisburseModal()" class="h-9 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 dark:bg-amber-500 dark:hover:bg-amber-400 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+        <i data-lucide="plus-circle" class="w-4 h-4 stroke-[2]"></i>
+        <span>Disburse New Loan</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== 4 KPI CARDS ==================== -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- 1. Active Loan Book -->
+    <div class="cb-card card-shine tint-amber p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Active Loan Book</span>
+        <div class="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <i data-lucide="wallet" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-black text-slate-900 dark:text-slate-100 money-fig" id="kpiActivePrincipal">₹0</div>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Principal balance outstanding</p>
+      </div>
+    </div>
+
+    <!-- 2. Accrued Compound Interest -->
+    <div class="cb-card card-shine tint-cyan p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Accrued Interest</span>
+        <div class="h-8 w-8 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+          <i data-lucide="trending-up" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-black text-cyan-600 dark:text-cyan-400 money-fig" id="kpiAccruedInterest">₹0</div>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Compounding daily accrual</p>
+      </div>
+    </div>
+
+    <!-- 3. Total Recovered -->
+    <div class="cb-card card-shine tint-emerald p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Recovered</span>
+        <div class="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400 money-fig" id="kpiTotalRecovered">₹0</div>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5" id="kpiRecoveredSub">₹0 P + ₹0 Interest</p>
+      </div>
+    </div>
+
+    <!-- 4. Active Borrowers -->
+    <div class="cb-card card-shine p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Active Borrowers</span>
+        <div class="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+          <i data-lucide="users" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-black text-slate-900 dark:text-slate-100 money-fig" id="kpiBorrowersCount">0</div>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Enrolled chit members</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FILTER TABS & SEARCH ==================== -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-chitDark-surface p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-xs">
+    <!-- Status Filter Pills -->
+    <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+      <button type="button" onclick="setFilterStatus('active')" id="tabFilterActive" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs cursor-pointer">
+        Active Loans
+      </button>
+      <button type="button" onclick="setFilterStatus('settled')" id="tabFilterSettled" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer">
+        Settled Loans
+      </button>
+      <button type="button" onclick="setFilterStatus('all')" id="tabFilterAll" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer">
+        All Records
+      </button>
+    </div>
+
+    <!-- Search Input -->
+    <div class="relative w-full sm:w-72">
+      <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+      <input type="text" id="loanSearchInput" oninput="renderLoansTable()" placeholder="Search borrower, customer ID, phone..." class="w-full h-9 pl-9 pr-3 text-xs bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200 placeholder-slate-400">
+    </div>
+  </div>
+
+  <!-- ==================== LOANS LIST / TABLE ==================== -->
+  <div class="cb-card rounded-2xl border border-slate-200/80 dark:border-slate-700/50 overflow-hidden">
+    <div class="p-4 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Member Loan Records</h3>
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" id="loansTableCount">0</span>
+      </div>
+      <div class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+        Formula: A = P &times; (1 + r)&Hat;t
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800/60">
+          <tr>
+            <th class="py-3 px-4">Borrower Details</th>
+            <th class="py-3 px-4">Principal &amp; Rate</th>
+            <th class="py-3 px-4">Tenure &amp; Age</th>
+            <th class="py-3 px-4 text-right">Accrued Interest</th>
+            <th class="py-3 px-4 text-right">Payoff Balance</th>
+            <th class="py-3 px-4 text-center">Status</th>
+            <th class="py-3 px-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="loansTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+          <tr>
+            <td colspan="7" class="py-12 text-center text-slate-400">
+              <div class="flex flex-col items-center gap-2">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-amber-500"></i>
+                <p>Loading loan records...</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL 1: DISBURSE LOAN ==================== -->
+<div id="modalDisburse" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 hidden modal-backdrop overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-2xl max-w-xl md:max-w-2xl w-full max-h-[90vh] my-auto overflow-y-auto p-6 space-y-5 animate-page">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Disburse Member Loan</h3>
+        <p class="text-xs text-slate-400">Restricted exclusively to enrolled chit fund subscribers</p>
+      </div>
+      <button type="button" onclick="closeDisburseModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="disburseLoanForm" onsubmit="submitDisburseLoan(event)" class="space-y-4">
+      <!-- 1. Select Member -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Subscriber / Borrower <span class="text-rose-500">*</span>
+        </label>
+        <select id="disburseMemberSelect" onchange="onBorrowerSelected()" required class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+          <option value="">Select an enrolled chit member...</option>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">Only subscribers with active chit memberships are listed.</p>
+      </div>
+
+      <!-- 2. Live Commitments Inspector Panel (Dynamic) -->
+      <div id="borrowerCommitmentBox" class="hidden p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-500"></i>
+            Subscriber Chit Exposure
+          </span>
+          <span id="inspectChitCount" class="text-[11px] font-semibold text-amber-600 dark:text-amber-400">0 active chits</span>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+          <div class="p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+            <span class="text-[10px] text-slate-400 block">Monthly Chit Commitment</span>
+            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 money-fig" id="inspectMonthlyCommitment">₹0 / mo</span>
+          </div>
+          <div class="p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+            <span class="text-[10px] text-slate-400 block">Overdue Unpaid Dues</span>
+            <span class="text-xs font-bold money-fig text-slate-700 dark:text-slate-300" id="inspectOverdueDues">₹0</span>
+          </div>
+        </div>
+
+        <div id="inspectActiveChitsList" class="space-y-1 pt-1 max-h-24 overflow-y-auto no-scrollbar text-[11px]">
+          <!-- Active chit rows -->
+        </div>
+
+        <div id="inspectExistingLoansNotice" class="hidden p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-[11px] font-medium flex items-center justify-between">
+          <span>⚠️ Member currently has active loan balance:</span>
+          <span class="font-bold money-fig" id="inspectExistingLoanBalance">₹0</span>
+        </div>
+      </div>
+
+      <!-- 3. Principal Amount & Annual Rate -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Principal Amount (₹) <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+            <input type="number" id="disbursePrincipal" oninput="updateLiveProjection()" required min="1000" step="500" placeholder="50000" class="w-full h-10 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 font-mono text-slate-800 dark:text-slate-200">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Annual Interest Rate (% p.a.) <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input type="number" id="disburseRate" oninput="updateLiveProjection()" required min="0" max="100" step="0.5" value="18.0" class="w-full h-10 pl-3 pr-8 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 font-mono text-slate-800 dark:text-slate-200">
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Disbursal Date -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Disbursal Date <span class="text-rose-500">*</span>
+        </label>
+        <input type="date" id="disburseDate" required class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+      </div>
+
+      <!-- 5. Compounding Preview Card -->
+      <div class="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 space-y-1.5">
+        <div class="flex items-center justify-between text-[11px] font-bold text-amber-800 dark:text-amber-300">
+          <span>Yearly Compounding Simulation</span>
+          <span class="text-[10px] font-mono">A = P &times; (1 + r)&Hat;t</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-[11px] text-amber-900 dark:text-amber-200 pt-1">
+          <div>
+            <span class="text-slate-500 dark:text-slate-400 block text-[10px]">Projected 6 Months Payoff</span>
+            <span class="font-bold money-fig text-xs" id="simProj6Mo">₹0</span>
+          </div>
+          <div>
+            <span class="text-slate-500 dark:text-slate-400 block text-[10px]">Projected 1 Year Payoff</span>
+            <span class="font-bold money-fig text-xs" id="simProj1Yr">₹0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Notes -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notes / Guarantor Reference</label>
+        <input type="text" id="disburseNotes" placeholder="E.g. Approved against Chit ticket security" class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button type="button" onclick="closeDisburseModal()" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+          Cancel
+        </button>
+        <button type="submit" id="btnSubmitDisburse" class="h-9 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Confirm Disbursal</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL 2: RECORD REPAYMENT ==================== -->
+<div id="modalRepay" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 hidden modal-backdrop overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-2xl max-w-lg md:max-w-xl w-full my-auto p-6 space-y-5 animate-page">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Record Loan Repayment</h3>
+        <p class="text-xs text-slate-400" id="repayBorrowerHeader">Subscriber</p>
+      </div>
+      <button type="button" onclick="closeRepayModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Current Balance Status Card -->
+    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 grid grid-cols-3 gap-2 text-center text-xs">
+      <div>
+        <span class="text-[10px] text-slate-400 block">Principal Balance</span>
+        <span class="font-bold text-slate-800 dark:text-slate-200 money-fig" id="repayRemPrincipal">₹0</span>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 block">Accrued Interest</span>
+        <span class="font-bold text-cyan-600 dark:text-cyan-400 money-fig" id="repayAccruedInterest">₹0</span>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 block">Total Payoff Dues</span>
+        <span class="font-bold text-amber-600 dark:text-amber-400 money-fig" id="repayTotalPayoff">₹0</span>
+      </div>
+    </div>
+
+    <form id="repaymentForm" onsubmit="submitRepayment(event)" class="space-y-4">
+      <input type="hidden" id="repayLoanId">
+
+      <!-- Quick Full Payoff Button -->
+      <div class="flex justify-end">
+        <button type="button" onclick="fillFullPayoff()" class="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1 cursor-pointer">
+          <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+          <span>Fill Full Payoff (Clear Loan)</span>
+        </button>
+      </div>
+
+      <!-- Principal & Interest Allocation -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Principal Portion (₹)
+          </label>
+          <input type="number" id="repayPrincipalAmt" step="1" min="0" placeholder="0" class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 font-mono text-slate-800 dark:text-slate-200">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Interest Portion (₹)
+          </label>
+          <input type="number" id="repayInterestAmt" step="1" min="0" placeholder="0" class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 font-mono text-slate-800 dark:text-slate-200">
+        </div>
+      </div>
+
+      <!-- Payment Mode & Repayment Date -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Payment Mode <span class="text-rose-500">*</span>
+          </label>
+          <select id="repayPaymentMode" class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+            <option value="Cash">Cash</option>
+            <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
+            <option value="UPI">UPI / GPay / PhonePe</option>
+            <option value="Cheque">Cheque</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Repayment Date <span class="text-rose-500">*</span>
+          </label>
+          <input type="date" id="repayDate" required class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notes / Transaction Reference</label>
+        <input type="text" id="repayNotes" placeholder="E.g. Cash received at branch office by Chinna Reddy" class="w-full h-10 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-200">
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button type="button" onclick="closeRepayModal()" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+          Cancel
+        </button>
+        <button type="submit" id="btnSubmitRepay" class="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Repayment</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL 3: LOAN STATEMENT / LEDGER ==================== -->
+<div id="modalDetails" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 hidden modal-backdrop overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-2xl max-w-2xl lg:max-w-3xl w-full max-h-[90vh] my-auto overflow-y-auto p-6 space-y-5 animate-page" id="loanStatementModalBox">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Loan Statement &amp; History</h3>
+        <p class="text-xs text-slate-400" id="detailHeaderSub">Siva Durga Chit Fund</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="printLoanStatement()" class="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 cursor-pointer">
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+          <span>Print</span>
+        </button>
+        <button type="button" onclick="closeDetailsModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loan Key Metrics Card -->
+    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-800 dark:text-slate-200" id="detBorrowerName">—</span>
+          <span class="text-[11px] text-slate-400 block" id="detBorrowerPhone">—</span>
+        </div>
+        <div id="detStatusBadge">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Active</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+        <div>
+          <span class="text-[10px] text-slate-400 block">Disbursed Principal</span>
+          <span class="font-bold money-fig text-slate-800 dark:text-slate-200" id="detPrincipal">₹0</span>
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-400 block">Interest Rate</span>
+          <span class="font-bold money-fig text-slate-800 dark:text-slate-200" id="detRate">0% p.a.</span>
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-400 block">Days Accrued</span>
+          <span class="font-bold money-fig text-slate-800 dark:text-slate-200" id="detDays">0 days</span>
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-400 block">Accrued Compound Interest</span>
+          <span class="font-bold money-fig text-cyan-600 dark:text-cyan-400" id="detAccruedInterest">₹0</span>
+        </div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+        <span class="font-bold text-slate-700 dark:text-slate-300">Net Payoff Required:</span>
+        <span class="text-base font-black text-amber-600 dark:text-amber-400 money-fig" id="detTotalPayoff">₹0</span>
+      </div>
+    </div>
+
+    <!-- Repayments History Table -->
+    <div class="space-y-2">
+      <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+        <i data-lucide="history" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Repayment Transaction History</span>
+      </h4>
+      
+      <div class="border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-400 border-b border-slate-100 dark:border-slate-800 text-[11px]">
+            <tr>
+              <th class="py-2.5 px-3">Date</th>
+              <th class="py-2.5 px-3">Receipt / Mode</th>
+              <th class="py-2.5 px-3 text-right">Principal</th>
+              <th class="py-2.5 px-3 text-right">Interest</th>
+              <th class="py-2.5 px-3 text-right">Total Repaid</th>
+            </tr>
+          </thead>
+          <tbody id="detRepaymentsBody" class="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+            <tr>
+              <td colspan="5" class="py-4 text-center text-slate-400 text-xs">No repayment transactions recorded yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="text-[11px] text-slate-400 font-mono text-center">
+      Annual compounding formula applied: Total = P &times; (1 + r)&Hat;t
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let allLoans = [];
+  let currentFilter = 'active';
+  let eligibleMembersList = [];
+  let currentActiveLoanForRepay = null;
+  let currentDetailLoan = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    fetchLoansData();
+    await fetchEligibleMembers();
+    document.getElementById('disburseDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('repayDate').value = new Date().toISOString().split('T')[0];
+
+    // Check query params for deep-link from member profile
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    const memberId = urlParams.get('member_id');
+    if (action === 'disburse') {
+      openDisburseModal();
+      if (memberId) {
+        const sel = document.getElementById('disburseMemberSelect');
+        if (sel) {
+          sel.value = memberId;
+          onBorrowerSelected();
+        }
+      }
+    }
+  });
+
+  async function fetchLoansData() {
+    try {
+      const res = await fetch(`/chit/api/loans?status=${currentFilter}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to load loans');
+
+      allLoans = data.loans || [];
+      renderSummaryCards(data.summary || {});
+      renderLoansTable();
+    } catch (err) {
+      console.error('fetchLoansData error:', err);
+      document.getElementById('loansTableBody').innerHTML = `
+        <tr>
+          <td colspan="7" class="py-8 text-center text-rose-500 text-xs">
+            Failed to load loan data: ${err.message}
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  function renderSummaryCards(summary) {
+    document.getElementById('kpiActivePrincipal').textContent = `₹${(summary.total_active_principal || 0).toLocaleString('en-IN')}`;
+    document.getElementById('kpiAccruedInterest').textContent = `₹${(summary.total_accrued_interest || 0).toLocaleString('en-IN')}`;
+    const totRec = (summary.total_recovered_principal || 0) + (summary.total_recovered_interest || 0);
+    document.getElementById('kpiTotalRecovered').textContent = `₹${totRec.toLocaleString('en-IN')}`;
+    document.getElementById('kpiRecoveredSub').textContent = `₹${(summary.total_recovered_principal || 0).toLocaleString('en-IN')} P + ₹${(summary.total_recovered_interest || 0).toLocaleString('en-IN')} Int`;
+    document.getElementById('kpiBorrowersCount').textContent = summary.total_active_borrowers || 0;
+  }
+
+  function setFilterStatus(status) {
+    currentFilter = status;
+    ['tabFilterActive', 'tabFilterSettled', 'tabFilterAll'].forEach(id => {
+      const btn = document.getElementById(id);
+      btn.className = "px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer";
+    });
+
+    if (status === 'active') {
+      document.getElementById('tabFilterActive').className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs cursor-pointer";
+    } else if (status === 'settled') {
+      document.getElementById('tabFilterSettled').className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs cursor-pointer";
+    } else {
+      document.getElementById('tabFilterAll').className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs cursor-pointer";
+    }
+
+    fetchLoansData();
+  }
+
+  function renderLoansTable() {
+    const q = (document.getElementById('loanSearchInput').value || '').trim().toLowerCase();
+    const filtered = allLoans.filter(l => {
+      if (!q) return true;
+      return (
+        (l.member_name && l.member_name.toLowerCase().includes(q)) ||
+        (l.customer_id && l.customer_id.toLowerCase().includes(q)) ||
+        (l.phone && l.phone.includes(q)) ||
+        (l.notes && l.notes.toLowerCase().includes(q))
+      );
+    });
+
+    document.getElementById('loansTableCount').textContent = filtered.length;
+    const tbody = document.getElementById('loansTableBody');
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="py-12 text-center text-slate-400 text-xs">
+            No loan records found matching criteria.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(l => {
+      const isSettled = (l.status === 'settled');
+      const statusBadge = isSettled
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Settled (${l.settlement_type === 'chit_payout_deduction' ? 'Chit Payout' : 'Paid'})</span>`
+        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">Active</span>`;
+
+      return `
+        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+          <td class="py-3 px-4">
+            <div class="flex items-center gap-2">
+              <a href="/chit/members/${l.member_id}?tab=loans" class="font-bold text-slate-900 dark:text-slate-100 hover:text-amber-600 transition-colors">
+                ${escapeHtml(l.member_name)}
+              </a>
+              ${l.customer_id ? `<span class="px-1.5 py-0.2 rounded font-mono text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">#${l.customer_id}</span>` : ''}
+            </div>
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+              <span>${escapeHtml(l.phone || '—')}</span>
+              <span>·</span>
+              <span class="text-amber-600 dark:text-amber-400 font-semibold">${l.active_chits_count || 1} active chits</span>
+            </div>
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="font-bold text-slate-900 dark:text-slate-100 money-fig">₹${l.principal_amount.toLocaleString('en-IN')}</div>
+            <div class="text-[11px] text-slate-400">${l.annual_interest_rate}% p.a. (Yearly)</div>
+          </td>
+
+          <td class="py-3 px-4">
+            <div class="text-slate-800 dark:text-slate-200">${l.disbursal_date}</div>
+            <div class="text-[11px] text-slate-400">${l.days_elapsed} days (${(l.days_elapsed/365.25).toFixed(2)} yrs)</div>
+          </td>
+
+          <td class="py-3 px-4 text-right">
+            <div class="font-bold text-cyan-600 dark:text-cyan-400 money-fig">+₹${(l.accrued_interest || 0).toLocaleString('en-IN')}</div>
+            <div class="text-[10px] text-slate-400">Paid: ₹${(l.repaid_interest || 0).toLocaleString('en-IN')}</div>
+          </td>
+
+          <td class="py-3 px-4 text-right">
+            <div class="font-black text-slate-900 dark:text-slate-100 money-fig">₹${(l.total_payoff || 0).toLocaleString('en-IN')}</div>
+            <div class="text-[10px] text-slate-400">Rem. P: ₹${(l.remaining_principal || 0).toLocaleString('en-IN')}</div>
+          </td>
+
+          <td class="py-3 px-4 text-center">
+            ${statusBadge}
+          </td>
+
+          <td class="py-3 px-4 text-right">
+            <div class="flex items-center justify-end gap-1.5">
+              ${!isSettled ? `
+                <button type="button" onclick="openRepayModal('${l.id}')" class="h-7 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 text-[11px] font-bold transition-all cursor-pointer">
+                  Repay
+                </button>
+              ` : ''}
+              <button type="button" onclick="openDetailsModal('${l.id}')" class="h-7 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-medium transition-all cursor-pointer">
+                Details
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // ==================== DISBURSE LOAN MODAL ====================
+  async function fetchEligibleMembers() {
+    try {
+      const res = await fetch('/chit/api/loans/eligible-members');
+      const data = await res.json();
+      if (!data.success) return;
+      eligibleMembersList = data.members || [];
+
+      const sel = document.getElementById('disburseMemberSelect');
+      sel.innerHTML = '<option value="">Select an enrolled chit member...</option>' +
+        eligibleMembersList.map(m => `
+          <option value="${m.id}">${escapeHtml(m.name)} (Cust ID: ${m.customer_id || 'N/A'} · ${m.phone || ''})</option>
+        `).join('');
+    } catch (e) {
+      console.warn('fetchEligibleMembers error:', e);
+    }
+  }
+
+  function openDisburseModal() {
+    document.getElementById('modalDisburse').classList.remove('hidden');
+    document.getElementById('borrowerCommitmentBox').classList.add('hidden');
+    document.getElementById('disburseLoanForm').reset();
+    document.getElementById('disburseDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('disburseRate').value = '18.0';
+    updateLiveProjection();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeDisburseModal() {
+    document.getElementById('modalDisburse').classList.add('hidden');
+  }
+
+  async function onBorrowerSelected() {
+    const memberId = document.getElementById('disburseMemberSelect').value;
+    const box = document.getElementById('borrowerCommitmentBox');
+    if (!memberId) {
+      box.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/chit/api/loans/member-commitments/${memberId}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      box.classList.remove('hidden');
+      document.getElementById('inspectChitCount').textContent = `${data.active_chits.length} active chit${data.active_chits.length === 1 ? '' : 's'}`;
+      document.getElementById('inspectMonthlyCommitment').textContent = `₹${data.total_monthly_commitment.toLocaleString('en-IN')} / mo`;
+      
+      const overdueEl = document.getElementById('inspectOverdueDues');
+      overdueEl.textContent = `₹${data.total_overdue.toLocaleString('en-IN')}`;
+      overdueEl.className = data.total_overdue > 0 ? "text-xs font-bold money-fig text-rose-600" : "text-xs font-bold money-fig text-slate-700 dark:text-slate-300";
+
+      const listEl = document.getElementById('inspectActiveChitsList');
+      listEl.innerHTML = data.active_chits.map(c => `
+        <div class="flex items-center justify-between py-1 px-2 rounded bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+          <span>${escapeHtml(c.group_name)} · Ticket #${c.ticket_number} (A/C: ${c.account_number})</span>
+          <span class="font-bold money-fig text-amber-600 dark:text-amber-400">₹${c.monthly_installment.toLocaleString('en-IN')}</span>
+        </div>
+      `).join('');
+
+      const existingNotice = document.getElementById('inspectExistingLoansNotice');
+      if (data.existing_loans && data.existing_loans.length > 0) {
+        const totOpen = data.existing_loans.reduce((acc, x) => acc + x.total_payoff, 0);
+        document.getElementById('inspectExistingLoanBalance').textContent = `₹${totOpen.toLocaleString('en-IN')}`;
+        existingNotice.classList.remove('hidden');
+      } else {
+        existingNotice.classList.add('hidden');
+      }
+
+      if (window.lucide) lucide.createIcons();
+    } catch (e) {
+      console.warn('onBorrowerSelected error:', e);
+      box.classList.add('hidden');
+    }
+  }
+
+  function updateLiveProjection() {
+    const p = parseFloat(document.getElementById('disbursePrincipal').value) || 0;
+    const r = (parseFloat(document.getElementById('disburseRate').value) || 0) / 100.0;
+
+    const p6 = p * Math.pow(1.0 + r, 0.5);
+    const p12 = p * Math.pow(1.0 + r, 1.0);
+
+    document.getElementById('simProj6Mo').textContent = `₹${Math.round(p6).toLocaleString('en-IN')}`;
+    document.getElementById('simProj1Yr').textContent = `₹${Math.round(p12).toLocaleString('en-IN')}`;
+  }
+
+  async function submitDisburseLoan(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitDisburse');
+    const memberId = document.getElementById('disburseMemberSelect').value;
+    const principal = parseFloat(document.getElementById('disbursePrincipal').value);
+    const rate = parseFloat(document.getElementById('disburseRate').value);
+    const disbDate = document.getElementById('disburseDate').value;
+    const notes = document.getElementById('disburseNotes').value.trim();
+
+    if (!memberId) {
+      alert('Please select a subscriber borrower.');
+      return;
+    }
+    if (!principal || principal <= 0) {
+      alert('Please enter a valid principal amount.');
+      return;
+    }
+
+    try {
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Disbursing...`;
+      if (window.lucide) lucide.createIcons();
+
+      const res = await fetch('/chit/api/loans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_id: memberId,
+          principal_amount: principal,
+          annual_interest_rate: rate,
+          disbursal_date: disbDate,
+          notes: notes
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to disburse loan');
+
+      closeDisburseModal();
+      fetchLoansData();
+      alert('Loan disbursed successfully!');
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Confirm Disbursal`;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+
+  // ==================== REPAYMENT MODAL ====================
+  function openRepayModal(loanId) {
+    const loan = allLoans.find(x => x.id === loanId);
+    if (!loan) return;
+    currentActiveLoanForRepay = loan;
+
+    document.getElementById('repayLoanId').value = loan.id;
+    document.getElementById('repayBorrowerHeader').textContent = `${loan.member_name} (ID #${loan.customer_id || 'N/A'})`;
+    document.getElementById('repayRemPrincipal').textContent = `₹${(loan.remaining_principal || 0).toLocaleString('en-IN')}`;
+    document.getElementById('repayAccruedInterest').textContent = `₹${(loan.accrued_interest || 0).toLocaleString('en-IN')}`;
+    document.getElementById('repayTotalPayoff').textContent = `₹${(loan.total_payoff || 0).toLocaleString('en-IN')}`;
+
+    document.getElementById('repaymentForm').reset();
+    document.getElementById('repayDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('repayInterestAmt').value = Math.round(loan.accrued_interest || 0);
+    document.getElementById('repayPrincipalAmt').value = '';
+
+    document.getElementById('modalRepay').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeRepayModal() {
+    document.getElementById('modalRepay').classList.add('hidden');
+  }
+
+  function fillFullPayoff() {
+    if (!currentActiveLoanForRepay) return;
+    document.getElementById('repayPrincipalAmt').value = Math.round(currentActiveLoanForRepay.remaining_principal || 0);
+    document.getElementById('repayInterestAmt').value = Math.round(currentActiveLoanForRepay.accrued_interest || 0);
+  }
+
+  async function submitRepayment(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitRepay');
+    const loanId = document.getElementById('repayLoanId').value;
+    const pAmt = parseFloat(document.getElementById('repayPrincipalAmt').value) || 0;
+    const iAmt = parseFloat(document.getElementById('repayInterestAmt').value) || 0;
+    const mode = document.getElementById('repayPaymentMode').value;
+    const rDate = document.getElementById('repayDate').value;
+    const notes = document.getElementById('repayNotes').value.trim();
+
+    if (pAmt + iAmt <= 0) {
+      alert('Repayment amount must be greater than zero.');
+      return;
+    }
+
+    try {
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...`;
+      if (window.lucide) lucide.createIcons();
+
+      const res = await fetch(`/chit/api/loans/${loanId}/repay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          principal_amount: pAmt,
+          interest_amount: iAmt,
+          payment_mode: mode,
+          repayment_date: rDate,
+          notes: notes
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to record repayment');
+
+      closeRepayModal();
+      fetchLoansData();
+      alert(data.message || 'Repayment recorded successfully!');
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Save Repayment`;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+
+  // ==================== LOAN DETAILS / STATEMENT MODAL ====================
+  async function openDetailsModal(loanId) {
+    try {
+      const res = await fetch(`/chit/api/loans/${loanId}/details`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Loan not found');
+
+      const loan = data.loan;
+      currentDetailLoan = loan;
+
+      document.getElementById('detailHeaderSub').textContent = `Loan Ref: LOAN-${loan.id.slice(0, 8).toUpperCase()}`;
+      document.getElementById('detBorrowerName').textContent = loan.member_name;
+      document.getElementById('detBorrowerPhone').textContent = `Phone: ${loan.phone || 'N/A'} · Cust ID: ${loan.customer_id || 'N/A'}`;
+      
+      const isSettled = (loan.status === 'settled');
+      document.getElementById('detStatusBadge').innerHTML = isSettled
+        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Settled</span>`
+        : `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Active</span>`;
+
+      document.getElementById('detPrincipal').textContent = `₹${loan.principal_amount.toLocaleString('en-IN')}`;
+      document.getElementById('detRate').textContent = `${loan.annual_interest_rate}% p.a.`;
+      document.getElementById('detDays').textContent = `${loan.calculation.days_elapsed} days (${loan.calculation.years_elapsed} yrs)`;
+      document.getElementById('detAccruedInterest').textContent = `₹${loan.calculation.accrued_interest.toLocaleString('en-IN')}`;
+      document.getElementById('detTotalPayoff').textContent = `₹${loan.calculation.total_payoff.toLocaleString('en-IN')}`;
+
+      const repsBody = document.getElementById('detRepaymentsBody');
+      if (!loan.repayments || loan.repayments.length === 0) {
+        repsBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-4 text-center text-slate-400 text-xs">No repayment transactions recorded yet.</td>
+          </tr>
+        `;
+      } else {
+        repsBody.innerHTML = loan.repayments.map(r => `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-2.5 px-3 font-mono">${r.date}</td>
+            <td class="py-2.5 px-3">
+              <span class="font-bold text-slate-800 dark:text-slate-200">${escapeHtml(r.mode)}</span>
+              ${r.receipt_no ? `<span class="text-[10px] text-slate-400 block">${escapeHtml(r.receipt_no)}</span>` : ''}
+            </td>
+            <td class="py-2.5 px-3 text-right font-mono">₹${r.principal.toLocaleString('en-IN')}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-cyan-600">₹${r.interest.toLocaleString('en-IN')}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">₹${r.total.toLocaleString('en-IN')}</td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('modalDetails').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      alert(`Error loading details: ${err.message}`);
+    }
+  }
+
+  function closeDetailsModal() {
+    document.getElementById('modalDetails').classList.add('hidden');
+  }
+
+  function printLoanStatement() {
+    window.print();
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+</script>
+{% endblock %}

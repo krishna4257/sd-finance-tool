@@ -183,19 +183,21 @@ def main():
     if not is_local_b:
         print("[CAUTION] Target database B is on a remote host (not localhost). Please double check.")
         
-    # Force typing database name to confirm
+    # Confirmation Prompt
     expected_confirm = db_b["database"]
-    prompt_text = f"To proceed, please type the name of the TARGET database to wipe ({expected_confirm}): "
-    
-    try:
-        user_input = input(prompt_text).strip()
-    except KeyboardInterrupt:
-        print("\n[!] Sync cancelled by user.")
-        sys.exit(0)
-        
-    if user_input != expected_confirm:
-        print("[-] Confirmation failed. Database name mismatch. Sync cancelled.")
-        sys.exit(0)
+    if "--yes" in sys.argv or "-y" in sys.argv:
+        print(f"[*] Auto-confirmed: Wiping target database '{expected_confirm}' via --yes flag.")
+    else:
+        prompt_text = f"To proceed, please type the name of the TARGET database to wipe ({expected_confirm}): "
+        try:
+            user_input = input(prompt_text).strip()
+        except KeyboardInterrupt:
+            print("\n[!] Sync cancelled by user.")
+            sys.exit(0)
+            
+        if user_input != expected_confirm:
+            print("[-] Confirmation failed. Database name mismatch. Sync cancelled.")
+            sys.exit(0)
         
     print("\n[*] Starting Replication...")
     

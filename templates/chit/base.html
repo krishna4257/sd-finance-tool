@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- FOUC Prevention: apply dark class before any paint -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('sd-theme');
+      if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>{% block title %}Siva Durga Chit Fund{% endblock %}</title>
+
+  <!-- Favicon / Tab Icon -->
+  <link rel="icon" type="image/svg+xml" href="/static/images/chit-logo.svg">
+  <link rel="alternate icon" type="image/svg+xml" href="/static/images/chit-logo.svg">
+  <link rel="shortcut icon" href="/static/images/chit-logo.svg">
+
+  <!-- Fonts: Inter & Manrope & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Lucide Icons (modern, minimal stroke icons) -->
+  <script src="https://unpkg.com/lucide@0.441.0/dist/umd/lucide.js"></script>
+
+  <!-- Canvas Confetti -->
+  <script src="/static/js/confetti.browser.min.js"></script>
+  <script>if (typeof confetti === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"><\/script>'); }</script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Manrope', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate: {
+              850: '#151f33',
+              900: '#0f172a',
+              950: '#080d1a',
+            },
+            sdGold: {
+              DEFAULT: '#f59e0b',
+              dark: '#b45309',
+              light: '#fef3c7'
+            },
+            chitDark: {
+              bg: '#0c1220',
+              surface: '#111827',
+              elevated: '#1a2332',
+              border: '#1e293b',
+            }
+          },
+          animation: {
+            'logo-float': 'logoFloat 3s ease-in-out infinite',
+            'logo-glow': 'logoGlow 2.5s ease-in-out infinite',
+            'shine': 'shine 3s ease-in-out infinite',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+          },
+          keyframes: {
+            logoFloat: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-3px)' },
+            },
+            logoGlow: {
+              '0%, 100%': { filter: 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.3)) drop-shadow(0 0 20px rgba(245, 158, 11, 0.1))' },
+              '50%': { filter: 'drop-shadow(0 0 12px rgba(245, 158, 11, 0.5)) drop-shadow(0 0 30px rgba(245, 158, 11, 0.2))' },
+            },
+            shine: {
+              '0%': { transform: 'translateX(-100%)' },
+              '50%, 100%': { transform: 'translateX(100%)' },
+            },
+            pulseSoft: {
+              '0%, 100%': { opacity: '0.4' },
+              '50%': { opacity: '0.7' },
+            },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Theme Toggle Script (before body to prevent FOUC) -->
+  <script src="/static/js/chit-theme.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Light mode body ── */
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+
+    .dark body {
+      background-color: #0c1220;
+      color: #e2e8f0;
+    }
+
+    .money-fig {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* ── Progress Gauges ── */
+    .cgauge-track {
+      background-color: #e2e8f0;
+      border-radius: 9999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .dark .cgauge-track {
+      background-color: #1e293b;
+    }
+
+    .cgauge-fill--paid {
+      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+      height: 100%;
+      transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* ── Light Mode Cards ── */
+    .cb-card {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 1.5rem;
+      box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
+      transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .cb-card:hover {
+      box-shadow: 0 8px 30px -8px rgba(15, 23, 42, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .dark .cb-card {
+      background: rgba(26, 35, 50, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-color: #2a3a4e;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .dark .cb-card:hover {
+      box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.4);
+      border-color: #3a4a5e;
+    }
+
+    .cb-card-elevated {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 1.5rem;
+      box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
+    }
+
+    .dark .cb-card-elevated {
+      background: #1a2332;
+      border-color: #2a3a4e;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ── Card Shine Effect (premium tilt-light sweep) ── */
+    .card-shine {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-shine::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -75%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(90deg,
+          transparent 0%,
+          rgba(255, 255, 255, 0.08) 45%,
+          rgba(255, 255, 255, 0.15) 50%,
+          rgba(255, 255, 255, 0.08) 55%,
+          transparent 100%);
+      transform: skewX(-20deg);
+      transition: left 0.7s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .card-shine:hover::before {
+      left: 125%;
+    }
+
+    .dark .card-shine::before {
+      background: linear-gradient(90deg,
+          transparent 0%,
+          rgba(255, 255, 255, 0.03) 45%,
+          rgba(255, 255, 255, 0.06) 50%,
+          rgba(255, 255, 255, 0.03) 55%,
+          transparent 100%);
+    }
+
+    /* ── Gradient Tint Cards (for stat cards) ── */
+    .tint-amber {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%);
+    }
+
+    .tint-emerald {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%);
+    }
+
+    .tint-blue {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%);
+    }
+
+    .tint-violet {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.02) 100%);
+    }
+
+    .tint-rose {
+      background: linear-gradient(135deg, rgba(244, 63, 94, 0.08) 0%, rgba(244, 63, 94, 0.02) 100%);
+    }
+
+    .dark .tint-amber {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.03) 100%);
+    }
+
+    .dark .tint-emerald {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.03) 100%);
+    }
+
+    .dark .tint-blue {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.03) 100%);
+    }
+
+    .dark .tint-violet {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(139, 92, 246, 0.03) 100%);
+    }
+
+    .dark .tint-rose {
+      background: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(244, 63, 94, 0.03) 100%);
+    }
+
+    /* ── Animated Logo Background Glow ── */
+    .logo-glow-bg {
+      position: absolute;
+      inset: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.35) 0%, rgba(16, 185, 129, 0.12) 50%, transparent 75%);
+      animation: pulseSoft 2.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    /* ── Sidebar Glass Effect ── */
+    .sidebar-glass {
+      background: linear-gradient(180deg, #0f172a 0%, #0a1120 50%, #080d1a 100%);
+    }
+
+    .dark .sidebar-glass {
+      background: linear-gradient(180deg, #070b14 0%, #0a0f1d 50%, #060a12 100%);
+    }
+
+    /* ── Nav Active Indicator Bar ── */
+    .nav-active-bar {
+      position: relative;
+    }
+
+    .nav-active-bar::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 60%;
+      border-radius: 0 4px 4px 0;
+      background: linear-gradient(180deg, #f59e0b, #d97706);
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    }
+
+    /* ── Glassmorphism Utilities ── */
+    .glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* ── Premium Button Hover ── */
+    .btn-premium {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-premium:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-premium:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    /* ── Focus Ring (Premium Glow) ── */
+    .focus-glow:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2), 0 0 0 1px rgba(245, 158, 11, 0.4);
+    }
+
+    /* ── Smooth Sleek Scrollbar ── */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+
+    .dark * {
+      scrollbar-color: #334155 transparent;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .dark ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* ── Search Command Palette ── */
+    .search-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .search-backdrop.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .search-palette {
+      position: fixed;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      z-index: 101;
+      width: 560px;
+      max-width: 90vw;
+      border-radius: 1.25rem;
+      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    }
+
+    .search-palette.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .search-result-item {
+      transition: background 0.15s ease;
+    }
+
+    .search-result-item:hover,
+    .search-result-item.active {
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    .dark .search-result-item:hover,
+    .dark .search-result-item.active {
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    /* ── Page Transition ── */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .animate-page {
+      animation: fadeInUp 0.25s ease forwards;
+    }
+
+    /* ── Ambient Slow-Drifting Background Aurora Mesh (Light & Dark Mode) ── */
+    .bg-aurora-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .bg-aurora-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(85px);
+      opacity: 0.55;
+      will-change: transform;
+    }
+
+    .dark .bg-aurora-blob {
+      opacity: 0.45;
+      filter: blur(115px);
+    }
+
+    .aurora-blob-1 {
+      top: -10%;
+      left: 15%;
+      width: 580px;
+      height: 580px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.10) 65%, transparent 100%);
+      animation: auroraFloat1 28s ease-in-out infinite alternate;
+    }
+
+    .dark .aurora-blob-1 {
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.05) 70%, transparent 100%);
+    }
+
+    .aurora-blob-2 {
+      top: 35%;
+      right: -5%;
+      width: 620px;
+      height: 620px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.28) 0%, rgba(14, 165, 233, 0.08) 65%, transparent 100%);
+      animation: auroraFloat2 34s ease-in-out infinite alternate;
+    }
+
+    .dark .aurora-blob-2 {
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(6, 182, 212, 0.04) 70%, transparent 100%);
+    }
+
+    .aurora-blob-3 {
+      bottom: -15%;
+      left: 25%;
+      width: 520px;
+      height: 520px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(6, 182, 212, 0.08) 65%, transparent 100%);
+      animation: auroraFloat3 30s ease-in-out infinite alternate;
+    }
+
+    .dark .aurora-blob-3 {
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.18) 0%, rgba(99, 102, 241, 0.05) 70%, transparent 100%);
+    }
+
+    @keyframes auroraFloat1 {
+      0% { transform: translate(0px, 0px) scale(1); }
+      50% { transform: translate(120px, 80px) scale(1.15); }
+      100% { transform: translate(-60px, 140px) scale(0.9); }
+    }
+
+    @keyframes auroraFloat2 {
+      0% { transform: translate(0px, 0px) scale(1); }
+      50% { transform: translate(-140px, -90px) scale(1.1); }
+      100% { transform: translate(80px, 110px) scale(0.95); }
+    }
+
+    @keyframes auroraFloat3 {
+      0% { transform: translate(0px, 0px) scale(0.95); }
+      50% { transform: translate(90px, -110px) scale(1.2); }
+      100% { transform: translate(-110px, 40px) scale(1); }
+    }
+
+    /* ── Micro-Dot Matrix Background Pattern ── */
+    .bg-dot-matrix {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .dark .bg-dot-matrix {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* ── Interactive Click Gradient Ripple Effect (Light & Dark Mode) ── */
+    .click-ripple-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 1;
+      transform: translate(-50%, -50%) scale(0.3);
+      opacity: 0.45;
+      background: radial-gradient(circle, rgba(217, 119, 6, 0.35) 0%, rgba(16, 185, 129, 0.22) 50%, rgba(79, 70, 229, 0.12) 80%, transparent 100%);
+      animation: clickRippleExpand 0.65s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+      filter: blur(5px);
+    }
+
+    .dark .click-ripple-orb {
+      opacity: 0.25;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, rgba(16, 185, 129, 0.12) 50%, transparent 100%);
+      filter: blur(8px);
+    }
+
+    @keyframes clickRippleExpand {
+      0% {
+        transform: translate(-50%, -50%) scale(0.3);
+        opacity: 0.45;
+      }
+      50% {
+        opacity: 0.25;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 0;
+      }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body
+  class="min-h-screen flex text-slate-900 dark:text-slate-100 antialiased selection:bg-amber-100 selection:text-amber-900 dark:selection:bg-amber-900/40 dark:selection:text-amber-200 bg-[#f8fafc] dark:bg-chitDark-bg relative overflow-x-hidden">
+
+  <!-- ==================== AMBIENT SLOW DRIFTING AURORA MESH & DOT MATRIX ==================== -->
+  <div class="bg-aurora-container">
+    <div class="bg-aurora-blob aurora-blob-1"></div>
+    <div class="bg-aurora-blob aurora-blob-2"></div>
+    <div class="bg-aurora-blob aurora-blob-3"></div>
+  </div>
+  <div class="bg-dot-matrix"></div>
+
+  <!-- ==================== LEFT SIDEBAR (FIXED) ==================== -->
+  <aside
+    class="w-64 sidebar-glass text-slate-300 flex flex-col shrink-0 fixed top-0 left-0 h-screen border-r border-slate-800/80 dark:border-slate-800/40 select-none z-40 overflow-y-auto no-scrollbar">
+
+    <!-- Top Branding: Centered Large Animated 3D Logo (Occupies 75%+ top width) + Theme Toggle -->
+    <div class="p-4 pt-3 border-b border-slate-800/60 relative flex flex-col items-center">
+      <!-- Theme Toggle Button (Top Right Corner) -->
+      <button id="themeToggleBtn" type="button" title="Toggle theme"
+        class="absolute top-3 right-3 h-8 w-8 rounded-xl bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 flex items-center justify-center transition-all duration-300 group z-20">
+        <!-- Sun Icon (visible in dark mode) -->
+        <svg id="themeIconSun" class="absolute h-4 w-4 text-amber-400 transition-all duration-500"
+          style="opacity:0; transform: rotate(90deg) scale(0.5);" xmlns="http://www.w3.org/2000/svg" width="16"
+          height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <!-- Moon Icon (visible in light mode) -->
+        <svg id="themeIconMoon" class="absolute h-4 w-4 text-slate-400 transition-all duration-500"
+          style="opacity:1; transform: rotate(0deg) scale(1);" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <!-- Prominent Centered Animated Logo (75%+ width) -->
+      <a href="/chit/dashboard" class="flex flex-col items-center justify-center group w-full pt-1 pb-1">
+        <div class="relative w-[50%] max-w-[185px] aspect-square flex items-center justify-center">
+          <div class="logo-glow-bg"></div>
+          <img src="/static/images/chit-logo.svg" alt="Siva Durga Chit Fund"
+            class="w-full h-full object-contain relative z-10 drop-shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-transform duration-300 group-hover:scale-105"
+            style="filter: drop-shadow(0 0 10px rgba(245,158,11,0.3));">
+        </div>
+      </a>
+
+      <!-- Quick Search Trigger (opens Command Palette) -->
+      <div class="mt-3 relative w-full">
+        <button type="button" id="searchTriggerBtn" onclick="openSearchPalette()"
+          class="w-full h-9 pl-9 pr-8 bg-slate-800/70 hover:bg-slate-700/70 text-slate-500 text-[11px] rounded-xl border border-slate-700/50 hover:border-slate-600/60 flex items-center transition-all duration-200 cursor-text focus-glow">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5"></i>
+          <span>Search everything...</span>
+        </button>
+        <kbd
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 bg-slate-700/50 px-1.5 py-0.5 rounded font-mono border border-slate-600/30">Ctrl
+          K</kbd>
+      </div>
+    </div>
+
+    <!-- Navigation Items -->
+    <nav class="p-3 space-y-1 flex-1">
+      <a href="/chit/dashboard"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if request.path == '/chit/dashboard' %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="layout-dashboard" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <a href="/chit/groups"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/groups' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="folder-kanban" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Chits</span>
+      </a>
+
+      <a href="/chit/members"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/members' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="users" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Members</span>
+      </a>
+
+      <a href="/chit/payouts"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/schedules' in request.path or '/auctions' in request.path or '/lifts' in request.path or '/payouts' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="banknote" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Payouts</span>
+      </a>
+
+      <a href="/chit/loans"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/loans' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="landmark" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Loans</span>
+      </a>
+
+      <a href="/chit/accounting"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/accounting' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="scale" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Accounting</span>
+      </a>
+
+      <a href="/chit/reports"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/reports' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="bar-chart-3" class="w-[18px] h-[18px] stroke-[1.8]"></i>
+        <span>Reports</span>
+      </a>
+
+      <!-- Back to Main SD Finance App -->
+      <div class="pt-3 mt-3 border-t border-slate-800/40">
+        <a href="/village"
+          class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-500 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+          <i data-lucide="arrow-left" class="w-4 h-4 stroke-[1.8]"></i>
+          <span>SD Finance Home</span>
+        </a>
+      </div>
+    </nav>
+
+    <!-- Bottom Notifications Box & User Profile -->
+    <div class="p-3 space-y-2 border-t border-slate-800/40">
+      <!-- Notifications pill -->
+      <div class="flex items-center justify-between p-2.5 glass rounded-2xl text-xs">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="h-7 w-7 rounded-full bg-slate-700/60 flex items-center justify-center text-slate-400">
+            <i data-lucide="bell" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="font-bold text-white leading-none text-[11px]">Notifications</p>
+            <p class="text-[10px] text-slate-400 truncate mt-0.5">Inbox is up to date</p>
+          </div>
+        </div>
+        <span
+          class="text-[10px] font-bold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/50">0</span>
+      </div>
+
+      <!-- User Profile Pill (dynamic from session) -->
+      <div
+        class="flex items-center justify-between p-2 glass hover:bg-white/[0.06] transition-all duration-200 rounded-2xl cursor-pointer group">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="relative">
+            <div
+              class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs select-none shadow-md shadow-amber-900/20">
+              {{ session.get('username', 'U')[0] | upper }}{{ session.get('username', 'Us')[1:2] | upper }}
+            </div>
+            <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>
+          </div>
+          <div class="min-w-0">
+            <p class="text-[12px] font-bold text-white leading-tight truncate">{{ session.get('username', 'User') |
+              upper }}</p>
+            <p class="text-[10px] text-slate-400 truncate">{{ session.get('email', '') or 'Smart Counting' }}</p>
+          </div>
+        </div>
+        <i data-lucide="chevron-right"
+          class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors stroke-[2]"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN CONTENT AREA ==================== -->
+  <main class="flex-1 min-w-0 flex flex-col bg-[#f8fafc] dark:bg-chitDark-bg ml-64 overflow-y-auto min-h-screen">
+    <div class="animate-page">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- ==================== GLOBAL SEARCH COMMAND PALETTE ==================== -->
+  <div id="searchBackdrop" class="search-backdrop" onclick="closeSearchPalette()"></div>
+  <div id="searchPalette"
+    class="search-palette bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-2xl overflow-hidden">
+    <!-- Search Input -->
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-200/80 dark:border-slate-700/40">
+      <i data-lucide="search" class="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0 stroke-[1.8]"></i>
+      <input type="text" id="globalSearchInput" placeholder="Search members, groups, payouts..."
+        class="flex-1 bg-transparent text-base text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
+        autocomplete="off" spellcheck="false">
+      <kbd
+        class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono border border-slate-200 dark:border-slate-700">ESC</kbd>
+    </div>
+    <!-- Search Results -->
+    <div id="searchResults" class="max-h-[380px] overflow-y-auto">
+      <div class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
+        <i data-lucide="search" class="w-8 h-8 mx-auto mb-2 opacity-30 stroke-[1.5]"></i>
+        <p>Search across members, groups, and payouts</p>
+        <p class="text-[11px] mt-1 text-slate-300 dark:text-slate-600">Type to search or use ⌘K anytime</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Toast -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 pointer-events-none"></div>
+
+  <script>
+    /* ── Toast Notifications ── */
+    function showToast(message, type = 'success') {
+      const c = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const isDark = document.documentElement.classList.contains('dark');
+      toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-sm font-semibold mb-2 transition-all transform duration-300 ${type === 'success'
+        ? (isDark ? 'bg-slate-800 text-white border border-slate-700' : 'bg-slate-900 text-white border border-slate-700')
+        : 'bg-rose-600 text-white'
+        }`;
+      const icon = type === 'success' ? 'check' : 'alert-circle';
+      const iconColor = type === 'success' ? 'text-emerald-400' : 'text-rose-300';
+      toast.innerHTML = `
+        <i data-lucide="${icon}" class="w-4 h-4 ${iconColor} stroke-[2]"></i>
+        <span>${message}</span>
+      `;
+      c.appendChild(toast);
+      if (window.lucide) lucide.createIcons();
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    /* ── Global Search Command Palette ── */
+    let searchDebounceTimer = null;
+
+    function openSearchPalette() {
+      document.getElementById('searchBackdrop').classList.add('active');
+      document.getElementById('searchPalette').classList.add('active');
+      const input = document.getElementById('globalSearchInput');
+      input.value = '';
+      setTimeout(() => input.focus(), 100);
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeSearchPalette() {
+      document.getElementById('searchBackdrop').classList.remove('active');
+      document.getElementById('searchPalette').classList.remove('active');
+    }
+
+    document.addEventListener('keydown', function (e) {
+      // Ctrl+K or Cmd+K
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const palette = document.getElementById('searchPalette');
+        if (palette.classList.contains('active')) {
+          closeSearchPalette();
+        } else {
+          openSearchPalette();
+        }
+      }
+      // Escape
+      if (e.key === 'Escape') {
+        closeSearchPalette();
+      }
+    });
+
+    // Debounced search
+    document.addEventListener('DOMContentLoaded', function () {
+      const input = document.getElementById('globalSearchInput');
+      if (input) {
+        input.addEventListener('input', function () {
+          clearTimeout(searchDebounceTimer);
+          const q = this.value.trim();
+          if (q.length < 1) {
+            document.getElementById('searchResults').innerHTML = `
+              <div class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
+                <p>Search across members, groups, and payouts</p>
+              </div>`;
+            return;
+          }
+          searchDebounceTimer = setTimeout(() => performGlobalSearch(q), 250);
+        });
+      }
+    });
+
+    async function performGlobalSearch(query) {
+      const resultsEl = document.getElementById('searchResults');
+      resultsEl.innerHTML = `<div class="p-4 text-center text-xs text-slate-400"><span class="inline-block animate-spin mr-1">⟳</span> Searching...</div>`;
+      try {
+        const res = await fetch('/chit/api/search?q=' + encodeURIComponent(query));
+        const data = await res.json();
+        let html = '';
+
+        if (data.members && data.members.length) {
+          html += `<div class="px-4 pt-3 pb-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Members</p></div>`;
+          data.members.forEach(m => {
+            html += `<a href="/chit/members/${m.id}" class="search-result-item flex items-center gap-3 px-4 py-2.5 cursor-pointer">
+              <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-[10px] shrink-0">${(m.name || '?')[0].toUpperCase()}</div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">${m.name}</p>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">${m.phone || ''} ${m.customer_id ? '· ' + m.customer_id : ''}</p>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 stroke-[1.5]"></i>
+            </a>`;
+          });
+        }
+
+        if (data.groups && data.groups.length) {
+          html += `<div class="px-4 pt-3 pb-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Chit Groups</p></div>`;
+          data.groups.forEach(g => {
+            html += `<a href="/chit/groups/${g.id}/edit" class="search-result-item flex items-center gap-3 px-4 py-2.5 cursor-pointer">
+              <div class="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+                <i data-lucide="folder-kanban" class="w-4 h-4 stroke-[1.8]"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">${g.name}</p>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">${g.chit_value ? '₹' + Number(g.chit_value).toLocaleString('en-IN') : ''} ${g.status ? '· ' + g.status : ''}</p>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 stroke-[1.5]"></i>
+            </a>`;
+          });
+        }
+
+        if (!html) {
+          html = `<div class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
+            <p>No results found for "<span class="font-semibold text-slate-500 dark:text-slate-300">${query}</span>"</p>
+          </div>`;
+        }
+
+        resultsEl.innerHTML = html;
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        resultsEl.innerHTML = `<div class="p-4 text-center text-xs text-rose-400">Search unavailable</div>`;
+      }
+    }
+
+    /* ── Global Modal Teleportation & Viewport Centering ── */
+    function teleportModalsToBody() {
+      const modals = document.querySelectorAll('.fixed.inset-0, [id$="Modal"], [id^="modal"]');
+      modals.forEach(el => {
+        if (!el || !el.parentElement || el.parentElement === document.body) return;
+        if (el.id === 'searchBackdrop' || el.id === 'toastContainer' || el.id === 'searchPalette') return;
+        if (el.classList.contains('fixed') && (el.classList.contains('inset-0') || el.id.toLowerCase().includes('modal'))) {
+          document.body.appendChild(el);
+        }
+      });
+    }
+
+    /* ── Initialize Lucide Icons & Global Modal Manager ── */
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.lucide) lucide.createIcons();
+      teleportModalsToBody();
+      setTimeout(teleportModalsToBody, 100);
+      setTimeout(teleportModalsToBody, 400);
+
+      // Auto-teleport on any modal open attempts
+      document.addEventListener('click', function (e) {
+        if (e.target && e.target.closest && e.target.closest('[onclick*="Modal"], [onclick*="modal"]')) {
+          setTimeout(teleportModalsToBody, 10);
+        }
+      }, true);
+
+      // Global Background Click Gradient Ripple Effect (Ultra-Subtle & Compact)
+      window.addEventListener('pointerdown', function (e) {
+        var ripple = document.createElement('div');
+        ripple.className = 'click-ripple-orb';
+        ripple.style.left = e.clientX + 'px';
+        ripple.style.top = e.clientY + 'px';
+        ripple.style.width = '60px';
+        ripple.style.height = '60px';
+        document.body.appendChild(ripple);
+
+        setTimeout(function () {
+          if (ripple && ripple.parentNode) {
+            ripple.parentNode.removeChild(ripple);
+          }
+        }, 650);
+      });
+    });
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+
+</html>

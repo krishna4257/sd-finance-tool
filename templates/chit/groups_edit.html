@@ -1,0 +1,1136 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Edit Chit Scheme – Siva Durga Chit Fund{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
+
+  <!-- Header matching ChitBase -->
+  <div class="flex items-center gap-3">
+    <a href="/chit/groups" class="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 flex items-center gap-1">
+      <i data-lucide="arrow-left" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+      <span>Back</span>
+    </a>
+    <span class="text-slate-300 dark:text-slate-600">/</span>
+    <div>
+      <h1 class="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight" id="headerEditTitle">Edit Chit Scheme</h1>
+      <p class="text-xs text-slate-400 dark:text-slate-500 font-medium" id="headerEditSub">Loading details...</p>
+    </div>
+  </div>
+
+  <!-- Segmented Tab Switcher matching ChitBase -->
+  <div class="flex items-center justify-center p-1 bg-slate-100 dark:bg-chitDark-elevated rounded-2xl w-fit mx-auto">
+    <button type="button" id="tabBtnDetails" onclick="switchEditTab('details')" class="px-6 py-2 rounded-xl text-xs font-extrabold bg-white dark:bg-chitDark-surface text-slate-900 dark:text-slate-100 shadow-sm transition-all">
+      Chit Details
+    </button>
+    <button type="button" id="tabBtnMembers" onclick="switchEditTab('members')" class="px-6 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-all">
+      Members
+    </button>
+  </div>
+
+  <!-- ==================== TAB 1: CHIT DETAILS ==================== -->
+  <div id="tabContentDetails" class="space-y-6">
+    <form id="editDetailsForm" onsubmit="handleSaveDetails(event)" class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border shadow-sm space-y-6">
+      
+      <div>
+        <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">Chit details</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Name & status</p>
+      </div>
+
+      <!-- Chit Name -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Chit Name *</label>
+        <input type="text" id="editChitName" required
+               class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:bg-chitDark-surface focus:ring-2 focus:ring-amber-300">
+      </div>
+
+      <!-- Status Segmented Control -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="p-3 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface flex items-center justify-center gap-2 cursor-pointer has-[:checked]:border-slate-900 has-[:checked]:bg-slate-50 dark:bg-chitDark-bg has-[:checked]:font-extrabold text-xs">
+            <input type="radio" name="editStatus" value="Draft" class="text-slate-900 dark:text-slate-100">
+            <span>Draft</span>
+          </label>
+          <label class="p-3 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface flex items-center justify-center gap-2 cursor-pointer has-[:checked]:border-slate-900 has-[:checked]:bg-slate-50 dark:bg-chitDark-bg has-[:checked]:font-extrabold text-xs">
+            <input type="radio" name="editStatus" value="Active" class="text-slate-900 dark:text-slate-100">
+            <span>Active</span>
+          </label>
+          <label class="p-3 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface flex items-center justify-center gap-2 cursor-pointer has-[:checked]:border-slate-900 has-[:checked]:bg-slate-50 dark:bg-chitDark-bg has-[:checked]:font-extrabold text-xs">
+            <input type="radio" name="editStatus" value="Completed" class="text-slate-900 dark:text-slate-100">
+            <span>Completed</span>
+          </label>
+        </div>
+        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Use for current collections</p>
+      </div>
+
+      <!-- Size & Timing Section -->
+      <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <div>
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">Size & timing</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500">Key fields</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <div class="flex justify-between text-xs">
+              <span class="font-bold text-slate-700 dark:text-slate-300">Member shares *</span>
+              <span class="text-slate-400 dark:text-slate-500" id="assignedSharesBadge">20 of 20 assigned</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="adjustShares(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">-</button>
+              <input type="number" id="editMemberShares" readonly class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl">
+              <button type="button" onclick="adjustShares(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">+</button>
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <div class="flex justify-between text-xs">
+              <span class="font-bold text-slate-700 dark:text-slate-300">Duration *</span>
+              <span class="text-slate-400 dark:text-slate-500" id="durationBadge">20 planned, 20 filled</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="adjustDuration(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">-</button>
+              <input type="number" id="editDuration" readonly class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl">
+              <button type="button" onclick="adjustDuration(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-1 text-xs">
+          <div class="bg-slate-50 dark:bg-chitDark-bg p-3 rounded-xl border border-slate-100 dark:border-chitDark-border">
+            <p class="font-bold text-slate-700 dark:text-slate-300">SHARES LIVE: <span id="sharesLiveDisplay" class="font-mono font-extrabold">20 / 20</span></p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5" id="sharesLiveDesc">Share count matches the members assigned.</p>
+          </div>
+          <div class="bg-slate-50 dark:bg-chitDark-bg p-3 rounded-xl border border-slate-100 dark:border-chitDark-border">
+            <p class="font-bold text-slate-700 dark:text-slate-300">MONTHS LIVE: <span id="monthsLiveDisplay" class="font-mono font-extrabold">20 / 20</span></p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Duration and monthly plan are ready.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start Month -->
+      <div class="space-y-1.5 pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Start Month *</label>
+        <input type="month" id="editStartMonth" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+        <p class="text-[11px] text-slate-400 dark:text-slate-500">Changing the start month shifts dashboard months only before this chit has payments, lifts, or closed months.</p>
+      </div>
+
+      <!-- Headline Value -->
+      <div class="space-y-1.5 pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Headline chit value (₹)</label>
+        <input type="text" id="editChitValue" readonly class="w-full h-11 px-3.5 bg-slate-100 dark:bg-chitDark-elevated border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-extrabold text-slate-800 dark:text-slate-100 money-fig">
+      </div>
+
+      <!-- Fixed Schedule Section with Edit Modal Button and Collapsible Margin Table -->
+      <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">Fixed schedule</h3>
+            <p class="text-xs text-slate-400 dark:text-slate-500">Installment & prize are set per month. Assign winners on the Winners page.</p>
+          </div>
+          <a href="/chit/schedules" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5">
+            <i data-lucide="pencil" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+            <span>Edit schedule</span>
+          </a>
+        </div>
+
+        <!-- Your Margin on this Chit Accordion matching ChitBase PDF Page 10 -->
+        <div class="cb-card card-shine bg-emerald-50 dark:bg-emerald-900/20/40 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30/80 dark:border-emerald-800/30 p-5 space-y-3">
+          <button type="button" onclick="toggleMarginDropdown()" class="w-full flex items-center justify-between text-xs font-bold text-emerald-950 dark:text-emerald-100">
+            <div class="flex items-center gap-2">
+              <i data-lucide="trending-up" class="w-4 h-4 stroke-[1.8] text-emerald-600 dark:text-emerald-400"></i>
+              <span>Your margin on this chit</span>
+            </div>
+            <i id="marginToggleIcon" data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[1.8] text-emerald-600 dark:text-emerald-400 transition-transform"></i>
+          </button>
+
+          <!-- 3 Totals Cards -->
+          <div class="grid grid-cols-3 gap-3 pt-1">
+            <div class="bg-white dark:bg-chitDark-surface rounded-2xl p-3.5 border border-emerald-100 dark:border-emerald-800/30 shadow-sm text-center">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">COLLECTED</p>
+              <p class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="marginTotalCollected">₹84,860</p>
+            </div>
+            <div class="bg-white dark:bg-chitDark-surface rounded-2xl p-3.5 border border-emerald-100 dark:border-emerald-800/30 shadow-sm text-center">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">PAYOUT</p>
+              <p class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-0.5" id="marginTotalPrizes">₹81,860</p>
+            </div>
+            <div class="bg-emerald-600 rounded-2xl p-3.5 text-white shadow-sm text-center">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-100">YOU KEEP</p>
+              <p class="text-sm font-extrabold money-fig mt-0.5" id="marginYouKeep">₹3,000</p>
+            </div>
+          </div>
+
+          <!-- Expanded Month-by-Month Margin Table matching PDF Page 10 -->
+          <div id="marginExpandedTable" class="hidden pt-3 border-t border-emerald-200 dark:border-emerald-800/30/70">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-emerald-100 dark:border-emerald-800/30">
+                  <th class="py-2">MO</th>
+                  <th class="py-2 text-right">COLLECT</th>
+                  <th class="py-2 text-right">PAYOUT</th>
+                  <th class="py-2 text-right">KEEP</th>
+                </tr>
+              </thead>
+              <tbody id="marginMatrixBody" class="divide-y divide-emerald-100/60 font-mono font-medium text-slate-700 dark:text-slate-300">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADVANCED Collapsible Textarea matching PDF Page 11 -->
+      <div class="pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <button type="button" onclick="toggleAdvancedBox()" class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+          <span id="advToggleText">ADVANCED Show</span>
+          <i id="advToggleIcon" data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+        </button>
+
+        <div id="advancedBoxContent" class="hidden pt-3 space-y-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Rules & Notes</label>
+          <textarea id="editRulesNotes" rows="3" placeholder="Optional rules or terms for this chit group..."
+                    class="w-full p-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:bg-chitDark-surface focus:outline-none"></textarea>
+        </div>
+      </div>
+
+      <!-- Bottom Form Buttons -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <a href="/chit/groups" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:bg-chitDark-bg">Back</a>
+        <button type="submit" id="btnUpdateGroup" class="px-6 py-2.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-md">
+          Update Group
+        </button>
+      </div>
+    </form>
+
+    <!-- Danger Zone Card matching ChitBase -->
+    <div class="cb-card card-shine p-6 bg-rose-50/40 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/30 rounded-2xl flex items-center justify-between">
+      <div>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-rose-800 dark:text-rose-400">DANGER ZONE</h4>
+        <p class="text-xs text-rose-700 dark:text-rose-400/90 mt-0.5">Permanently delete this chit group and all its connected data.</p>
+      </div>
+      <button type="button" onclick="openTrashStep1Modal()" class="px-4 py-2 rounded-xl bg-white dark:bg-chitDark-surface border border-rose-300 dark:border-rose-800/40 text-rose-700 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/30 shadow-sm flex items-center gap-1.5">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+        <span>Delete</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: MEMBERS ==================== -->
+  <div id="tabContentMembers" class="space-y-6 hidden">
+    <div class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border shadow-sm space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Members</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500" id="membersTabCounterLabel">Loading members...</p>
+        </div>
+        <button type="button" onclick="openAddMemberToGroupModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-sm flex items-center gap-1">
+          <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+          <span>Add Member</span>
+        </button>
+      </div>
+
+      <!-- Bulk Installment Plan Action Bar -->
+      <div class="flex items-center justify-between flex-wrap gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-chitDark-bg border border-slate-200/80 dark:border-chitDark-border">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Set All Members Plan:</span>
+          <button type="button" onclick="bulkChangeInstallmentType('incremental')" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-chitDark-elevated transition-all cursor-pointer">
+            All Incremental
+          </button>
+          <button type="button" onclick="bulkChangeInstallmentType('fixed')" class="px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all cursor-pointer">
+            All Fixed
+          </button>
+        </div>
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono" id="editFixedAmountBadge">Fixed: ₹0/mo</span>
+      </div>
+
+      <!-- Open Seats Quick Action Banner -->
+      <div id="unfilledSeatsBanner" class="hidden p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/80 dark:border-amber-800/30 flex items-center justify-between text-xs">
+        <div>
+          <p class="font-extrabold text-amber-950 dark:text-amber-100 text-xs" id="unfilledSeatsBannerTitle">Seats still open</p>
+          <p class="text-[11px] text-amber-800 dark:text-amber-400/90 dark:text-amber-200/90 mt-0.5">Click "Fill Seat" to select from customer directory or register a new customer.</p>
+        </div>
+        <button type="button" onclick="openAddMemberToGroupModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-bold text-xs shadow-sm hover:bg-slate-800 dark:hover:bg-slate-200 flex items-center gap-1.5">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+          <span>Fill Seat Now</span>
+        </button>
+      </div>
+
+      <!-- Member Rows with Steppers & Joining/Splits Drawer -->
+      <div id="editGroupMembersContainer" class="space-y-3">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Footer Buttons -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-chitDark-border">
+        <a href="/chit/groups" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-chitDark-border text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-bg">Back</a>
+        <button type="button" onclick="showToast('Member allocations saved!'); window.location.href='/chit/groups';" class="px-6 py-2 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200">
+          Done
+        </button>
+      </div>
+    </div>
+
+    <!-- Danger Zone Card on Members Tab too -->
+    <div class="cb-card card-shine p-6 bg-rose-50/40 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/30 rounded-2xl flex items-center justify-between">
+      <div>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-rose-800 dark:text-rose-400">DANGER ZONE</h4>
+        <p class="text-xs text-rose-700 dark:text-rose-400/90 mt-0.5">Permanently delete this chit group and all its connected data.</p>
+      </div>
+      <button type="button" onclick="openTrashStep1Modal()" class="px-4 py-2 rounded-xl bg-white dark:bg-chitDark-surface border border-rose-300 dark:border-rose-800/40 text-rose-700 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/30 shadow-sm flex items-center gap-1.5">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+        <span>Delete</span>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== 2-STEP MOVE TO TRASH MODAL ==================== -->
+<!-- Step 1 Modal -->
+<div id="trashStep1Modal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-md md:max-w-lg w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-chitDark-border animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-chitDark-border">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Move to Trash</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Review what will be moved to trash.</p>
+      </div>
+      <button onclick="closeTrashModals()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      <div class="bg-rose-50/70 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/30 rounded-2xl p-4 space-y-2">
+        <p class="text-xs font-bold text-rose-900 dark:text-rose-300" id="trashImpactGroupName">Scheme Name</p>
+        <p class="text-[11px] text-rose-800 dark:text-rose-400/80 leading-relaxed">
+          Deleting this chit removes all connected history, payments, lifts, and member mappings.
+        </p>
+      </div>
+
+      <!-- Stats Grid matching ChitBase -->
+      <div class="grid grid-cols-4 gap-2 text-center">
+        <div class="bg-slate-50 dark:bg-chitDark-bg p-2.5 rounded-xl border border-slate-100 dark:border-chitDark-border">
+          <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">MEMBERS</p>
+          <p class="text-xs font-extrabold text-slate-800 dark:text-slate-100 money-fig mt-0.5" id="trashStatMembers">0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-chitDark-bg p-2.5 rounded-xl border border-slate-100 dark:border-chitDark-border">
+          <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">MONTHS</p>
+          <p class="text-xs font-extrabold text-slate-800 dark:text-slate-100 money-fig mt-0.5" id="trashStatMonths">0/20</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-chitDark-bg p-2.5 rounded-xl border border-slate-100 dark:border-chitDark-border">
+          <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">PAYMENTS</p>
+          <p class="text-xs font-extrabold text-slate-800 dark:text-slate-100 money-fig mt-0.5" id="trashStatPayments">0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-chitDark-bg p-2.5 rounded-xl border border-slate-100 dark:border-chitDark-border">
+          <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">COLLECTED</p>
+          <p class="text-xs font-extrabold text-slate-800 dark:text-slate-100 money-fig mt-0.5" id="trashStatCollected">₹0</p>
+        </div>
+      </div>
+
+      <!-- Permanent Effect Breakdown -->
+      <div class="bg-slate-50 dark:bg-chitDark-bg rounded-2xl p-4 border border-slate-100 dark:border-chitDark-border space-y-2 text-xs text-slate-600 dark:text-slate-300">
+        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">PERMANENT EFFECT</p>
+        <p>• <span id="trashEffectMonths">0</span> month records will be removed</p>
+        <p>• <span id="trashEffectPayments">0</span> payment records will be deleted</p>
+        <p>• <span id="trashEffectLifts">0</span> lift records will be deleted</p>
+        <p>• <span id="trashEffectMembers">0</span> member links will be removed</p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-2">
+      <button type="button" onclick="closeTrashModals()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-chitDark-border text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-bg">Cancel</button>
+      <button type="button" onclick="openTrashStep2Modal()" class="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Step 2 Modal: Confirm Move to Trash -->
+<div id="trashStep2Modal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-md md:max-w-lg w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-chitDark-border animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-chitDark-border">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Confirm Move to Trash</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Data kept 30 days, then permanently purged.</p>
+      </div>
+      <button onclick="closeTrashModals()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        This chit will be moved to trash. All data is retained for 30 days and can be restored from the trash tray at the bottom of the Chits page.
+      </p>
+
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">NOTE FOR AUDIT LOG</label>
+        <textarea id="trashAuditNote" rows="3" placeholder="Optional note about why this chit is being deleted..."
+                  class="w-full p-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:bg-chitDark-surface focus:outline-none"></textarea>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-2">
+      <button type="button" onclick="openTrashStep1Modal()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-chitDark-border text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-bg">Back</button>
+      <button type="button" id="btnConfirmTrash" onclick="executeGroupTrash()" class="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md">
+        Move to Trash
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Member Modal matching ChitBase -->
+<div id="addMemberModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-chitDark-border animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-chitDark-border">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Add Member to Chit Scheme</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Select an existing customer or register a new customer</p>
+      </div>
+      <button type="button" onclick="closeAddMemberModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-chitDark-elevated">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <!-- Search directory input -->
+    <div class="space-y-2">
+      <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Search Customers</label>
+      <div class="relative">
+        <i data-lucide="search" class="w-3.5 h-3.5 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
+        <input type="text" id="editModalMemberSearch" oninput="filterEditModalMembers()" placeholder="Search customer by name or phone..."
+               class="w-full h-10 pl-9 pr-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs focus:bg-white dark:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400">
+      </div>
+    </div>
+
+    <!-- Capped at 2 rows height with scrollbar -->
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+        <span>DIRECTORY CANDIDATES (SELECT ONE):</span>
+        <span id="editModalCountBadge">Loading...</span>
+      </div>
+      <div id="editModalCandidateList" class="max-h-36 overflow-y-auto p-2 border border-slate-200 dark:border-chitDark-border rounded-2xl bg-slate-50 dark:bg-chitDark-bg/50 flex flex-wrap gap-2 transition-all">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+
+    <!-- Selected customer summary -->
+    <div id="selectedCustomerDisplay" class="hidden p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 flex items-center justify-between text-xs text-emerald-950 dark:text-emerald-100 font-bold">
+      <div class="flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4 stroke-[1.8] text-emerald-600 dark:text-emerald-400"></i>
+        <div>
+          <p id="selectedCustomerName">Customer Name</p>
+          <p class="text-[10px] text-emerald-700 dark:text-emerald-400 font-normal" id="selectedCustomerPhone">Phone</p>
+        </div>
+      </div>
+      <button type="button" onclick="clearSelectedCustomer()" class="text-xs text-rose-600 hover:underline">Change</button>
+    </div>
+
+    <!-- Inline Quick Create Customer (if not found in directory) -->
+    <div id="quickNewCustomerSection" class="pt-2 border-t border-slate-100 dark:border-chitDark-border space-y-2">
+      <button type="button" onclick="toggleQuickNewCustomer()" class="text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+        <i data-lucide="user-plus" class="w-3.5 h-3.5 stroke-[1.8] text-emerald-600 dark:text-emerald-400"></i>
+        <span>Or create a new customer directly</span>
+        <i id="quickNewCustChevron" data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+      </button>
+
+      <div id="quickNewCustomerForm" class="hidden grid grid-cols-2 gap-2 pt-1">
+        <input type="text" id="newCustName" placeholder="Full Name *" class="h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs focus:bg-white dark:bg-chitDark-surface focus:outline-none">
+        <input type="tel" id="newCustPhone" placeholder="Phone Number" class="h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs focus:bg-white dark:bg-chitDark-surface focus:outline-none">
+      </div>
+    </div>
+
+    <!-- Account Number, Share multiplier, Joining Month and Installment Plan -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-chitDark-border">
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Account # *</label>
+        <input type="text" id="newMemberAccountNumber" placeholder="e.g. 1"
+               class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold focus:bg-white dark:bg-chitDark-surface focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Share Multiplier</label>
+        <select id="newMemberShareUnits" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="0.5">0.5x (Half Ticket)</option>
+          <option value="1.0" selected>1.0x (Full Ticket)</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2.0x (Double Ticket)</option>
+          <option value="3.0">3.0x</option>
+          <option value="5.0">5.0x</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Joins from Month</label>
+        <select id="newMemberJoinsMonth" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="1" selected>Month 1</option>
+          <option value="2">Month 2</option>
+          <option value="3">Month 3</option>
+          <option value="4">Month 4</option>
+          <option value="5">Month 5</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Installment Plan</label>
+        <select id="newMemberInstallmentType" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="incremental" selected>Incremental</option>
+          <option value="fixed">Fixed</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-chitDark-border">
+      <button type="button" onclick="closeAddMemberModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-chitDark-border text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-chitDark-bg">Cancel</button>
+      <button type="button" id="btnSubmitAddMember" onclick="submitAddMemberToGroup()" class="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-md">
+        Enroll in Chit
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const groupId = '{{ group_id }}';
+  let groupPayload = null;
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function switchEditTab(tab) {
+    const isDetails = tab === 'details';
+    document.getElementById('tabContentDetails').classList.toggle('hidden', !isDetails);
+    document.getElementById('tabContentMembers').classList.toggle('hidden', isDetails);
+
+    document.getElementById('tabBtnDetails').className = isDetails 
+      ? 'px-6 py-2 rounded-xl text-xs font-extrabold bg-white dark:bg-chitDark-surface text-slate-900 dark:text-slate-100 shadow-sm transition-all'
+      : 'px-6 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-all';
+
+    document.getElementById('tabBtnMembers').className = !isDetails 
+      ? 'px-6 py-2 rounded-xl text-xs font-extrabold bg-white dark:bg-chitDark-surface text-slate-900 dark:text-slate-100 shadow-sm transition-all'
+      : 'px-6 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-all';
+  }
+
+  function adjustShares(delta) {
+    const el = document.getElementById('editMemberShares');
+    const curVal = parseInt(el.value) || 20;
+    const newVal = Math.max(2, curVal + delta);
+    el.value = newVal;
+    if (groupPayload?.group) {
+      document.getElementById('sharesLiveDisplay').textContent = `${groupPayload.group.shares_assigned} / ${newVal}`;
+      document.getElementById('assignedSharesBadge').textContent = `${groupPayload.group.shares_assigned} of ${newVal} assigned`;
+    }
+  }
+
+  function adjustDuration(delta) {
+    const el = document.getElementById('editDuration');
+    const curVal = parseInt(el.value) || 20;
+    const newVal = Math.max(2, curVal + delta);
+    el.value = newVal;
+    if (groupPayload?.group) {
+      document.getElementById('durationBadge').textContent = `${newVal} planned`;
+    }
+  }
+
+  async function loadGroupDetails() {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/edit-details`);
+      const data = await res.json();
+      groupPayload = data;
+
+      const g = data.group;
+      document.getElementById('headerEditTitle').textContent = g.name;
+      document.getElementById('headerEditSub').textContent = `${formatINR(g.chit_total_value)} • ${g.duration_months} Months • ${g.status}`;
+      document.getElementById('editChitName').value = g.name;
+      document.getElementById('editMemberShares').value = g.total_members;
+      document.getElementById('editDuration').value = g.duration_months;
+      document.getElementById('editStartMonth').value = g.start_month_year;
+      document.getElementById('editChitValue').value = formatINR(g.chit_total_value);
+      document.getElementById('editRulesNotes').value = g.rules_notes;
+
+      // Status radio
+      const radios = document.getElementsByName('editStatus');
+      for (const r of radios) {
+        if (r.value === g.status) r.checked = true;
+      }
+
+      // Live badges
+      document.getElementById('sharesLiveDisplay').textContent = `${g.shares_assigned} / ${g.shares_target}`;
+      document.getElementById('assignedSharesBadge').textContent = `${g.shares_assigned} of ${g.shares_target} assigned`;
+      document.getElementById('monthsLiveDisplay').textContent = `${g.current_month_index} / ${g.duration_months}`;
+      document.getElementById('durationBadge').textContent = `${g.duration_months} planned, ${g.shares_assigned} filled`;
+
+      // Margins
+      const m = data.margins;
+      document.getElementById('marginTotalCollected').textContent = formatINR(m.total_collected);
+      document.getElementById('marginTotalPrizes').textContent = formatINR(m.total_prizes);
+      document.getElementById('marginYouKeep').textContent = formatINR(m.you_keep);
+
+      // Render Matrix Table
+      renderMarginMatrix(m.matrix);
+
+      // Render Members
+      renderMembersTab(data.members, g);
+
+      // Audit info
+      const aud = data.impact_audit;
+      document.getElementById('trashImpactGroupName').textContent = g.name;
+      document.getElementById('trashStatMembers').textContent = aud.members_count;
+      document.getElementById('trashStatMonths').textContent = aud.months_ratio;
+      document.getElementById('trashStatPayments').textContent = aud.payments_count;
+      document.getElementById('trashStatCollected').textContent = formatINR(aud.collected_amount);
+
+      document.getElementById('trashEffectMonths').textContent = aud.month_records_count;
+      document.getElementById('trashEffectPayments').textContent = aud.payments_count;
+      document.getElementById('trashEffectLifts').textContent = aud.lifts_count;
+      document.getElementById('trashEffectMembers').textContent = aud.members_count;
+
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function renderMarginMatrix(matrix) {
+    const tbody = document.getElementById('marginMatrixBody');
+    tbody.innerHTML = '';
+    matrix.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="py-2 font-bold">${row.month_label}</td>
+        <td class="py-2 text-right">${formatINR(row.collect)}</td>
+        <td class="py-2 text-right text-amber-700">${row.prize > 0 ? formatINR(row.prize) : '—'}</td>
+        <td class="py-2 text-right text-emerald-700 dark:text-emerald-400 font-bold">${formatINR(row.keep)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMembersTab(members, group) {
+    const container = document.getElementById('editGroupMembersContainer');
+    document.getElementById('membersTabCounterLabel').textContent = `${members.length} members · ${group.shares_assigned}/${group.shares_target} shares filled`;
+
+    const fixedBadge = document.getElementById('editFixedAmountBadge');
+    if (fixedBadge) {
+      fixedBadge.textContent = 'Fixed: ' + formatINR(group.fixed_installment_amount || 0) + '/mo';
+    }
+
+    const unfilled = Math.max(0, group.shares_target - group.shares_assigned);
+    const banner = document.getElementById('unfilledSeatsBanner');
+    if (banner) {
+      if (unfilled > 0) {
+        banner.classList.remove('hidden');
+        document.getElementById('unfilledSeatsBannerTitle').textContent = `${unfilled} Seat${unfilled > 1 ? 's' : ''} Still Open (${group.shares_assigned}/${group.shares_target} filled)`;
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    if (members.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">No members assigned to this group yet. Click "+ Add Member" above to enroll customers.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    members.forEach((m, idx) => {
+      const card = document.createElement('div');
+      card.className = 'cb-card card-shine p-4 border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface space-y-3';
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-2 py-0.5 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-extrabold text-[11px] tracking-tight">A/C #${m.account_number || m.ticket_number}</span>
+              ${m.customer_id ? `<span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold font-mono text-[11px]">#${m.customer_id}</span>` : ''}
+              <span class="font-extrabold text-xs text-slate-900 dark:text-slate-100">${m.full_name}</span>
+              <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${m.installment_type === 'fixed' ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' : 'bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">${m.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
+              ${m.has_lifted ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-400 text-[10px] font-bold">Lifted M${m.lifted_month_index}</span>` : ''}
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Pays ≈ ${formatINR(m.estimated_monthly_payment)}/mo · wins up to ${formatINR(m.max_win_amount)} · ${m.phone || 'No phone'}
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="removeMemberFromGroup('${m.membership_id}', '${m.full_name}')" class="text-slate-300 dark:text-slate-600 hover:text-rose-600 text-xs">
+              <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8]"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-chitDark-border">
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl p-1">
+            <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units - 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">-</button>
+            <span class="w-8 text-center text-xs font-extrabold">${m.share_units}x</span>
+            <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units + 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">+</button>
+          </div>
+
+          <button type="button" onclick="toggleJoiningSplits('${m.membership_id}')" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-slate-100 flex items-center gap-1">
+            <span>Joining & splits</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+          </button>
+        </div>
+
+        <!-- Joining & splits drawer matching ChitBase PDF Page 12 -->
+        <div id="splitsDrawer_${m.membership_id}" class="hidden p-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Account #</label>
+              <input type="text" value="${m.account_number || m.ticket_number}"
+                     onchange="updateMemberAccountNumber('${m.membership_id}', this.value)"
+                     class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-400">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Share Multiplier</label>
+              <select onchange="changeMemberShare('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
+                <option value="0.5" ${m.share_units === 0.5 ? 'selected' : ''}>0.5x</option>
+                <option value="1.0" ${m.share_units === 1.0 ? 'selected' : ''}>1x</option>
+                <option value="1.5" ${m.share_units === 1.5 ? 'selected' : ''}>1.5x</option>
+                <option value="2.0" ${m.share_units === 2.0 ? 'selected' : ''}>2x</option>
+                <option value="3.0" ${m.share_units === 3.0 ? 'selected' : ''}>3x</option>
+                <option value="5.0" ${m.share_units === 5.0 ? 'selected' : ''}>5x</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Joins from Month</label>
+              <select onchange="updateJoinsFrom('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
+                <option value="1" ${m.start_month_index === 1 ? 'selected' : ''}>Month 1</option>
+                <option value="2" ${m.start_month_index === 2 ? 'selected' : ''}>Month 2</option>
+                <option value="3" ${m.start_month_index === 3 ? 'selected' : ''}>Month 3</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Installment Plan</label>
+              <select onchange="updateMemberInstallmentType('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
+                <option value="incremental" ${m.installment_type !== 'fixed' ? 'selected' : ''}>Incremental</option>
+                <option value="fixed" ${m.installment_type === 'fixed' ? 'selected' : ''}>Fixed (${formatINR((group.fixed_installment_amount || 0) * (m.share_units || 1))}/mo)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-chitDark-border/60 text-[11px]">
+            <button type="button" onclick="transferSharePrompt('${m.membership_id}')" class="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-slate-100 font-semibold underline">
+              Transfer shares...
+            </button>
+            <button type="button" onclick="removeMemberFromGroup('${m.membership_id}', '${m.full_name}')" class="text-rose-600 font-semibold hover:underline">
+              Member leaves chit...
+            </button>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+
+  async function updateMemberAccountNumber(membershipId, newAcc) {
+    newAcc = String(newAcc || '').trim();
+    if (!newAcc) {
+      alert('Account number cannot be empty');
+      loadGroupDetails();
+      return;
+    }
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_account_number', membership_id: membershipId, account_number: newAcc })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Account number updated!');
+        loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to update account number');
+        loadGroupDetails();
+      }
+    } catch (e) {
+      alert('Error updating account number');
+      loadGroupDetails();
+    }
+  }
+
+  function toggleJoiningSplits(id) {
+    const drawer = document.getElementById(`splitsDrawer_${id}`);
+    drawer.classList.toggle('hidden');
+  }
+
+  async function changeMemberShare(membershipId, newShare) {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_share', membership_id: membershipId, share_units: parseFloat(newShare) })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Updated share multiplier!');
+        loadGroupDetails();
+      }
+    } catch (e) {
+      alert('Error updating shares');
+    }
+  }
+
+  async function updateJoinsFrom(membershipId, monthIdx) {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_share', membership_id: membershipId, start_month_index: parseInt(monthIdx) })
+      });
+      if (data.success) {
+        showToast('Updated start month for seat!');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function removeMemberFromGroup(membershipId, name) {
+    if (!confirm(`Remove ${name} from this chit scheme?`)) return;
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', membership_id: membershipId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Removed ${name} from chit`);
+        loadGroupDetails();
+      }
+    } catch (e) {
+      alert('Error removing member');
+    }
+  }
+
+  function transferSharePrompt(membershipId) {
+    const targetId = prompt('Enter Subscriber ID to transfer this ticket to:');
+    if (!targetId) return;
+    fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'transfer', membership_id: membershipId, target_member_id: targetId })
+    }).then(r => r.json()).then(d => {
+      if (d.success) {
+        showToast('Transferred ticket share!');
+        loadGroupDetails();
+      }
+    });
+  }
+
+  async function updateMemberInstallmentType(membershipId, instType) {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_installment_type', membership_id: membershipId, installment_type: instType })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Plan updated to ${instType === 'fixed' ? 'Fixed' : 'Incremental'}!`);
+        loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to update installment plan');
+        loadGroupDetails();
+      }
+    } catch (e) {
+      alert('Error updating installment plan');
+      loadGroupDetails();
+    }
+  }
+
+  async function bulkChangeInstallmentType(instType) {
+    const typeLabel = instType === 'fixed' ? 'FIXED' : 'INCREMENTAL';
+    if (!confirm(`Are you sure you want to set ALL members in this chit group to ${typeLabel} installment plan?`)) return;
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk_update_installment_type', installment_type: instType })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`All members updated to ${instType === 'fixed' ? 'Fixed' : 'Incremental'}!`);
+        loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to update members in bulk');
+      }
+    } catch (e) {
+      alert('Error updating members in bulk');
+    }
+  }
+
+  // Add Member Modal Logic
+  let allDirectoryCustomers = [];
+  let selectedCandidateId = null;
+
+  async function openAddMemberToGroupModal() {
+    const modal = document.getElementById('addMemberModal');
+    modal.classList.remove('hidden');
+    clearSelectedCustomer();
+    const searchInput = document.getElementById('editModalMemberSearch');
+    if (searchInput) searchInput.value = '';
+    
+    // Auto-suggest next sequential account number inside this group
+    const existingAccs = new Set((groupPayload?.members || []).map(m => String(m.account_number || '').trim()));
+    let nextAcc = 1;
+    while (existingAccs.has(String(nextAcc))) {
+      nextAcc++;
+    }
+    const accInput = document.getElementById('newMemberAccountNumber');
+    if (accInput) accInput.value = nextAcc;
+
+    const joinsSelect = document.getElementById('newMemberJoinsMonth');
+    joinsSelect.innerHTML = '';
+    const dur = groupPayload?.group?.duration_months || 20;
+    const curM = groupPayload?.group?.current_month_index || 1;
+    for (let i = 1; i <= dur; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Month ${i}${i === curM ? ' (Current)' : ''}`;
+      if (i === curM) opt.selected = true;
+      joinsSelect.appendChild(opt);
+    }
+
+    try {
+      const res = await fetch('/chit/api/members');
+      allDirectoryCustomers = await res.json();
+      filterEditModalMembers();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function closeAddMemberModal() {
+    document.getElementById('addMemberModal').classList.add('hidden');
+  }
+
+  function filterEditModalMembers() {
+    const q = (document.getElementById('editModalMemberSearch')?.value || '').trim().toLowerCase();
+    let list = allDirectoryCustomers;
+    if (q) {
+      list = allDirectoryCustomers.filter(m => 
+        (m.customer_id && m.customer_id.toLowerCase().includes(q)) ||
+        (m.name && m.name.toLowerCase().includes(q)) || 
+        (m.phone && m.phone.toLowerCase().includes(q))
+      );
+    }
+    renderEditModalCandidates(list);
+  }
+
+  function renderEditModalCandidates(members) {
+    const container = document.getElementById('editModalCandidateList');
+    const badge = document.getElementById('editModalCountBadge');
+    if (badge) badge.textContent = `${members.length} available`;
+    container.innerHTML = '';
+
+    if (members.length === 0) {
+      container.innerHTML = '<p class="text-[11px] text-slate-400 dark:text-slate-500 py-2 w-full text-center">No customers match your search.</p>';
+      return;
+    }
+
+    members.forEach(m => {
+      const isSelected = selectedCandidateId === m.id;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 ${
+        isSelected ? 'bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 shadow-sm' : 'bg-white dark:bg-chitDark-surface border-slate-200 dark:border-chitDark-border text-slate-700 dark:text-slate-300 hover:border-slate-400 hover:bg-slate-50 dark:bg-chitDark-bg'
+      }`;
+      btn.innerHTML = `
+        <i data-lucide="${isSelected ? 'check' : 'user'}" class="w-3.5 h-3.5 stroke-[1.8] opacity-70"></i>
+        ${m.customer_id ? `<span class="font-mono text-[10px] opacity-75 font-extrabold">#${m.customer_id}</span>` : ''}
+        <span>${m.name}</span>
+        ${m.phone && m.phone !== '—' ? `<span class="text-[10px] opacity-60 font-mono">(${m.phone.slice(-4)})</span>` : ''}
+      `;
+      btn.onclick = () => selectCandidate(m);
+      container.appendChild(btn);
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function selectCandidate(m) {
+    selectedCandidateId = m.id;
+    document.getElementById('selectedCustomerDisplay').classList.remove('hidden');
+    document.getElementById('selectedCustomerName').textContent = (m.customer_id ? `#${m.customer_id} · ` : '') + m.name;
+    document.getElementById('selectedCustomerPhone').textContent = m.phone ? `Phone: ${m.phone}` : 'No phone recorded';
+    filterEditModalMembers();
+  }
+
+  function clearSelectedCustomer() {
+    selectedCandidateId = null;
+    document.getElementById('selectedCustomerDisplay').classList.add('hidden');
+    filterEditModalMembers();
+  }
+
+  function toggleQuickNewCustomer() {
+    const f = document.getElementById('quickNewCustomerForm');
+    const c = document.getElementById('quickNewCustChevron');
+    f.classList.toggle('hidden');
+    c.classList.toggle('rotate-180');
+  }
+
+  async function submitAddMemberToGroup() {
+    const btn = document.getElementById('btnSubmitAddMember');
+    const newName = (document.getElementById('newCustName')?.value || '').trim();
+    const newPhone = (document.getElementById('newCustPhone')?.value || '').trim();
+    const accNumber = (document.getElementById('newMemberAccountNumber')?.value || '').trim();
+    const shareUnits = parseFloat(document.getElementById('newMemberShareUnits').value) || 1.0;
+    const joinsMonth = parseInt(document.getElementById('newMemberJoinsMonth').value) || 1;
+
+    if (!accNumber) {
+      alert('Please enter an Account Number for this subscriber.');
+      return;
+    }
+
+    if (!selectedCandidateId && !newName) {
+      alert('Please select a customer from the directory or enter a new customer name.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enrolling...';
+
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add',
+          member_id: selectedCandidateId,
+          account_number: accNumber,
+          new_member_name: newName,
+          new_member_phone: newPhone,
+          share_units: shareUnits,
+          start_month_index: joinsMonth,
+          installment_type: document.getElementById('newMemberInstallmentType')?.value || 'incremental'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Member enrolled successfully!');
+        closeAddMemberModal();
+        if (document.getElementById('newCustName')) document.getElementById('newCustName').value = '';
+        if (document.getElementById('newCustPhone')) document.getElementById('newCustPhone').value = '';
+        await loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to enroll member');
+      }
+    } catch (e) {
+      alert('Error enrolling member');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enroll in Chit';
+    }
+  }
+
+  function toggleMarginDropdown() {
+    const tbl = document.getElementById('marginExpandedTable');
+    const icon = document.getElementById('marginToggleIcon');
+    tbl.classList.toggle('hidden');
+    icon.classList.toggle('rotate-180');
+  }
+
+  function toggleAdvancedBox() {
+    const box = document.getElementById('advancedBoxContent');
+    const txt = document.getElementById('advToggleText');
+    const icon = document.getElementById('advToggleIcon');
+    box.classList.toggle('hidden');
+    if (box.classList.contains('hidden')) {
+      txt.textContent = 'ADVANCED Show';
+      icon.setAttribute('data-lucide', 'chevron-down');
+      if (window.lucide) lucide.createIcons({attrs: {class: 'w-3.5 h-3.5 stroke-[1.8]'}, nameAttr: 'data-lucide'});
+    } else {
+      txt.textContent = 'ADVANCED Hide';
+      icon.setAttribute('data-lucide', 'chevron-up');
+      if (window.lucide) lucide.createIcons({attrs: {class: 'w-3.5 h-3.5 stroke-[1.8]'}, nameAttr: 'data-lucide'});
+    }
+  }
+
+  async function handleSaveDetails(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnUpdateGroup');
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    let status = 'Active';
+    const radios = document.getElementsByName('editStatus');
+    for (const r of radios) {
+      if (r.checked) status = r.value;
+    }
+
+    const payload = {
+      name: document.getElementById('editChitName').value,
+      status: status,
+      start_month_year: document.getElementById('editStartMonth').value,
+      rules_notes: document.getElementById('editRulesNotes').value,
+      total_members: parseInt(document.getElementById('editMemberShares').value) || undefined,
+      duration_months: parseInt(document.getElementById('editDuration').value) || undefined
+    };
+
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Updated chit scheme parameters!');
+        loadGroupDetails();
+      }
+    } catch (e) {
+      alert('Error updating group');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Update Group';
+    }
+  }
+
+  // Trash Modals
+  function openTrashStep1Modal() {
+    document.getElementById('trashStep1Modal').classList.remove('hidden');
+    document.getElementById('trashStep2Modal').classList.add('hidden');
+  }
+
+  function openTrashStep2Modal() {
+    document.getElementById('trashStep1Modal').classList.add('hidden');
+    document.getElementById('trashStep2Modal').classList.remove('hidden');
+  }
+
+  function closeTrashModals() {
+    document.getElementById('trashStep1Modal').classList.add('hidden');
+    document.getElementById('trashStep2Modal').classList.add('hidden');
+  }
+
+  async function executeGroupTrash() {
+    const btn = document.getElementById('btnConfirmTrash');
+    btn.disabled = true;
+    btn.textContent = 'Moving to Trash...';
+
+    const reason = document.getElementById('trashAuditNote').value;
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/trash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (data.success) {
+        closeTrashModals();
+        showToast('Scheme moved to trash');
+        setTimeout(() => window.location.href = '/chit/groups', 800);
+      }
+    } catch (e) {
+      alert('Error trashing group');
+      btn.disabled = false;
+      btn.textContent = 'Move to Trash';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadGroupDetails();
+    if (window.location.hash === '#members') {
+      switchEditTab('members');
+    }
+  });
+
+  if (window.lucide) lucide.createIcons();
+</script>
+{% endblock %}

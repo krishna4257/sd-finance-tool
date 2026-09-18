@@ -670,6 +670,11 @@ app.config["SESSION_COOKIE_DOMAIN"] = None
 csrf = CSRFProtect(app)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
+# ChitBase Blueprint Registration
+from chit_controller import chit_bp
+csrf.exempt(chit_bp)
+app.register_blueprint(chit_bp)
+
 # Custom mobile rate limit key function
 def mobile_rate_limit_key():
     token = request.headers.get("X-Mobile-Token")
@@ -15549,5 +15554,6 @@ def app_download_action():
 # RUN APP
 # ----------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
+    debug_mode = os.environ.get("FLASK_DEBUG", "true").strip().lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=debug_mode)
 
