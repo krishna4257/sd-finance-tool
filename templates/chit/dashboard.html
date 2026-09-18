@@ -1,0 +1,2262 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Dashboard – Siva Durga Chit Fund{% endblock %}
+
+{% block extra_head %}
+<style>
+  .card-shadow {
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  }
+  .dark .card-shadow {
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.2);
+  }
+  .payment-mint-box {
+    background-color: #f0fdf4;
+    border: 1px solid #dcfce7;
+  }
+  .dark .payment-mint-box {
+    background-color: rgba(6, 78, 59, 0.2);
+    border: 1px solid rgba(6, 78, 59, 0.3);
+  }
+  .money-fig {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  @keyframes progressGlare {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+  }
+  .glare-animation {
+    position: relative;
+    overflow: hidden;
+  }
+  .glare-animation::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 45%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
+    animation: progressGlare 2.2s infinite linear;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-3xl mx-auto w-full space-y-5 pt-3 pb-20">
+
+  <!-- ==================== CELEBRATION / CLOSED MONTH STATEMENT OFFER CARD ==================== -->
+  <div id="closedMonthStatementOfferCard" class="hidden animate-in fade-in slide-in-from-top-2 duration-500 relative overflow-hidden rounded-3xl p-3.5 bg-slate-900 dark:bg-chitDark-elevated text-white border border-slate-800 dark:border-slate-700/60 shadow-xl dark:shadow-none">
+    <button type="button" onclick="dismissClosedMonthStatementOffer()" aria-label="Dismiss statement offer" class="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+    </button>
+    <div class="flex items-center gap-3.5 pr-6">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 border border-emerald-500/30">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check text-emerald-400"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-[14px] font-bold text-white dark:text-slate-100 leading-tight truncate" id="closedMonthBannerTitle">Chit Scheme — month closed</p>
+        <p class="mt-0.5 text-[11.5px] leading-snug text-slate-300 dark:text-slate-400">Share the full statement: collections, prize &amp; outstanding dues.</p>
+      </div>
+      <button type="button" onclick="shareClosedMonthStatementPDF()" class="shrink-0 rounded-full bg-emerald-500 px-3.5 py-2 text-[12px] font-bold text-white active:scale-95 transition-transform disabled:opacity-60 hover:bg-emerald-600">
+        Share PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== TOP CHIT SELECTOR TABS ==================== -->
+  <div class="flex items-center justify-center gap-2">
+    <button type="button" id="btnPrevChitGroup" onclick="navigateChitGroup(-1)" aria-label="Previous chit group"
+            class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0">
+      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
+    </button>
+
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full" id="chitSelectorContainer">
+      <!-- Rendered via JS -->
+    </div>
+
+    <button type="button" id="btnNextChitGroup" onclick="navigateChitGroup(1)" aria-label="Next chit group"
+            class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0">
+      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
+    </button>
+  </div>
+
+  <!-- ==================== FUTURE / PAST MONTH NOTICE BANNER ==================== -->
+  <div id="futureMonthBanner" class="hidden bg-sky-50/90 dark:bg-sky-950/40 border border-sky-200/90 dark:border-sky-800/50 rounded-2xl p-4 flex items-center justify-between shadow-xs dark:shadow-none transition-all duration-300">
+    <div class="flex items-center gap-3">
+      <div id="futureMonthIconBox" class="h-9 w-9 rounded-full bg-sky-100 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-700/60 text-sky-600 dark:text-sky-300 flex items-center justify-center text-sm shadow-2xs dark:shadow-none shrink-0">
+        <i data-lucide="clock" class="w-4 h-4 stroke-[1.8]"></i>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400" id="futureMonthTypeTag">FUTURE MONTH</p>
+        <p class="text-xs font-bold text-slate-800 dark:text-slate-100" id="futureMonthNoticeText">Nov 2026 · M2 Not opened yet</p>
+      </div>
+    </div>
+    <button type="button" onclick="goToCurrentMonth()" class="h-8 px-4 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-xs dark:shadow-none active:scale-95 shrink-0">
+      <i data-lucide="chevron-left" class="w-3.5 h-3.5 stroke-[1.8] text-[10px]"></i>
+      <span>Back to current</span>
+    </button>
+  </div>
+
+  <!-- ==================== DRAG REORDER HINT STRIP ==================== -->
+  <div id="dragHintBanner" class="hidden bg-slate-100/80 text-[11px] text-slate-500 dark:text-slate-400 font-medium px-4 py-2 rounded-full flex items-center justify-between border border-slate-200/60 dark:border-slate-700/50 shadow-xs dark:shadow-none transition-all duration-300">
+    <div class="flex items-center gap-2">
+      <i data-lucide="grip-vertical" class="w-3.5 h-3.5 stroke-[1.8] text-slate-400 dark:text-slate-400 text-xs"></i>
+      <span>Long-press a chit to drag and reorder</span>
+    </div>
+    <button type="button" onclick="dismissHintBanner()" class="text-slate-400 dark:text-slate-400 hover:text-slate-700 text-xs px-1">
+      <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+    </button>
+  </div>
+
+  <!-- ==================== MONTH TIMELINE SLIDER ==================== -->
+  <div class="flex items-center justify-center gap-2">
+    <button id="btnPrevMonth" onclick="navigateMonth(-1)" class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0">
+      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
+    </button>
+    
+    <div id="monthsPillsList" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full">
+      <!-- Rendered via JS -->
+    </div>
+
+    <button id="btnNextMonth" onclick="navigateMonth(1)" class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors text-xs shrink-0">
+      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
+    </button>
+  </div>
+
+  <!-- ==================== CARD 1: COLLECTION PROGRESS ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-emerald border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-6">
+    
+    <!-- Header row inside card -->
+    <div class="flex items-center justify-between">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+        COLLECTION PROGRESS
+      </p>
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-xs font-medium text-slate-400 dark:text-slate-400" id="clockDisplay">08:09 PM</span>
+
+        <button type="button" onclick="handleMarkAllPaid()" class="border border-emerald-400 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full hover:bg-emerald-50 transition-colors shadow-xs dark:shadow-none">
+          Mark all paid
+        </button>
+
+        <button type="button" onclick="handleCloseMonthCycle()" class="border border-slate-300 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 text-xs font-bold px-3.5 py-1 rounded-full hover:bg-slate-50 dark:hover:bg-white/[0.05] transition-colors shadow-xs dark:shadow-none">
+          Close month
+        </button>
+      </div>
+    </div>
+
+    <!-- Numbers row: Collected & Fraction -->
+    <div class="flex items-baseline justify-between pt-1">
+      <div>
+        <div class="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100 money-fig tracking-tight" id="totalCollectedDisplay">
+          ₹0
+        </div>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 mt-1">COLLECTED</p>
+      </div>
+
+      <div class="text-right">
+        <div class="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 money-fig tracking-tight">
+          <span class="text-emerald-600" id="paidCountDisplay">0</span><span class="text-slate-300 dark:text-slate-500">/</span><span id="totalMembersCountDisplay">5</span>
+        </div>
+        <p class="text-[11px] font-medium text-slate-400 dark:text-slate-400 mt-1" id="unpaidSubtext">
+          0 partial · 0 unpaid
+        </p>
+      </div>
+    </div>
+
+    <!-- Target & Pending figures -->
+    <div class="flex items-center gap-10 text-xs pt-1">
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-0.5">TARGET</p>
+        <p class="font-extrabold text-slate-900 dark:text-slate-100 money-fig text-sm" id="targetAmountDisplay">₹0</p>
+      </div>
+
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-0.5">PENDING</p>
+        <p class="font-extrabold text-rose-600 money-fig text-sm" id="pendingAmountDisplay">₹0</p>
+      </div>
+    </div>
+
+    <!-- Tri-color Gauge -->
+    <div class="space-y-2">
+      <div class="h-2.5 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full flex overflow-hidden">
+        <div id="gaugePaidBar" class="bg-emerald-500 h-full transition-all duration-500" style="width: 0%;"></div>
+        <div id="gaugePartialBar" class="bg-gradient-to-r from-amber-400 to-amber-500 h-full transition-all duration-500" style="width: 0%;"></div>
+      </div>
+      
+      <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium pt-0.5">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> Paid</span>
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-400"></span> Partial</span>
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-slate-300"></span> Unpaid</span>
+        </div>
+        <div class="flex items-center gap-2 font-semibold text-slate-500 dark:text-slate-400">
+          <span id="daysLeftDisplay">16d left</span>
+          <span id="pctDisplay">0%</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== CARD 2: YET TO PAY SUBSCRIBERS ==================== -->
+  <div id="yetToPayCard" class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-amber border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-5">
+    
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100 leading-tight">
+          <span id="yetToPayTitle">5 yet to pay</span>
+        </h3>
+        <p class="text-xs text-slate-400 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-2">
+          <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span> <span id="partialCountSub">1 partial</span></span>
+          <span>·</span>
+          <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-slate-300"></span> <span id="neverPaidCountSub">4 never paid</span></span>
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button type="button" id="defaultedFilterBtn" onclick="toggleDefaultedFilter()" class="border border-rose-300 dark:border-rose-800/60 bg-rose-50/80 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-all flex items-center gap-1.5 shadow-xs dark:shadow-none" title="Filter defaulted subscribers">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          </span>
+          <span>Defaulted</span>
+          <span id="defaultedBadgeCount" class="ml-0.5 px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black">0</span>
+        </button>
+
+        <button type="button" onclick="sendBulkReminders()" class="border border-emerald-400 text-emerald-700 text-xs font-bold px-3.5 py-1.5 rounded-full hover:bg-emerald-50 transition-colors flex items-center gap-1.5 shadow-xs dark:shadow-none">
+          <i data-lucide="message-circle" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+          <span>Remind All</span>
+        </button>
+
+        <button type="button" onclick="toggleSelectMode()" class="border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 text-xs font-bold px-4 py-1.5 rounded-full hover:bg-slate-50 dark:hover:bg-white/[0.05] transition-colors shadow-xs dark:shadow-none">
+          Select
+        </button>
+      </div>
+    </div>
+
+    <!-- Search input & Amount sort -->
+    <div class="relative flex items-center">
+      <input type="text" id="pendingSearchInput" oninput="filterPendingMembers()" placeholder="Search pending..." 
+             class="w-full h-11 pl-4 pr-24 bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 text-xs placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300 transition-all shadow-xs dark:shadow-none">
+      <button type="button" onclick="toggleAmountSort()" class="absolute right-2 px-2.5 py-1 bg-slate-50 dark:bg-chitDark-elevated hover:bg-slate-100 dark:hover:bg-white/[0.05] border border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors">
+        <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 stroke-[1.8] text-[10px]"></i>
+        <span>Amount</span>
+      </button>
+    </div>
+
+    <!-- Member Rows -->
+    <div id="pendingMembersContainer" class="divide-y divide-slate-100">
+      <!-- Rendered via JS -->
+    </div>
+
+  </div>
+
+  <!-- ==================== CARD 2B: CELEBRATION CARD (ALL MEMBERS PAID) ==================== -->
+  <div id="celebrationCard" class="hidden bg-emerald-50/40 dark:bg-emerald-950/25 border border-emerald-200/90 dark:border-emerald-800/50 rounded-[28px] p-8 text-center space-y-4 card-shadow animate-in fade-in zoom-in-95 duration-200">
+    <div class="h-12 w-12 rounded-full bg-emerald-600 text-white mx-auto flex items-center justify-center text-lg shadow-sm dark:shadow-none">
+      <i data-lucide="check" class="w-4 h-4 stroke-[1.8]"></i>
+    </div>
+    <div class="space-y-1">
+      <h4 class="text-base font-extrabold text-slate-900 dark:text-slate-100" id="celebrationTitle">All 10 members paid</h4>
+      <p class="text-base font-extrabold text-emerald-700 dark:text-emerald-400 money-fig" id="celebrationAmount">₹3,75,000 collected</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Collections cleared. All installments received for this month.</p>
+    </div>
+    <div class="pt-1">
+      <button type="button" onclick="toggleShowPaidCelebration()" class="text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1.5 transition-colors py-1.5 px-4 rounded-full bg-white dark:bg-chitDark-surface border border-emerald-200/80 dark:border-emerald-800/50 shadow-2xs dark:shadow-none hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
+        <i data-lucide="check-circle" class="w-4 h-4 stroke-[1.8] text-emerald-600 dark:text-emerald-400"></i>
+        <span id="togglePaidText">Show paid (10) ∨</span>
+      </button>
+    </div>
+    <div id="celebrationPaidMembersList" class="hidden mt-4 pt-4 border-t border-emerald-200/60 dark:border-emerald-800/40 text-left space-y-2 divide-y divide-emerald-100/60 dark:divide-emerald-900/30 max-h-64 overflow-y-auto">
+      <!-- Injected via JS -->
+    </div>
+  </div>
+
+  <!-- ==================== CARD 3: COLLECTIONS CHART ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-blue border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-5">
+    
+    <div class="flex items-center justify-between">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+        COLLECTIONS
+      </p>
+
+      <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
+        <span class="flex items-center gap-1.5 text-emerald-600">
+          <span class="h-2 w-2 rounded-full bg-emerald-500"></span> COLLECTED
+        </span>
+        <span class="flex items-center gap-1.5 text-amber-500">
+          <span class="h-2 w-2 rounded-full bg-amber-400"></span> PENDING
+        </span>
+      </div>
+    </div>
+
+    <!-- Dynamic SVG Trend Line Chart -->
+    <div class="pt-2">
+      <div class="relative w-full h-32" id="chartContainer">
+        <svg id="trendSvg" class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 500 120">
+          <!-- Rendered via JS -->
+        </svg>
+      </div>
+
+      <!-- X-axis Month Labels -->
+      <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-400 font-semibold pt-3 px-1" id="chartMonthLabels">
+        <span>APR '26</span>
+        <span>MAY '26</span>
+        <span>JUN '26</span>
+        <span>JUL '26</span>
+        <span>AUG '26</span>
+        <span class="text-slate-700 dark:text-slate-300 font-bold">SEP '26</span>
+      </div>
+    </div>
+
+    <!-- This Month - Per Chit Breakdown -->
+    <div class="pt-3 border-t border-slate-100 dark:border-slate-700/50 space-y-3">
+      <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+        THIS MONTH · PER CHIT
+      </p>
+      <div id="perChitContainer" class="space-y-3">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== CARD 4: PAYMENTS SECTION ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-violet border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-4">
+    
+    <!-- Centered Collapsible Header -->
+    <div class="flex items-center justify-center cursor-pointer py-1 select-none" onclick="togglePaymentsCard()">
+      <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors">
+        <span class="text-xs font-bold uppercase tracking-wider" id="paymentsHeaderTitle">
+          PAYMENTS 0 members
+        </span>
+        <i data-lucide="chevron-up" class="w-3.5 h-3.5 stroke-[1.8] text-xs transition-transform"></i>
+      </div>
+    </div>
+
+    <!-- Payments Container by Member -->
+    <div id="paymentsListContainer" class="space-y-5 divide-y divide-slate-100 pt-2">
+      <!-- Rendered via JS -->
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ==================== RECORD / EDIT PAYMENT MODAL ==================== -->
+<div id="paymentModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl lg:max-w-2xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl dark:shadow-none border border-slate-100 dark:border-slate-700/50 animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+    
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/50 shrink-0">
+      <div>
+        <h3 class="text-xl font-extrabold text-slate-900 dark:text-slate-100" id="modalActionTitle">Edit payment</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-400 font-medium" id="modalMemberSubheader">Member Name</p>
+      </div>
+      <button type="button" onclick="closePaymentModal()" class="h-8 w-8 rounded-full border border-slate-200 dark:border-slate-700/50 flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+      </button>
+    </div>
+
+    <!-- Scrollable Body -->
+    <div class="px-6 py-4 space-y-5 overflow-y-auto flex-1">
+
+      <!-- Subscriber badge row -->
+      <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-chitDark-elevated rounded-2xl border border-slate-100 dark:border-slate-700/50">
+        <div id="modalMemberAvatar" class="h-9 w-9 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center text-sm shrink-0">
+          A
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate" id="modalMemberFullName">Aaa</p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-400 truncate" id="modalChitDetailsText">Chit 1 - ₹5L · 20M · 20 Months · 2026-09</p>
+        </div>
+      </div>
+
+      <form id="paymentForm" onsubmit="handlePaymentSubmit(event)" class="space-y-5">
+        <input type="hidden" id="modalPaymentId">
+        <input type="hidden" id="modalInstallmentId">
+        <input type="hidden" id="modalMembershipId">
+        <input type="hidden" id="modalFullDueAmount">
+
+        <!-- AMOUNT SECTION -->
+        <div class="text-center space-y-2">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-400">AMOUNT</p>
+          
+          <div class="flex items-center justify-center gap-1">
+            <span class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">₹</span>
+            <input type="number" step="0.01" id="modalAmountInput" required
+                   class="w-48 text-center text-3xl md:text-4xl font-black text-slate-900 dark:text-slate-100 money-fig bg-transparent border-b-2 border-transparent focus:border-slate-300 focus:outline-none transition-colors">
+          </div>
+
+          <div class="flex items-center justify-center gap-2 pt-1">
+            <button type="button" onclick="clearModalAmount()" class="border border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] text-xs font-semibold px-4 py-1 rounded-full shadow-2xs dark:shadow-none transition-colors">
+              Clear
+            </button>
+          </div>
+
+          <!-- Quick fraction chips -->
+          <div class="flex items-center justify-center gap-2 pt-1" id="modalFractionChips">
+            <!-- Rendered via JS -->
+          </div>
+        </div>
+
+        <!-- METHOD SECTION -->
+        <div class="space-y-2">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-400">METHOD</p>
+          
+          <div class="grid grid-cols-4 gap-2">
+            <button type="button" onclick="selectPaymentMethod('Cash')" id="methodBtnCash" 
+                    class="method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-slate-900 dark:bg-slate-100 text-white border-slate-900 dark:border-slate-700/50 shadow-xs dark:shadow-none">
+              <i data-lucide="banknote" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+              <span>Cash</span>
+            </button>
+
+            <button type="button" onclick="selectPaymentMethod('UPI')" id="methodBtnUPI" 
+                    class="method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
+              <i data-lucide="smartphone" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+              <span>UPI</span>
+            </button>
+
+            <button type="button" onclick="selectPaymentMethod('Bank')" id="methodBtnBank" 
+                    class="method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
+              <i data-lucide="landmark" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+              <span>Bank</span>
+            </button>
+
+            <button type="button" onclick="selectPaymentMethod('Cheque')" id="methodBtnCheque" 
+                    class="method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
+              <i data-lucide="banknote" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+              <span>Cheque</span>
+            </button>
+          </div>
+          <input type="hidden" id="selectedPaymentMethod" value="Cash">
+        </div>
+
+        <!-- DATE SECTION -->
+        <div class="space-y-2">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-400">DATE</p>
+          
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="selectPaymentDateOption('Today')" id="dateBtnToday" 
+                    class="date-btn py-2.5 rounded-2xl text-xs font-semibold border transition-all bg-slate-900 text-white border-slate-900 dark:bg-slate-800 dark:text-white dark:border-slate-600 shadow-xs flex items-center justify-center gap-1.5">
+              <span>Today</span>
+            </button>
+
+            <button type="button" onclick="selectPaymentDateOption('Yesterday')" id="dateBtnYesterday" 
+                    class="date-btn py-2.5 rounded-2xl text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] flex items-center justify-center gap-1.5">
+              <span>Yesterday</span>
+            </button>
+
+            <button type="button" onclick="selectPaymentDateOption('Custom')" id="dateBtnCustom" 
+                    class="date-btn py-2.5 rounded-2xl text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] flex items-center justify-center gap-1.5">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 stroke-[1.8] text-[11px]"></i>
+              <span>Custom</span>
+            </button>
+          </div>
+
+          <input type="date" id="customDateInput" class="hidden w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-medium focus:outline-none focus:border-slate-400 mt-2">
+        </div>
+
+        <!-- NOTE (OPTIONAL) -->
+        <div>
+          <input type="text" id="modalNoteInput" placeholder="Note (optional)" 
+                 class="w-full h-11 px-4 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-2xl text-xs placeholder:text-slate-400 focus:outline-none focus:border-slate-400 transition-colors">
+        </div>
+
+        <!-- ATTACH RECEIPT PHOTO -->
+        <div>
+          <label for="receiptFileInput" class="border-2 border-dashed border-slate-200 dark:border-slate-700/50 hover:border-slate-300 rounded-2xl py-3 px-4 w-full flex items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.05] cursor-pointer transition-colors">
+            <i data-lucide="paperclip" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-400"></i>
+            <span id="receiptAttachmentLabel">Attach receipt photo</span>
+          </label>
+          <input type="file" id="receiptFileInput" accept="image/*" class="hidden" onchange="handleReceiptFileSelected(event)">
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Pinned Footer Action Button -->
+    <div class="border-t border-slate-100 dark:border-slate-700/50 bg-white/95 dark:bg-chitDark-surface/95 px-6 py-3.5 shrink-0 rounded-b-3xl">
+      <button type="submit" form="paymentForm" id="btnSubmitPayment" 
+              class="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md dark:shadow-none shadow-emerald-700/20 active:scale-[0.99] transition-all">
+        <i data-lucide="check" id="modalSubmitBtnIcon" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+        <span id="modalSubmitBtnText">Record payment</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RECORD LIFT / PRIZE DISBURSE MODAL ==================== -->
+<div id="liftModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl dark:shadow-none border border-slate-100 dark:border-slate-700/50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/50 shrink-0">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Chit Payout / Disburse</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-400" id="liftModalSub">Month Payout</p>
+      </div>
+      <button onclick="closeLiftModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.05]">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8] text-sm"></i>
+      </button>
+    </div>
+
+    <form id="liftForm" onsubmit="handleLiftSubmit(event)" class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+      <div class="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700/50 rounded-2xl p-4">
+        <div class="flex justify-between text-xs font-semibold text-amber-900 dark:text-amber-200">
+          <span>Net Payout Amount:</span>
+          <span class="font-extrabold money-fig text-sm text-amber-950 dark:text-amber-100" id="liftModalAmt">₹0</span>
+        </div>
+        <div class="flex justify-between text-xs text-amber-700/80 dark:text-amber-400 mt-1">
+          <span>Chit Loss:</span>
+          <span class="money-fig font-medium" id="liftModalLoss">₹0</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Subscriber who took chit</label>
+        <select id="liftMemberSelect" required class="w-full h-11 px-3 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+          <option value="">Loading subscribers...</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Payout Date</label>
+        <input type="date" id="liftDateInput" required class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Notes / NEFT / Cheque #</label>
+        <input type="text" id="liftNotesInput" placeholder="e.g. Disbursed via Bank Transfer" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs">
+      </div>
+
+      <div class="pt-2">
+        <button type="submit" id="btnSubmitLift" class="w-full h-12 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md dark:shadow-none shadow-amber-700/20 dark:shadow-none active:scale-[0.99] transition-transform">
+          Confirm Chit Payout
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: CLOSE MONTH (CHITBASE REPLICA) ==================== -->
+<div id="closeMonthModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative w-full max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] my-auto flex flex-col overflow-hidden rounded-3xl outline-none bg-white dark:bg-chitDark-surface border border-slate-200/80 dark:border-slate-700/50 shadow-2xl dark:shadow-none animate-in fade-in zoom-in-95 duration-150">
+    
+    <!-- Sticky Header -->
+    <div class="sticky top-0 z-20 border-b border-slate-100 dark:border-slate-700/50 bg-white/95 dark:bg-chitDark-surface/95 px-5 py-3.5 backdrop-blur-xl shrink-0">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100 sm:text-xl">Close Month</h2>
+          <p class="line-clamp-2 text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5" id="closeMonthModalSubtitle">Sep 2026 M1</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeCloseMonthModal()" aria-label="Close" class="touch-feedback inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 shadow-xs dark:shadow-none transition-all hover:bg-slate-50 dark:hover:bg-white/[0.05] active:scale-95 focus:outline-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scrollable Body -->
+    <div class="app-scroll min-h-0 flex-1 overflow-y-auto overflow-x-clip p-4 sm:p-5 space-y-3.5">
+      
+      <!-- Almost There Banner (amber) -->
+      <div id="closeMonthAlmostThereBanner" class="relative overflow-hidden rounded-[24px] border px-4 py-3.5 border-amber-200/90 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-950/40">
+        <div class="relative flex items-start gap-3">
+          <div class="relative flex h-10 w-10 shrink-0 items-center justify-center">
+            <span class="relative flex h-9 w-9 items-center justify-center rounded-full bg-amber-500 text-white shadow-xs dark:shadow-none">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16.5 12"></polyline></svg>
+            </span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] bg-white/90 dark:bg-slate-900/90 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200/80 dark:ring-amber-700/60">Almost there</span>
+            </div>
+            <p class="mt-1 text-[15px] font-semibold tracking-tight text-slate-950 dark:text-slate-100">A couple of checks still need attention.</p>
+            <p class="mt-0.5 text-[11.5px] leading-relaxed text-slate-600 dark:text-slate-300">Closing this month locks the current cycle and opens the next month automatically.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics 2-Col Grid -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface px-3.5 py-2.5 shadow-xs dark:shadow-none">
+          <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-400">Collected</p>
+          <p class="mt-1 text-[15px] font-bold money-fig tracking-tight text-slate-950 dark:text-slate-100" id="closeMonthCollectedStat">₹0</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface px-3.5 py-2.5 shadow-xs dark:shadow-none">
+          <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-400">Members</p>
+          <p class="mt-1 text-[15px] font-bold money-fig tracking-tight text-slate-950 dark:text-slate-100" id="closeMonthMembersStat">0/0</p>
+        </div>
+      </div>
+
+      <!-- Conditional Checks Container -->
+      <div class="space-y-2.5" id="closeMonthChecksContainer">
+        <!-- Rendered via JS: Payout and Collections check boxes -->
+      </div>
+
+    </div>
+
+    <!-- Pinned Footer Action Buttons -->
+    <div class="border-t border-slate-100 dark:border-slate-700/50 bg-white/95 dark:bg-chitDark-surface/95 px-5 py-3.5 shrink-0 rounded-b-3xl">
+      <div class="grid grid-cols-2 gap-2.5">
+        <button type="button" onclick="closeCloseMonthModal()" class="inline-flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface hover:bg-slate-50 dark:hover:bg-white/[0.05] active:scale-[0.99] transition-all rounded-2xl h-11">
+          Cancel
+        </button>
+        <button type="button" id="closeMonthSubmitBtn" onclick="executeCloseMonth()" disabled class="inline-flex items-center justify-center gap-2 px-3 py-3 text-xs font-bold text-slate-400 dark:text-slate-500 transition-all duration-200 rounded-2xl h-11 bg-slate-200 dark:bg-slate-800/80 border border-transparent dark:border-slate-700/50 cursor-not-allowed">
+          Tick the box above to proceed
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let activeChitId = '';
+  let activeMonthIndex = 1;
+  let allChits = [];
+  let allMonths = [];
+  let currentDuesData = null;
+  let currentPaymentsData = [];
+  let sortDescending = true;
+  let paymentsCollapsed = false;
+  let expandedMemberIds = new Set();
+  let paymentsExpandedInitialized = false;
+  let selectedDateType = 'Today';
+  let selectedMethod = 'Cash';
+  let longPressTimer = null;
+  let didLongPress = false;
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function formatMonthYear(myStr) {
+    if (!myStr) return '';
+    try {
+      const parts = myStr.split('-');
+      if (parts.length >= 2) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+        return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      }
+      return myStr;
+    } catch (e) {
+      return myStr;
+    }
+  }
+
+  function getAvatarColor(idxOrKey) {
+    const colors = [
+      'bg-sky-500/15 text-sky-800 border-sky-300 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-600/60',
+      'bg-rose-500/15 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-600/60',
+      'bg-emerald-500/15 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-600/60',
+      'bg-amber-500/15 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-600/60',
+      'bg-purple-500/15 text-purple-800 border-purple-300 dark:bg-purple-950/70 dark:text-purple-300 dark:border-purple-600/60',
+      'bg-indigo-500/15 text-indigo-800 border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-600/60'
+    ];
+    let num = parseInt(idxOrKey, 10);
+    if (isNaN(num)) num = typeof idxOrKey === 'number' ? idxOrKey : 0;
+    else num = Math.max(0, num - 1);
+    return colors[num % colors.length];
+  }
+
+  function formatAcBadge(accountNumber, ticketNumber, fallback) {
+    let raw = (accountNumber !== undefined && accountNumber !== null && String(accountNumber).trim() !== '')
+      ? String(accountNumber).trim()
+      : (ticketNumber !== undefined && ticketNumber !== null && String(ticketNumber).trim() !== '' ? String(ticketNumber).trim() : '');
+    if (!raw) return String(fallback !== undefined ? fallback : '1');
+    const cleaned = raw.replace(/^(a\/?c|acc|account|no|#|\s)+/i, '').replace(/^[#:\-\s]+/, '').trim();
+    return cleaned || String(fallback !== undefined ? fallback : '1');
+  }
+
+  function startLongPress() {
+    didLongPress = false;
+    longPressTimer = setTimeout(() => {
+      didLongPress = true;
+      const banner = document.getElementById('dragHintBanner');
+      if (banner) banner.classList.remove('hidden');
+    }, 3000);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  // 1. Initial Load
+  document.addEventListener('DOMContentLoaded', async () => {
+    updateClock();
+    setInterval(updateClock, 1000);
+    await loadChitGroups();
+  });
+
+  function updateClock() {
+    const now = new Date();
+    const str = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const clockEl = document.getElementById('clockDisplay');
+    if (clockEl) clockEl.textContent = str;
+  }
+
+  function dismissHintBanner() {
+    document.getElementById('dragHintBanner').classList.add('hidden');
+  }
+
+  function sortChitsBySavedOrder(groups) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('sd_finance_chit_order') || '[]');
+      if (Array.isArray(saved) && saved.length > 0) {
+        groups.sort((a, b) => {
+          const idxA = saved.indexOf(a.id);
+          const idxB = saved.indexOf(b.id);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+      }
+    } catch (e) {}
+    return groups;
+  }
+
+  function navigateChitGroup(delta) {
+    if (!allChits || allChits.length === 0) return;
+    let currentIdx = allChits.findIndex(g => g.id === activeChitId);
+    let nextIdx = 0;
+    if (activeChitId === 'all') {
+      nextIdx = delta > 0 ? 0 : allChits.length - 1;
+    } else if (currentIdx !== -1) {
+      nextIdx = currentIdx + delta;
+    }
+    if (nextIdx >= 0 && nextIdx < allChits.length) {
+      selectChitGroup(allChits[nextIdx].id);
+    }
+  }
+
+  // 2. Load Chit Groups
+  async function loadChitGroups() {
+    try {
+      const res = await fetch('/chit/api/chitgroups');
+      const data = await res.json();
+      allChits = data.groups || (Array.isArray(data) ? data : []);
+      allChits = sortChitsBySavedOrder(allChits);
+      renderChitSelectorTabs(allChits);
+      if (window.lucide) { lucide.createIcons(); }
+      if (allChits.length > 0) {
+        selectChitGroup(allChits[0].id);
+      }
+    } catch (e) {
+      console.error('Error loading chit groups:', e);
+    }
+  }
+
+  let chitDragSrcIdx = null;
+
+  function renderChitSelectorTabs(groups) {
+    const container = document.getElementById('chitSelectorContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (window.lucide) { lucide.createIcons(); }
+
+    // "All" pill button
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    const isAll = activeChitId === 'all';
+    allBtn.className = `px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all shadow-xs select-none ${
+      isAll 
+        ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-white dark:border dark:border-slate-600 font-bold active-group-pill' 
+        : 'bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-chitDark-elevated dark:hover:text-slate-200'
+    }`;
+    allBtn.textContent = 'All';
+    allBtn.onclick = () => selectChitGroup('all');
+    container.appendChild(allBtn);
+
+    let activeGroupBtn = isAll ? allBtn : null;
+
+    // Chit Scheme pills
+    groups.forEach((g, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.draggable = true;
+      const isActive = g.id === activeChitId;
+      btn.className = `px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 flex items-center gap-2 transition-all shadow-xs select-none cursor-grab active:cursor-grabbing ${
+        isActive 
+          ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-white dark:border dark:border-slate-600 font-bold active-group-pill' 
+          : 'bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-chitDark-elevated dark:hover:text-slate-200'
+      }`;
+      btn.innerHTML = `
+        <span class="h-2 w-2 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-emerald-500'}"></span>
+        <span>${g.name}</span>
+      `;
+
+      let lpTimer = null;
+      let isHoldDrag = false;
+
+      const onHoldStart = () => {
+        isHoldDrag = false;
+        lpTimer = setTimeout(() => {
+          isHoldDrag = true;
+          btn.classList.add('scale-105', 'ring-2', 'ring-emerald-400');
+          showToast('Slide left or right to reorder chit groups');
+        }, 1000);
+      };
+
+      const onHoldEnd = () => {
+        if (lpTimer) clearTimeout(lpTimer);
+      };
+
+      btn.addEventListener('mousedown', onHoldStart);
+      btn.addEventListener('mouseup', onHoldEnd);
+      btn.addEventListener('mouseleave', onHoldEnd);
+      btn.addEventListener('touchstart', onHoldStart, { passive: true });
+      btn.addEventListener('touchend', onHoldEnd);
+      btn.addEventListener('touchcancel', onHoldEnd);
+
+      btn.ondragstart = (e) => {
+        chitDragSrcIdx = idx;
+        e.dataTransfer.effectAllowed = 'move';
+        btn.classList.add('opacity-40');
+      };
+
+      btn.ondragover = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      };
+
+      btn.ondrop = (e) => {
+        e.preventDefault();
+        if (chitDragSrcIdx !== null && chitDragSrcIdx !== idx) {
+          const movedItem = allChits.splice(chitDragSrcIdx, 1)[0];
+          allChits.splice(idx, 0, movedItem);
+          localStorage.setItem('sd_finance_chit_order', JSON.stringify(allChits.map(x => x.id)));
+          renderChitSelectorTabs(allChits);
+        }
+      };
+
+      btn.ondragend = () => {
+        btn.classList.remove('opacity-40', 'scale-105', 'ring-2', 'ring-emerald-400');
+        chitDragSrcIdx = null;
+      };
+
+      btn.onclick = () => {
+        if (isHoldDrag) {
+          isHoldDrag = false;
+          return;
+        }
+        selectChitGroup(g.id);
+      };
+
+      container.appendChild(btn);
+      if (window.lucide) { lucide.createIcons(); }
+      if (isActive) activeGroupBtn = btn;
+    });
+
+    if (activeGroupBtn) {
+      setTimeout(() => {
+        activeGroupBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 50);
+    }
+  }
+
+  async function selectChitGroup(chitId) {
+    activeChitId = chitId;
+    paymentsExpandedInitialized = false;
+    renderChitSelectorTabs(allChits);
+    if (window.lucide) { lucide.createIcons(); }
+
+    let targetChit = allChits.find(g => g.id === chitId);
+    if (!targetChit && allChits.length > 0) {
+      targetChit = allChits[0];
+    }
+
+    if (targetChit) {
+      activeMonthIndex = targetChit.current_month_index || 1;
+      await loadMonthsForChit(targetChit.id);
+    }
+  }
+
+  // 3. Load Month Timeline
+  async function loadMonthsForChit(chitId) {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${chitId}/months`);
+      const months = await res.json();
+      allMonths = months;
+      renderMonthPills(months);
+    if (window.lucide) { lucide.createIcons(); }
+      await loadDashboardData(activeChitId, activeMonthIndex);
+    } catch (e) {
+      console.error('Error loading months:', e);
+    }
+  }
+
+  function renderMonthPills(months) {
+    const container = document.getElementById('monthsPillsList');
+    container.innerHTML = '';
+        if (window.lucide) { lucide.createIcons(); }
+
+    let activeBtn = null;
+    months.forEach(m => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = m.month_index === activeMonthIndex;
+      btn.className = `px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5 shadow-xs ${
+        isActive 
+          ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-white dark:border dark:border-slate-600 font-bold active-month-pill' 
+          : 'bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-chitDark-elevated dark:hover:text-slate-200'
+      }`;
+      btn.innerHTML = `
+        ${isActive ? '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>' : ''}
+        <span>${m.month_label}</span>
+      `;
+        if (window.lucide) { lucide.createIcons(); }
+      btn.onclick = () => {
+        activeMonthIndex = m.month_index;
+        paymentsExpandedInitialized = false;
+        renderMonthPills(allMonths);
+        loadDashboardData(activeChitId, activeMonthIndex);
+      };
+      container.appendChild(btn);
+      if (window.lucide) { lucide.createIcons(); }
+      if (isActive) activeBtn = btn;
+    });
+
+    if (activeBtn) {
+      setTimeout(() => {
+        activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 50);
+    }
+  }
+
+  function navigateMonth(delta) {
+    const nextIdx = activeMonthIndex + delta;
+    if (nextIdx >= 1 && nextIdx <= allMonths.length) {
+      activeMonthIndex = nextIdx;
+      paymentsExpandedInitialized = false;
+      renderMonthPills(allMonths);
+      loadDashboardData(activeChitId, activeMonthIndex);
+    }
+  }
+
+  function updateFutureMonthBanner(monthIndex) {
+    const banner = document.getElementById('futureMonthBanner');
+    if (!banner) return;
+    
+    let target = activeChitId === 'all' ? allChits[0] : allChits.find(g => g.id === activeChitId);
+    let curMonth = (target ? target.current_month_index : 1) || 1;
+    let mObj = allMonths.find(m => m.month_index === monthIndex);
+    let mLabel = mObj ? mObj.month_label : `Month ${monthIndex}`;
+
+    const iconBox = document.getElementById('futureMonthIconBox');
+    const typeTag = document.getElementById('futureMonthTypeTag');
+    const noticeText = document.getElementById('futureMonthNoticeText');
+
+    if (monthIndex > curMonth) {
+      banner.classList.remove('hidden');
+      banner.className = 'bg-sky-50/90 dark:bg-sky-950/40 border border-sky-200/90 dark:border-sky-800/50 rounded-2xl p-4 flex items-center justify-between shadow-xs dark:shadow-none transition-all duration-300';
+      if (iconBox) {
+        iconBox.className = 'h-9 w-9 rounded-full bg-sky-100 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-700/60 text-sky-600 dark:text-sky-300 flex items-center justify-center text-sm shadow-2xs dark:shadow-none shrink-0';
+      }
+      if (typeTag) {
+        typeTag.textContent = 'FUTURE MONTH';
+        typeTag.className = 'text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400';
+      }
+      if (noticeText) {
+        noticeText.textContent = `${mLabel} · M${monthIndex} Not opened yet`;
+        noticeText.className = 'text-xs font-bold text-slate-800 dark:text-slate-100';
+      }
+    } else if (monthIndex < curMonth) {
+      banner.classList.remove('hidden');
+      banner.className = 'bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/50 rounded-2xl p-4 flex items-center justify-between shadow-xs dark:shadow-none transition-all duration-300';
+      if (iconBox) {
+        iconBox.className = 'h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 border border-amber-200 dark:border-amber-700/60 text-amber-600 dark:text-amber-300 flex items-center justify-center text-sm shadow-2xs dark:shadow-none shrink-0';
+      }
+      if (typeTag) {
+        typeTag.textContent = 'PAST MONTH';
+        typeTag.className = 'text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400';
+      }
+      if (noticeText) {
+        noticeText.textContent = `${mLabel} · M${monthIndex} Closed cycle`;
+        noticeText.className = 'text-xs font-bold text-slate-800 dark:text-slate-100';
+      }
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
+
+  function goToCurrentMonth() {
+    let target = activeChitId === 'all' ? allChits[0] : allChits.find(g => g.id === activeChitId);
+    let curMonth = (target ? target.current_month_index : 1) || 1;
+    activeMonthIndex = curMonth;
+    paymentsExpandedInitialized = false;
+    renderMonthPills(allMonths);
+    loadDashboardData(activeChitId, activeMonthIndex);
+  }
+
+  // 4. Load Combined Dashboard Data
+  async function loadDashboardData(chitId, monthIndex) {
+    if (!chitId) return;
+    try {
+      const duesUrl = chitId === 'all' 
+        ? `/chit/api/chitgroups/all/month/${monthIndex}/dues`
+        : `/chit/api/chitgroups/${chitId}/month/${monthIndex}/dues`;
+      const payUrl = `/chit/api/payments?chit_id=${chitId}&month_index=${monthIndex}`;
+      const trendUrl = chitId === 'all' && allChits.length > 0
+        ? `/chit/api/dashboard/trend?chit_id=${allChits[0].id}`
+        : `/chit/api/dashboard/trend?chit_id=${chitId}`;
+
+      const [duesRes, payRes, trendRes] = await Promise.all([
+        fetch(duesUrl),
+        fetch(payUrl),
+        fetch(trendUrl)
+      ]);
+
+      currentDuesData = await duesRes.json();
+      const payData = await payRes.json();
+      currentPaymentsData = payData.members || [];
+      const trendData = await trendRes.json();
+
+      const defCount = currentDuesData.defaulted_members_count || 0;
+      const defBadge = document.getElementById('defaultedBadgeCount');
+      if (defBadge) defBadge.textContent = defCount;
+
+      // Only recent entry (first item) should be expanded by default; remaining are collapsed
+      if (!paymentsExpandedInitialized && currentPaymentsData.length > 0) {
+        expandedMemberIds.clear();
+        expandedMemberIds.add(currentPaymentsData[0].member_id);
+        paymentsExpandedInitialized = true;
+      }
+
+      updateFutureMonthBanner(monthIndex);
+      renderCollectionProgressCard(currentDuesData);
+      renderPendingSubscribers(currentDuesData.dues || []);
+      renderCollectionsTrend(trendData);
+      renderPaymentsCard(currentPaymentsData, payData.total_payments_count || 0);
+    } catch (e) {
+      console.error('Error loading dashboard data:', e);
+    }
+  }
+
+  // 5. Render Collection Progress Card
+  function renderCollectionProgressCard(data) {
+    document.getElementById('totalCollectedDisplay').textContent = formatINR(data.total_collected);
+    document.getElementById('paidCountDisplay').textContent = data.paid_members_count || 0;
+    document.getElementById('totalMembersCountDisplay').textContent = data.total_members || 0;
+    
+    // Count partial vs unpaid
+    const dues = data.dues || [];
+    const partialCount = dues.filter(d => d.paid_amount > 0 && d.pending_amount > 0).length;
+    const unpaidCount = dues.filter(d => d.paid_amount === 0 && d.pending_amount > 0).length;
+    document.getElementById('unpaidSubtext').textContent = `${partialCount} partial · ${unpaidCount} unpaid`;
+
+    document.getElementById('targetAmountDisplay').textContent = formatINR(data.total_target);
+    document.getElementById('pendingAmountDisplay').textContent = formatINR(data.total_pending);
+
+    // Multi-segment progress calculation
+    const totalTarget = data.total_target > 0 ? data.total_target : 1;
+    const fullPaidAmt = dues.filter(d => d.pending_amount <= 0).reduce((acc, d) => acc + d.net_due_amount, 0);
+    const partialAmt = dues.filter(d => d.paid_amount > 0 && d.pending_amount > 0).reduce((acc, d) => acc + d.paid_amount, 0);
+
+    const paidPct = Math.min(100, Math.round((fullPaidAmt / totalTarget) * 100));
+    const partialPct = Math.min(100 - paidPct, Math.round((partialAmt / totalTarget) * 100));
+    const totalCollectedPct = Math.min(100, Math.round((data.total_collected / totalTarget) * 100));
+
+    const gaugePaid = document.getElementById('gaugePaidBar');
+    gaugePaid.style.width = `${paidPct}%`;
+    document.getElementById('gaugePartialBar').style.width = `${partialPct}%`;
+    document.getElementById('pctDisplay').textContent = `${totalCollectedPct}%`;
+
+    // Celebration Card & Glare Animation Check
+    const yetToPayCard = document.getElementById('yetToPayCard');
+    const celebrationCard = document.getElementById('celebrationCard');
+    const unpaidMembers = dues.filter(d => d.pending_amount > 0);
+    const totalMembers = data.total_members || dues.length;
+
+    const yetToPayTitle = document.getElementById('yetToPayTitle');
+    const partialSub = document.getElementById('partialCountSub');
+    const neverPaidSub = document.getElementById('neverPaidCountSub');
+    if (yetToPayTitle) yetToPayTitle.textContent = `${unpaidMembers.length} yet to pay`;
+    if (partialSub) partialSub.textContent = `${partialCount} partial`;
+    if (neverPaidSub) neverPaidSub.textContent = `${unpaidCount} never paid`;
+
+    if (unpaidMembers.length === 0 && totalMembers > 0) {
+      gaugePaid.classList.add('glare-animation');
+      if (yetToPayCard) yetToPayCard.classList.add('hidden');
+      if (celebrationCard) {
+        celebrationCard.classList.remove('hidden');
+        document.getElementById('celebrationTitle').textContent = `All ${totalMembers} members paid`;
+        document.getElementById('celebrationAmount').textContent = `${formatINR(data.total_collected)} collected`;
+        document.getElementById('togglePaidText').textContent = `Show paid (${dues.length}) ∨`;
+        renderCelebrationPaidMembers(dues);
+      }
+    } else {
+      gaugePaid.classList.remove('glare-animation');
+      if (yetToPayCard) yetToPayCard.classList.remove('hidden');
+      if (celebrationCard) celebrationCard.classList.add('hidden');
+    }
+  }
+
+  function renderCelebrationPaidMembers(dues) {
+    const container = document.getElementById('celebrationPaidMembersList');
+    if (!container) return;
+    container.innerHTML = '';
+        if (window.lucide) { lucide.createIcons(); }
+    dues.forEach((m, idx) => {
+      const acBadge = formatAcBadge(m.account_number, m.ticket_number, idx + 1);
+      const avatarColor = getAvatarColor(acBadge || idx);
+      const div = document.createElement('div');
+      div.className = 'py-2 flex items-center justify-between gap-3 text-xs';
+      div.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="h-7 w-7 rounded-full ${avatarColor} font-black flex items-center justify-center text-xs shrink-0 font-mono tracking-tight border shadow-2xs" title="A/C #${acBadge}">
+            ${acBadge}
+          </div>
+          <div class="min-w-0">
+            <span class="font-bold text-slate-800 dark:text-slate-100 truncate block">${m.member_name}</span>
+            <span class="text-[10px] text-slate-400 dark:text-slate-400 font-medium">${m.chit_name ? m.chit_name + ' · ' : ''}Account #${m.account_number || m.ticket_number} · ${m.share_units}x · ${m.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="font-extrabold text-emerald-700 money-fig">${formatINR(m.paid_amount || m.net_due_amount)}</span>
+          <span class="h-5 w-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">
+            <i data-lucide="check" class="w-4 h-4 stroke-[1.8]"></i>
+          </span>
+        </div>
+      `;
+        if (window.lucide) { lucide.createIcons(); }
+      container.appendChild(div);
+    });
+  }
+
+  let celebrationPaidVisible = false;
+  function toggleShowPaidCelebration() {
+    celebrationPaidVisible = !celebrationPaidVisible;
+    const list = document.getElementById('celebrationPaidMembersList');
+    const btnText = document.getElementById('togglePaidText');
+    const dues = currentDuesData?.dues || [];
+    if (celebrationPaidVisible) {
+      list.classList.remove('hidden');
+      btnText.textContent = `Hide paid (${dues.length}) ∧`;
+    } else {
+      list.classList.add('hidden');
+      btnText.textContent = `Show paid (${dues.length}) ∨`;
+    }
+  }
+
+  let isDefaultedFilterActive = false;
+
+  function toggleDefaultedFilter() {
+    isDefaultedFilterActive = !isDefaultedFilterActive;
+    const btn = document.getElementById('filterDefaultedBtn');
+    const badge = document.getElementById('defaultedBadgeCount');
+    
+    if (isDefaultedFilterActive) {
+      if (btn) btn.className = 'px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm bg-rose-600 text-white border-rose-600 hover:bg-rose-700 cursor-pointer';
+      if (badge) badge.className = 'px-1.5 py-0.2 rounded-full text-[10px] font-black bg-white text-rose-700';
+    } else {
+      if (btn) btn.className = 'px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated cursor-pointer';
+      if (badge) badge.className = 'px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400';
+    }
+    filterPendingMembers();
+  }
+
+  function toggleRowBreakdown(id) {
+    const el = document.getElementById(`breakdown-${id}`);
+    if (el) {
+      el.classList.toggle('hidden');
+      if (window.lucide) { lucide.createIcons(); }
+    }
+  }
+
+  // 6. Render Yet to Pay Subscribers
+  function renderPendingSubscribers(pendingList) {
+    const container = document.getElementById('pendingMembersContainer') || document.getElementById('pendingListContainer');
+    if (!container) return;
+
+    // Filter out subscribers who are 100% paid up (pending_amount <= 0)
+    const actualPending = (pendingList || []).filter(m => (m.pending_amount || 0) > 0);
+
+    container.innerHTML = '';
+    if (window.lucide) { lucide.createIcons(); }
+
+    if (actualPending.length === 0) {
+      container.innerHTML = `
+        <div class="py-6 text-center text-xs text-slate-400 dark:text-slate-400">
+          No pending collections for Month ${activeMonthIndex}. All caught up!
+        </div>
+      `;
+      if (window.lucide) { lucide.createIcons(); }
+      return;
+    }
+
+    actualPending.forEach((m, idx) => {
+      const isPartial = m.paid_amount > 0 && m.pending_amount > 0;
+      const pctPaid = m.net_due_amount > 0 ? Math.round((m.paid_amount / m.net_due_amount) * 100) : 0;
+      const acBadge = formatAcBadge(m.account_number, m.ticket_number, idx + 1);
+      const avatarColor = getAvatarColor(acBadge || idx);
+
+      const rowWrapper = document.createElement('div');
+      rowWrapper.className = 'py-4 transition-colors';
+      rowWrapper.innerHTML = `
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="h-10 w-10 rounded-full ${avatarColor} font-black flex items-center justify-center text-sm shrink-0 font-mono tracking-tight border shadow-2xs" title="A/C #${acBadge}">
+              ${acBadge}
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">${m.member_name}</span>
+                ${(activeChitId === 'all' && m.chit_name) ? `
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/50">
+                    ${m.chit_name}
+                  </span>
+                ` : ''}
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100/80 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
+                  A/C #${m.account_number || m.ticket_number} · ${m.share_units}x share
+                </span>
+                ${m.has_lifted ? `
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                    Payout Disbursed
+                  </span>
+                ` : ''}
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${m.installment_type === 'fixed' ? 'bg-indigo-100/90 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/50'}">
+                  ${m.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}
+                </span>
+                ${m.is_defaulted ? `
+                  <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800/80 flex items-center gap-1 shadow-2xs" title="${m.defaulted_reason || 'Subscriber defaulted'}">
+                    <span class="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                    DEFAULTED
+                  </span>
+                ` : ''}
+                ${isPartial ? `
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                    Partial
+                  </span>
+                ` : ''}
+              </div>
+
+              <div class="flex items-center gap-2 flex-wrap text-xs font-medium mt-0.5">
+                <span class="text-slate-400 dark:text-slate-400">
+                  ${isPartial ? 'Last paid recently' : 'Never paid'}
+                </span>
+                ${(m.prev_dues && m.prev_dues > 0) ? `
+                  <button type="button" onclick="event.stopPropagation(); toggleRowBreakdown('${m.installment_id}')" class="text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-bold bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 px-2 py-0.5 rounded-md text-[10px] transition-colors inline-flex items-center gap-1 cursor-pointer" title="Click to view cycle breakdown">
+                    <span>+ ${formatINR(m.prev_dues)} arrear</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 stroke-[2]"></i>
+                  </button>
+                ` : ''}
+                ${(m.sub_tickets && m.sub_tickets.length > 1) ? `
+                  <button type="button" onclick="event.stopPropagation(); toggleRowBreakdown('${m.installment_id}')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md text-[10px] transition-colors inline-flex items-center gap-1 cursor-pointer" title="Click to view ticket split breakdown">
+                    <span>${m.sub_tickets.length} tickets split</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 stroke-[2]"></i>
+                  </button>
+                ` : ''}
+                ${m.due_since ? `
+                  <span class="text-rose-500 dark:text-rose-400 font-medium text-[11px]">
+                    · Due since ${m.due_since}
+                  </span>
+                ` : ''}
+              </div>
+
+              ${isPartial ? `
+                <div class="flex items-center gap-2 mt-1.5 max-w-xs">
+                  <div class="h-1.5 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-400 rounded-full" style="width: ${pctPaid}%"></div>
+                  </div>
+                  <span class="text-[10px] font-bold text-amber-700 dark:text-amber-400">${pctPaid}%</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 shrink-0">
+            <div class="text-right">
+              <div class="text-sm md:text-base font-extrabold text-slate-900 dark:text-slate-100 money-fig tracking-tight">
+                ${formatINR(m.pending_amount)}
+              </div>
+              ${isPartial ? `
+                <div class="text-[11px] font-bold text-emerald-600 money-fig">
+                  ${formatINR(m.paid_amount)} paid
+                </div>
+              ` : ''}
+            </div>
+
+            <button type="button" class="btn-record-due h-8 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs dark:shadow-none active:scale-95 transition-all">
+              Record
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Cycle & Ticket Breakdown Card -->
+        <div id="breakdown-${m.installment_id}" class="hidden mt-3 p-3 bg-slate-50 dark:bg-chitDark-elevated/70 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 space-y-2 text-xs">
+          ${(m.sub_tickets && m.sub_tickets.length > 1) ? `
+            <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex justify-between border-b border-slate-200/60 dark:border-slate-700/40 pb-1.5">
+              <span>Ticket Split Breakdown (${m.sub_tickets.length} tickets)</span>
+              <span>Current Due</span>
+            </div>
+            ${m.sub_tickets.map(st => `
+              <div class="flex justify-between items-center text-xs py-0.5">
+                <span class="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${st.has_lifted ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}">
+                    ${st.share_units}x ${st.has_lifted ? ('Lifted M' + st.lifted_month_index) : 'Active'}
+                  </span>
+                  <span>Ticket #${st.ticket_number} (A/C #${st.account_number})</span>
+                </span>
+                <span class="font-bold money-fig text-slate-800 dark:text-slate-200">${formatINR(st.pending_amount)}</span>
+              </div>
+            `).join('')}
+            <div class="border-t border-slate-200/60 dark:border-slate-700/40 my-1"></div>
+          ` : ''}
+
+          <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex justify-between border-b border-slate-200/60 dark:border-slate-700/40 pb-1.5">
+            <span>Cycle Breakdown (${(m.due_breakdown || []).length} cycles)</span>
+            <span>Amount</span>
+          </div>
+          ${(m.due_breakdown || []).map(b => `
+            <div class="flex justify-between items-center text-xs py-0.5">
+              <span class="flex items-center gap-2 font-medium ${b.is_closed ? 'text-rose-700 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}">
+                <span class="h-1.5 w-1.5 rounded-full ${b.is_closed ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+                <span>${b.tag || b.month_year}</span>
+              </span>
+              <span class="font-extrabold money-fig text-slate-900 dark:text-slate-100">${formatINR(b.amount)}</span>
+            </div>
+          `).join('')}
+          <div class="flex justify-between items-center text-xs font-black border-t border-slate-200/60 dark:border-slate-700/40 pt-1.5 text-slate-900 dark:text-slate-100">
+            <span>Total Outstanding Due</span>
+            <span class="text-rose-600 dark:text-rose-400 money-fig">${formatINR(m.pending_amount)}</span>
+          </div>
+        </div>
+      `;
+
+      const recBtn = rowWrapper.querySelector('.btn-record-due');
+      if (recBtn) {
+        recBtn.onclick = () => {
+          openRecordPaymentModal(
+            m.installment_id,
+            m.membership_id,
+            m.member_name || '',
+            m.pending_amount || 0,
+            m.account_number || m.ticket_number || '',
+            m.net_due_amount || 0,
+            m.chit_name || '',
+            m.group_id || '',
+            m.prev_dues || 0,
+            m.current_month_pending || 0,
+            m.installment_type || 'incremental'
+          );
+        };
+      }
+      container.appendChild(rowWrapper);
+    });
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  function filterPendingMembers() {
+    const q = document.getElementById('pendingSearchInput').value.toLowerCase().trim();
+    if (!currentDuesData || !currentDuesData.dues) return;
+    let filtered = currentDuesData.dues.filter(d => (d.pending_amount || 0) > 0);
+    if (q) {
+      filtered = filtered.filter(d => 
+        d.member_name.toLowerCase().includes(q) || 
+        String(d.account_number || d.ticket_number).includes(q) ||
+        (d.phone && d.phone.includes(q))
+      );
+    }
+    if (isDefaultedFilterActive) {
+      filtered = filtered.filter(d => d.is_defaulted);
+    }
+    renderPendingSubscribers(filtered);
+  }
+
+  function toggleAmountSort() {
+    if (!currentDuesData || !currentDuesData.dues) return;
+    sortDescending = !sortDescending;
+    const unpaidDues = currentDuesData.dues.filter(d => (d.pending_amount || 0) > 0);
+    unpaidDues.sort((a, b) => sortDescending ? b.pending_amount - a.pending_amount : a.pending_amount - b.pending_amount);
+    renderPendingSubscribers(unpaidDues);
+  }
+
+  function toggleSelectMode() {
+    showToast('Select mode: pick members to remind or mark as paid in bulk');
+  }
+
+  // 8. Render Collections Trend SVG Chart
+  function renderCollectionsTrend(trendData) {
+    const svg = document.getElementById('trendSvg');
+    const collectedPoints = trendData.collected_points || [0, 0, 0, 0, 0, 0];
+    const maxVal = Math.max(...collectedPoints, trendData.total_target || 10000, 50000);
+
+    const width = 500;
+    const height = 110;
+    const step = width / (collectedPoints.length - 1);
+
+    const coords = collectedPoints.map((val, i) => {
+      const x = i * step;
+      const y = height - ((val / maxVal) * (height - 20)) - 10;
+      return { x, y, val };
+    });
+
+    // Build smooth cubic bezier path
+    let d = `M ${coords[0].x} ${coords[0].y}`;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i];
+      const p1 = coords[i + 1];
+      const cx1 = p0.x + (p1.x - p0.x) / 2;
+      const cy1 = p0.y;
+      const cx2 = p0.x + (p1.x - p0.x) / 2;
+      const cy2 = p1.y;
+      d += ` C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p1.x} ${p1.y}`;
+    }
+
+    const fillPath = `${d} L ${width} ${height} L 0 ${height} Z`;
+
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+        </linearGradient>
+      </defs>
+      <path d="${fillPath}" fill="url(#trendGrad)" />
+      <path d="${d}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      ${coords.map((pt, idx) => `
+        <circle cx="${pt.x}" cy="${pt.y}" r="${idx === coords.length - 1 ? '4' : '3'}" 
+                fill="${idx === coords.length - 1 ? '#10b981' : '#ffffff'}" 
+                stroke="#10b981" stroke-width="2" />
+      `).join('')}
+    `;
+        if (window.lucide) { lucide.createIcons(); }
+
+    // Per chit bars
+    const perChitContainer = document.getElementById('perChitContainer');
+    perChitContainer.innerHTML = '';
+        if (window.lucide) { lucide.createIcons(); }
+    (trendData.per_chit || []).forEach(pc => {
+      const div = document.createElement('div');
+      div.className = 'space-y-1.5';
+      div.innerHTML = `
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${pc.name}</span>
+          <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig">${formatINR(pc.collected)}</span>
+        </div>
+        <div class="h-2 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full overflow-hidden flex">
+          <div class="h-full bg-emerald-500 rounded-full" style="width: ${pc.percent}%"></div>
+        </div>
+      `;
+        if (window.lucide) { lucide.createIcons(); }
+      perChitContainer.appendChild(div);
+    });
+  }
+
+  // 9. Render Payments Section
+  function renderPaymentsCard(memberPayments, totalCount) {
+    const container = document.getElementById('paymentsListContainer');
+    container.innerHTML = '';
+        if (window.lucide) { lucide.createIcons(); }
+
+    document.getElementById('paymentsHeaderTitle').textContent = `PAYMENTS ${memberPayments.length} members`;
+
+    if (memberPayments.length === 0) {
+      container.innerHTML = `
+        <div class="py-6 text-center text-xs text-slate-400 dark:text-slate-400">
+          No payments recorded yet for Month ${activeMonthIndex}.
+        </div>
+      `;
+        if (window.lucide) { lucide.createIcons(); }
+      return;
+    }
+
+    memberPayments.forEach((mp, mIdx) => {
+      const acBadge = formatAcBadge(mp.account_number, mp.ticket_number, mIdx + 1);
+      const avatarColor = getAvatarColor(acBadge || mIdx);
+      const isExpanded = expandedMemberIds.has(mp.member_id);
+
+      const card = document.createElement('div');
+      card.className = 'space-y-3 pt-3 first:pt-0';
+      
+      let totalAmtDisplay = mp.total_paid;
+      if (totalAmtDisplay === 0) {
+        const poSum = (mp.payments || []).filter(p => p.is_payout).reduce((a, b) => a + (b.amount || 0), 0);
+        if (poSum > 0) totalAmtDisplay = poSum;
+      }
+
+      let html = `
+        <!-- Member header row -->
+        <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleMemberPayments('${mp.member_id}')">
+          <div class="flex items-center gap-3">
+            <div class="h-9 w-9 rounded-full ${avatarColor} font-black flex items-center justify-center text-xs shrink-0 font-mono tracking-tight border shadow-2xs" title="A/C #${acBadge}">
+              ${acBadge}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">${mp.member_name}</p>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${mp.installment_type === 'fixed' ? 'bg-indigo-100/90 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/50'}">
+                  ${mp.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 dark:text-slate-400 font-medium">${mp.payments_count} entry${mp.payments_count > 1 ? 'ies' : ''}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-sm md:text-base font-black text-emerald-600 dark:text-emerald-400 money-fig">
+              ${formatINR(totalAmtDisplay)}
+            </span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 stroke-[1.8] text-slate-300 dark:text-slate-500 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90 text-slate-500' : ''}"></i>
+          </div>
+        </div>
+      `;
+
+      // Payments & Payouts list inside capsule box
+      if (isExpanded) {
+        mp.payments.forEach(p => {
+          if (p.is_payout) {
+            html += `
+              <div class="rounded-2xl p-3 md:p-3.5 flex items-center justify-between gap-3 shadow-2xs dark:shadow-none border ${ p.payout_status === 'paid' ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200/90 dark:border-amber-800/40' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200/90 dark:border-rose-800/40' }">
+                <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+                  <span class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig">${formatINR(p.amount)}</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${p.installment_type === 'fixed' ? 'bg-indigo-100/90 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">${p.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
+                  <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${ p.payout_status === 'paid' ? 'bg-amber-200/80 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200' : 'bg-rose-200/80 dark:bg-rose-900/40 text-rose-900 dark:text-rose-200' }">
+                    <i data-lucide="banknote" class="w-4 h-4 stroke-[1.8] mr-1"></i>
+                    Payout ${p.payout_status === 'paid' ? 'Disbursed' : 'Unpaid'}
+                  </span>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">${p.payment_mode}</span>
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${p.month_tag}</span>
+                </div>
+
+                <div class="flex items-center gap-2.5 shrink-0">
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    ${p.time_ago}
+                  </span>
+
+                  <!-- Share receipt for payout -->
+                  <button type="button" onclick="sharePaymentReceipt('${p.id}', '${mp.member_name}', '${mp.phone}', ${p.amount}, '${p.receipt_no}', '${p.payment_mode}')" 
+                          title="Share Receipt" class="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 flex items-center justify-center transition-colors shadow-2xs dark:shadow-none">
+                    <i data-lucide="share-2" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="bg-emerald-50/50 dark:bg-emerald-950/25 border border-emerald-200/70 dark:border-emerald-800/40 rounded-2xl p-3 md:p-3.5 flex items-center justify-between gap-3 shadow-2xs dark:shadow-none">
+                <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+                  <span class="text-sm font-black text-slate-900 dark:text-slate-100 money-fig">${formatINR(p.amount)}</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${p.installment_type === 'fixed' ? 'bg-indigo-100/90 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">${p.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
+                  <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">${p.payment_mode}</span>
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${p.month_tag}</span>
+                </div>
+
+                <div class="flex items-center gap-2.5 shrink-0">
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    ${p.is_recent ? '<span class="h-2 w-2 rounded-full bg-emerald-500"></span>' : ''}
+                    ${p.time_ago}
+                  </span>
+
+                  <!-- 3 Actions: Share, Edit, Delete -->
+                  <button type="button" onclick="sharePaymentReceipt('${p.id}', '${mp.member_name}', '${mp.phone}', ${p.amount}, '${p.receipt_no}', '${p.payment_mode}')" 
+                          title="Share Receipt" class="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 flex items-center justify-center transition-colors shadow-2xs dark:shadow-none">
+                    <i data-lucide="share-2" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+                  </button>
+
+                  <button type="button" onclick="openEditPaymentModal('${p.id}')" 
+                          title="Edit Payment" class="h-8 w-8 rounded-full bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center transition-colors shadow-2xs dark:shadow-none">
+                    <i data-lucide="pencil" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+                  </button>
+
+                  <button type="button" onclick="handleDeletePayment('${p.id}', '${mp.member_name}', ${p.amount})" 
+                          title="Delete Payment" class="h-8 w-8 rounded-full bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-slate-400 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center transition-colors shadow-2xs dark:shadow-none">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            `;
+          }
+        });
+
+        html += `
+          <div class="pt-0.5">
+            <button type="button" onclick="toggleMemberPayments('${mp.member_id}')" class="text-xs font-semibold text-slate-400 dark:text-slate-400 hover:text-slate-600 transition-colors">
+              Hide
+            </button>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="pt-0.5">
+            <button type="button" onclick="toggleMemberPayments('${mp.member_id}')" class="px-3 py-1 bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:hover:bg-white/[0.05] text-slate-700 dark:text-slate-300 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-2xs dark:shadow-none">
+              <span class="h-4 w-4 rounded-full bg-slate-300 text-slate-800 dark:text-slate-100 flex items-center justify-center text-[10px] font-bold">${mp.payments_count}</span>
+              <span>Show entries</span>
+            </button>
+          </div>
+        `;
+      }
+
+      card.innerHTML = html;
+      container.appendChild(card);
+    });
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  function togglePaymentsCard() {
+    const list = document.getElementById('paymentsListContainer');
+    const chevron = document.getElementById('paymentsCardChevron');
+    paymentsCollapsed = !paymentsCollapsed;
+    if (paymentsCollapsed) {
+      list.classList.add('hidden');
+      chevron.classList.add('rotate-180');
+    } else {
+      list.classList.remove('hidden');
+      chevron.classList.remove('rotate-180');
+    }
+  }
+
+  function toggleMemberPayments(memberId) {
+    if (expandedMemberIds.has(memberId)) {
+      expandedMemberIds.delete(memberId);
+    } else {
+      expandedMemberIds.add(memberId);
+    }
+    renderPaymentsCard(currentPaymentsData, currentPaymentsData.reduce((a, b) => a + b.payments_count, 0));
+  }
+
+  // 10. Record & Edit Payment Modal Handlers
+  function openRecordPaymentModal(installmentId, membershipId, name, pendingAmount, ticketNo, fullDue, chitName, groupId, prevDues = 0, curPending = 0, installmentType = '') {
+    document.getElementById('modalPaymentId').value = '';
+    document.getElementById('modalActionTitle').textContent = 'Record payment';
+
+    const submitBtn = document.getElementById('btnSubmitPayment');
+    if (submitBtn) submitBtn.disabled = false;
+    const submitBtnIcon = document.getElementById('modalSubmitBtnIcon');
+    if (submitBtnIcon) {
+      submitBtnIcon.setAttribute('data-lucide', 'check');
+      submitBtnIcon.className = 'w-3.5 h-3.5 stroke-[1.8] text-xs';
+      if (window.lucide) { lucide.createIcons(); }
+    }
+    const submitBtnText = document.getElementById('modalSubmitBtnText');
+    if (submitBtnText) submitBtnText.textContent = 'Record payment';
+
+    document.getElementById('modalMemberSubheader').textContent = name;
+    document.getElementById('modalMemberFullName').textContent = name;
+    document.getElementById('modalMemberAvatar').textContent = (name || 'U').charAt(0).toUpperCase();
+
+    const chit = allChits.find(g => g.id === (groupId || (activeChitId === 'all' ? (allChits[0]?.id) : activeChitId)));
+    const gName = chitName || (chit ? chit.name : 'Chit');
+    const planText = installmentType ? ` · ${installmentType.charAt(0).toUpperCase() + installmentType.slice(1)}` : '';
+    const chitLabel = `${gName} · Account #${ticketNo} · Month ${activeMonthIndex}${planText}`;
+    document.getElementById('modalChitDetailsText').textContent = chitLabel;
+
+    document.getElementById('modalInstallmentId').value = installmentId;
+    document.getElementById('modalMembershipId').value = membershipId;
+    document.getElementById('modalFullDueAmount').value = fullDue || pendingAmount;
+    document.getElementById('modalAmountInput').value = pendingAmount;
+    document.getElementById('modalNoteInput').value = '';
+    document.getElementById('receiptAttachmentLabel').textContent = 'Attach receipt photo';
+
+    selectPaymentMethod('Cash');
+    selectPaymentDateOption('Today');
+    renderFractionChips(pendingAmount, prevDues, curPending);
+
+    document.getElementById('paymentModal').classList.remove('hidden');
+  }
+
+  async function openEditPaymentModal(paymentId) {
+    try {
+      const res = await fetch(`/chit/api/payments/${paymentId}`);
+      if (!res.ok) throw new Error('Payment not found');
+      const p = await res.json();
+
+      document.getElementById('modalPaymentId').value = p.id;
+      document.getElementById('modalActionTitle').textContent = 'Edit payment';
+
+      const submitBtn = document.getElementById('btnSubmitPayment');
+      if (submitBtn) submitBtn.disabled = false;
+      const submitBtnIcon = document.getElementById('modalSubmitBtnIcon');
+      if (submitBtnIcon) {
+        submitBtnIcon.setAttribute('data-lucide', 'check');
+        submitBtnIcon.className = 'w-3.5 h-3.5 stroke-[1.8] text-xs';
+        if (window.lucide) { lucide.createIcons(); }
+      }
+      const submitBtnText = document.getElementById('modalSubmitBtnText');
+      if (submitBtnText) submitBtnText.textContent = 'Save changes';
+
+      document.getElementById('modalMemberSubheader').textContent = p.member_name;
+      document.getElementById('modalMemberFullName').textContent = p.member_name;
+      document.getElementById('modalMemberAvatar').textContent = (p.member_name || 'U').charAt(0).toUpperCase();
+
+      document.getElementById('modalChitDetailsText').textContent = `${p.chit_name} · ${p.month_year || ''}`;
+      document.getElementById('modalInstallmentId').value = p.installment_id;
+      document.getElementById('modalMembershipId').value = p.membership_id;
+      document.getElementById('modalFullDueAmount').value = p.net_due_amount;
+      document.getElementById('modalAmountInput').value = p.amount;
+      document.getElementById('modalNoteInput').value = p.notes || p.reference_no || '';
+
+      selectPaymentMethod(p.payment_mode || 'Cash');
+      
+      // Determine date
+      const todayStr = new Date().toISOString().split('T')[0];
+      const yest = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      if (p.payment_date === todayStr) {
+        selectPaymentDateOption('Today');
+      } else if (p.payment_date === yest) {
+        selectPaymentDateOption('Yesterday');
+      } else {
+        selectPaymentDateOption('Custom');
+        document.getElementById('customDateInput').value = p.payment_date;
+      }
+
+      renderFractionChips(p.net_due_amount, 0, 0);
+      document.getElementById('paymentModal').classList.remove('hidden');
+    } catch (e) {
+      alert('Error fetching payment details: ' + e.message);
+    }
+  }
+
+  function renderFractionChips(fullAmount, prevDues = 0, curPending = 0) {
+    const container = document.getElementById('modalFractionChips');
+    if (prevDues > 0) {
+      const curAmt = curPending > 0 ? curPending : Math.max(0, fullAmount - prevDues);
+      container.innerHTML = `
+        <button type="button" onclick="setModalAmount(${fullAmount})" class="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[11px] font-bold hover:bg-emerald-200 transition-colors">
+          Total (₹${fullAmount})
+        </button>
+        <button type="button" onclick="setModalAmount(${prevDues})" class="px-2.5 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[11px] font-bold hover:bg-rose-200 transition-colors">
+          Arrears (₹${prevDues})
+        </button>
+        ${curAmt > 0 ? `
+          <button type="button" onclick="setModalAmount(${curAmt})" class="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[11px] font-bold hover:bg-amber-200 transition-colors">
+            Current (₹${curAmt})
+          </button>
+        ` : ''}
+      `;
+    } else {
+      const half = Math.round((fullAmount / 2) * 100) / 100;
+      const quarter = Math.round((fullAmount / 4) * 100) / 100;
+      container.innerHTML = `
+        <button type="button" onclick="setModalAmount(${fullAmount})" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold hover:bg-emerald-200 transition-colors">
+          Full (₹${fullAmount})
+        </button>
+        <button type="button" onclick="setModalAmount(${half})" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-white/[0.05] transition-colors">
+          1/2 (₹${half})
+        </button>
+        <button type="button" onclick="setModalAmount(${quarter})" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-white/[0.05] transition-colors">
+          1/4 (₹${quarter})
+        </button>
+      `;
+    }
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  function setModalAmount(amt) {
+    document.getElementById('modalAmountInput').value = amt;
+  }
+
+  function clearModalAmount() {
+    document.getElementById('modalAmountInput').value = '';
+    document.getElementById('modalAmountInput').focus();
+  }
+
+  function selectPaymentMethod(method) {
+    selectedMethod = method;
+    document.getElementById('selectedPaymentMethod').value = method;
+
+    const methods = ['Cash', 'UPI', 'Bank', 'Cheque'];
+    methods.forEach(m => {
+      const btn = document.getElementById(`methodBtn${m}`);
+      if (btn) {
+        if (m === method) {
+          btn.className = 'method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-slate-900 text-white border-slate-900 dark:bg-slate-800 dark:text-white dark:border-slate-600 shadow-xs';
+        } else {
+          btn.className = 'method-btn py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]';
+        }
+      }
+    });
+  }
+
+  function selectPaymentDateOption(opt) {
+    selectedDateType = opt;
+    const opts = ['Today', 'Yesterday', 'Custom'];
+    opts.forEach(o => {
+      const btn = document.getElementById(`dateBtn${o}`);
+      if (btn) {
+        if (o === opt) {
+          btn.className = 'date-btn py-2.5 rounded-2xl text-xs font-semibold border transition-all bg-slate-900 text-white border-slate-900 dark:bg-slate-800 dark:text-white dark:border-slate-600 shadow-xs flex items-center justify-center gap-1.5';
+        } else {
+          btn.className = 'date-btn py-2.5 rounded-2xl text-xs font-semibold border transition-all bg-white dark:bg-chitDark-surface border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] flex items-center justify-center gap-1.5';
+        }
+      }
+    });
+
+    const customInput = document.getElementById('customDateInput');
+    if (opt === 'Custom') {
+      customInput.classList.remove('hidden');
+      if (!customInput.value) {
+        customInput.value = new Date().toISOString().split('T')[0];
+      }
+    } else {
+      customInput.classList.add('hidden');
+    }
+  }
+
+  function handleReceiptFileSelected(e) {
+    const file = e.target.files[0];
+    if (file) {
+      document.getElementById('receiptAttachmentLabel').textContent = `Attached: ${file.name}`;
+      showToast(`Receipt photo "${file.name}" attached`);
+    }
+  }
+
+  function closePaymentModal() {
+    document.getElementById('paymentModal').classList.add('hidden');
+  }
+
+  async function handlePaymentSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitPayment');
+    const btnIcon = document.getElementById('modalSubmitBtnIcon');
+    const btnText = document.getElementById('modalSubmitBtnText');
+    if (btn) btn.disabled = true;
+    if (btnIcon) {
+      btnIcon.setAttribute('data-lucide', 'loader-2');
+      btnIcon.className = 'w-3.5 h-3.5 stroke-[1.8] text-xs animate-spin';
+      if (window.lucide) { lucide.createIcons(); }
+    }
+    if (btnText) btnText.textContent = 'Saving...';
+
+    const paymentId = document.getElementById('modalPaymentId').value;
+    const amountVal = parseFloat(document.getElementById('modalAmountInput').value);
+
+    let payDate = new Date().toISOString().split('T')[0];
+    if (selectedDateType === 'Yesterday') {
+      payDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    } else if (selectedDateType === 'Custom') {
+      payDate = document.getElementById('customDateInput').value || payDate;
+    }
+
+    const payload = {
+      amount: amountVal,
+      payment_mode: document.getElementById('selectedPaymentMethod').value,
+      payment_date: payDate,
+      notes: document.getElementById('modalNoteInput').value,
+      reference_no: document.getElementById('modalNoteInput').value
+    };
+
+    try {
+      let res, data;
+      if (paymentId) {
+        // Edit existing payment
+        res = await fetch(`/chit/api/payments/${paymentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        data = await res.json();
+      } else {
+        // Quick Pay new payment
+        payload.installment_id = document.getElementById('modalInstallmentId').value;
+        payload.membership_id = document.getElementById('modalMembershipId').value;
+        res = await fetch('/chit/api/payments/quick-pay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        data = await res.json();
+      }
+
+      if (data.success) {
+        closePaymentModal();
+        showToast(paymentId ? 'Payment updated successfully!' : `Payment recorded! Receipt: ${data.receipt_no}`);
+        await loadDashboardData(activeChitId, activeMonthIndex);
+      } else {
+        alert(data.error || 'Failed to save payment');
+      }
+    } catch (err) {
+      alert('Network error saving payment');
+    } finally {
+      if (btn) btn.disabled = false;
+      if (btnIcon) {
+        btnIcon.setAttribute('data-lucide', 'check');
+        btnIcon.className = 'w-3.5 h-3.5 stroke-[1.8] text-xs';
+        if (window.lucide) { lucide.createIcons(); }
+      }
+      if (btnText) btnText.textContent = paymentId ? 'Save changes' : 'Record payment';
+    }
+  }
+
+  // 11. Delete Payment Handler
+  async function handleDeletePayment(paymentId, memberName, amount) {
+    if (!confirm(`Are you sure you want to delete this payment of ${formatINR(amount)} for ${memberName}? This will reverse the subscriber's balance.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/chit/api/payments/${paymentId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Payment of ${formatINR(amount)} deleted`);
+        await loadDashboardData(activeChitId, activeMonthIndex);
+      } else {
+        alert(data.error || 'Failed to delete payment');
+      }
+    } catch (e) {
+      alert('Network error deleting payment');
+    }
+  }
+
+  // 12. Share Payment Receipt
+  function sharePaymentReceipt(paymentId, memberName, phone, amount, receiptNo, mode) {
+    const text = encodeURIComponent(`Namaste ${memberName} garu,\n\nWe have received your payment of ${formatINR(amount)} (${mode}) for Siva Durga Chit Fund.\nReceipt #: ${receiptNo || 'SDC'}\nMonth: M${activeMonthIndex}\n\nThank you!`);
+    if (phone && phone.replace(/[^0-9]/g, '').length >= 10) {
+      window.open(`https://wa.me/91${phone.replace(/[^0-9]/g, '').slice(-10)}?text=${text}`, '_blank');
+      showToast(`Opening WhatsApp for ${memberName}`);
+    } else {
+      navigator.clipboard.writeText(decodeURIComponent(text));
+      showToast(`Receipt copied to clipboard for ${memberName}!`);
+    }
+  }
+
+  // 13. Remind All WhatsApp
+  function sendBulkReminders() {
+    if (!currentDuesData || !currentDuesData.dues) return;
+    const unpaid = currentDuesData.dues.filter(m => m.pending_amount > 0 && m.phone);
+    if (unpaid.length === 0) {
+      alert('No pending members with phone numbers found.');
+      return;
+    }
+
+    const first = unpaid[0];
+    const grp = allChits.find(g => g.id === activeChitId) || allChits[0];
+    const grpName = grp ? grp.name : 'Siva Durga Chit';
+    const text = encodeURIComponent(`Namaste ${first.member_name} garu, reminder from Siva Durga Chit Fund. Your monthly installment of ${formatINR(first.pending_amount)} for ${grpName} (Month ${activeMonthIndex}) is due. Please pay via UPI or Cash. Thank you!`);
+    window.open(`https://wa.me/91${first.phone.replace(/[^0-9]/g, '').slice(-10)}?text=${text}`, '_blank');
+    showToast(`Opening reminder for ${first.member_name}`);
+  }
+
+  // 14. Mark All Paid
+  async function handleMarkAllPaid() {
+    if (!confirm(`Mark all subscribers as paid in full for Month ${activeMonthIndex}?`)) return;
+    try {
+      const res = await fetch('/chit/api/payments/mark-all-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chit_id: activeChitId, month_index: activeMonthIndex })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Marked ${data.recorded_count} subscribers paid (${formatINR(data.total_amount)})!`);
+        await loadDashboardData(activeChitId, activeMonthIndex);
+      } else {
+        alert(data.error || 'Failed to mark all paid');
+      }
+    } catch (e) {
+      alert('Network error marking all paid');
+    }
+  }
+
+  // 15. Close Month Modal & Celebratory Flow (ChitBase Replica)
+  function handleCloseMonthCycle() {
+    openCloseMonthModal();
+  }
+
+  function openCloseMonthModal() {
+    if (!currentDuesData) {
+      showToast('Loading month dues details...');
+      return;
+    }
+
+    const chit = allChits.find(g => g.id === (activeChitId === 'all' ? allChits[0]?.id : activeChitId)) || allChits[0];
+    const cName = chit ? chit.name : 'Chit Scheme';
+    const monthLabel = currentDuesData.month_year ? formatMonthYear(currentDuesData.month_year) : `Month ${activeMonthIndex}`;
+    
+    document.getElementById('closeMonthModalSubtitle').textContent = `${monthLabel} M${activeMonthIndex}`;
+    document.getElementById('closeMonthCollectedStat').textContent = formatINR(currentDuesData.total_collected || 0);
+    document.getElementById('closeMonthMembersStat').textContent = `${currentDuesData.paid_members_count || 0}/${currentDuesData.total_members || 0}`;
+
+    const isPayoutDone = Boolean(currentDuesData.winner_name || currentDuesData.payout_status === 'paid');
+    const unpaidMembers = (currentDuesData.dues || []).filter(d => (d.pending_amount || 0) > 0);
+    const hasUnpaid = unpaidMembers.length > 0;
+    const hasWarnings = (!isPayoutDone || hasUnpaid);
+
+    const banner = document.getElementById('closeMonthAlmostThereBanner');
+    if (hasWarnings) {
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+
+    const checksContainer = document.getElementById('closeMonthChecksContainer');
+    let checksHtml = '';
+
+    // Check 1: Payout / Auction check
+    if (!isPayoutDone) {
+      checksHtml += `
+        <div class="overflow-hidden rounded-2xl border border-amber-200/80 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/40">
+          <div class="flex items-start gap-3 px-3 py-2.5">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+              <i data-lucide="banknote" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[12px] font-semibold text-slate-950 dark:text-slate-100">Payout</p>
+              <p class="mt-0.5 text-[11px] leading-5 text-amber-800 dark:text-amber-300">No payout recorded for this month.</p>
+            </div>
+          </div>
+          <div class="border-t border-amber-200/60 dark:border-amber-700/40 px-3 pb-3 pt-2">
+            <label class="flex items-start gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="closeMonthPayoutAck" onchange="updateCloseMonthBtnState()" class="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-500 focus:ring-amber-300 shrink-0">
+              <span class="text-[11px] font-semibold text-amber-900 dark:text-amber-200 leading-5">I acknowledge no payout has been recorded and want to close this month anyway</span>
+            </label>
+          </div>
+        </div>
+      `;
+    } else {
+      checksHtml += `
+        <div class="overflow-hidden rounded-2xl border border-emerald-200/80 dark:border-emerald-700/50 bg-emerald-50/80 dark:bg-emerald-950/40">
+          <div class="flex items-start gap-3 px-3 py-2.5">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+              <i data-lucide="check" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[12px] font-semibold text-slate-950 dark:text-slate-100">Payout Recorded</p>
+              <p class="mt-0.5 text-[11px] leading-5 text-emerald-800 dark:text-emerald-300">Payout recorded for this cycle${currentDuesData.winner_name ? ' (' + currentDuesData.winner_name + ')' : ''}.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check 2: Collections check
+    if (hasUnpaid) {
+      checksHtml += `
+        <div class="rounded-2xl border overflow-hidden border-amber-200/80 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/40">
+          <div class="flex items-start gap-3 px-3 py-2.5">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+              <i data-lucide="triangle-exclamation" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[12px] font-semibold text-slate-950 dark:text-slate-100">Collections</p>
+              <p class="mt-0.5 text-[11px] leading-5 text-amber-800 dark:text-amber-300">${unpaidMembers.length} member${unpaidMembers.length > 1 ? 's' : ''} still have pending payments.</p>
+            </div>
+          </div>
+          <div class="border-t border-amber-200/60 dark:border-amber-700/40 px-3 pb-3">
+            <div class="mt-2 max-h-[120px] overflow-y-auto space-y-1 pr-1">
+              ${unpaidMembers.map(u => `
+                <div class="flex items-center justify-between gap-2 rounded-lg bg-white/80 dark:bg-slate-800/80 px-2.5 py-1.5 border border-slate-200/40 dark:border-slate-700/40">
+                  <span class="text-[11px] font-medium text-slate-700 dark:text-slate-200 truncate">${u.member_name}</span>
+                  <span class="money-fig text-[11px] font-bold text-amber-700 dark:text-amber-400 shrink-0">${formatINR(u.pending_amount)}</span>
+                </div>
+              `).join('')}
+            </div>
+            <label class="mt-2 flex items-start gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="closeMonthCollectionsAck" onchange="updateCloseMonthBtnState()" class="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-500 focus:ring-amber-300 shrink-0">
+              <span class="text-[11px] font-semibold text-amber-900 dark:text-amber-200 leading-5">I acknowledge ${unpaidMembers.length} member${unpaidMembers.length > 1 ? 's' : ''} have unpaid dues and want to close this month anyway</span>
+            </label>
+          </div>
+        </div>
+      `;
+    } else {
+      checksHtml += `
+        <div class="overflow-hidden rounded-2xl border border-emerald-200/80 dark:border-emerald-700/50 bg-emerald-50/80 dark:bg-emerald-950/40">
+          <div class="flex items-start gap-3 px-3 py-2.5">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+              <i data-lucide="check" class="w-3.5 h-3.5 stroke-[1.8] text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[12px] font-semibold text-slate-950 dark:text-slate-100">Collections</p>
+              <p class="mt-0.5 text-[11px] leading-5 text-emerald-800 dark:text-emerald-300">All ${currentDuesData.total_members} members paid for this cycle.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    checksContainer.innerHTML = checksHtml;
+        if (window.lucide) { lucide.createIcons(); }
+    updateCloseMonthBtnState();
+    document.getElementById('closeMonthModal').classList.remove('hidden');
+  }
+
+  function closeCloseMonthModal() {
+    document.getElementById('closeMonthModal').classList.add('hidden');
+  }
+
+  function updateCloseMonthBtnState() {
+    const btn = document.getElementById('closeMonthSubmitBtn');
+    if (!btn || !currentDuesData) return;
+
+    const isPayoutDone = Boolean(currentDuesData.winner_name || currentDuesData.payout_status === 'paid');
+    const unpaidMembers = (currentDuesData.dues || []).filter(d => (d.pending_amount || 0) > 0);
+    const hasUnpaid = unpaidMembers.length > 0;
+
+    const payoutCb = document.getElementById('closeMonthPayoutAck');
+    const collCb = document.getElementById('closeMonthCollectionsAck');
+
+    const payoutAckOk = !payoutCb || payoutCb.checked;
+    const collAckOk = !collCb || collCb.checked;
+    const canProceed = payoutAckOk && collAckOk;
+
+    if (!canProceed) {
+      btn.disabled = true;
+      btn.className = 'inline-flex items-center justify-center gap-2 px-3 py-3 text-xs font-bold text-slate-400 dark:text-slate-500 transition-all duration-200 rounded-2xl h-11 bg-slate-200 dark:bg-slate-800/80 border border-transparent dark:border-slate-700/50 cursor-not-allowed';
+      btn.textContent = 'Tick the box above to proceed';
+    } else {
+      btn.disabled = false;
+      btn.className = 'inline-flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-white shadow-[0_8px_20px_-12px_rgba(15,23,42,0.7)] active:scale-[0.99] transition-all duration-200 rounded-2xl h-11 bg-slate-950 hover:bg-slate-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 cursor-pointer';
+      btn.textContent = !isPayoutDone ? 'Close without payout' : 'Close month';
+    }
+  }
+
+  async function executeCloseMonth() {
+    const btn = document.getElementById('closeMonthSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="spinner" class="w-4 h-4 stroke-[1.8] animate-spin mr-1"></i> Closing month...';
+        if (window.lucide) { lucide.createIcons(); }
+
+    const targetChitId = activeChitId === 'all' ? (allChits[0]?.id) : activeChitId;
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${targetChitId}/close-month`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month_index: activeMonthIndex })
+      });
+      const data = await res.json();
+      if (data.success) {
+        closeCloseMonthModal();
+
+        // 1. Confetti burst animation (exact replicate of ChitBase)
+        try {
+          if (typeof confetti === 'function') {
+            confetti({
+              particleCount: 120,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6"]
+            });
+            setTimeout(() => {
+              confetti({
+                particleCount: 60,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 },
+                colors: ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6"]
+              });
+              confetti({
+                particleCount: 60,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 },
+                colors: ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6"]
+              });
+            }, 250);
+          }
+        } catch (confettiErr) {
+          console.error("Confetti error:", confettiErr);
+        }
+
+        // 2. Smooth scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // 3. Show celebration closed month offer card
+        const chit = allChits.find(g => g.id === targetChitId) || allChits[0];
+        const chitName = chit ? chit.name : 'Chit Scheme';
+        document.getElementById('closedMonthBannerTitle').textContent = `${chitName} — month closed`;
+        document.getElementById('closedMonthStatementOfferCard').classList.remove('hidden');
+
+        // 4. Show success toast notification
+        showToast('Month closed. Next month is now active.');
+
+        // 5. Refresh chit group metadata and transition to next month
+        const resChits = await fetch('/chit/api/chitgroups');
+        if (resChits.ok) {
+          allChits = await resChits.json();
+        }
+        activeMonthIndex = data.new_current_month;
+        await loadMonthsForChit(targetChitId);
+      } else {
+        alert(data.error || 'Failed to close month');
+      }
+    } catch (e) {
+      alert('Network error closing month');
+    } finally {
+      btn.disabled = false;
+      updateCloseMonthBtnState();
+    }
+  }
+
+  function dismissClosedMonthStatementOffer() {
+    document.getElementById('closedMonthStatementOfferCard').classList.add('hidden');
+  }
+
+  function shareClosedMonthStatementPDF() {
+    showToast('Opening closed month statement...');
+    window.open('/chit/reports?tab=statements', '_blank');
+  }
+
+  // 16. Lift / Winner Modal
+  function openLiftModal() {
+    if (!currentDuesData) return;
+    document.getElementById('liftModalSub').textContent = `Month ${activeMonthIndex} · ${currentDuesData.month_year || ''}`;
+    document.getElementById('liftModalAmt').textContent = formatINR(currentDuesData.amount_received_if_lifted);
+    document.getElementById('liftModalLoss').textContent = formatINR(currentDuesData.chit_loss);
+    document.getElementById('liftDateInput').value = new Date().toISOString().split('T')[0];
+
+    const sel = document.getElementById('liftMemberSelect');
+    sel.innerHTML = '<option value="">-- Choose Subscriber --</option>';
+        if (window.lucide) { lucide.createIcons(); }
+    (currentDuesData.dues || []).forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.membership_id;
+      opt.textContent = `Ticket #${m.ticket_number} - ${m.member_name} ${m.has_lifted ? '(Already Lifted)' : ''}`;
+      if (m.has_lifted) opt.disabled = true;
+      sel.appendChild(opt);
+    });
+
+    document.getElementById('liftModal').classList.remove('hidden');
+  }
+
+  function closeLiftModal() {
+    document.getElementById('liftModal').classList.add('hidden');
+  }
+
+  async function handleLiftSubmit(e) {
+    e.preventDefault();
+    const msId = document.getElementById('liftMemberSelect').value;
+    if (!msId) {
+      alert('Please select a subscriber');
+      return;
+    }
+    const targetChitId = activeChitId === 'all' ? (allChits[0]?.id) : activeChitId;
+    const payload = {
+      membership_id: msId,
+      payout_date: document.getElementById('liftDateInput').value,
+      notes: document.getElementById('liftNotesInput').value
+    };
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${targetChitId}/month/${activeMonthIndex}/record-lift`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        closeLiftModal();
+        showToast(`Chit payout recorded! Amount: ${formatINR(data.amount_received)}`);
+        await loadDashboardData(targetChitId, activeMonthIndex);
+      } else {
+        alert(data.error || 'Failed to record payout');
+      }
+    } catch (e) {
+      alert('Error recording payout');
+    }
+  }
+</script>
+{% endblock %}

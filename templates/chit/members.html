@@ -1,0 +1,743 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Members Directory – Siva Durga Chit Fund{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+
+  <!-- Search & Add Bar -->
+  <div class="flex items-center gap-3">
+    <div class="flex-1 relative">
+      <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
+      <input type="text" id="memberSearchInput" oninput="filterMembers()" placeholder="Search subscriber by name, phone, Aadhaar..." 
+             class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-elevated rounded-2xl border border-slate-200 dark:border-slate-700/50 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50 dark:focus:shadow-[0_0_15px_rgba(245,158,11,0.2)] shadow-sm transition-all">
+    </div>
+
+    <button type="button" onclick="openDirectoryLinkModal()" class="px-3.5 h-11 rounded-2xl bg-white dark:bg-chitDark-elevated text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-chitDark-surface transition-colors shadow-xs inline-flex items-center gap-1.5 active:scale-95">
+      <i data-lucide="link" class="w-4 h-4 stroke-[1.8] text-indigo-500"></i>
+      <span>Link Accounts</span>
+    </button>
+
+    <a href="/chit/members/new" class="px-4 h-11 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shadow-sm inline-flex items-center gap-2">
+      <i data-lucide="user-plus" class="w-4 h-4 stroke-[1.8]"></i>
+      <span>Add Member</span>
+    </a>
+  </div>
+
+  <div class="flex items-center justify-between px-1">
+    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+      Total <strong class="text-slate-900 dark:text-slate-100" id="membersCountDisplay">0</strong> subscribers enrolled
+    </p>
+    <span class="text-[11px] text-slate-400 dark:text-slate-500">Click any subscriber to open full passbook & lift history</span>
+  </div>
+
+  <!-- Members Table -->
+  <div class="cb-card card-shine bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm overflow-hidden rounded-2xl">
+    <div class="grid grid-cols-12 px-6 py-3.5 border-b border-slate-100 dark:border-slate-700/40 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/70 dark:bg-chitDark-elevated items-center">
+      <div class="col-span-2 flex items-center gap-2">
+        <input type="checkbox" id="selectAllMembersCheck" onchange="toggleSelectAllMembers(this)" class="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-400 cursor-pointer" title="Select all for linking">
+        <span>CUSTOMER ID</span>
+      </div>
+      <div class="col-span-3">SUBSCRIBER</div>
+      <div class="col-span-1 text-center">GROUPS</div>
+      <div class="col-span-2 text-center">CHIT VALUE</div>
+      <div class="col-span-2 text-center">PAYOUTS</div>
+      <div class="col-span-2 text-right">TOTAL DUES</div>
+    </div>
+
+    <div id="membersTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/40 text-xs font-medium">
+      <p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">Loading subscribers...</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Customer Passbook Drawer -->
+<div id="passbookDrawer" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex justify-end">
+  <div class="bg-white dark:bg-chitDark-surface max-w-lg w-full h-full shadow-2xl p-6 overflow-y-auto space-y-6 flex flex-col justify-between animate-in slide-in-from-right duration-200 border-l border-slate-200 dark:border-slate-700/50">
+    <div class="space-y-5">
+      <!-- Drawer Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/40">
+        <div>
+          <h3 class="text-lg font-extrabold text-slate-900 dark:text-slate-100" id="drawerMemberName">Subscriber Passbook</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500" id="drawerMemberPhone">+91 00000 00000 · Aadhaar: ****</p>
+        </div>
+        <button onclick="closePassbookDrawer()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+          <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+        </button>
+      </div>
+
+      <!-- Enrolled Chits Lifecycle Breakdown -->
+      <div class="space-y-3" id="drawerEnrollmentsList">
+        <p class="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">Loading subscriber lifecycle...</p>
+      </div>
+    </div>
+
+    <div class="pt-4 border-t border-slate-100 dark:border-slate-700/40">
+      <button type="button" onclick="closePassbookDrawer()" class="w-full h-11 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-white/[0.1] transition-colors">
+        Close Passbook
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Member Modal -->
+<div id="addMemberModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-slate-700/50 animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/40">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Add New Member</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Auto-Generated Customer ID & Details</p>
+      </div>
+      <button onclick="closeAddMemberModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <form id="addMemberForm" onsubmit="handleAddMember(event)" class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Customer ID (Auto-Generated)</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs font-bold">#</span>
+            <input type="text" id="newMemberCustomerId" readonly placeholder="Auto"
+                   class="w-full h-11 pl-7 pr-3 bg-slate-100 dark:bg-chitDark-elevated/70 border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-mono font-bold text-slate-600 dark:text-slate-300 cursor-not-allowed select-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Full Legal Name *</label>
+          <input type="text" id="newMemberName" required placeholder="e.g. Chinna Reddy"
+                 class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Phone (WhatsApp) *</label>
+          <input type="tel" id="newMemberPhone" required placeholder="9876543210"
+                 class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Aadhaar / Govt ID</label>
+          <input type="text" id="newMemberAadhaar" placeholder="12-digit Aadhaar"
+                 class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Residential Address</label>
+        <input type="text" id="newMemberAddress" placeholder="Village / Town, Khammam"
+               class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50">
+      </div>
+
+      <div class="pt-2">
+        <button type="submit" id="btnSaveMember" class="w-full h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:bg-slate-800 dark:hover:bg-slate-200 shadow-md active:scale-95 transition-all">
+          Save Subscriber
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Floating Bulk Link Bar -->
+<div id="bulkLinkFloatingBar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-800 dark:border-slate-200 hidden animate-in fade-in slide-in-from-bottom-3 duration-200">
+  <div class="flex items-center gap-2">
+    <div class="h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></div>
+    <span class="text-xs font-bold" id="bulkSelectedCountText">0 subscribers selected</span>
+  </div>
+  <div class="flex items-center gap-2">
+    <button type="button" onclick="executeBulkLinkSelected()" class="h-8 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95">
+      <i data-lucide="link" class="w-3.5 h-3.5"></i>
+      <span>Link Selected</span>
+    </button>
+    <button type="button" onclick="clearSelectedMembers()" class="h-8 px-2.5 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 text-slate-300 dark:text-slate-600 text-xs font-semibold transition-colors">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<!-- Directory Link Accounts Modal -->
+<div id="directoryLinkModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg w-full max-h-[90vh] my-auto overflow-y-auto p-6 shadow-2xl space-y-5 border border-slate-100 dark:border-slate-700/50 animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/40">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <i data-lucide="link" class="w-4 h-4 text-indigo-500"></i>
+          <span id="dirModalTitle">Link Subscriber Accounts</span>
+        </h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Link family members or related accounts together for quick switching</p>
+      </div>
+      <button onclick="closeDirectoryLinkModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <!-- Active member linked cluster (if opened for a specific member) -->
+    <div id="dirCurrentGroupSection" class="space-y-2 hidden">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Currently Linked in this Family</h4>
+        <span id="dirGroupCountBadge" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">0</span>
+      </div>
+      <div id="dirCurrentGroupList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1"></div>
+      <div class="h-px bg-slate-100 dark:bg-chitDark-elevated my-2"></div>
+    </div>
+
+    <!-- Multi-select / Link Search Section -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400" id="dirSelectLabel">Select Subscribers to Link</h4>
+        <span id="dirSelectedToLinkBadge" class="text-xs font-bold text-indigo-600 dark:text-indigo-400">0 selected</span>
+      </div>
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+        <input type="text" id="dirSearchInput" oninput="renderDirModalCandidates()" placeholder="Search by name, customer ID, phone..."
+               class="w-full h-10 pl-9 pr-3 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-chitDark-surface focus:ring-2 focus:ring-indigo-400">
+      </div>
+      <div id="dirCandidatesList" class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+        <!-- Candidate subscribers -->
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/40 flex items-center justify-between">
+      <span class="text-[11px] text-slate-400" id="dirFooterHint">Select at least 2 accounts</span>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="closeDirectoryLinkModal()" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors">
+          Close
+        </button>
+        <button type="button" id="btnSubmitDirLink" onclick="submitDirectoryLink()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+          Link Selected
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let allMembers = [];
+  let selectedMemberIds = new Set();
+  let dirModalTargetMember = null;
+  let dirModalSelectedIds = new Set();
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  async function loadMembers() {
+    const tbody = document.getElementById('membersTableBody');
+    try {
+      const res = await fetch('/chit/api/members');
+      const data = await res.json();
+      allMembers = data;
+      document.getElementById('membersCountDisplay').textContent = data.length;
+      renderTable(data);
+    } catch (e) {
+      tbody.innerHTML = '<p class="text-xs text-rose-500 dark:text-rose-400 py-6 text-center">Failed to load members</p>';
+    }
+  }
+
+  function renderTable(members) {
+    const tbody = document.getElementById('membersTableBody');
+    if (members.length === 0) {
+      tbody.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">No subscribers registered yet</p>';
+      updateSelectAllCheckboxState();
+      return;
+    }
+    tbody.innerHTML = '';
+    members.forEach(m => {
+      const row = document.createElement('div');
+      const isChecked = selectedMemberIds.has(String(m.id));
+      row.className = 'grid grid-cols-12 px-6 py-3.5 items-center hover:bg-amber-50/40 dark:hover:bg-white/[0.02] cursor-pointer transition-colors';
+      row.onclick = (e) => {
+        window.location.href = `/chit/members/${m.id}`;
+      };
+
+      row.innerHTML = `
+        <div class="col-span-2 flex items-center gap-2">
+          <input type="checkbox" class="member-row-check w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-400 cursor-pointer" data-id="${m.id}" ${isChecked ? 'checked' : ''} onchange="onMemberCheckChange(event, '${m.id}')" onclick="event.stopPropagation()">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-800 dark:text-slate-200 font-mono font-bold text-xs tracking-wider border border-slate-200/60 dark:border-slate-700/50 shadow-2xs">
+            #${m.customer_id || '—'}
+          </span>
+        </div>
+
+        <div class="col-span-3 flex items-center gap-2.5 min-w-0">
+          <div class="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+            ${(m.name || 'U').charAt(0).toUpperCase()}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <p class="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">${m.name}</p>
+              ${m.is_defaulted ? `
+                <span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded-md bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800/80 flex items-center gap-1 shadow-2xs" title="${m.defaulted_reason || 'Defaulted'}">
+                  <span class="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                  DEFAULTED
+                </span>
+              ` : ''}
+              ${m.linked_count && m.linked_count > 1 ? `
+                <button type="button" onclick="event.stopPropagation(); openDirectoryLinkModal('${m.id}')" class="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 inline-flex items-center gap-1 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors shadow-2xs" title="Linked to ${m.linked_count} accounts. Click to view or manage family links.">
+                  <i data-lucide="link" class="w-2.5 h-2.5"></i>
+                  <span>${m.linked_count} Linked</span>
+                </button>
+              ` : ''}
+            </div>
+            <p class="text-[10px] text-slate-400 dark:text-slate-500 truncate">${m.phone || 'No phone'}</p>
+          </div>
+        </div>
+
+        <div class="col-span-1 text-center">
+          <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-extrabold text-[11px]">
+            ${m.groups_count || 0}
+          </span>
+        </div>
+
+        <div class="col-span-2 text-center">
+          <span class="px-2.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 font-extrabold text-xs border border-emerald-200/50 dark:border-emerald-500/20">
+            ${m.total_shares || 0}x
+          </span>
+        </div>
+
+        <div class="col-span-2 text-center">
+          ${(m.payout_shares && m.payout_shares > 0) ? `
+            <span class="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-400 font-extrabold text-xs border border-amber-200 dark:border-amber-500/20">
+              ${m.payout_shares}x
+            </span>
+          ` : `
+            <span class="text-xs text-slate-400 dark:text-slate-500 font-medium">0</span>
+          `}
+        </div>
+
+        <div class="col-span-2 text-right font-extrabold money-fig ${m.total_dues > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}">
+          ${formatINR(m.total_dues)}
+        </div>
+      `;
+      tbody.appendChild(row);
+    });
+
+    updateSelectAllCheckboxState();
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  }
+
+  function filterMembers() {
+    const filtered = getCurrentlyFilteredMembers();
+    renderTable(filtered);
+  }
+
+  function getCurrentlyFilteredMembers() {
+    const q = (document.getElementById('memberSearchInput')?.value || '').toLowerCase().trim();
+    if (!q) return allMembers;
+    return allMembers.filter(m => 
+      (m.name && m.name.toLowerCase().includes(q)) || 
+      (m.customer_id && m.customer_id.toLowerCase().includes(q)) ||
+      (m.phone && m.phone.toLowerCase().includes(q))
+    );
+  }
+
+  function onMemberCheckChange(e, id) {
+    if (e.target.checked) {
+      selectedMemberIds.add(String(id));
+    } else {
+      selectedMemberIds.delete(String(id));
+    }
+    updateBulkFloatingBar();
+    updateSelectAllCheckboxState();
+  }
+
+  function toggleSelectAllMembers(masterCheckbox) {
+    const isChecked = masterCheckbox.checked;
+    const currentList = getCurrentlyFilteredMembers();
+    currentList.forEach(m => {
+      if (isChecked) {
+        selectedMemberIds.add(String(m.id));
+      } else {
+        selectedMemberIds.delete(String(m.id));
+      }
+    });
+    document.querySelectorAll('.member-row-check').forEach(cb => {
+      cb.checked = isChecked;
+    });
+    updateBulkFloatingBar();
+  }
+
+  function updateSelectAllCheckboxState() {
+    const master = document.getElementById('selectAllMembersCheck');
+    if (!master) return;
+    const currentList = getCurrentlyFilteredMembers();
+    if (currentList.length === 0) {
+      master.checked = false;
+      return;
+    }
+    const allChecked = currentList.every(m => selectedMemberIds.has(String(m.id)));
+    master.checked = allChecked;
+  }
+
+  function updateBulkFloatingBar() {
+    const bar = document.getElementById('bulkLinkFloatingBar');
+    const text = document.getElementById('bulkSelectedCountText');
+    if (!bar) return;
+    const count = selectedMemberIds.size;
+    if (count >= 2) {
+      bar.classList.remove('hidden');
+      if (text) text.textContent = `${count} subscribers selected`;
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  function clearSelectedMembers() {
+    selectedMemberIds.clear();
+    document.querySelectorAll('.member-row-check').forEach(cb => cb.checked = false);
+    const master = document.getElementById('selectAllMembersCheck');
+    if (master) master.checked = false;
+    updateBulkFloatingBar();
+  }
+
+  async function executeBulkLinkSelected() {
+    if (selectedMemberIds.size < 2) {
+      showToast('Please select at least 2 subscribers to link', 'error');
+      return;
+    }
+    const ids = Array.from(selectedMemberIds);
+    try {
+      const res = await fetch('/chit/api/members/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to link accounts');
+      showToast(`Successfully linked ${ids.length} subscriber accounts!`);
+      clearSelectedMembers();
+      await loadMembers();
+    } catch (e) {
+      alert(e.message || 'Failed to link subscribers');
+    }
+  }
+
+  // ==================== DIRECTORY LINK MODAL ====================
+  async function openDirectoryLinkModal(memberId = null) {
+    const modal = document.getElementById('directoryLinkModal');
+    modal.classList.remove('hidden');
+    dirModalTargetMember = memberId ? allMembers.find(m => String(m.id) === String(memberId)) : null;
+    dirModalSelectedIds.clear();
+
+    const titleEl = document.getElementById('dirModalTitle');
+    const groupSec = document.getElementById('dirCurrentGroupSection');
+    const groupList = document.getElementById('dirCurrentGroupList');
+    const groupBadge = document.getElementById('dirGroupCountBadge');
+    const searchInput = document.getElementById('dirSearchInput');
+    if (searchInput) searchInput.value = '';
+
+    if (dirModalTargetMember) {
+      titleEl.textContent = `Link Accounts – ${dirModalTargetMember.name}`;
+      dirModalSelectedIds.add(String(dirModalTargetMember.id));
+
+      if (dirModalTargetMember.linked_group_id) {
+        groupSec.classList.remove('hidden');
+        groupList.innerHTML = '<p class="text-xs text-slate-400 py-2">Loading current family members...</p>';
+        try {
+          const res = await fetch(`/chit/api/members/${dirModalTargetMember.id}/linked-accounts`);
+          const d = await res.json();
+          const linkedList = d.linked_members || [];
+          groupBadge.textContent = `${linkedList.length} accounts`;
+          groupList.innerHTML = '';
+          linkedList.forEach(lm => {
+            const isSelf = String(lm.id) === String(dirModalTargetMember.id);
+            const r = document.createElement('div');
+            r.className = 'flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-chitDark-elevated text-xs';
+            r.innerHTML = `
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 truncate">${lm.full_name}</span>
+                <span class="text-slate-400 font-mono text-[10px]">#${lm.customer_id || ''}</span>
+                ${isSelf ? '<span class="text-[9px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold px-1.5 py-0.2 rounded">This Member</span>' : ''}
+              </div>
+              ${!isSelf ? `
+                <button type="button" onclick="unlinkFromDirModal('${lm.id}')" class="text-rose-600 hover:text-rose-700 text-xs font-bold px-2 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                  Unlink
+                </button>
+              ` : ''}
+            `;
+            groupList.appendChild(r);
+          });
+        } catch (err) {
+          groupList.innerHTML = '<p class="text-xs text-rose-500 py-2">Failed to load linked members</p>';
+        }
+      } else {
+        groupSec.classList.add('hidden');
+      }
+    } else {
+      titleEl.textContent = 'Link Subscriber Accounts';
+      groupSec.classList.add('hidden');
+      if (selectedMemberIds.size > 0) {
+        selectedMemberIds.forEach(id => dirModalSelectedIds.add(String(id)));
+      }
+    }
+
+    renderDirModalCandidates();
+    updateDirSubmitButton();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeDirectoryLinkModal() {
+    document.getElementById('directoryLinkModal').classList.add('hidden');
+  }
+
+  function renderDirModalCandidates() {
+    const list = document.getElementById('dirCandidatesList');
+    const q = (document.getElementById('dirSearchInput')?.value || '').toLowerCase().trim();
+    const filtered = allMembers.filter(m => {
+      if (dirModalTargetMember && String(m.id) === String(dirModalTargetMember.id)) {
+        return false;
+      }
+      if (!q) return true;
+      return (m.name && m.name.toLowerCase().includes(q)) ||
+             (m.customer_id && m.customer_id.toLowerCase().includes(q)) ||
+             (m.phone && m.phone.toLowerCase().includes(q));
+    });
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">No subscribers found</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    filtered.slice(0, 20).forEach(m => {
+      const isSel = dirModalSelectedIds.has(String(m.id));
+      const row = document.createElement('div');
+      row.className = `flex items-center justify-between p-2 rounded-xl border transition-colors cursor-pointer ${
+        isSel 
+          ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800' 
+          : 'hover:bg-slate-50 dark:hover:bg-chitDark-elevated border-slate-100 dark:border-slate-800/80'
+      }`;
+      row.onclick = () => toggleDirCandidateSelect(String(m.id));
+
+      row.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <input type="checkbox" ${isSel ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-400 pointer-events-none">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">${m.name}</span>
+              <span class="text-[10px] font-mono text-slate-400">#${m.customer_id || '—'}</span>
+            </div>
+            <span class="text-[10px] text-slate-400">${m.phone || 'No phone'}</span>
+          </div>
+        </div>
+        <span class="text-[10px] font-bold ${isSel ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}">
+          ${isSel ? 'Selected' : '+ Select'}
+        </span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  function toggleDirCandidateSelect(id) {
+    if (dirModalSelectedIds.has(id)) {
+      if (dirModalTargetMember && String(dirModalTargetMember.id) === String(id)) return;
+      dirModalSelectedIds.delete(id);
+    } else {
+      dirModalSelectedIds.add(id);
+    }
+    renderDirModalCandidates();
+    updateDirSubmitButton();
+  }
+
+  function updateDirSubmitButton() {
+    const btn = document.getElementById('btnSubmitDirLink');
+    const badge = document.getElementById('dirSelectedToLinkBadge');
+    const count = dirModalSelectedIds.size;
+    if (badge) badge.textContent = `${count} selected`;
+    if (btn) {
+      btn.disabled = count < 2;
+    }
+  }
+
+  async function submitDirectoryLink() {
+    if (dirModalSelectedIds.size < 2) {
+      alert('Please select at least 2 subscribers to link');
+      return;
+    }
+
+    const ids = Array.from(dirModalSelectedIds);
+    try {
+      const res = await fetch('/chit/api/members/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to link accounts');
+      showToast(`Successfully linked ${ids.length} subscriber accounts!`);
+      closeDirectoryLinkModal();
+      clearSelectedMembers();
+      await loadMembers();
+    } catch (e) {
+      alert(e.message || 'Error linking accounts');
+    }
+  }
+
+  async function unlinkFromDirModal(memberId) {
+    try {
+      const res = await fetch(`/chit/api/members/${memberId}/unlink`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to unlink');
+      showToast('Subscriber unlinked');
+      if (dirModalTargetMember) {
+        await openDirectoryLinkModal(dirModalTargetMember.id);
+      }
+      await loadMembers();
+    } catch (e) {
+      alert(e.message || 'Error unlinking account');
+    }
+  }
+
+  async function openPassbook(memberId) {
+    document.getElementById('passbookDrawer').classList.remove('hidden');
+    const container = document.getElementById('drawerEnrollmentsList');
+    container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">Loading subscriber passbook...</p>';
+
+    try {
+      const res = await fetch(`/chit/api/members/${memberId}/summary`);
+      const data = await res.json();
+      document.getElementById('drawerMemberName').textContent = data.full_name;
+      document.getElementById('drawerMemberPhone').textContent = `Phone: ${data.phone || '—'}`;
+
+      if (!data.enrollments || data.enrollments.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">No active chits enrolled for this subscriber.</p>';
+        return;
+      }
+
+      container.innerHTML = '';
+      data.enrollments.forEach(en => {
+        const fin = en.financials;
+        const hasLift = en.has_lifted;
+
+        const card = document.createElement('div');
+        card.className = 'cb-card p-4 border border-slate-200 dark:border-slate-700/40 bg-white dark:bg-chitDark-surface space-y-3';
+        card.innerHTML = `
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700/40">
+            <div>
+              <h4 class="font-extrabold text-slate-900 dark:text-slate-100 text-xs">${en.group_name}</h4>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500">Ticket #${en.ticket_number} · Cycle Month ${fin.current_month_index}</p>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${hasLift ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-400' : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-900 dark:text-emerald-400'}">
+              ${hasLift ? `Lifted M${en.lifted_month_index}` : 'Saver (Not Lifted)'}
+            </span>
+          </div>
+
+          <!-- Financial status -->
+          <div class="bg-slate-50 dark:bg-chitDark-elevated rounded-xl p-3 text-xs space-y-1.5">
+            <div class="flex justify-between text-slate-600 dark:text-slate-400">
+              <span>Current Month Installment:</span>
+              <span class="font-bold money-fig text-slate-900 dark:text-slate-100">${formatINR(fin.current_month_due)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600 dark:text-slate-400">
+              <span>Bonus Saved this Month:</span>
+              <span class="font-bold money-fig text-emerald-600 dark:text-emerald-400">${formatINR(fin.current_month_bonus)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600 dark:text-slate-400">
+              <span>Total Installments Paid to Date:</span>
+              <span class="font-bold money-fig text-slate-900 dark:text-slate-100">${formatINR(fin.paid_to_date_projected)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600 dark:text-slate-400">
+              <span>Future Installments Remaining:</span>
+              <span class="font-bold money-fig text-amber-800 dark:text-amber-400">${formatINR(fin.future_dues_projected)}</span>
+            </div>
+          </div>
+
+          <!-- Lift or Saver Profit -->
+          <div class="p-3 rounded-xl ${hasLift ? 'bg-amber-50/70 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20' : 'bg-emerald-50/70 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'} text-xs space-y-1">
+            ${hasLift && fin.lift_info ? `
+              <div class="flex justify-between font-bold text-amber-950 dark:text-amber-400">
+                <span>Chit Amount Received:</span>
+                <span class="money-fig text-sm font-extrabold">${formatINR(fin.lift_info.amount_received)}</span>
+              </div>
+              <div class="flex justify-between text-[11px] text-amber-800 dark:text-amber-500">
+                <span>Total Net Borrowing Cost:</span>
+                <span class="money-fig font-bold">${formatINR(fin.lift_info.borrow_cost)}</span>
+              </div>
+            ` : `
+              <div class="flex justify-between font-bold text-emerald-950 dark:text-emerald-400">
+                <span>Final Maturity Payout:</span>
+                <span class="money-fig text-sm font-extrabold">${formatINR(fin.final_maturity_payout)}</span>
+              </div>
+              <div class="flex justify-between text-[11px] text-emerald-800 dark:text-emerald-500">
+                <span>Net Profit if paid till completion:</span>
+                <span class="money-fig font-bold">+${formatINR(fin.saver_net_profit)} (+14.3%)</span>
+              </div>
+            `}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    } catch (e) {
+      container.innerHTML = '<p class="text-xs text-rose-500 dark:text-rose-400 py-6 text-center">Failed to load subscriber details</p>';
+    }
+  }
+
+  function closePassbookDrawer() {
+    document.getElementById('passbookDrawer').classList.add('hidden');
+  }
+
+  function openAddMemberModal() {
+    window.location.href = '/chit/members/new';
+  }
+
+  function closeAddMemberModal() {
+    document.getElementById('addMemberModal').classList.add('hidden');
+  }
+
+  async function handleAddMember(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSaveMember');
+    const custId = (document.getElementById('newMemberCustomerId')?.value || '').trim();
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const payload = {
+      customer_id: custId,
+      full_name: document.getElementById('newMemberName').value.trim(),
+      phone: document.getElementById('newMemberPhone').value.trim(),
+      aadhaar_no: document.getElementById('newMemberAadhaar').value.trim(),
+      address: document.getElementById('newMemberAddress').value.trim()
+    };
+
+    try {
+      const res = await fetch('/chit/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('addMemberForm').reset();
+        closeAddMemberModal();
+        showToast(`Registered subscriber #${data.customer_id} ${data.name}!`);
+        // Clear search filter so the newly added subscriber immediately appears in the refreshed list
+        const searchBox = document.getElementById('memberSearchInput');
+        if (searchBox) searchBox.value = '';
+        await loadMembers();
+      } else {
+        alert(data.error || 'Failed to save member');
+      }
+    } catch (err) {
+      alert('Network error saving subscriber');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Subscriber';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadMembers();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,923 @@
+{% extends "chit/base.html" %}
+
+{% block title %}Reports & Statements – Siva Durga Chit Fund{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media print {
+    aside, #searchBackdrop, #searchPalette, #themeToggleBtn, .no-print, nav {
+      display: none !important;
+    }
+    main {
+      margin-left: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+    }
+    .print-sheet {
+      box-shadow: none !important;
+      border: none !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    /* Hide everything except active print modal if one is open */
+    body.printing-modal > *:not(#printContainer) {
+      display: none !important;
+    }
+    body.printing-modal #printContainer {
+      display: block !important;
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+    }
+  }
+
+  /* Printable Document Sheet Styling */
+  .receipt-watermark {
+    background-image: radial-gradient(circle at center, rgba(245, 158, 11, 0.03) 0%, transparent 70%);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6 pb-20 no-print-section">
+
+  <!-- ==================== REPORT CATEGORY PILLS ==================== -->
+  <div class="cb-card card-shine p-2.5 bg-white dark:bg-chitDark-surface border border-slate-200/80 dark:border-slate-700/50 shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div class="flex items-center gap-1.5 flex-wrap" id="reportTabsContainer">
+      <button type="button" onclick="switchReportTab('monthly')" id="tabBtnMonthly" class="rep-tab-btn px-3 py-1.5 rounded-xl bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 font-bold inline-flex items-center gap-1.5 transition-all shadow-xs">
+        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 stroke-[2]"></i>
+        <span>Monthly</span>
+      </button>
+
+      <button type="button" onclick="switchReportTab('defaulters')" id="tabBtnDefaulters" class="rep-tab-btn px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] font-semibold inline-flex items-center gap-1.5 transition-all">
+        <i data-lucide="user-x" class="w-3.5 h-3.5 stroke-[1.8] text-rose-500"></i>
+        <span>Defaulters</span>
+      </button>
+
+      <button type="button" onclick="switchReportTab('earnings')" id="tabBtnEarnings" class="rep-tab-btn px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] font-semibold inline-flex items-center gap-1.5 transition-all">
+        <i data-lucide="wallet" class="w-3.5 h-3.5 stroke-[1.8] text-amber-500"></i>
+        <span>Earnings</span>
+      </button>
+
+      <button type="button" onclick="switchReportTab('payouts')" id="tabBtnPayouts" class="rep-tab-btn px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] font-semibold inline-flex items-center gap-1.5 transition-all">
+        <i data-lucide="banknote" class="w-3.5 h-3.5 stroke-[1.8] text-emerald-500"></i>
+        <span>Payouts</span>
+      </button>
+    </div>
+
+    <!-- Right: Print / Export -->
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="window.print()" class="h-8 px-3 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-elevated text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-white/[0.05] flex items-center gap-1.5">
+        <i data-lucide="printer" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+        <span>Print</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== VIEW 1: MONTHLY STATEMENT ==================== -->
+  <div id="viewMonthly" class="space-y-6">
+
+    <!-- Active Chit Selector Dropdown / Pill -->
+    <div class="flex items-center justify-center gap-2">
+      <select id="reportChitSelect" onchange="onChitSelectionChanged()" class="px-4 py-2 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-extrabold shadow-sm ring-1 ring-slate-800 dark:ring-slate-200 cursor-pointer focus:outline-none">
+        <option value="">Loading Chit Schemes...</option>
+      </select>
+    </div>
+
+    <!-- Month Timeline Slider Pills -->
+    <div class="flex items-center justify-center gap-2">
+      <button type="button" onclick="navigateMonth(-1)" class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="chevron-left" class="w-4 h-4 stroke-[2]"></i>
+      </button>
+
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1" id="reportMonthsSlider">
+        <!-- Rendered via JS -->
+      </div>
+
+      <button type="button" onclick="navigateMonth(1)" class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2]"></i>
+      </button>
+    </div>
+
+    <!-- Big PDF / Statement Trigger Button -->
+    <button type="button" onclick="openMonthStatementModal()" class="w-full h-12 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+      <i data-lucide="file-text" class="w-4 h-4 stroke-[2]"></i>
+      <span>Open Month Statement (Printable / PDF)</span>
+    </button>
+
+    <!-- Share Quick Action Row -->
+    <div class="grid grid-cols-2 gap-3">
+      <button type="button" onclick="shareStatementText()" class="h-11 rounded-2xl border border-slate-200/90 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-100 font-bold text-xs hover:bg-slate-50 dark:hover:bg-white/[0.05] flex items-center justify-center gap-2 transition-all">
+        <i data-lucide="share-2" class="w-4 h-4 stroke-[1.8] text-slate-400 dark:text-slate-500"></i>
+        <span>Share Text Summary</span>
+      </button>
+
+      <button type="button" onclick="openMonthStatementModal()" class="h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all">
+        <i data-lucide="printer" class="w-4 h-4 stroke-[1.8]"></i>
+        <span>Print Statement PDF</span>
+      </button>
+    </div>
+
+    <!-- 4 Colored KPI Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="cb-card card-shine p-4 bg-white dark:bg-chitDark-surface border border-slate-200/80 dark:border-slate-700/50">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">EXPECTED</p>
+        <p class="text-base font-extrabold text-slate-900 dark:text-slate-100 money-fig mt-1" id="repExpectedAmt">₹0</p>
+      </div>
+
+      <div class="cb-card card-shine p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/30">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">COLLECTED</p>
+        <p class="text-base font-extrabold text-emerald-700 dark:text-emerald-400 money-fig mt-1" id="repCollectedAmt">₹0</p>
+      </div>
+
+      <div class="cb-card card-shine p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/30">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">PENDING</p>
+        <p class="text-base font-extrabold text-amber-700 dark:text-amber-400 money-fig mt-1" id="repPendingAmt">₹0</p>
+      </div>
+
+      <div class="cb-card card-shine p-4 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-800/30">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-400">COLLECTION %</p>
+        <p class="text-base font-extrabold text-rose-600 dark:text-rose-400 money-fig mt-1" id="repCollectionPct">0%</p>
+      </div>
+    </div>
+
+    <!-- Collection Progress Bar -->
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between text-xs font-semibold">
+        <span class="text-slate-700 dark:text-slate-300">Collection Progress</span>
+        <span class="text-emerald-600 dark:text-emerald-400 font-bold" id="repProgressPctText">0% received</span>
+      </div>
+      <div class="cgauge-track h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div class="cgauge-fill--paid rounded-full" id="repProgressBar" style="width: 0%;"></div>
+      </div>
+    </div>
+
+    <!-- Payout / Disbursal Card for this month -->
+    <div id="monthPayoutBox" class="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <i data-lucide="trophy" class="w-5 h-5 stroke-[1.8]"></i>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">PRIZE MONEY DISBURSED</p>
+          <p class="text-xs font-extrabold text-slate-900 dark:text-slate-100 mt-0.5" id="repPayoutWinner">Winner: Not yet recorded</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig" id="repPayoutAmount">₹0</p>
+        <span class="inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold" id="repPayoutStatusBadge">Pending</span>
+      </div>
+    </div>
+
+    <!-- Members Payment Breakdown Table -->
+    <div class="cb-card rounded-3xl border border-slate-200/80 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface overflow-hidden">
+      <div class="p-4 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+        <h3 class="text-xs font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Subscriber Collections</h3>
+        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-400" id="repMemberCountBadge">0 members</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/60 dark:bg-chitDark-elevated/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-2.5">#</th>
+              <th class="px-4 py-2.5">Subscriber</th>
+              <th class="px-4 py-2.5 text-right">Due</th>
+              <th class="px-4 py-2.5 text-right">Paid</th>
+              <th class="px-4 py-2.5 text-right">Pending</th>
+              <th class="px-4 py-2.5 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="repMembersTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/40 font-medium">
+            <tr>
+              <td colspan="6" class="p-6 text-center text-slate-400">Loading member collections...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== VIEW 2: DEFAULTERS ==================== -->
+  <div id="viewDefaulters" class="hidden space-y-4">
+    <div class="cb-card p-6 rounded-3xl border border-slate-200/80 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Overdue Subscribers</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Members with pending installment payments across all active groups</p>
+        </div>
+        <button type="button" onclick="sendAllDefaulterReminders()" class="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs">
+          <i data-lucide="bell" class="w-3.5 h-3.5 stroke-[2]"></i>
+          <span>Remind All Defaulters</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/60 dark:bg-chitDark-elevated/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-3">Subscriber</th>
+              <th class="px-4 py-3">Phone</th>
+              <th class="px-4 py-3">Customer ID</th>
+              <th class="px-4 py-3 text-center">Active Chits</th>
+              <th class="px-4 py-3 text-right">Total Overdue</th>
+              <th class="px-4 py-3 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="defaultersTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/40 font-medium">
+            <tr>
+              <td colspan="6" class="p-6 text-center text-slate-400">Loading defaulters list...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== VIEW 3: FOREMAN EARNINGS ==================== -->
+  <div id="viewEarnings" class="hidden space-y-4">
+    <div class="cb-card p-6 rounded-3xl border border-slate-200/80 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface space-y-4">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Foreman Earnings &amp; Commission</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Cumulative monthly commission earned from managing active chit schemes</p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/60 dark:bg-chitDark-elevated/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-3">Chit Scheme</th>
+              <th class="px-4 py-3 text-right">Pool Value</th>
+              <th class="px-4 py-3 text-center">Duration</th>
+              <th class="px-4 py-3 text-center">Month</th>
+              <th class="px-4 py-3 text-right">Monthly Commission</th>
+              <th class="px-4 py-3 text-right">Cumulative Earned</th>
+            </tr>
+          </thead>
+          <tbody id="earningsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/40 font-medium">
+            <tr>
+              <td colspan="6" class="p-6 text-center text-slate-400">Loading earnings register...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== VIEW 4: PAYOUTS REGISTER ==================== -->
+  <div id="viewPayouts" class="hidden space-y-4">
+    <div class="cb-card p-6 rounded-3xl border border-slate-200/80 dark:border-slate-700/50 bg-white dark:bg-chitDark-surface space-y-4">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Prize Money Disbursal Register</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Record of all auction payouts and prize distributions disbursed to subscribers</p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/60 dark:bg-chitDark-elevated/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-3">Chit Scheme</th>
+              <th class="px-4 py-3">Month</th>
+              <th class="px-4 py-3">Prize Winner</th>
+              <th class="px-4 py-3 text-right">Payout Amount</th>
+              <th class="px-4 py-3 text-right">Chit Loss</th>
+              <th class="px-4 py-3">Disbursal Date</th>
+              <th class="px-4 py-3 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="payoutsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/40 font-medium">
+            <tr>
+              <td colspan="7" class="p-6 text-center text-slate-400">Loading payouts register...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- =========================================================================
+     MODAL 1: MONTH STATEMENT (EXACT REPLICA OF USER REFERENCE media_1789488101072.jpg)
+     ========================================================================= -->
+<div id="monthStatementModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white text-slate-900 rounded-3xl max-w-xl md:max-w-2xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-200 overflow-hidden print-sheet">
+    
+    <!-- Modal Sticky Action Bar (Hidden in Print) -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50 no-print shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold text-slate-700">Month Statement Preview</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="printStatementDocument()" class="h-8 px-3 rounded-xl bg-slate-950 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="printer" class="w-3.5 h-3.5 stroke-[2]"></i>
+          <span>Print / Save PDF</span>
+        </button>
+        <button type="button" onclick="closeMonthStatementModal()" class="h-8 w-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800">
+          <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrollable Printable Statement Body -->
+    <div class="p-6 sm:p-8 overflow-y-auto space-y-5 receipt-watermark text-slate-900 font-sans text-xs">
+      
+      <!-- Top Branding Row -->
+      <div class="flex items-start justify-between border-b border-slate-100 pb-4">
+        <div class="flex items-center gap-3">
+          <img src="/static/images/chit-logo.svg" alt="Siva Durga" class="w-9 h-9">
+          <div>
+            <h2 class="text-sm font-extrabold tracking-tight text-slate-900 leading-tight">Siva Durga Chit Fund</h2>
+            <p class="text-[10px] text-slate-400 font-medium">Smart Finance &amp; Chit Operations</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">MONTH STATEMENT</p>
+          <p class="text-[10px] text-slate-500 font-mono mt-0.5" id="stmtGeneratedTime"></p>
+        </div>
+      </div>
+
+      <!-- Statement Title & Scheme Chips -->
+      <div>
+        <h1 class="text-2xl font-black text-slate-950 tracking-tight">Month Statement</h1>
+        <div class="flex items-center gap-2 mt-2 flex-wrap text-xs">
+          <span class="px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-800 border border-slate-200" id="stmtSchemePill">₹5L · 20M · 20 Months</span>
+          <span class="px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-800 border border-slate-200" id="stmtMonthPill">Oct 26</span>
+        </div>
+        <div class="h-0.5 w-12 bg-emerald-600 rounded-full mt-3"></div>
+      </div>
+
+      <!-- 3 Key Metric Blocks -->
+      <div class="grid grid-cols-3 gap-3 py-1">
+        <div class="border border-slate-100 rounded-2xl p-3 bg-slate-50/50">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">EXPECTED</p>
+          <p class="text-base font-extrabold text-slate-950 money-fig mt-1" id="stmtExpected">₹0</p>
+        </div>
+        <div class="border border-emerald-100 rounded-2xl p-3 bg-emerald-50/40">
+          <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">COLLECTED</p>
+          <p class="text-base font-extrabold text-emerald-600 money-fig mt-1" id="stmtCollected">₹0</p>
+        </div>
+        <div class="border border-slate-100 rounded-2xl p-3 bg-slate-50/50">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PENDING</p>
+          <p class="text-base font-extrabold text-slate-950 money-fig mt-1" id="stmtPending">₹0</p>
+        </div>
+      </div>
+
+      <!-- Collection Progress -->
+      <div class="space-y-1.5 p-3 rounded-2xl bg-slate-50/60 border border-slate-100">
+        <div class="flex items-center justify-between text-[11px] font-bold">
+          <span class="text-slate-700">Collection Progress</span>
+          <span class="text-emerald-700 font-extrabold" id="stmtProgressPct">100% received</span>
+        </div>
+        <div class="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+          <div class="h-full bg-emerald-600 rounded-full transition-all" id="stmtProgressBar" style="width: 100%;"></div>
+        </div>
+        <div class="pt-1">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800" id="stmtStatusBadge">All collected</span>
+        </div>
+      </div>
+
+      <!-- Collections List Table -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-extrabold uppercase tracking-wider text-slate-400 text-[10px]">COLLECTIONS</span>
+          <span class="font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full text-[10px]" id="stmtMembersCountPill">10 members</span>
+        </div>
+
+        <div class="border border-slate-100 rounded-2xl overflow-hidden">
+          <table class="w-full text-left text-[11px] border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase">
+                <th class="py-2.5 px-3">#</th>
+                <th class="py-2.5 px-3">Member</th>
+                <th class="py-2.5 px-3 text-right">Due</th>
+                <th class="py-2.5 px-3 text-right">Paid</th>
+                <th class="py-2.5 px-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="stmtTableBody" class="divide-y divide-slate-100 font-medium">
+              <!-- Rendered via JS -->
+            </tbody>
+            <tfoot>
+              <tr class="bg-slate-50 font-extrabold text-slate-950 border-t border-slate-200">
+                <td colspan="3" class="py-2.5 px-3">Total Collected</td>
+                <td class="py-2.5 px-3 text-right money-fig text-emerald-600" id="stmtTotalCollectedFooter">₹0</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Document Footer (matching reference bottom) -->
+      <div class="pt-6 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+        <div class="flex items-center gap-1.5 font-bold text-slate-700">
+          <img src="/static/images/chit-logo.svg" alt="" class="w-4 h-4">
+          <span>Siva Durga Chit Fund</span>
+        </div>
+        <span>Confidential</span>
+        <span id="stmtPageDateFooter">Page 1 of 1</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL 2: PAYMENT RECEIPT (EXACT REPLICA OF USER REFERENCE media_1789488101014.jpg)
+     ========================================================================= -->
+<div id="paymentReceiptModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white text-slate-900 rounded-3xl max-w-md md:max-w-lg w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-200 overflow-hidden print-sheet">
+    
+    <!-- Action Bar -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50 no-print shrink-0">
+      <span class="text-xs font-bold text-slate-700">Receipt Preview</span>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="printReceiptDocument()" class="h-8 px-3 rounded-xl bg-slate-950 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="printer" class="w-3.5 h-3.5 stroke-[2]"></i>
+          <span>Print / Save PDF</span>
+        </button>
+        <button type="button" onclick="closePaymentReceiptModal()" class="h-8 w-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800">
+          <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Receipt Body -->
+    <div class="p-6 sm:p-8 overflow-y-auto space-y-5 text-slate-900 font-sans text-xs">
+      
+      <!-- Top Branding -->
+      <div class="flex items-start justify-between border-b border-slate-100 pb-4">
+        <div class="flex items-center gap-2.5">
+          <img src="/static/images/chit-logo.svg" alt="Logo" class="w-8 h-8">
+          <span class="font-extrabold text-sm text-slate-900">Siva Durga</span>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PAYMENT RECEIPT</p>
+          <p class="text-[10px] text-slate-500 font-mono mt-0.5" id="rcptTimestamp"></p>
+        </div>
+      </div>
+
+      <!-- Entity & Receipt Info -->
+      <div>
+        <h1 class="text-xl font-black text-slate-950 tracking-tight" id="rcptOrgName">SIVA DURGA CHIT FUND</h1>
+        <p class="text-xs text-slate-500 font-medium mt-1">
+          Receipt <span class="font-bold font-mono text-slate-800" id="rcptNumber">#RCP-000001</span> · <span id="rcptDateTop">14 Sept 2026</span>
+        </p>
+        <div class="h-0.5 w-12 bg-emerald-600 rounded-full mt-3"></div>
+      </div>
+
+      <!-- Green Amount Received Box (Matching Screenshot) -->
+      <div class="rounded-2xl p-4 bg-emerald-50/60 border border-emerald-200/80 flex items-center justify-between">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">AMOUNT RECEIVED</p>
+          <p class="text-2xl font-black text-emerald-700 money-fig mt-0.5" id="rcptAmount">₹25,000</p>
+        </div>
+        <span class="text-xs font-extrabold text-slate-700 bg-white/80 px-3 py-1.5 rounded-xl border border-emerald-200/60 shadow-2xs" id="rcptModeBadge">via Cash</span>
+      </div>
+
+      <!-- Receipt Details Box (Matching Screenshot) -->
+      <div class="space-y-2">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">RECEIPT DETAILS</p>
+        <div class="border border-slate-100 rounded-2xl bg-slate-50/50 p-4 space-y-3 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Received from</span>
+            <span class="font-bold text-slate-900" id="rcptMemberName">Aaa</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Chit Group</span>
+            <span class="font-bold text-slate-900" id="rcptChitGroup">Chit 1 - ₹5L · 20M · 20 Months</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Applied for</span>
+            <span class="font-bold text-slate-900" id="rcptAppliedMonth">Sept 2026 · M1</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Payment Method</span>
+            <span class="font-bold text-slate-900" id="rcptPaymentMethod">Cash</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Date</span>
+            <span class="font-bold text-slate-900" id="rcptDate">14 Sept 2026</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500">Receipt No.</span>
+            <span class="font-mono font-extrabold text-slate-900" id="rcptNoDetails">RCP-000001</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Acknowledgment -->
+      <p class="text-[10px] text-slate-400 italic text-center">
+        Received with thanks — this is a computer generated receipt.
+      </p>
+
+      <!-- Bottom Watermark -->
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+        <div class="flex items-center gap-1 font-bold text-slate-700">
+          <img src="/static/images/chit-logo.svg" alt="" class="w-3.5 h-3.5">
+          <span>Siva Durga Chit Fund</span>
+        </div>
+        <span>sd-finance.com</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let currentActiveTab = 'monthly';
+  let allChitGroups = [];
+  let selectedChitId = null;
+  let selectedMonthIndex = 1;
+  let currentMonthlyReportData = null;
+
+  function formatINR(val) {
+    return '₹' + Number(val || 0).toLocaleString('en-IN');
+  }
+
+  // 1. Tab Switching
+  function switchReportTab(tab) {
+    currentActiveTab = tab;
+    document.querySelectorAll('.rep-tab-btn').forEach(b => {
+      b.className = 'rep-tab-btn px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] font-semibold inline-flex items-center gap-1.5 transition-all';
+    });
+    const targetBtn = {
+      'monthly': 'tabBtnMonthly',
+      'defaulters': 'tabBtnDefaulters',
+      'earnings': 'tabBtnEarnings',
+      'payouts': 'tabBtnPayouts'
+    }[tab];
+    if (targetBtn && document.getElementById(targetBtn)) {
+      document.getElementById(targetBtn).className = 'rep-tab-btn px-3 py-1.5 rounded-xl bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 font-bold inline-flex items-center gap-1.5 transition-all shadow-xs';
+    }
+
+    // Toggle views
+    ['viewMonthly', 'viewDefaulters', 'viewEarnings', 'viewPayouts'].forEach(v => {
+      const el = document.getElementById(v);
+      if (el) el.classList.add('hidden');
+    });
+
+    const activeViewId = {
+      'monthly': 'viewMonthly',
+      'defaulters': 'viewDefaulters',
+      'earnings': 'viewEarnings',
+      'payouts': 'viewPayouts'
+    }[tab];
+    if (activeViewId && document.getElementById(activeViewId)) {
+      document.getElementById(activeViewId).classList.remove('hidden');
+    }
+
+    if (tab === 'monthly') loadMonthlyReport();
+    else if (tab === 'defaulters') loadDefaultersReport();
+    else if (tab === 'earnings') loadEarningsReport();
+    else if (tab === 'payouts') loadPayoutsReport();
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // 2. Load Chit Schemes into Dropdown
+  async function initReportChits() {
+    try {
+      const res = await fetch('/chit/api/chitgroups?status=active');
+      const data = await res.json();
+      allChitGroups = data.groups || [];
+
+      const sel = document.getElementById('reportChitSelect');
+      if (!allChitGroups.length) {
+        sel.innerHTML = '<option value="">No Active Chit Schemes</option>';
+        return;
+      }
+
+      sel.innerHTML = allChitGroups.map(g => `
+        <option value="${g.id}">
+          ${g.name} · ${formatINR(g.chit_total_value)} · ${g.duration_months} Months
+        </option>
+      `).join('');
+
+      selectedChitId = allChitGroups[0].id;
+      selectedMonthIndex = allChitGroups[0].current_month_index || 1;
+      renderMonthSlider(allChitGroups[0].duration_months || 20);
+      loadMonthlyReport();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function renderMonthSlider(duration) {
+    const slider = document.getElementById('reportMonthsSlider');
+    let html = '';
+    for (let i = 1; i <= duration; i++) {
+      const isSelected = i === selectedMonthIndex;
+      html += `
+        <button type="button" onclick="selectReportMonth(${i})" class="px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+          isSelected 
+            ? 'bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm' 
+            : 'bg-white dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+        }">
+          M${i}
+        </button>
+      `;
+    }
+    slider.innerHTML = html;
+  }
+
+  function selectReportMonth(mIdx) {
+    selectedMonthIndex = mIdx;
+    const chit = allChitGroups.find(g => g.id === selectedChitId);
+    renderMonthSlider(chit ? chit.duration_months : 20);
+    loadMonthlyReport();
+  }
+
+  function navigateMonth(delta) {
+    const chit = allChitGroups.find(g => g.id === selectedChitId);
+    const maxDur = chit ? chit.duration_months : 20;
+    const nextM = selectedMonthIndex + delta;
+    if (nextM >= 1 && nextM <= maxDur) {
+      selectReportMonth(nextM);
+    }
+  }
+
+  function onChitSelectionChanged() {
+    selectedChitId = document.getElementById('reportChitSelect').value;
+    const chit = allChitGroups.find(g => g.id === selectedChitId);
+    selectedMonthIndex = chit ? (chit.current_month_index || 1) : 1;
+    renderMonthSlider(chit ? chit.duration_months : 20);
+    loadMonthlyReport();
+  }
+
+  // 3. Load Monthly Statement Data
+  async function loadMonthlyReport() {
+    if (!selectedChitId) return;
+    try {
+      const res = await fetch(`/chit/api/reports/data?type=monthly&chit_id=${selectedChitId}&month_index=${selectedMonthIndex}`);
+      const data = await res.json();
+      if (!data.success || !data.data) return;
+
+      currentMonthlyReportData = data.data;
+      const d = data.data;
+
+      // Update KPIs
+      document.getElementById('repExpectedAmt').textContent = formatINR(d.expected_amount);
+      document.getElementById('repCollectedAmt').textContent = formatINR(d.collected_amount);
+      document.getElementById('repPendingAmt').textContent = formatINR(d.pending_amount);
+      document.getElementById('repCollectionPct').textContent = `${d.collection_pct}%`;
+      document.getElementById('repProgressPctText').textContent = `${d.collection_pct}% received`;
+      document.getElementById('repProgressBar').style.width = `${Math.min(100, d.collection_pct)}%`;
+      document.getElementById('repMemberCountBadge').textContent = `${d.members.length} members`;
+
+      // Payout summary
+      const p = d.payout || {};
+      document.getElementById('repPayoutWinner').textContent = p.winner ? `Winner: ${p.winner}` : 'Auction / Winner: Pending';
+      document.getElementById('repPayoutAmount').textContent = p.amount_received ? formatINR(p.amount_received) : '₹0';
+      const pBadge = document.getElementById('repPayoutStatusBadge');
+      if (p.payout_status === 'paid') {
+        pBadge.textContent = 'Paid Out';
+        pBadge.className = 'inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300';
+      } else {
+        pBadge.textContent = 'Unclaimed / Pending';
+        pBadge.className = 'inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
+      }
+
+      // Member collections table
+      const tbody = document.getElementById('repMembersTableBody');
+      if (!d.members.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No subscriber records for this month.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = d.members.map(m => `
+        <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02] transition-colors">
+          <td class="py-2.5 px-4 font-mono text-[11px] text-slate-400">${m.row_num}</td>
+          <td class="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">${m.member_name}</td>
+          <td class="py-2.5 px-4 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">${formatINR(m.due_amount)}</td>
+          <td class="py-2.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">${formatINR(m.paid_amount)}</td>
+          <td class="py-2.5 px-4 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">${formatINR(m.pending_amount)}</td>
+          <td class="py-2.5 px-4 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              m.status === 'Paid' 
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' 
+                : (m.status === 'Partial' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400')
+            }">
+              ${m.status}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // 4. Defaulters Report
+  async function loadDefaultersReport() {
+    try {
+      const res = await fetch('/chit/api/reports/data?type=defaulters');
+      const data = await res.json();
+      const tbody = document.getElementById('defaultersTableBody');
+      const list = data.defaulters || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-emerald-600 font-bold">🎉 No overdue subscribers! All collections up to date.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(d => `
+        <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02]">
+          <td class="py-3 px-4 font-bold text-slate-900 dark:text-slate-100">${d.name}</td>
+          <td class="py-3 px-4 text-slate-500 font-mono">${d.phone || '-'}</td>
+          <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">${d.customer_id || '-'}</td>
+          <td class="py-3 px-4 text-center">
+            <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold">${d.groups_count}</span>
+          </td>
+          <td class="py-3 px-4 text-right font-extrabold text-rose-600 dark:text-rose-400 money-fig">${formatINR(d.total_pending)}</td>
+          <td class="py-3 px-4 text-center">
+            <a href="https://wa.me/91${d.phone}?text=Dear%20${encodeURIComponent(d.name)},%20your%20chit%20fund%20due%20of%20${encodeURIComponent(formatINR(d.total_pending))}%20is%20pending.%20Please%20clear%20at%20earliest." target="_blank" class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-[11px] hover:bg-emerald-100 transition-colors inline-flex items-center gap-1">
+              <i data-lucide="message-circle" class="w-3 h-3 stroke-[2]"></i> WhatsApp
+            </a>
+          </td>
+        </tr>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // 5. Earnings Report
+  async function loadEarningsReport() {
+    try {
+      const res = await fetch('/chit/api/reports/data?type=earnings');
+      const data = await res.json();
+      const tbody = document.getElementById('earningsTableBody');
+      const list = data.earnings || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No active schemes found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(e => `
+        <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02]">
+          <td class="py-3 px-4 font-bold text-slate-900 dark:text-slate-100">${e.name}</td>
+          <td class="py-3 px-4 text-right font-mono font-semibold">${formatINR(e.chit_value)}</td>
+          <td class="py-3 px-4 text-center font-bold text-slate-500">${e.duration_months}M</td>
+          <td class="py-3 px-4 text-center font-bold text-amber-600">M${e.current_month}</td>
+          <td class="py-3 px-4 text-right font-mono font-bold text-slate-700 dark:text-slate-300">${formatINR(e.monthly_earning)}</td>
+          <td class="py-3 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">${formatINR(e.total_earned)}</td>
+        </tr>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // 6. Payouts Register
+  async function loadPayoutsReport() {
+    try {
+      const res = await fetch('/chit/api/reports/data?type=payouts');
+      const data = await res.json();
+      const tbody = document.getElementById('payoutsTableBody');
+      const list = data.payouts || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No recorded payouts yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(p => `
+        <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02]">
+          <td class="py-3 px-4 font-bold text-slate-900 dark:text-slate-100">${p.chit_name}</td>
+          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">M${p.month_index} (${p.month_year || ''})</td>
+          <td class="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">${p.winner}</td>
+          <td class="py-3 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">${formatINR(p.amount_received)}</td>
+          <td class="py-3 px-4 text-right font-mono text-amber-600">${formatINR(p.chit_loss)}</td>
+          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${p.payout_date}</td>
+          <td class="py-3 px-4 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              p.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+            }">${p.status}</span>
+          </td>
+        </tr>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // 7. Month Statement Modal & Print (Reference media_1789488101072.jpg)
+  function openMonthStatementModal() {
+    if (!currentMonthlyReportData) {
+      showToast('Please wait for month data to load...', 'error');
+      return;
+    }
+    const d = currentMonthlyReportData;
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('en-GB') + ', ' + now.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12:true});
+
+    document.getElementById('stmtGeneratedTime').textContent = timeStr;
+    document.getElementById('stmtSchemePill').textContent = `${d.chit_name} · ${formatINR(d.chit_value)} · ${d.duration_months} Months`;
+    document.getElementById('stmtMonthPill').textContent = d.month_year || `Month ${d.current_month_index}`;
+
+    document.getElementById('stmtExpected').textContent = formatINR(d.expected_amount);
+    document.getElementById('stmtCollected').textContent = formatINR(d.collected_amount);
+    document.getElementById('stmtPending').textContent = formatINR(d.pending_amount);
+
+    document.getElementById('stmtProgressPct').textContent = `${d.collection_pct}% received`;
+    document.getElementById('stmtProgressBar').style.width = `${Math.min(100, d.collection_pct)}%`;
+    document.getElementById('stmtStatusBadge').textContent = d.collection_pct >= 100 ? 'All collected' : `${d.members.filter(m => m.pending_amount > 0).length} pending`;
+    document.getElementById('stmtMembersCountPill').textContent = `${d.members.length} members`;
+
+    const tbody = document.getElementById('stmtTableBody');
+    tbody.innerHTML = d.members.map(m => `
+      <tr class="hover:bg-slate-50/50">
+        <td class="py-2 px-3 font-mono text-[10px] text-slate-400">${m.row_num}</td>
+        <td class="py-2 px-3 font-bold text-slate-900">${m.member_name}</td>
+        <td class="py-2 px-3 text-right font-mono font-semibold text-slate-800">${formatINR(m.due_amount)}</td>
+        <td class="py-2 px-3 text-right font-mono font-bold text-slate-900">${formatINR(m.paid_amount)}</td>
+        <td class="py-2 px-3 text-center">
+          <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${
+            m.status === 'Paid' ? 'bg-slate-100 text-slate-800' : 'bg-rose-50 text-rose-700'
+          }">${m.status}</span>
+        </td>
+      </tr>
+    `).join('');
+
+    document.getElementById('stmtTotalCollectedFooter').textContent = formatINR(d.collected_amount);
+    document.getElementById('stmtPageDateFooter').textContent = `Page 1 of 1 · ${timeStr}`;
+
+    document.getElementById('monthStatementModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeMonthStatementModal() {
+    document.getElementById('monthStatementModal').classList.add('hidden');
+  }
+
+  function printStatementDocument() {
+    window.print();
+  }
+
+  // 8. Payment Receipt Modal & Print (Reference media_1789488101014.jpg)
+  async function openPaymentReceipt(paymentId) {
+    try {
+      const res = await fetch(`/chit/api/receipts/payment/${paymentId}`);
+      const data = await res.json();
+      if (!data.success || !data.receipt) throw new Error('Receipt not found');
+
+      const r = data.receipt;
+      const now = new Date(r.created_at || Date.now());
+      const timeStr = now.toLocaleDateString('en-GB') + ', ' + now.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12:true});
+
+      document.getElementById('rcptTimestamp').textContent = timeStr;
+      document.getElementById('rcptNumber').textContent = '#' + r.receipt_no;
+      document.getElementById('rcptDateTop').textContent = r.payment_date;
+      document.getElementById('rcptAmount').textContent = formatINR(r.amount);
+      document.getElementById('rcptModeBadge').textContent = 'via ' + r.payment_mode;
+
+      document.getElementById('rcptMemberName').textContent = r.member_name;
+      document.getElementById('rcptChitGroup').textContent = `${r.chit_name} · ${formatINR(r.chit_value)} · ${r.duration_months} Months`;
+      document.getElementById('rcptAppliedMonth').textContent = `${r.month_year} · M${r.month_index}`;
+      document.getElementById('rcptPaymentMethod').textContent = r.payment_mode;
+      document.getElementById('rcptDate').textContent = r.payment_date;
+      document.getElementById('rcptNoDetails').textContent = r.receipt_no;
+
+      document.getElementById('paymentReceiptModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      showToast('Error loading receipt: ' + err.message, 'error');
+    }
+  }
+
+  function closePaymentReceiptModal() {
+    document.getElementById('paymentReceiptModal').classList.add('hidden');
+  }
+
+  function printReceiptDocument() {
+    window.print();
+  }
+
+  function shareStatementText() {
+    if (!currentMonthlyReportData) return;
+    const d = currentMonthlyReportData;
+    const text = `📊 *${d.chit_name} — Month Statement*\nMonth: ${d.month_year}\n\n• Expected: ${formatINR(d.expected_amount)}\n• Collected: ${formatINR(d.collected_amount)} (${d.collection_pct}%)\n• Pending: ${formatINR(d.pending_amount)}\n\n_Generated by Siva Durga Chit Fund_`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      showToast('Statement summary copied to clipboard');
+    }
+  }
+
+  function sendAllDefaulterReminders() {
+    showToast('Sending automated reminder notices to all defaulters...');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initReportChits();
+  });
+</script>
+{% endblock %}
