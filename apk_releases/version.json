@@ -1,11 +1,11 @@
 {
-  "latest_version": "1.1.1",
-  "latest_version_code": 14,
+  "latest_version": "1.1.2",
+  "latest_version_code": 15,
   "min_supported_version_code": 5,
   "force_update": false,
-  "sha256": "eab63e738e063b96887e757ba664a7d6d28c6d347b452ee384749b8148853eb7",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.1",
-  "release_notes": "Updated UI with fresh logo branding, KYC section prioritized at top in Add Customer form, and fixed layout overflow across screen components.",
-  "released_at": "2026-09-08T17:35:00+05:30",
+  "sha256": "69fbbb255ba7b44e77dccf2ee772e8856bcba9003c42cfd0219d3f293eb9db3a",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.2",
+  "release_notes": "Sync is now manual only — payments and customers are submitted only when you press the Sync button. Improved app stability.",
+  "released_at": "2026-09-18T09:25:00+05:30",
   "published_by": "admin"
 }
