@@ -80,6 +80,56 @@ def ensure_chit_schema(cur):
         cur.execute("ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS defaulted_at TIMESTAMP WITH TIME ZONE;")
         cur.execute("ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS linked_group_id UUID;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chit_members_linked_group ON chit_members(linked_group_id);")
+
+        cur.execute("""
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS chit_total_value NUMERIC(14, 2);
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS duration_months INT;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS total_members INT;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS monthly_installment NUMERIC(14, 2);
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5, 2) DEFAULT 5.0;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS foreman_commission_percent NUMERIC(5, 2) DEFAULT 5.0;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS foreman_monthly_earnings NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS start_month_year VARCHAR(7);
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS schedule_type VARCHAR(50) DEFAULT 'Standard';
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS rules_notes TEXT;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS is_month1_company_month BOOLEAN DEFAULT TRUE;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+            ALTER TABLE chit_groups ADD COLUMN IF NOT EXISTS delete_reason TEXT;
+            
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS govt_id_last4 VARCHAR(4);
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS member_portal_enabled BOOLEAN DEFAULT FALSE;
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS nominee_name VARCHAR(255);
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS nominee_phone VARCHAR(20);
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS nominee_relation VARCHAR(50);
+            ALTER TABLE chit_members ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+            
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS chit_group_id UUID REFERENCES chit_groups(id) ON DELETE CASCADE;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS share_units NUMERIC(5, 2) DEFAULT 1.0;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS has_lifted BOOLEAN DEFAULT FALSE;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS lifted_month_index INT;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS start_month_index INT DEFAULT 1;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS is_pool_split BOOLEAN DEFAULT FALSE;
+            
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS chit_group_id UUID REFERENCES chit_groups(id) ON DELETE CASCADE;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS chit_loss NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS amount_received NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS bonus NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS installment_kattubadi NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS is_company_month BOOLEAN DEFAULT FALSE;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS lifted_by_membership_id UUID REFERENCES chit_memberships(id);
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS payout_date DATE;
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS payout_status VARCHAR(50);
+            
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS chit_group_id UUID REFERENCES chit_groups(id) ON DELETE CASCADE;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS month_index INT;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS month_year VARCHAR(7);
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS gross_amount NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS net_due_amount NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS kattubadi_due NUMERIC(14, 2) DEFAULT 0;
+            ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS bonus_discount NUMERIC(14, 2) DEFAULT 0;
+        """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chit_loans (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
