@@ -1,14 +1,15 @@
 import os
+import re
 import pytz
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import]
 import time as pytime
 import calendar
 from bisect import bisect_right
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import traceback
 import logging
 import uuid
-import platform
 import base64
 import hashlib
 import hmac
@@ -17,18 +18,16 @@ from functools import wraps
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 import secrets
 import threading
 import io
-import base64
 import socket
 from flask import (
     Flask, render_template, request, redirect,
     session, jsonify, flash, url_for, send_file
 )
-from db import get_pg_connection, get_pool_stats
+from db import get_pg_connection
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
@@ -599,7 +598,6 @@ def execute_daily_rating_recalculation():
                         for sub_view in ["active_only", "active_defaulted"]:
                             # 1. Warm dashboard cache
                             with app.test_request_context(query_string={"view": view, "sub_view": sub_view, "force_recalc": "true"}):
-                                from flask import session
                                 session["user_id"] = "scheduler"
                                 session["level"] = "admin"
                                 api_village_behavioral_analytics(vid)
@@ -607,7 +605,6 @@ def execute_daily_rating_recalculation():
                             # 2. Warm health history cache for each range
                             for time_range in ["weekly", "monthly", "yearly", "complete"]:
                                 with app.test_request_context(query_string={"view": view, "sub_view": sub_view, "range": time_range, "force_recalc": "true"}):
-                                    from flask import session
                                     session["user_id"] = "scheduler"
                                     session["level"] = "admin"
                                     api_village_health_history(vid)
@@ -951,8 +948,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
-
-import threading
 
 class TTLMemoryCache:
     def __init__(self):
@@ -6168,7 +6163,6 @@ def api_ocr_extract_bulk():
         # Method A: Direct official Gemini REST API (zero SDK dependency / eliminates import conflicts)
         for m in models_to_try:
             try:
-                import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
                 parts = []
                 for item in image_data_list:
@@ -12967,8 +12961,6 @@ def toggle_village_status():
 @login_required
 def api_village_geocode():
     """Geocode a single village using Nominatim (same logic as geocode_villages.py)."""
-    import re as _re
-    import requests as _requests
 
     data = request.get_json()
     vid = data.get("vid")
@@ -12992,9 +12984,9 @@ def api_village_geocode():
         # Clean village name: remove all digits (e.g. HUBBILLI2 -> HUBBILLI) and trim dashes/spaces
         clean_name = ""
         if village_name:
-            clean_name = _re.sub(r'\d+', '', village_name)
-            clean_name = _re.sub(r'[-\s]+$', '', clean_name)
-            clean_name = _re.sub(r'^[-\s]+', '', clean_name).strip()
+            clean_name = re.sub(r'\d+', '', village_name)
+            clean_name = re.sub(r'[-\s]+$', '', clean_name)
+            clean_name = re.sub(r'^[-\s]+', '', clean_name).strip()
 
         geocode_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -13003,7 +12995,7 @@ def api_village_geocode():
         def _geocode_query(q):
             url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
             try:
-                resp = _requests.get(url, headers=geocode_headers, timeout=10)
+                resp = requests.get(url, headers=geocode_headers, timeout=10)
                 if resp.status_code == 200:
                     results = resp.json()
                     if results:
@@ -13066,8 +13058,6 @@ def api_village_geocode():
 @login_required
 def api_geocode_coordinates():
     """Geocode arbitrary address for Create Village form coordinates."""
-    import re as _re
-    import requests as _requests
 
     data = request.get_json()
     if not data:
@@ -13084,9 +13074,9 @@ def api_geocode_coordinates():
     # Clean village name: remove all digits and trim dashes/spaces
     clean_name = ""
     if village_name:
-        clean_name = _re.sub(r'\d+', '', village_name)
-        clean_name = _re.sub(r'[-\s]+$', '', clean_name)
-        clean_name = _re.sub(r'^[-\s]+', '', clean_name).strip()
+        clean_name = re.sub(r'\d+', '', village_name)
+        clean_name = re.sub(r'[-\s]+$', '', clean_name)
+        clean_name = re.sub(r'^[-\s]+', '', clean_name).strip()
 
     geocode_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -13095,7 +13085,7 @@ def api_geocode_coordinates():
     def _geocode_query(q):
         url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
         try:
-            resp = _requests.get(url, headers=geocode_headers, timeout=10)
+            resp = requests.get(url, headers=geocode_headers, timeout=10)
             if resp.status_code == 200:
                 results = resp.json()
                 if results:
@@ -15041,7 +15031,6 @@ def mobile_app_download(version):
         status="success"
     )
 
-    from flask import send_file
     return send_file(
         apk_path,
         mimetype="application/vnd.android.package-archive",
@@ -15548,7 +15537,6 @@ def app_download_action():
         status="success"
     )
 
-    from flask import send_file
     return send_file(
         apk_path,
         mimetype="application/vnd.android.package-archive",
