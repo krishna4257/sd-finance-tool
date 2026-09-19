@@ -1,11 +1,11 @@
 {
-  "latest_version": "1.1.2",
-  "latest_version_code": 15,
+  "latest_version": "1.1.3",
+  "latest_version_code": 16,
   "min_supported_version_code": 5,
-  "force_update": false,
-  "sha256": "69fbbb255ba7b44e77dccf2ee772e8856bcba9003c42cfd0219d3f293eb9db3a",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.2",
-  "release_notes": "Sync is now manual only — payments and customers are submitted only when you press the Sync button. Improved app stability.",
-  "released_at": "2026-09-18T09:25:00+05:30",
+  "force_update": true,
+  "sha256": "bfae1f9ca8a8438916104aceb31f487390a49b31aac1854f54121fa7e1f926ca",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.3",
+  "release_notes": "Fix customer active status posting validation and overall stability improvements.",
+  "released_at": "2026-09-19T23:03:00+05:30",
   "published_by": "admin"
 }
