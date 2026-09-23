@@ -110,6 +110,8 @@ def ensure_chit_schema(cur):
             ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS lifted_month_index INT;
             ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS start_month_index INT DEFAULT 1;
             ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS is_pool_split BOOLEAN DEFAULT FALSE;
+            ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+            UPDATE chit_memberships SET created_at = joined_at WHERE created_at IS NULL AND joined_at IS NOT NULL;
             
             ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS chit_group_id UUID REFERENCES chit_groups(id) ON DELETE CASCADE;
             ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS chit_loss NUMERIC(14, 2) DEFAULT 0;
@@ -120,6 +122,12 @@ def ensure_chit_schema(cur):
             ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS lifted_by_membership_id UUID REFERENCES chit_memberships(id);
             ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS payout_date DATE;
             ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS payout_status VARCHAR(50);
+            ALTER TABLE chit_schedules ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Open';
+            
+            ALTER TABLE chit_audit_logs ADD COLUMN IF NOT EXISTS actor_name VARCHAR(255);
+            ALTER TABLE chit_audit_logs ADD COLUMN IF NOT EXISTS actor_role VARCHAR(100);
+            ALTER TABLE chit_audit_logs ADD COLUMN IF NOT EXISTS entity_type VARCHAR(100);
+            ALTER TABLE chit_audit_logs ADD COLUMN IF NOT EXISTS entity_id VARCHAR(255);
             
             ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS chit_group_id UUID REFERENCES chit_groups(id) ON DELETE CASCADE;
             ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS month_index INT;
@@ -129,6 +137,50 @@ def ensure_chit_schema(cur):
             ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14, 2) DEFAULT 0;
             ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS kattubadi_due NUMERIC(14, 2) DEFAULT 0;
             ALTER TABLE chit_installments ADD COLUMN IF NOT EXISTS bonus_discount NUMERIC(14, 2) DEFAULT 0;
+        """)
+
+        # Gracefully drop legacy NOT NULL constraints from earlier draft replication schemas
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chit_groups_group_code_key') THEN
+                    ALTER TABLE chit_groups DROP CONSTRAINT chit_groups_group_code_key;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_groups' AND column_name = 'group_code') THEN
+                    ALTER TABLE chit_groups ALTER COLUMN group_code DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_groups' AND column_name = 'group_name') THEN
+                    ALTER TABLE chit_groups ALTER COLUMN group_name DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_groups' AND column_name = 'total_months') THEN
+                    ALTER TABLE chit_groups ALTER COLUMN total_months DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_groups' AND column_name = 'pot_amount') THEN
+                    ALTER TABLE chit_groups ALTER COLUMN pot_amount DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_groups' AND column_name = 'start_month') THEN
+                    ALTER TABLE chit_groups ALTER COLUMN start_month DROP NOT NULL;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_memberships' AND column_name = 'group_id') THEN
+                    ALTER TABLE chit_memberships ALTER COLUMN group_id DROP NOT NULL;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_schedules' AND column_name = 'group_id') THEN
+                    ALTER TABLE chit_schedules ALTER COLUMN group_id DROP NOT NULL;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_installments' AND column_name = 'schedule_id') THEN
+                    ALTER TABLE chit_installments ALTER COLUMN schedule_id DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_installments' AND column_name = 'base_amount') THEN
+                    ALTER TABLE chit_installments ALTER COLUMN base_amount DROP NOT NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chit_installments' AND column_name = 'net_due') THEN
+                    ALTER TABLE chit_installments ALTER COLUMN net_due DROP NOT NULL;
+                END IF;
+            END $$;
         """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chit_loans (

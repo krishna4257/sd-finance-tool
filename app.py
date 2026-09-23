@@ -160,6 +160,31 @@ def format_date_display(value):
     if isinstance(value, date):
         return value.strftime("%d-%m-%Y")
 
+
+def format_date_iso(value):
+    """Format a date for HTML5 <input type='date'> as yyyy-mm-dd.
+    Accepts: date, datetime, or date string (iso, dd-mm-yyyy, dd/mm/yyyy).
+    Returns: 'yyyy-mm-dd' string or '' if None/invalid.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return ""
+        if len(value) == 10 and value[4] == '-' and value[7] == '-':
+            return value
+        parsed = parse_date_input(value)
+        if parsed:
+            return parsed.strftime("%Y-%m-%d")
+        return value
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    return ""
+
+
 def ensure_feed_tables_exist(cur):
     """Ensure customer_feed_edits and payment_feed_edits tables exist."""
     cur.execute("""
@@ -5047,6 +5072,104 @@ def api_add_customer_metadata():
         logger.error(f"Error fetching add customer metadata: {e}")
         return jsonify(success=False, error=str(e)), 500
 
+@app.route("/api/customer/check_aadhaar")
+@login_required
+def api_check_aadhaar():
+    raw_aadhaar = request.args.get("aadhaar", "").strip()
+    clean_aadhaar = "".join(ch for ch in raw_aadhaar if ch.isdigit())
+
+    if len(clean_aadhaar) != 12:
+        return jsonify({
+            "duplicate": False,
+            "count": 0,
+            "aadhaar": clean_aadhaar,
+            "accounts": []
+        })
+
+    exclude_ano = request.args.get("exclude_ano")
+    exclude_vid = request.args.get("exclude_vid")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        query = """
+            SELECT 
+                c.cid,
+                c.vid,
+                COALESCE(v.village_name, 'Village ' || c.vid::text) AS village_name,
+                c.ano,
+                c.name,
+                c.phone_number,
+                c.start_date,
+                c.end_date,
+                c.total_amount,
+                c.balance_amount,
+                COALESCE(c.status, 'open') AS status
+            FROM customer c
+            LEFT JOIN village v ON v.vid = c.vid
+            WHERE REPLACE(REPLACE(COALESCE(c.aadhaar_number, ''), ' ', ''), '-', '') = %s
+        """
+        params = [clean_aadhaar]
+        if exclude_ano and exclude_vid:
+            query += " AND NOT (c.ano = %s AND c.vid = %s)"
+            params.extend([int(exclude_ano), int(exclude_vid)])
+
+        query += """
+            UNION ALL
+            SELECT 
+                ca.cid,
+                ca.vid,
+                COALESCE(v.village_name, 'Village ' || ca.vid::text) AS village_name,
+                ca.ano,
+                ca.name,
+                ca.phone_number,
+                ca.start_date,
+                ca.end_date,
+                ca.total_amount,
+                ca.balance_amount,
+                'closed' AS status
+            FROM closed_cust_account ca
+            LEFT JOIN village v ON v.vid = ca.vid
+            WHERE REPLACE(REPLACE(COALESCE(ca.aadhaar_number, ''), ' ', ''), '-', '') = %s
+        """
+        params.append(clean_aadhaar)
+        if exclude_ano and exclude_vid:
+            query += " AND NOT (ca.ano = %s AND ca.vid = %s)"
+            params.extend([int(exclude_ano), int(exclude_vid)])
+
+        query += " ORDER BY cid DESC"
+
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
+        accounts = []
+        for r in rows:
+            accounts.append({
+                "cid": r[0],
+                "vid": r[1],
+                "village_name": r[2] or f"Village {r[1]}",
+                "ano": r[3],
+                "name": r[4] or "Unnamed",
+                "phone_number": r[5] or "",
+                "start_date": format_date_display(str(r[6])) if r[6] else "",
+                "end_date": format_date_display(str(r[7])) if r[7] else "",
+                "total_amount": float(r[8] or 0),
+                "balance_amount": float(r[9] or 0),
+                "status": r[10] or "open"
+            })
+
+        return jsonify({
+            "duplicate": len(accounts) > 0,
+            "count": len(accounts),
+            "aadhaar": clean_aadhaar,
+            "accounts": accounts
+        })
+    except Exception as e:
+        logger.error(f"Error checking duplicate aadhaar: {e}")
+        return jsonify({"duplicate": False, "count": 0, "error": str(e), "accounts": []}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route("/view_customers")
 @login_required
 def view_customers():
@@ -8148,6 +8271,14 @@ def feed():
     cur = conn.cursor()
 
     try:
+        # Fetch village mapping
+        village_map = {}
+        try:
+            cur.execute("SELECT vid, village_name FROM village")
+            village_map = {row[0]: row[1] for row in cur.fetchall()}
+        except Exception as ve:
+            logger.warning(f"Failed to fetch village_map: {ve}")
+
         # CUSTOMER FEED
         cur.execute("""
             SELECT
@@ -8169,8 +8300,10 @@ def feed():
                 ) AS type,
                 COALESCE(feed_docs.aadhaar_front_pic, docs.aadhaar_front_pic) AS aadhaar_front_pic,
                 COALESCE(feed_docs.aadhaar_back_pic, docs.aadhaar_back_pic) AS aadhaar_back_pic,
-                COALESCE(feed_docs.house_photo, docs.house_photo) AS house_photo
+                COALESCE(feed_docs.house_photo, docs.house_photo) AS house_photo,
+                v.village_name
             FROM customer_feed cf
+            LEFT JOIN village v ON v.vid = cf.vid
             LEFT JOIN LATERAL (
                 SELECT
                     cdf.aadhaar_front_pic,
@@ -8243,34 +8376,49 @@ def feed():
                 "vid": customer_payload.get("vid"), # type: ignore
             })
 
+            # Resolved village_name
+            row_dict["village_name"] = (
+                row_dict.get("village_name")
+                or customer_payload.get("village_name")
+                or village_map.get(row_dict.get("vid"))
+                or session.get("village_name")
+                or (f"Village {row_dict.get('vid')}" if row_dict.get('vid') else "Village")
+            )
+
             # keep payload also (optional)
             row_dict["payload"] = customer_payload
             row_dict["raw_payload"] = payload
 
-            # format dates if present
+            # format dates for HTML5 date inputs (must be yyyy-mm-dd)
             if row_dict.get("start_date"):
-                row_dict["start_date"] = format_date_display(row_dict["start_date"])
+                row_dict["start_date"] = format_date_iso(row_dict["start_date"])
             if row_dict.get("end_date"):
-                row_dict["end_date"] = format_date_display(row_dict["end_date"])
+                row_dict["end_date"] = format_date_iso(row_dict["end_date"])
 
             customers.append(row_dict)
-        # PAYMENT FEED
+        # PAYMENT FEED (Left join customer by vid and ano to detect mapped/unmapped status)
         cur.execute("""
         SELECT
-            feed_payment_id,
-            local_uuid,
-            payload->>'ano' AS ano,
-            payload->>'amt' AS amt,
-            COALESCE(payload->>'payment_date', payload->>'pdate') AS pdt,
-            COALESCE(payload->>'payment_type', 'cash') AS payment_type,
-            payload->>'cash_amount' AS cash_amount,
-            payload->>'upi_amount' AS upi_amount,
-            payload->>'vid' AS vid,
-            status
-        FROM payment_feed_items
-        WHERE status='pending'
-          AND (payload->>'vid')::INT = %s
-        ORDER BY feed_payment_id DESC
+            pfi.feed_payment_id,
+            pfi.local_uuid,
+            pfi.payload->>'ano' AS ano,
+            pfi.payload->>'amt' AS amt,
+            COALESCE(pfi.payload->>'payment_date', pfi.payload->>'pdate') AS pdt,
+            COALESCE(pfi.payload->>'payment_type', 'cash') AS payment_type,
+            pfi.payload->>'cash_amount' AS cash_amount,
+            pfi.payload->>'upi_amount' AS upi_amount,
+            pfi.payload->>'vid' AS vid,
+            pfi.status,
+            c.cid,
+            c.name AS customer_name,
+            c.start_date AS customer_start_date
+        FROM payment_feed_items pfi
+        LEFT JOIN customer c
+          ON c.vid = (pfi.payload->>'vid')::INT
+         AND c.ano = (pfi.payload->>'ano')::INT
+        WHERE pfi.status='pending'
+          AND (pfi.payload->>'vid')::INT = %s
+        ORDER BY pfi.feed_payment_id DESC
     """, (vid,))
 
         rows = cur.fetchall()
@@ -8351,7 +8499,88 @@ def feed():
                 except Exception:
                     raw = {}
             local_uuid = raw.get("local_uuid") or c.get("local_uuid")
-            c["edit"] = customer_edit_map.get(local_uuid) if local_uuid else None
+            edit = customer_edit_map.get(local_uuid) if local_uuid else None
+            if edit:
+                if edit.get("start_date"):
+                    edit["start_date"] = format_date_iso(edit["start_date"])
+                if edit.get("end_date"):
+                    edit["end_date"] = format_date_iso(edit["end_date"])
+            c["edit"] = edit
+
+        # Pre-screen duplicate Aadhaar cards across pending customer registrations
+        feed_aadhaars = set()
+        for c in customers:
+            raw_a = str((c.get("edit") and c.get("edit", {}).get("aadhaar_number")) or c.get("aadhaar_number") or "").replace(" ", "").replace("-", "").strip()
+            clean_a = "".join(ch for ch in raw_a if ch.isdigit())
+            if len(clean_a) == 12:
+                feed_aadhaars.add(clean_a)
+
+        aadhaar_dupe_map = {}
+        if feed_aadhaars:
+            try:
+                cur.execute("""
+                    SELECT 
+                        c.cid,
+                        c.vid,
+                        COALESCE(v.village_name, 'Village ' || c.vid::text) AS village_name,
+                        c.ano,
+                        c.name,
+                        c.phone_number,
+                        c.start_date,
+                        c.end_date,
+                        c.total_amount,
+                        c.balance_amount,
+                        COALESCE(c.status, 'open') AS status,
+                        REPLACE(REPLACE(COALESCE(c.aadhaar_number, ''), ' ', ''), '-', '') AS clean_aadhaar
+                    FROM customer c
+                    LEFT JOIN village v ON v.vid = c.vid
+                    WHERE REPLACE(REPLACE(COALESCE(c.aadhaar_number, ''), ' ', ''), '-', '') = ANY(%s)
+                    UNION ALL
+                    SELECT 
+                        ca.cid,
+                        ca.vid,
+                        COALESCE(v.village_name, 'Village ' || ca.vid::text) AS village_name,
+                        ca.ano,
+                        ca.name,
+                        ca.phone_number,
+                        ca.start_date,
+                        ca.end_date,
+                        ca.total_amount,
+                        ca.balance_amount,
+                        'closed' AS status,
+                        REPLACE(REPLACE(COALESCE(ca.aadhaar_number, ''), ' ', ''), '-', '') AS clean_aadhaar
+                    FROM closed_cust_account ca
+                    LEFT JOIN village v ON v.vid = ca.vid
+                    WHERE REPLACE(REPLACE(COALESCE(ca.aadhaar_number, ''), ' ', ''), '-', '') = ANY(%s)
+                    ORDER BY cid DESC
+                """, (list(feed_aadhaars), list(feed_aadhaars)))
+                dupe_rows = cur.fetchall()
+                for dr in dupe_rows:
+                    a_key = dr[11]
+                    if a_key not in aadhaar_dupe_map:
+                        aadhaar_dupe_map[a_key] = []
+                    aadhaar_dupe_map[a_key].append({
+                        "cid": dr[0],
+                        "vid": dr[1],
+                        "village_name": dr[2] or f"Village {dr[1]}",
+                        "ano": dr[3],
+                        "name": dr[4] or "Unnamed",
+                        "phone_number": dr[5] or "",
+                        "start_date": format_date_display(str(dr[6])) if dr[6] else "",
+                        "end_date": format_date_display(str(dr[7])) if dr[7] else "",
+                        "total_amount": float(dr[8] or 0),
+                        "balance_amount": float(dr[9] or 0),
+                        "status": dr[10] or "open"
+                    })
+            except Exception as e:
+                logger.error(f"Error pre-screening duplicate aadhaars for feed: {e}")
+
+        for c in customers:
+            raw_a = str((c.get("edit") and c.get("edit", {}).get("aadhaar_number")) or c.get("aadhaar_number") or "").replace(" ", "").replace("-", "").strip()
+            clean_a = "".join(ch for ch in raw_a if ch.isdigit())
+            dupes = aadhaar_dupe_map.get(clean_a, [])
+            c["duplicate_accounts"] = dupes
+            c["duplicate_count"] = len(dupes)
 
         # Fetch payment edits submitted from mobile (payment_feed_edits)
         payment_edit_map = {}
@@ -8372,10 +8601,28 @@ def feed():
         except Exception:
             conn.rollback()  # Table may not exist yet on first run; rollback aborted transaction
 
-        # Attach edits to payments
+        # Attach edits to payments and re-verify cid if ano was edited
         for p in payments:
             local_uuid = p.get("local_uuid")
-            p["edit"] = payment_edit_map.get(local_uuid) if local_uuid else None
+            edit = payment_edit_map.get(local_uuid) if local_uuid else None
+            p["edit"] = edit
+            if edit and edit.get("ano"):
+                try:
+                    edited_ano = int(edit["ano"])
+                    cur.execute(
+                        "SELECT cid, name, start_date FROM customer WHERE vid = %s AND ano = %s",
+                        (vid, edited_ano)
+                    )
+                    cust_match = cur.fetchone()
+                    if cust_match:
+                        p["cid"] = cust_match[0]
+                        p["customer_name"] = cust_match[1]
+                        p["customer_start_date"] = cust_match[2]
+                    else:
+                        p["cid"] = None
+                        p["customer_name"] = None
+                except Exception:
+                    pass
 
         # ACCOUNT CLOSURE FEED
         cur.execute("""
@@ -8388,16 +8635,43 @@ def feed():
                 acf.ano,
                 acf.status,
                 acf.created_at,
-                c.name,
-                c.cid,
-                c.total_amount,
-                c.paid_amount,
-                c.balance_amount,
-                c.interest_amount
+                COALESCE(c.name, ca.name, 'Customer Not Found') AS name,
+                COALESCE(c.cid, ca.cid) AS cid,
+                COALESCE(c.total_amount, ca.total_amount, 0) AS total_amount,
+                COALESCE(c.paid_amount, ca.paid_amount, 0) AS paid_amount,
+                COALESCE(c.balance_amount, ca.balance_amount, 0) AS balance_amount,
+                COALESCE(c.interest_amount, ca.interest_amount, 0) AS interest_amount,
+                COALESCE(c.type, ca.type, 'weekly') AS type,
+                COALESCE(c.period, ca.period, 0) AS period,
+                COALESCE(c.installment_amount, ca.installment_amount, 0) AS installment_amount,
+                COALESCE(c.start_date, ca.start_date) AS start_date,
+                COALESCE(c.end_date, ca.end_date) AS end_date,
+                COALESCE(c.phone_number, ca.phone_number, '') AS phone_number,
+                COALESCE(c.aadhaar_number, ca.aadhaar_number, '') AS aadhaar_number,
+                COALESCE(c.notes, ca.notes, '') AS notes,
+                COALESCE(c.latitude, ca.latitude) AS latitude,
+                COALESCE(c.longitude, ca.longitude) AS longitude,
+                COALESCE(c.status, ca.status, 'open') AS account_status,
+                COALESCE(v.village_name, 'Village ' || acf.vid::text) AS village_name,
+                docs.aadhaar_front_pic,
+                docs.aadhaar_back_pic,
+                docs.house_photo
             FROM account_closure_feed acf
-            INNER JOIN customer c
+            LEFT JOIN customer c
               ON c.vid = acf.vid
              AND c.ano = acf.ano
+            LEFT JOIN closed_cust_account ca
+              ON ca.vid = acf.vid
+             AND ca.ano = acf.ano
+            LEFT JOIN village v
+              ON v.vid = acf.vid
+            LEFT JOIN LATERAL (
+                SELECT cd.aadhaar_front_pic, cd.aadhaar_back_pic, cd.house_photo
+                FROM customer_docs cd
+                WHERE cd.vid = acf.vid AND cd.ano = acf.ano
+                ORDER BY cd.uploaded_at DESC NULLS LAST, cd.doc_id DESC
+                LIMIT 1
+            ) docs ON TRUE
             WHERE acf.vid = %s AND acf.status = 'pending'
             ORDER BY acf.feed_id DESC
         """, (vid,))
@@ -8405,12 +8679,98 @@ def feed():
         columns = [desc[0] for desc in cur.description] # type: ignore
         closure_requests = [dict(zip(columns, r)) for r in rows]
 
+        for req in closure_requests:
+            for pic_key in ("aadhaar_front_pic", "aadhaar_back_pic", "house_photo"):
+                pic_val = req.get(pic_key)
+                if isinstance(pic_val, memoryview):
+                    req[pic_key] = base64.b64encode(pic_val.tobytes()).decode("ascii")
+                elif isinstance(pic_val, (bytes, bytearray)):
+                    req[pic_key] = base64.b64encode(pic_val).decode("ascii")
+
+            if req.get("created_at"):
+                try:
+                    dt = req["created_at"]
+                    if hasattr(dt, "strftime"):
+                        req["created_at_display"] = dt.strftime("%d %b %Y, %I:%M %p")
+                    else:
+                        req["created_at_display"] = str(dt)
+                except Exception:
+                    req["created_at_display"] = str(req.get("created_at"))
+            else:
+                req["created_at_display"] = "Recently"
+
+            if req.get("start_date"):
+                try:
+                    s_dt = req["start_date"]
+                    req["start_date_display"] = s_dt.strftime("%d %b %Y") if hasattr(s_dt, "strftime") else str(s_dt)
+                except Exception:
+                    req["start_date_display"] = str(req.get("start_date"))
+            else:
+                req["start_date_display"] = "—"
+
+            if req.get("end_date"):
+                try:
+                    e_dt = req["end_date"]
+                    req["end_date_display"] = e_dt.strftime("%d %b %Y") if hasattr(e_dt, "strftime") else str(e_dt)
+                except Exception:
+                    req["end_date_display"] = str(req.get("end_date"))
+            else:
+                req["end_date_display"] = "—"
+
+            t_raw = str(req.get("type") or "W").upper()
+            if t_raw in ("W", "WEEKLY"):
+                req["type_display"] = "Weekly"
+                req["installment_freq"] = "/ week"
+            elif t_raw in ("D", "DAILY"):
+                req["type_display"] = "Daily"
+                req["installment_freq"] = "/ day"
+            elif t_raw in ("M", "MONTHLY"):
+                req["type_display"] = "Monthly"
+                req["installment_freq"] = "/ month"
+            else:
+                req["type_display"] = req.get("type", "Standard")
+                req["installment_freq"] = ""
+
+        # Highest account number recorded in DB for this village
+        cur.execute("SELECT COALESCE(MAX(ano), 0) FROM customer WHERE vid = %s", (vid,))
+        max_ano_res = cur.fetchone()
+        max_ano = max_ano_res[0] if max_ano_res and max_ano_res[0] else 0
+
+        # Highest payment date recorded in DB for this village
+        cur.execute("SELECT MAX(payment_date) FROM payment WHERE vid = %s", (vid,))
+        max_pdt_res = cur.fetchone()
+        max_payment_date = max_pdt_res[0] if max_pdt_res and max_pdt_res[0] else None
+        max_payment_date_display = format_date_display(str(max_payment_date)) if max_payment_date else "No payments yet"
+
+        # Calculate pending summary totals for All Queues Dashboard
+        def _parse_dec(val):
+            try:
+                return Decimal(str(val)) if val is not None else Decimal(0)
+            except Exception:
+                return Decimal(0)
+
+        pending_payments_total = sum(
+            _parse_dec(p.get("edit", {}).get("amt") if p.get("edit") and p.get("edit", {}).get("amt") else p.get("amt"))
+            for p in payments
+        )
+        pending_customers_total = sum(
+            _parse_dec(c.get("edit", {}).get("total_amount") if c.get("edit") and c.get("edit", {}).get("total_amount") else c.get("total_amount"))
+            for c in customers
+        )
+        pending_closures_total = sum(_parse_dec(cl.get("balance_amount")) for cl in closure_requests)
+
         return render_template(
             "feed.html",
             customers=customers,
             payments=payments,
             existing_customer_docs=existing_customer_docs,
-            closure_requests=closure_requests
+            closure_requests=closure_requests,
+            village_map=village_map,
+            max_ano=max_ano,
+            max_payment_date_display=max_payment_date_display,
+            pending_payments_total=pending_payments_total,
+            pending_customers_total=pending_customers_total,
+            pending_closures_total=pending_closures_total
         )
 
     finally:
@@ -8454,6 +8814,12 @@ def accept_closure_request(feed_id):
         """, (ano, vid))
         cust_row = cur.fetchone()
         if not cust_row:
+            cur.execute("SELECT cid FROM closed_cust_account WHERE ano = %s AND vid = %s", (ano, vid))
+            closed_row = cur.fetchone()
+            if closed_row:
+                cur.execute("UPDATE account_closure_feed SET status = 'accepted' WHERE feed_id = %s", (feed_id,))
+                conn.commit()
+                return jsonify({"success": True, "message": "Customer account was already closed; closure feed request marked as accepted."})
             return jsonify({"success": False, "error": f"Customer with Account Number {ano} not found in this village"}), 404
 
         cid, total_amount, paid_amount, balance_amount, interest_amount, interest_discount = cust_row
@@ -8556,6 +8922,11 @@ def accept_closure_request(feed_id):
             SET status = 'accepted'
             WHERE ano = %s AND vid = %s AND status = 'pending'
         """, (ano, vid))
+
+        # Invalidate village health cache (matching customer dashboard pipeline)
+        KOLKATA = pytz.timezone('Asia/Kolkata')
+        today = datetime.now(KOLKATA).date()
+        invalidate_village_health_cache(cur, vid, today)
 
         audit_log(
             action="close_customer_account_via_feed",
@@ -8950,66 +9321,79 @@ def accept_customer(feed_id):
     cid = cur.fetchone()[0]
     recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
-    cur.execute("""
-        SELECT docs_feed_id, aadhaar_front_pic, aadhaar_back_pic, house_photo
-        FROM customer_docs_feed
-        WHERE vid = %s AND ano = %s AND status = 'pending'
-        ORDER BY created_at DESC NULLS LAST, docs_feed_id DESC
-        LIMIT 1
-    """, (data.get("vid"), data.get("ano"))) # type: ignore
-    pending_docs_row = cur.fetchone()
+    # Auto-approve and link all pending customer documents for this new customer
+    try:
+        vid_int = int(data.get("vid")) if data.get("vid") is not None else None
+        ano_int = int(data.get("ano")) if data.get("ano") is not None else None
+    except (TypeError, ValueError):
+        vid_int = None
+        ano_int = None
 
-    if pending_docs_row:
-        docs_feed_id, aadhaar_front_pic, aadhaar_back_pic, house_photo = pending_docs_row
-
+    if vid_int is not None and ano_int is not None:
         cur.execute("""
-            SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
-            FROM customer_docs
-            WHERE vid = %s AND ano = %s
-            LIMIT 1
-        """, (data.get("vid"), data.get("ano"))) # type: ignore
-        existing_docs = cur.fetchone()
+            SELECT docs_feed_id, aadhaar_front_pic, aadhaar_back_pic, house_photo
+            FROM customer_docs_feed
+            WHERE vid = %s AND ano = %s AND status = 'pending'
+            ORDER BY docs_feed_id ASC
+        """, (vid_int, ano_int))
+        pending_docs_list = cur.fetchall()
 
-        existing_aadhaar_front = existing_docs[0] if existing_docs else None
-        existing_aadhaar_back = existing_docs[1] if existing_docs else None
-        existing_house = existing_docs[2] if existing_docs else None
-
-        final_aadhaar_front = aadhaar_front_pic if aadhaar_front_pic is not None else existing_aadhaar_front
-        final_aadhaar_back = aadhaar_back_pic if aadhaar_back_pic is not None else existing_aadhaar_back
-        final_house = house_photo if house_photo is not None else existing_house
-
-        if final_aadhaar_front is not None or final_aadhaar_back is not None or final_house is not None:
+        if pending_docs_list:
             cur.execute("""
-                INSERT INTO customer_docs (
-                    vid,
-                    ano,
-                    aadhaar_front_pic,
-                    aadhaar_back_pic,
-                    house_photo,
-                    uploaded_at
-                )
-                VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
-                ON CONFLICT (vid, ano)
-                DO UPDATE SET
-                    aadhaar_front_pic = EXCLUDED.aadhaar_front_pic,
-                    aadhaar_back_pic = EXCLUDED.aadhaar_back_pic,
-                    house_photo = EXCLUDED.house_photo,
-                    uploaded_at = CURRENT_TIMESTAMP
-            """, (
-                data.get("vid"), # type: ignore
-                data.get("ano"), # type: ignore
-                final_aadhaar_front,
-                final_aadhaar_back,
-                final_house
-            ))
+                SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
+                FROM customer_docs
+                WHERE vid = %s AND ano = %s
+                LIMIT 1
+            """, (vid_int, ano_int))
+            existing_docs = cur.fetchone()
 
-        cur.execute("""
-            UPDATE customer_docs_feed
-            SET status = 'accepted',
-                reviewed_by = %s,
-                reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-            WHERE docs_feed_id = %s
-        """, (logged_user, docs_feed_id))
+            final_aadhaar_front = existing_docs[0] if existing_docs else None
+            final_aadhaar_back = existing_docs[1] if existing_docs else None
+            final_house = existing_docs[2] if existing_docs else None
+
+            doc_feed_ids = []
+            for d_row in pending_docs_list:
+                doc_feed_ids.append(d_row[0])
+                if d_row[1] is not None:
+                    final_aadhaar_front = d_row[1]
+                if d_row[2] is not None:
+                    final_aadhaar_back = d_row[2]
+                if d_row[3] is not None:
+                    final_house = d_row[3]
+
+            if final_aadhaar_front is not None or final_aadhaar_back is not None or final_house is not None:
+                cur.execute("""
+                    INSERT INTO customer_docs (
+                        vid,
+                        ano,
+                        aadhaar_front_pic,
+                        aadhaar_back_pic,
+                        house_photo,
+                        uploaded_at
+                    )
+                    VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                    ON CONFLICT (vid, ano)
+                    DO UPDATE SET
+                        aadhaar_front_pic = COALESCE(EXCLUDED.aadhaar_front_pic, customer_docs.aadhaar_front_pic),
+                        aadhaar_back_pic = COALESCE(EXCLUDED.aadhaar_back_pic, customer_docs.aadhaar_back_pic),
+                        house_photo = COALESCE(EXCLUDED.house_photo, customer_docs.house_photo),
+                        uploaded_at = CURRENT_TIMESTAMP
+                """, (
+                    vid_int,
+                    ano_int,
+                    final_aadhaar_front,
+                    final_aadhaar_back,
+                    final_house
+                ))
+
+            cur.execute("""
+                UPDATE customer_docs_feed
+                SET status = 'accepted',
+                    cid = %s,
+                    reviewed_by = %s,
+                    reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+                WHERE docs_feed_id = ANY(%s::bigint[])
+            """, (cid, logged_user, doc_feed_ids))
 
     cur.execute("""
         UPDATE customer_feed
@@ -9333,8 +9717,35 @@ def edit_payment_feed(feed_payment_id):
                     VALUES (%s, %s, %s, %s, 'pending', NOW())
                 """, (local_uuid, json.dumps(payload), payload.get("eid"), payload.get("vid")))
 
+        # Check customer mapping with updated ano and vid
+        customer_mapped = False
+        cid = None
+        customer_name = None
+        chk_vid = payload.get("vid") or session.get("vid")
+        chk_ano = payload.get("ano")
+        if chk_vid and chk_ano is not None:
+            try:
+                cur.execute("""
+                    SELECT cid, name
+                    FROM customer
+                    WHERE vid = %s AND ano = %s
+                    LIMIT 1
+                """, (chk_vid, int(chk_ano)))
+                cust_row = cur.fetchone()
+                if cust_row:
+                    customer_mapped = True
+                    cid = cust_row[0]
+                    customer_name = cust_row[1]
+            except Exception:
+                pass
+
         conn.commit()
-        return jsonify({"success": True})
+        return jsonify({
+            "success": True,
+            "mapped": customer_mapped,
+            "cid": cid,
+            "customer_name": customer_name
+        })
 
     except Exception as e:
         if conn:
@@ -9432,27 +9843,26 @@ def delete_payment_feed(feed_payment_id):
 @app.post("/feed/payment/accept/<feed_payment_id>")
 @login_required
 def accept_payment(feed_payment_id):
-
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # Safety check: ensure logged-in employee
     logged_user = session.get("employee_id")
-
     if not logged_user:
+        cur.close()
+        conn.close()
         return {"success": False, "error": "User not logged properly"}
 
-    # 1ï¸ âƒ£ Get payload
     cur.execute("""
         SELECT local_uuid, payload
         FROM payment_feed_items
         WHERE feed_payment_id = %s
     """, (feed_payment_id,))
-
     row = cur.fetchone()
 
     if not row:
-        return {"success": False, "error": "Feed not found"}
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Feed payment not found"}
 
     local_uuid = row[0]
     data = row[1]
@@ -9460,9 +9870,10 @@ def accept_payment(feed_payment_id):
         try:
             data = json.loads(data)
         except Exception:
+            cur.close()
+            conn.close()
             return {"success": False, "error": "Invalid payload format"}
 
-    # Ensure feed edit tracking tables exist safely
     ensure_feed_tables_exist(cur)
 
     # Merge pending edit if any
@@ -9483,47 +9894,80 @@ def accept_payment(feed_payment_id):
                     ep = {}
             data = merge_edit_payload(data, ep)
 
-        # Mark edit as accepted
-        cur.execute("""
-            UPDATE payment_feed_edits
-            SET edit_status = 'accepted'
-            WHERE local_uuid = %s AND edit_status = 'pending'
-        """, (local_uuid,))
-
     try:
         data = normalize_mobile_payment_payload(data)
     except ValueError as exc:
+        cur.close()
+        conn.close()
         return {"success": False, "error": str(exc)}
 
     ano = data.get("ano")
     vid = data.get("vid")
     eid = data.get("eid")
     if ano is None or vid is None or eid is None:
-        return {"success": False, "error": "Missing ano, vid, or eid in payment payload"}
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Missing account number, village ID, or employee ID in payment payload"}
 
-    amt = Decimal(str(data.get("amt")))
-    payment_date = datetime.fromisoformat(
-        str(data.get("payment_date") or data.get("pdate"))[:10]
-    ).date()
+    amt = Decimal(str(data.get("amt", 0)))
+    if amt <= 0:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Payment amount must be greater than 0"}
+
+    try:
+        raw_pdt = str(data.get("payment_date") or data.get("pdate"))[:10]
+        payment_date = datetime.fromisoformat(raw_pdt).date()
+    except Exception:
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Invalid payment date format"}
+
     payment_type = data.get("payment_type", "cash")
     cash_amount = Decimal(str(data.get("cash_amount", 0)))
     upi_amount = Decimal(str(data.get("upi_amount", 0)))
 
-    # 2ï¸âƒ£ Get customer
+    # Fetch customer from DB for this village
     cur.execute("""
-        SELECT cid, total_amount
+        SELECT cid, total_amount, start_date
         FROM customer
         WHERE ano = %s AND vid = %s
     """, (ano, vid))
-
     cust = cur.fetchone()
 
     if not cust:
-        return {"success": False, "error": "Customer not found"}
+        cur.close()
+        conn.close()
+        return {
+            "success": False,
+            "error": f"Customer Account #{ano} not found in database for this village! Please approve the new customer registration first."
+        }
 
-    cid, total_amt = cust
+    cid, total_amt, start_date = cust
 
-    # 3ï¸âƒ£ Insert payment
+    # Validate payment_date >= start_date
+    if start_date and payment_date < start_date:
+        cur.close()
+        conn.close()
+        return {
+            "success": False,
+            "error": f"Customer Account #{ano} start date is {format_date_display(str(start_date))}. Payment date ({format_date_display(str(payment_date))}) cannot be earlier than start date."
+        }
+
+    # Duplicate check in payment table
+    cur.execute("""
+        SELECT COUNT(*) FROM payment
+        WHERE ano = %s AND vid = %s AND payment_date = %s
+    """, (ano, vid, payment_date))
+    if cur.fetchone()[0] > 0:
+        cur.close()
+        conn.close()
+        return {
+            "success": False,
+            "error": f"Duplicate payment already recorded in database for Account #{ano} on {format_date_display(str(payment_date))}."
+        }
+
+    # Insert payment
     cur.execute("""
         INSERT INTO payment
         (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
@@ -9540,10 +9984,18 @@ def accept_payment(feed_payment_id):
         upi_amount
     ))
 
-    # 4ï¸âƒ£ Recalculate balance
+    # Recalculate balance
     recalc_customer_balance(cur, cid)
 
-    # 5ï¸âƒ£ Mark feed accepted
+    # Mark edit as accepted
+    if local_uuid:
+        cur.execute("""
+            UPDATE payment_feed_edits
+            SET edit_status = 'accepted'
+            WHERE local_uuid = %s AND edit_status = 'pending'
+        """, (local_uuid,))
+
+    # Mark feed item as accepted
     cur.execute("""
         UPDATE payment_feed_items
         SET status='accepted',
@@ -9573,14 +10025,13 @@ def accept_payment(feed_payment_id):
 
     return {"success": True}
 
+
 # ----------- Batch accept payments -----------
 @app.post("/feed/payment/accept_batch")
 @login_required
 def accept_payment_batch():
-
-    data = request.get_json()
+    data = request.get_json() or {}
     ids = data.get("ids", [])
-    # ✅ Ensure IDs are integers (fix bigint = text error)
     try:
         ids = [int(i) for i in ids]
     except Exception:
@@ -9592,27 +10043,30 @@ def accept_payment_batch():
     conn = get_pg_connection()
     cur = conn.cursor()
 
-    # Safety check: ensure logged-in employee
     logged_user = session.get("employee_id")
-
     if not logged_user:
+        cur.close()
+        conn.close()
         return {"success": False, "error": "User not logged properly"}
 
     try:
-        # 1️⃣ Fetch all selected payloads
+        ensure_feed_tables_exist(cur)
+
+        # 1. Fetch selected items with their specific feed_payment_id
         cur.execute("""
-            SELECT local_uuid, payload
+            SELECT feed_payment_id, local_uuid, payload
             FROM payment_feed_items
             WHERE feed_payment_id = ANY(%s::bigint[])
         """, (ids,))
-
         rows = cur.fetchall()
 
         if not rows:
-            return {"success": False, "error": "No valid payments found"}
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "No matching payments found in queue"}
 
         # Fetch pending edits if any for these local_uuids
-        local_uuids = [r[0] for r in rows if r[0]]
+        local_uuids = [r[1] for r in rows if r[1]]
         payment_edit_map = {}
         if local_uuids:
             cur.execute("""
@@ -9629,194 +10083,282 @@ def accept_payment_batch():
                         ep = {}
                 payment_edit_map[edit_row[0]] = ep
 
-        # -------------------------------------------------
-        # Batch prefetch customers
-        # -------------------------------------------------
+        # 2. Prefetch customers for all unique ANOs in this village
+        batch_vid = session.get("vid")
         anos = []
-
         for r in rows:
-            local_uuid = r[0]
-            payload = r[1]
-            if isinstance(payload, str):
+            l_uuid = r[1]
+            p_data = r[2]
+            if isinstance(p_data, str):
                 try:
-                    payload = json.loads(payload)
+                    p_data = json.loads(p_data)
                 except Exception:
-                    payload = {}
-            if local_uuid and local_uuid in payment_edit_map:
-                payload = merge_edit_payload(payload, payment_edit_map[local_uuid])
-            
-            ano = payload.get("ano")
-            if ano is not None:
+                    p_data = {}
+            if l_uuid and l_uuid in payment_edit_map:
+                p_data = merge_edit_payload(p_data, payment_edit_map[l_uuid])
+            if not batch_vid and p_data.get("vid"):
+                batch_vid = p_data.get("vid")
+            a_val = p_data.get("ano")
+            if a_val is not None:
                 try:
-                    anos.append(int(ano))
+                    anos.append(int(a_val))
                 except Exception:
                     pass
 
         anos = list(set(anos))
-
         customer_map = {}
-
-        if anos:
-
-            # Use vid from first payload (all selected payments belong to same village)
-            first_payload = rows[0][1]
-            if isinstance(first_payload, str):
-                try:
-                    first_payload = json.loads(first_payload)
-                except Exception:
-                    first_payload = {}
-            first_local_uuid = rows[0][0]
-            if first_local_uuid and first_local_uuid in payment_edit_map:
-                first_payload = merge_edit_payload(first_payload, payment_edit_map[first_local_uuid])
-
-            batch_vid = first_payload.get("vid")
-
+        if anos and batch_vid:
             cur.execute("""
-                SELECT
-                    cid,
-                    ano,
-                    total_amount,
-                    paid_amount,
-                    balance_amount
+                SELECT cid, ano, total_amount, paid_amount, balance_amount, start_date
                 FROM customer
                 WHERE ano = ANY(%s)
                   AND vid = %s
             """, (anos, batch_vid))
-
-            for row in cur.fetchall():
-                customer_map[int(row[1])] = {
-                    "cid": row[0],
-                    "total_amount": row[2],
-                    "paid_amount": row[3],
-                    "balance_amount": row[4]
+            for crow in cur.fetchall():
+                customer_map[int(crow[1])] = {
+                    "cid": crow[0],
+                    "total_amount": crow[2],
+                    "paid_amount": crow[3],
+                    "balance_amount": crow[4],
+                    "start_date": crow[5]
                 }
 
         insert_values = []
+        successful_feed_ids = []
+        successful_local_uuids = []
+        affected_cids = set()
+        failed_items = []
+        seen_in_batch = set()
 
-        # 2️⃣ Prepare bulk insert
         for r in rows:
-            local_uuid = r[0]
-            p = r[1]
+            f_id = r[0]
+            l_uuid = r[1]
+            p = r[2]
             if isinstance(p, str):
-                p = json.loads(p)
-            if local_uuid and local_uuid in payment_edit_map:
-                p = merge_edit_payload(p, payment_edit_map[local_uuid])
+                try:
+                    p = json.loads(p)
+                except Exception:
+                    failed_items.append({
+                        "feed_payment_id": f_id,
+                        "ano": "?",
+                        "reason": "Invalid payload format"
+                    })
+                    continue
+
+            if l_uuid and l_uuid in payment_edit_map:
+                p = merge_edit_payload(p, payment_edit_map[l_uuid])
 
             try:
                 p = normalize_mobile_payment_payload(p)
-            except ValueError:
+            except Exception as exc:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": str(p.get("ano", "?")),
+                    "reason": f"Payload error: {str(exc)}"
+                })
                 continue
 
-            ano = p.get("ano")
-            vid = p.get("vid")
-            eid = p.get("eid")
-            if ano is None or vid is None or eid is None:
+            ano_raw = p.get("ano")
+            vid_val = p.get("vid") or batch_vid
+            eid_val = p.get("eid")
+            if ano_raw is None or vid_val is None or eid_val is None:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": str(ano_raw or "?"),
+                    "reason": "Missing account number, village ID, or employee ID"
+                })
                 continue
 
             try:
-                ano_int = int(ano)
-            except (TypeError, ValueError):
+                ano_int = int(ano_raw)
+            except Exception:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": str(ano_raw),
+                    "reason": "Account number must be numeric"
+                })
                 continue
 
-            amt = Decimal(str(p.get("amt")))
-            payment_date = datetime.fromisoformat(
-                str(p.get("payment_date") or p.get("pdate"))[:10]
-            ).date()
+            try:
+                amt = Decimal(str(p.get("amt", 0)))
+            except Exception:
+                amt = Decimal(0)
+
+            if amt <= 0:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Payment amount must be greater than 0"
+                })
+                continue
+
+            try:
+                raw_pdt = str(p.get("payment_date") or p.get("pdate"))[:10]
+                payment_date = datetime.fromisoformat(raw_pdt).date()
+            except Exception:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Invalid payment date"
+                })
+                continue
+
+            # Check 1: Customer existence in database for this village
+            customer = customer_map.get(ano_int)
+            if not customer:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Customer not found in database for this village. Please approve new customer registration first."
+                })
+                continue
+
+            cid = customer["cid"]
+            cust_start = customer.get("start_date")
+
+            # Check 2: Payment date >= Customer start date
+            if cust_start and payment_date < cust_start:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Payment date ({format_date_display(str(payment_date))}) cannot be earlier than customer start date ({format_date_display(str(cust_start))})."
+                })
+                continue
+
+            # Check 3: Intra-batch duplicate check
+            batch_pair = (ano_int, str(payment_date))
+            if batch_pair in seen_in_batch:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Multiple payments for date {format_date_display(str(payment_date))} in the same selection."
+                })
+                continue
+            seen_in_batch.add(batch_pair)
+
+            # Check 4: Database duplicate check
+            cur.execute("""
+                SELECT COUNT(*) FROM payment
+                WHERE ano = %s AND vid = %s AND payment_date = %s
+            """, (ano_int, vid_val, payment_date))
+            if cur.fetchone()[0] > 0:
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Duplicate payment already recorded in database on {format_date_display(str(payment_date))}."
+                })
+                continue
+
             payment_type = p.get("payment_type", "cash")
             cash_amount = Decimal(str(p.get("cash_amount", 0)))
             upi_amount = Decimal(str(p.get("upi_amount", 0)))
 
-            customer = customer_map.get(ano_int)
-
-            if not customer:
-                continue
-
-            cid = customer["cid"]
-
             insert_values.append((
                 cid,
-                vid,
-                eid,
+                vid_val,
+                eid_val,
                 ano_int,
                 amt,
                 payment_date,
                 payment_type,
                 cash_amount,
-                upi_amount,
+                upi_amount
             ))
+            successful_feed_ids.append(f_id)
+            if l_uuid:
+                successful_local_uuids.append(l_uuid)
+            affected_cids.add(cid)
 
-        if not insert_values:
-            return {"success": False, "error": "No valid payments to insert"}
-
-        # 3️⃣ BULK INSERT (safe + parameterized)
-        execute_values(
-            cur,
-            """
-                INSERT INTO payment (
-                    cid,
-                    vid,
-                    eid,
-                    ano,
-                    amt,
-                    payment_date,
-                    payment_type,
-                    cash_amount,
-                    upi_amount
-                )
-                VALUES %s
-            """,
-            insert_values,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-        )
-
-        # 4ï¸âƒ£ Update customers (optimized)
-        for customer in customer_map.values():
-            recalc_customer_balance(cur, customer["cid"])
-
-        # 5ï¸âƒ£ Mark all as accepted
-        cur.execute("""
-            UPDATE payment_feed_items
-            SET status = 'accepted',
-                review_by = %s,
-                review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-            WHERE feed_payment_id = ANY(%s::bigint[])
-        """, (logged_user, ids))
-
-        if local_uuids:
-            cur.execute("""
-                UPDATE payment_feed_edits
-                SET edit_status = 'accepted'
-                WHERE local_uuid = ANY(%s) AND edit_status = 'pending'
-            """, (local_uuids,))
-
-        # Invalidate cache for this village
+        # 3. If there are valid payments to insert
         if insert_values:
-            batch_vid = insert_values[0][1]
+            execute_values(
+                cur,
+                """
+                    INSERT INTO payment (
+                        cid,
+                        vid,
+                        eid,
+                        ano,
+                        amt,
+                        payment_date,
+                        payment_type,
+                        cash_amount,
+                        upi_amount
+                    )
+                    VALUES %s
+                """,
+                insert_values,
+                template="(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            )
+
+            # Recalculate customer balances for affected customers
+            for c_id in affected_cids:
+                recalc_customer_balance(cur, c_id)
+
+            # ONLY update status for successful payments!
+            cur.execute("""
+                UPDATE payment_feed_items
+                SET status = 'accepted',
+                    review_by = %s,
+                    review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+                WHERE feed_payment_id = ANY(%s::bigint[])
+            """, (logged_user, successful_feed_ids))
+
+            if successful_local_uuids:
+                cur.execute("""
+                    UPDATE payment_feed_edits
+                    SET edit_status = 'accepted'
+                    WHERE local_uuid = ANY(%s) AND edit_status = 'pending'
+                """, (successful_local_uuids,))
+
+            # Invalidate cache
             min_pdt = min(val[5] for val in insert_values)
             invalidate_village_health_cache(cur, batch_vid, min_pdt)
 
-        conn.commit()
-        audit_log(
-            action="accept_payment_batch",
-            entity_type="payment_feed",
-            entity_id=vid,
-            details={
-                "reviewed_by": logged_user,
-                "selected_feed_ids": ids,
-                "payments_inserted": len(insert_values)
-            }
-        )
+            conn.commit()
+            audit_log(
+                action="accept_payment_batch",
+                entity_type="payment_feed",
+                entity_id=batch_vid,
+                details={
+                    "reviewed_by": logged_user,
+                    "selected_count": len(ids),
+                    "accepted_count": len(successful_feed_ids),
+                    "failed_count": len(failed_items)
+                }
+            )
+
+        cur.close()
         conn.close()
 
-        return {
-            "success": True,
-            "message": f"{len(insert_values)} payments inserted"
-        }
+        if successful_feed_ids:
+            accepted_sum = float(sum(val[4] for val in insert_values)) if insert_values else 0.0
+            return {
+                "success": True,
+                "accepted_count": len(successful_feed_ids),
+                "accepted_sum": accepted_sum,
+                "failed_count": len(failed_items),
+                "failed_items": failed_items,
+                "accepted_ids": successful_feed_ids,
+                "message": f"{len(successful_feed_ids)} payments posted successfully." if not failed_items else f"{len(successful_feed_ids)} payments posted. {len(failed_items)} could not be posted."
+            }
+        else:
+            return {
+                "success": False,
+                "accepted_count": 0,
+                "failed_count": len(failed_items),
+                "failed_items": failed_items,
+                "error": "None of the selected payments could be posted.",
+                "message": "None of the selected payments could be posted."
+            }
 
     except Exception as e:
         conn.rollback()
+        cur.close()
         conn.close()
         return {"success": False, "error": str(e)}
+
+
 
 # ----------- NEW: Postgres-based customer update route -----------
 @app.route("/api/customer/update_pg", methods=["POST"])
@@ -14793,6 +15335,11 @@ def b64encode_filter(data):
     if not data:
         return ""
     return base64.b64encode(data).decode('utf-8')
+
+@app.template_filter('format_date_iso')
+def format_date_iso_filter(value):
+    return format_date_iso(value)
+
 
 # ====================================================
 # SELF-HOSTED APK DISTRIBUTION

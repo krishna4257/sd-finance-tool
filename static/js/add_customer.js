@@ -60,6 +60,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // ✅ NEW STATE FLAG: Prevents duplicate submissions
     let isSubmitting = false;
 
+    // Aadhaar Duplicate Tracking
+    let currentAadhaarDuplicates = [];
+    let confirmedAadhaarBypass = null;
+
     // --- Form State Controller ---
     /**
      * Disables or enables all form fields except the account number.
@@ -122,6 +126,107 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     anoInput.addEventListener("blur", checkAno);
     anoInput.addEventListener("change", checkAno);
+
+    // --- Aadhaar Duplicate Check ---
+    const aadhaarInput = document.getElementById('aadhaar_number');
+    const aadhaarWarnBox = document.getElementById('aadhaarDuplicateWarning');
+    const aadhaarWarnCount = document.getElementById('aadhaarWarnCount');
+
+    const checkAadhaarDuplicate = debounce(function () {
+        if (!aadhaarInput) return;
+        const rawVal = aadhaarInput.value.trim();
+        const cleanVal = rawVal.replace(/[^0-9]/g, "");
+
+        if (cleanVal.length !== 12) {
+            currentAadhaarDuplicates = [];
+            confirmedAadhaarBypass = null;
+            if (aadhaarWarnBox) aadhaarWarnBox.style.display = 'none';
+            return;
+        }
+
+        fetch(`/api/customer/check_aadhaar?aadhaar=${cleanVal}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.duplicate && data.accounts && data.accounts.length > 0) {
+                    currentAadhaarDuplicates = data.accounts;
+                    if (aadhaarWarnCount) aadhaarWarnCount.textContent = data.accounts.length;
+                    if (aadhaarWarnBox) aadhaarWarnBox.style.display = 'block';
+                } else {
+                    currentAadhaarDuplicates = [];
+                    confirmedAadhaarBypass = null;
+                    if (aadhaarWarnBox) aadhaarWarnBox.style.display = 'none';
+                }
+            })
+            .catch(err => {
+                console.error("Error checking Aadhaar duplicate:", err);
+            });
+    }, 250);
+
+    if (aadhaarInput) {
+        aadhaarInput.addEventListener("input", function () {
+            this.value = this.value.replace(/[^0-9]/g, "").slice(0, 12);
+            checkAadhaarDuplicate();
+        });
+        aadhaarInput.addEventListener("blur", function () {
+            checkAadhaarDuplicate();
+        });
+    }
+
+    window.showAadhaarDuplicatesModal = function () {
+        const modal = document.getElementById('duplicateAadhaarModal');
+        const tbody = document.getElementById('dupeAccountsTableBody');
+        const emptyNotice = document.getElementById('dupeAccountsEmptyNotice');
+        const aadhaarSpan = document.getElementById('dupeModalAadhaar');
+        const countBadge = document.getElementById('dupeModalCountBadge');
+
+        if (!modal) return;
+
+        const currentAadhaar = aadhaarInput ? aadhaarInput.value.replace(/[^0-9]/g, "") : "—";
+        if (aadhaarSpan) aadhaarSpan.textContent = currentAadhaar || "—";
+        if (countBadge) countBadge.textContent = `${currentAadhaarDuplicates.length} Accounts`;
+
+        if (tbody) {
+            tbody.innerHTML = '';
+            if (currentAadhaarDuplicates.length === 0) {
+                if (emptyNotice) emptyNotice.style.display = 'block';
+            } else {
+                if (emptyNotice) emptyNotice.style.display = 'none';
+                currentAadhaarDuplicates.forEach(acc => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--border)';
+                    const isOpen = acc.status === 'open' || acc.status === 'active';
+                    const statusBadge = isOpen
+                        ? '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">OPEN</span>'
+                        : '<span style="background: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">CLOSED</span>';
+
+                    tr.innerHTML = `
+                        <td style="padding: 10px 14px; font-weight: 700; font-family: monospace;">#${acc.ano}</td>
+                        <td style="padding: 10px 14px; font-weight: 600;">${acc.name}</td>
+                        <td style="padding: 10px 14px; color: var(--text-secondary);"><i class="fas fa-map-marker-alt text-danger me-1"></i>${acc.village_name}</td>
+                        <td style="padding: 10px 14px; font-family: monospace;">${acc.phone_number || '—'}</td>
+                        <td style="padding: 10px 14px; font-weight: 600;">₹${Number(acc.total_amount).toLocaleString('en-IN')}</td>
+                        <td style="padding: 10px 14px; font-weight: 700; color: ${Number(acc.balance_amount) > 0 ? '#ef4444' : 'var(--text)'};">₹${Number(acc.balance_amount).toLocaleString('en-IN')}</td>
+                        <td style="padding: 10px 14px; text-align: center;">${statusBadge}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        modal.style.display = 'flex';
+    };
+
+    window.closeAadhaarDuplicatesModal = function () {
+        const modal = document.getElementById('duplicateAadhaarModal');
+        if (modal) modal.style.display = 'none';
+    };
+
+    document.addEventListener('click', function (e) {
+        const modal = document.getElementById('duplicateAadhaarModal');
+        if (modal && e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
 
     let isFetchingPano = false;
     let lastFetchedPano = "";
@@ -437,6 +542,20 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Aadhaar Duplicate Warning Guard
+        const rawAadhaar = aadhaarInput ? aadhaarInput.value.trim() : "";
+        const cleanAadhaar = rawAadhaar.replace(/[^0-9]/g, "");
+
+        if (cleanAadhaar.length === 12 && currentAadhaarDuplicates && currentAadhaarDuplicates.length > 0 && confirmedAadhaarBypass !== cleanAadhaar) {
+            const proceed = confirm(`⚠️ DUPLICATE AADHAAR WARNING:\n\nThis Aadhaar (${cleanAadhaar}) is already registered with ${currentAadhaarDuplicates.length} existing account(s) across villages.\n\n• Click OK to proceed and add this customer anyway.\n• Click Cancel to review the existing accounts.`);
+            if (!proceed) {
+                isSubmitting = false;
+                window.showAadhaarDuplicatesModal();
+                return;
+            }
+            confirmedAadhaarBypass = cleanAadhaar;
+        }
+
         message.textContent = "Saving...";
         message.className = "message-box";
         message.style.display = 'block';
@@ -469,6 +588,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('aadhaar_number').value = '';
                     document.getElementById('pano').value = '';
                     document.getElementById('phone_number').value = '';
+
+                    currentAadhaarDuplicates = [];
+                    confirmedAadhaarBypass = null;
+                    if (aadhaarWarnBox) aadhaarWarnBox.style.display = 'none';
 
                     document.getElementById('total_amount').value = '';
 
