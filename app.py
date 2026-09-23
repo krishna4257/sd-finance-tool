@@ -4348,7 +4348,7 @@ def customer_docs_update():
                 "vid": vid,
                 "device_id": device_id,
                 "local_uuid": local_uuid,
-                "aadhaar_uploaded": aadhaar_bytes is not None, # type: ignore
+                "aadhaar_uploaded": (aadhaar_front_bytes is not None or aadhaar_back_bytes is not None),
                 "house_uploaded": house_bytes is not None
             }
         )
@@ -16089,12 +16089,16 @@ def app_download_action():
         status="success"
     )
 
-    return send_file(
+    response = send_file(
         apk_path,
         mimetype="application/vnd.android.package-archive",
         as_attachment=True,
         download_name=apk_filename,
     )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 # ----------------------------------------------------
