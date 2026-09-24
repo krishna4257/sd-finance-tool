@@ -2,14 +2,58 @@ import os
 import math
 import json
 import uuid
+from collections import defaultdict
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
-from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, g
+from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, g, flash
 from db import get_pg_connection
 import chit_calc_engine as ce
+from chit_calc_engine import round_curr
 
 chit_bp = Blueprint('chit_bp', __name__, url_prefix='/chit')
+
+def is_chit_api_request():
+    return (
+        request.path.startswith("/chit/api/")
+        or request.path.startswith("/api/")
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.is_json
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+def get_current_actor():
+    return session.get('username') or 'Admin'
+
+def get_current_actor_role():
+    level = session.get('level')
+    if level:
+        return level.upper()
+    return 'ADMIN'
+
+@chit_bp.before_request
+def require_chit_auth():
+    user_id = session.get("user_id")
+    if not user_id:
+        session.modified = False
+        if is_chit_api_request():
+            return jsonify({
+                "success": False,
+                "error": "Session expired. Please login again.",
+                "session_expired": True
+            }), 401
+        return redirect("/login")
+
+    user_level = session.get("level")
+    if user_level in ("j", "m", "s"):
+        if is_chit_api_request():
+            return jsonify({"success": False, "error": "Access denied."}), 403
+        if session.get("download_authorized") is True:
+            return redirect("/app/portal")
+        else:
+            session.clear()
+            flash("Access denied.")
+            return redirect("/login")
 
 def decimal_default(obj):
     if isinstance(obj, Decimal):
@@ -332,12 +376,12 @@ def calculate_loan_compound_interest(principal, annual_rate, disbursal_date, as_
     return {
         'days_elapsed': days_elapsed,
         'years_elapsed': round(t_years, 3),
-        'original_principal': round(p_orig, 2),
-        'repaid_principal': round(p_rep, 2),
-        'remaining_principal': round(p_rem, 2),
-        'repaid_interest': round(i_rep, 2),
-        'accrued_interest': round(net_interest, 2),
-        'total_payoff': round(total_payoff, 2)
+        'original_principal': round_curr(p_orig),
+        'repaid_principal': round_curr(p_rep),
+        'remaining_principal': round_curr(p_rem),
+        'repaid_interest': round_curr(i_rep),
+        'accrued_interest': round_curr(net_interest),
+        'total_payoff': round_curr(total_payoff)
     }
 
 @chit_bp.route('/api/loans/eligible-members', methods=['GET'])
@@ -574,10 +618,10 @@ def handle_loans_collection():
                 })
 
             summary = {
-                'total_active_principal': round(tot_active_principal, 2),
-                'total_accrued_interest': round(tot_accrued_interest, 2),
-                'total_recovered_principal': round(tot_recovered_principal, 2),
-                'total_recovered_interest': round(tot_recovered_interest, 2),
+                'total_active_principal': round_curr(tot_active_principal),
+                'total_accrued_interest': round_curr(tot_accrued_interest),
+                'total_recovered_principal': round_curr(tot_recovered_principal),
+                'total_recovered_interest': round_curr(tot_recovered_interest),
                 'total_active_borrowers': len(unique_borrowers),
                 'total_loans_count': len(loans)
             }
@@ -622,9 +666,10 @@ def handle_loans_collection():
             # Audit log
             cur.execute("""
                 INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-                VALUES (%s, 'ADMIN', 'LOAN_DISBURSED', 'CHIT_LOAN', %s, %s);
+                VALUES (%s, %s, 'LOAN_DISBURSED', 'CHIT_LOAN', %s, %s);
             """, (
-                session.get('username', 'CHINNA REDDY'),
+                get_current_actor(),
+                get_current_actor_role(),
                 loan_id,
                 json.dumps({'principal': principal, 'rate': rate, 'disbursal_date': disbursal_date, 'member_id': member_id})
             ))
@@ -703,9 +748,10 @@ def repay_loan(loan_id):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'ADMIN', 'LOAN_REPAYMENT', 'CHIT_LOAN', %s, %s);
+            VALUES (%s, %s, 'LOAN_REPAYMENT', 'CHIT_LOAN', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             loan_id,
             json.dumps({'total_repaid': tot_amt, 'principal': p_amt, 'interest': i_amt, 'is_settled': is_settled})
         ))
@@ -1693,33 +1739,6 @@ def get_chit_groups():
         cur.close()
         conn.close()
 
-@chit_bp.route('/api/chitgroups/trash', methods=['GET'])
-def get_trashed_chit_groups():
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT id, name, chit_total_value, duration_months, deleted_at, delete_reason
-            FROM chit_groups
-            WHERE deleted_at IS NOT NULL
-            ORDER BY deleted_at DESC;
-        """)
-        rows = cur.fetchall()
-        trashed = []
-        for r in rows:
-            del_at = r[4]
-            trashed.append({
-                'id': str(r[0]),
-                'name': r[1],
-                'chit_total_value': float(r[2]),
-                'duration_months': int(r[3]),
-                'deleted_at': del_at.strftime("%d %b %y") if del_at else '—',
-                'delete_reason': r[5] or 'Deleted by user'
-            })
-        return jsonify(trashed)
-    finally:
-        cur.close()
-        conn.close()
 
 @chit_bp.route('/api/chitgroups/new', methods=['POST'])
 def create_chit_group():
@@ -1832,13 +1851,13 @@ def create_chit_group():
                 m1_info = schedule[0]
                 if m_inst_type == 'fixed':
                     fixed_base = ce.get_fixed_installment_amount(chit_total_val, duration_months)
-                    kattubadi = round(fixed_base * share, 2)
-                    gross = round((chit_total_val / float(duration_months)) * share, 2)
-                    bonus = round(gross - kattubadi, 2)
+                    kattubadi = round_curr(fixed_base * share)
+                    gross = round_curr((chit_total_val / float(duration_months)) * share)
+                    bonus = round_curr(gross - kattubadi)
                 else:
-                    kattubadi = round(float(m1_info['installment_kattubadi']) * share, 2)
-                    bonus = round(float(m1_info['bonus']) * share, 2)
-                    gross = kattubadi + bonus
+                    kattubadi = round_curr(float(m1_info['installment_kattubadi']) * share)
+                    bonus = round_curr(float(m1_info['bonus']) * share)
+                    gross = round_curr(kattubadi + bonus)
 
                 cur.execute("""
                     INSERT INTO chit_installments (
@@ -1863,9 +1882,10 @@ def create_chit_group():
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'Admin', 'Created new fixed chit scheme', 'chit_groups', %s, %s);
+            VALUES (%s, %s, 'Created new fixed chit scheme', 'chit_groups', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(group_id),
             json.dumps({'name': name, 'value': chit_total_val, 'months': duration_months, 'members': total_members})
         ))
@@ -1931,9 +1951,9 @@ def get_chit_group_edit_details(group_id):
             total_shares += sh
             m_itype = m[13] or 'incremental'
             if m_itype == 'fixed':
-                est_monthly = round(sh * ce.get_fixed_installment_amount(val, dur), 2)
+                est_monthly = round_curr(sh * ce.get_fixed_installment_amount(val, dur))
             else:
-                est_monthly = round(sh * (val / dur), 2)
+                est_monthly = round_curr(sh * (val / dur))
 
             members.append({
                 'membership_id': str(m[0]),
@@ -2058,9 +2078,10 @@ def update_chit_group(group_id):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'Admin', 'Updated chit group parameters', 'chit_groups', %s, %s);
+            VALUES (%s, %s, 'Updated chit group parameters', 'chit_groups', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(group_id),
             json.dumps({'name': name, 'status': status, 'total_members': total_members})
         ))
@@ -2170,9 +2191,10 @@ def trash_chit_group(group_id):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'Admin', 'Moved chit group to trash', 'chit_groups', %s, %s);
+            VALUES (%s, %s, 'Moved chit group to trash', 'chit_groups', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(group_id),
             json.dumps({'reason': reason})
         ))
@@ -2197,9 +2219,10 @@ def restore_chit_group(group_id):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'Admin', 'Restored chit group from trash', 'chit_groups', %s, '{}');
+            VALUES (%s, %s, 'Restored chit group from trash', 'chit_groups', %s, '{}');
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(group_id)
         ))
 
@@ -2276,13 +2299,13 @@ def update_group_members(group_id):
                 if srow:
                     if inst_type == 'fixed':
                         fixed_base = ce.get_fixed_installment_amount(grow[2], grow[1])
-                        katt = round(fixed_base * share_units, 2)
-                        gross = round((float(grow[2]) / float(grow[1])) * share_units, 2)
-                        bon = round(gross - katt, 2)
+                        katt = round_curr(fixed_base * share_units)
+                        gross = round_curr((float(grow[2]) / float(grow[1])) * share_units)
+                        bon = round_curr(gross - katt)
                     else:
-                        katt = round(float(srow[1]) * share_units, 2)
-                        bon = round(float(srow[2]) * share_units, 2)
-                        gross = katt + bon
+                        katt = round_curr(float(srow[1]) * share_units)
+                        bon = round_curr(float(srow[2]) * share_units)
+                        gross = round_curr(katt + bon)
 
                     cur.execute("""
                         INSERT INTO chit_installments (
@@ -2338,16 +2361,16 @@ def update_group_members(group_id):
 
                 if ms_itype == 'fixed':
                     fixed_base = ce.get_fixed_installment_amount(g_val, dur)
-                    katt = round(fixed_base * share_units, 2)
-                    gross = round((g_val / float(dur)) * share_units, 2)
-                    bon = round(gross - katt, 2)
+                    katt = round_curr(fixed_base * share_units)
+                    gross = round_curr((g_val / float(dur)) * share_units)
+                    bon = round_curr(gross - katt)
                 else:
                     cur.execute("SELECT installment_kattubadi, bonus FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, cur_m))
                     srow = cur.fetchone()
                     if srow:
-                        katt = round(float(srow[0]) * share_units, 2)
-                        bon = round(float(srow[1]) * share_units, 2)
-                        gross = katt + bon
+                        katt = round_curr(float(srow[0]) * share_units)
+                        bon = round_curr(float(srow[1]) * share_units)
+                        gross = round_curr(katt + bon)
                     else:
                         katt = 0.0
                         bon = 0.0
@@ -2381,15 +2404,15 @@ def update_group_members(group_id):
 
                 if new_inst_type == 'fixed':
                     fixed_base = ce.get_fixed_installment_amount(g_val, dur)
-                    katt = round(fixed_base * sh, 2)
-                    gross = round((g_val / float(dur)) * sh, 2)
-                    bon = round(gross - katt, 2)
+                    katt = round_curr(fixed_base * sh)
+                    gross = round_curr((g_val / float(dur)) * sh)
+                    bon = round_curr(gross - katt)
                 else:
                     cur.execute("SELECT installment_kattubadi, bonus FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, cur_m))
                     srow = cur.fetchone()
-                    katt = round(float(srow[0]) * sh, 2) if srow else 0.0
-                    bon = round(float(srow[1]) * sh, 2) if srow else 0.0
-                    gross = katt + bon
+                    katt = round_curr(float(srow[0]) * sh) if srow else 0.0
+                    bon = round_curr(float(srow[1]) * sh) if srow else 0.0
+                    gross = round_curr(katt + bon)
 
                 cur.execute("""
                     UPDATE chit_installments
@@ -2422,13 +2445,13 @@ def update_group_members(group_id):
                     sh = float(sh_val or 1.0)
                     if new_inst_type == 'fixed':
                         fixed_base = ce.get_fixed_installment_amount(g_val, dur)
-                        katt = round(fixed_base * sh, 2)
-                        gross = round((g_val / float(dur)) * sh, 2)
-                        bon = round(gross - katt, 2)
+                        katt = round_curr(fixed_base * sh)
+                        gross = round_curr((g_val / float(dur)) * sh)
+                        bon = round_curr(gross - katt)
                     else:
-                        katt = round(float(srow[0]) * sh, 2) if srow else 0.0
-                        bon = round(float(srow[1]) * sh, 2) if srow else 0.0
-                        gross = katt + bon
+                        katt = round_curr(float(srow[0]) * sh) if srow else 0.0
+                        bon = round_curr(float(srow[1]) * sh) if srow else 0.0
+                        gross = round_curr(katt + bon)
                     cur.execute("""
                         UPDATE chit_installments
                         SET gross_amount = %s,
@@ -2619,13 +2642,13 @@ def rescale_and_rebalance_member_installments(cur, member_id, group_id=None):
 
                 if inst_type == 'fixed':
                     fixed_base = ce.get_fixed_installment_amount(g_val, duration)
-                    katt = round(fixed_base * share, 2)
-                    gross = round((g_val / float(duration)) * share, 2)
-                    bon = round(gross - katt, 2)
+                    katt = round_curr(fixed_base * share)
+                    gross = round_curr((g_val / float(duration)) * share)
+                    bon = round_curr(gross - katt)
                 else:
-                    katt = round(katt_base * share, 2)
-                    bon = round(bonus_base * share, 2)
-                    gross = round(katt + bon, 2)
+                    katt = round_curr(katt_base * share)
+                    bon = round_curr(bonus_base * share)
+                    gross = round_curr(katt + bon)
                     
                 if is_lifted_in_m and i_existing and float(i_existing[1] or 0.0) > 0:
                     katt = float(i_existing[1])
@@ -2664,12 +2687,12 @@ def rescale_and_rebalance_member_installments(cur, member_id, group_id=None):
                 elif tot_direct_payments > 0 and all(direct_payments[s['sib']['id']] <= s['katt'] for s in sib_info):
                     sib_paid = direct_payments[ms_id]
                 elif tot_net_due > 0 and tot_available > 0:
-                    sib_paid = min(katt, round(tot_available * (katt / tot_net_due), 2))
+                    sib_paid = min(katt, round_curr(tot_available * (katt / tot_net_due)))
                 else:
                     ratio = share / total_ticket_shares
-                    sib_paid = round(tot_available * ratio, 2)
+                    sib_paid = round_curr(tot_available * ratio)
                     
-                pending = max(0.0, round(katt - sib_paid, 2))
+                pending = max(0.0, round_curr(katt - sib_paid))
                 st = 'paid' if pending <= 0.01 else 'due'
                 
                 if item['inst_id']:
@@ -2760,13 +2783,13 @@ def ensure_group_month_installments(cur, group_id, month_index):
         share = float(sh or 1.0)
         if inst_type == 'fixed':
             fixed_base = ce.get_fixed_installment_amount(g_val, dur)
-            net = round(fixed_base * share, 2)
-            gross = round((g_val / float(dur)) * share, 2)
-            b_disc = round(gross - net, 2)
+            net = round_curr(fixed_base * share)
+            gross = round_curr((g_val / float(dur)) * share)
+            b_disc = round_curr(gross - net)
         else:
-            net = round(katt * share, 2)
-            b_disc = round(bon * share, 2)
-            gross = net + b_disc
+            net = round_curr(katt * share)
+            b_disc = round_curr(bon * share)
+            gross = round_curr(net + b_disc)
 
         cur.execute("""
             INSERT INTO chit_installments (
@@ -3076,14 +3099,14 @@ def get_month_dues(chit_id, month_index):
                 }
             else:
                 existing = dues_by_key[key]
-                existing['share_units'] = round(existing['share_units'] + d['share_units'], 2)
-                existing['gross_amount'] = round(existing['gross_amount'] + d['gross_amount'], 2)
-                existing['dividend_discount'] = round(existing['dividend_discount'] + d['dividend_discount'], 2)
-                existing['net_due_amount'] = round(existing['net_due_amount'] + d['net_due_amount'], 2)
-                existing['paid_amount'] = round(existing['paid_amount'] + d['paid_amount'], 2)
-                existing['pending_amount'] = round(existing['pending_amount'] + d['pending_amount'], 2)
-                existing['current_month_pending'] = round(existing['current_month_pending'] + d['current_month_pending'], 2)
-                existing['prev_dues'] = round(existing['prev_dues'] + d['prev_dues'], 2)
+                existing['share_units'] = round_curr(existing['share_units'] + d['share_units'])
+                existing['gross_amount'] = round_curr(existing['gross_amount'] + d['gross_amount'])
+                existing['dividend_discount'] = round_curr(existing['dividend_discount'] + d['dividend_discount'])
+                existing['net_due_amount'] = round_curr(existing['net_due_amount'] + d['net_due_amount'])
+                existing['paid_amount'] = round_curr(existing['paid_amount'] + d['paid_amount'])
+                existing['pending_amount'] = round_curr(existing['pending_amount'] + d['pending_amount'])
+                existing['current_month_pending'] = round_curr(existing['current_month_pending'] + d['current_month_pending'])
+                existing['prev_dues'] = round_curr(existing['prev_dues'] + d['prev_dues'])
                 existing['has_lifted'] = existing['has_lifted'] or d['has_lifted']
                 existing['never_paid'] = existing['never_paid'] and d['never_paid']
                 existing['due_breakdown'].extend(d['due_breakdown'])
@@ -3430,12 +3453,12 @@ def handle_month_payout(chit_id, month_index):
             return jsonify({'error': 'Invalid month index'}), 400
         
         m_base = base_sched[month_index - 1]
-        calc_amt_rec = round(float(m_base['amount_received']) * share_count, 2)
-        calc_loss = round(float(m_base['chit_loss']) * share_count, 2)
+        calc_amt_rec = round_curr(float(m_base['amount_received']) * share_count)
+        calc_loss = round_curr(float(m_base['chit_loss']) * share_count)
 
         # Multi-share split handling
         if share_count < orig_shares:
-            rem_shares = round(orig_shares - share_count, 2)
+            rem_shares = round_curr(orig_shares - share_count)
             cur.execute("""
                 SELECT id FROM chit_memberships
                 WHERE chit_group_id = %s AND member_id = %s AND ticket_number = %s AND has_lifted = FALSE AND id != %s
@@ -3552,7 +3575,7 @@ def handle_month_payout(chit_id, month_index):
                         'deducted_principal': ded_principal,
                         'deducted_interest': ded_interest,
                         'is_settled': is_cleared,
-                        'remaining_balance': max(0.0, round(rem_payoff - actual_deduction, 2))
+                        'remaining_balance': max(0.0, round_curr(rem_payoff - actual_deduction))
                     }
 
         cur.execute("""
@@ -3569,9 +3592,10 @@ def handle_month_payout(chit_id, month_index):
         action_name = 'PAYOUT_RECORDED' if request.method == 'POST' else 'PAYOUT_UPDATED'
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'ADMIN', %s, 'CHIT_SCHEDULE', %s, %s);
+            VALUES (%s, %s, %s, 'CHIT_SCHEDULE', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             action_name,
             str(membership_id),
             json.dumps({'month': month_index, 'amount': calc_amt_rec, 'loss': calc_loss, 'share_count': share_count, 'status': payout_status, 'notes': full_notes, 'loan_settlement': loan_settlement_info})
@@ -3650,9 +3674,10 @@ def delete_month_payout(chit_id, month_index):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'ADMIN', 'PAYOUT_DELETED', 'CHIT_SCHEDULE', %s, %s);
+            VALUES (%s, %s, 'PAYOUT_DELETED', 'CHIT_SCHEDULE', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(ms_id),
             json.dumps({'month': month_index, 'action': 'Payout cancelled and reset'})
         ))
@@ -3684,9 +3709,10 @@ def mark_month_payout_paid(chit_id, month_index):
         ms_id, amt = res
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'ADMIN', 'PAYOUT_MARKED_PAID', 'CHIT_SCHEDULE', %s, %s);
+            VALUES (%s, %s, 'PAYOUT_MARKED_PAID', 'CHIT_SCHEDULE', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             str(ms_id) if ms_id else '',
             json.dumps({'month': month_index, 'amount': float(amt or 0), 'status': 'paid'})
         ))
@@ -4006,9 +4032,10 @@ def handle_payment_item(payment_id):
 
             cur.execute("""
                 INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-                VALUES (%s, 'Admin', 'Updated payment entry', 'chit_payments', %s, %s);
+                VALUES (%s, %s, 'Updated payment entry', 'chit_payments', %s, %s);
             """, (
-                session.get('username', 'CHINNA REDDY'),
+                get_current_actor(),
+                get_current_actor_role(),
                 str(payment_id),
                 json.dumps({'old_amount': old_amount, 'new_amount': new_amount, 'payment_mode': payment_mode})
             ))
@@ -4049,9 +4076,10 @@ def handle_payment_item(payment_id):
 
             cur.execute("""
                 INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-                VALUES (%s, 'Admin', 'Deleted payment entry', 'chit_payments', %s, %s);
+                VALUES (%s, %s, 'Deleted payment entry', 'chit_payments', %s, %s);
             """, (
-                session.get('username', 'CHINNA REDDY'),
+                get_current_actor(),
+                get_current_actor_role(),
                 str(payment_id),
                 json.dumps({'amount_reversed': amount})
             ))
@@ -4195,7 +4223,7 @@ def process_payment_record(data):
                 """, (
                     inst['id'], inst['membership_id'], alloc,
                     payment_mode, pay_date, reference_no, rcpt_no,
-                    receipt_url, sub_notes, session.get('username', 'CHINNA REDDY')
+                    receipt_url, sub_notes, get_current_actor()
                 ))
                 p_id = cur.fetchone()[0]
                 payment_ids.append(str(p_id))
@@ -4251,9 +4279,10 @@ def process_payment_record(data):
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
-            VALUES (%s, 'Admin', 'Recorded payment', 'chit_payments', %s, %s);
+            VALUES (%s, %s, 'Recorded payment', 'chit_payments', %s, %s);
         """, (
-            session.get('username', 'CHINNA REDDY'),
+            get_current_actor(),
+            get_current_actor_role(),
             payment_ids[0] if payment_ids else str(uuid.uuid4()),
             json.dumps({'amount': amount, 'mode': payment_mode, 'receipt_no': receipt_base, 'allocated_count': len(payment_ids)})
         ))
@@ -4579,7 +4608,7 @@ def mark_all_paid():
                     %s, %s, %s,
                     %s, CURRENT_DATE, %s, 'Mark all paid', %s
                 );
-            """, (inst_id, ms_id, pend, payment_mode, receipt_no, session.get('username', 'CHINNA REDDY')))
+            """, (inst_id, ms_id, pend, payment_mode, receipt_no, get_current_actor()))
 
             cur.execute("""
                 UPDATE chit_installments
@@ -4946,6 +4975,54 @@ def get_member_folio(member_id):
         """, (member_id,))
         m_rows = cur.fetchall()
 
+        ms_ids = [mr[0] for mr in m_rows]
+        group_ids = list({mr[1] for mr in m_rows})
+
+        # Batch-fetch installments for all memberships (eliminates N+1 query)
+        inst_map_by_ms = defaultdict(dict)
+        if ms_ids:
+            cur.execute("""
+                SELECT membership_id, id, month_index, month_year, net_due_amount, paid_amount, pending_amount, status
+                FROM chit_installments
+                WHERE membership_id = ANY(%s)
+                ORDER BY month_index ASC;
+            """, (ms_ids,))
+            for r in cur.fetchall():
+                inst_map_by_ms[r[0]][r[2]] = r[1:]
+
+        # Batch-fetch closed arrears for all memberships (eliminates N+1 query)
+        closed_arrears_by_ms = defaultdict(list)
+        if ms_ids:
+            cur.execute("""
+                SELECT i.membership_id, i.id, i.month_index, i.month_year, i.pending_amount, i.net_due_amount, s.month_year
+                FROM chit_installments i
+                JOIN chit_groups g ON i.chit_group_id = g.id
+                JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
+                WHERE i.membership_id = ANY(%s)
+                  AND i.month_index < g.current_month_index
+                  AND s.status = 'Closed'
+                  AND i.pending_amount > 0
+                ORDER BY i.month_index ASC;
+            """, (ms_ids,))
+            for ca in cur.fetchall():
+                closed_arrears_by_ms[ca[0]].append(ca[1:])
+
+        # Batch-fetch schedules for all chit groups (eliminates N+1 query)
+        sched_rows_by_group = defaultdict(list)
+        sched_map_by_group = defaultdict(dict)
+        if group_ids:
+            cur.execute("""
+                SELECT chit_group_id, month_index, chit_loss, amount_received, bonus, installment_kattubadi
+                FROM chit_schedules
+                WHERE chit_group_id = ANY(%s)
+                ORDER BY month_index ASC;
+            """, (group_ids,))
+            for sr in cur.fetchall():
+                grp_id = sr[0]
+                row_data = sr[1:]
+                sched_rows_by_group[grp_id].append(row_data)
+                sched_map_by_group[grp_id][row_data[0]] = row_data
+
         chits = []
         payouts_list = []
         total_paid_in = 0.0
@@ -4964,15 +5041,8 @@ def get_member_folio(member_id):
             cur_m = int(cur_m or 1)
             total_months_count += duration
 
-            # Installments
-            cur.execute("""
-                SELECT id, month_index, month_year, net_due_amount, paid_amount, pending_amount, status
-                FROM chit_installments
-                WHERE membership_id = %s
-                ORDER BY month_index ASC;
-            """, (ms_id,))
-            inst_rows = cur.fetchall()
-            inst_map = {r[1]: r for r in inst_rows}
+            # Installments (pre-fetched in batch)
+            inst_map = inst_map_by_ms.get(ms_id, {})
 
             group_paid_months = 0
             group_collected = 0.0
@@ -5005,18 +5075,8 @@ def get_member_folio(member_id):
             months_paid_count += group_paid_months
             total_paid_in += group_collected
 
-            # Query unpaid closed months for this membership
-            cur.execute("""
-                SELECT i.id, i.month_index, i.month_year, i.pending_amount, i.net_due_amount, s.month_year
-                FROM chit_installments i
-                JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
-                WHERE i.membership_id = %s
-                  AND i.month_index < %s
-                  AND s.status = 'Closed'
-                  AND i.pending_amount > 0
-                ORDER BY i.month_index ASC;
-            """, (ms_id, cur_m))
-            closed_arrears = cur.fetchall()
+            # Query unpaid closed months for this membership (pre-fetched in batch)
+            closed_arrears = closed_arrears_by_ms.get(ms_id, [])
             for ca in closed_arrears:
                 all_unpaid_items.append({
                     'installment_id': str(ca[0]),
@@ -5070,15 +5130,9 @@ def get_member_folio(member_id):
                     'installment_id': None
                 }
 
-            # Schedules for payout
-            cur.execute("""
-                SELECT month_index, chit_loss, amount_received, bonus, installment_kattubadi
-                FROM chit_schedules
-                WHERE chit_group_id = %s
-                ORDER BY month_index ASC;
-            """, (g_id,))
-            sched_rows = cur.fetchall()
-            sched_map = {r[0]: r for r in sched_rows}
+            # Schedules for payout (pre-fetched in batch)
+            sched_rows = sched_rows_by_group.get(g_id, [])
+            sched_map = sched_map_by_group.get(g_id, {})
 
             if has_lift and lift_m:
                 s_row = sched_map.get(lift_m)
@@ -5105,7 +5159,7 @@ def get_member_folio(member_id):
                 }
 
             if inst_type == 'fixed':
-                fixed_monthly = round(ce.get_fixed_installment_amount(g_val, duration) * share, 2)
+                fixed_monthly = round_curr(ce.get_fixed_installment_amount(g_val, duration) * share)
                 monthly_disp = fixed_monthly
             else:
                 fixed_monthly = None
@@ -5214,7 +5268,7 @@ def get_member_folio(member_id):
                 'group_name': p['group_name'],
                 'details': f"{p['month_tag']} · {p['payment_mode']}",
                 'time_str': p['time_ago'],
-                'actor': 'CHINNA REDDY',
+                'actor': get_current_actor(),
                 'date': p['payment_date']
             })
 
@@ -5227,7 +5281,7 @@ def get_member_folio(member_id):
                 'group_name': c['group_name'],
                 'details': f"Account #{c['account_number']} · {c['share_units']}x share",
                 'time_str': 'Earlier',
-                'actor': 'CHINNA REDDY',
+                'actor': get_current_actor(),
                 'date': None
             })
 
@@ -5257,7 +5311,7 @@ def get_member_folio(member_id):
                 'group_name': po_gname,
                 'details': f"Month {po_midx} Payout · Account #{po_acc} · {po_sh}x share · {po_stat.upper()}",
                 'time_str': time_str,
-                'actor': 'CHINNA REDDY',
+                'actor': get_current_actor(),
                 'date': po_pdate.isoformat() if po_pdate else None
             })
 
@@ -5279,6 +5333,23 @@ def get_member_folio(member_id):
         tot_active_loan_principal = 0.0
         tot_active_loan_accrued_interest = 0.0
 
+        # Batch-fetch repayments for all member loans (eliminates N+1 query)
+        loan_ids = [str(lr[0]) for lr in loan_rows]
+        repayments_by_loan = defaultdict(list)
+        if loan_ids:
+            cur.execute("""
+                SELECT loan_id::text, id::text, repayment_date::text, principal_amount, interest_amount, total_amount, payment_mode, receipt_no, notes
+                FROM chit_loan_repayments
+                WHERE loan_id::text = ANY(%s)
+                ORDER BY repayment_date DESC;
+            """, (loan_ids,))
+            for rp in cur.fetchall():
+                repayments_by_loan[rp[0]].append({
+                    'id': rp[1], 'date': rp[2], 'principal': float(rp[3] or 0),
+                    'interest': float(rp[4] or 0), 'total': float(rp[5] or 0),
+                    'mode': rp[6], 'receipt_no': rp[7] or '', 'notes': rp[8] or ''
+                })
+
         for lr in loan_rows:
             calc = calculate_loan_compound_interest(
                 principal=lr[1],
@@ -5292,18 +5363,7 @@ def get_member_folio(member_id):
                 tot_active_loan_principal += calc['remaining_principal']
                 tot_active_loan_accrued_interest += calc['accrued_interest']
 
-            cur.execute("""
-                SELECT id::text, repayment_date::text, principal_amount, interest_amount, total_amount, payment_mode, receipt_no, notes
-                FROM chit_loan_repayments
-                WHERE loan_id::text = %s
-                ORDER BY repayment_date DESC;
-            """, (lr[0],))
-            reps = cur.fetchall()
-            repayments = [{
-                'id': rp[0], 'date': rp[1], 'principal': float(rp[2] or 0),
-                'interest': float(rp[3] or 0), 'total': float(rp[4] or 0),
-                'mode': rp[5], 'receipt_no': rp[6] or '', 'notes': rp[7] or ''
-            } for rp in reps]
+            repayments = repayments_by_loan.get(str(lr[0]), [])
 
             member_loans.append({
                 'id': lr[0],
@@ -5333,7 +5393,7 @@ def get_member_folio(member_id):
                 'group_name': 'Member Loan',
                 'details': f"₹{float(lr[1]):,.0f} @ {lr[2]}% p.a. · Current payoff: ₹{calc['total_payoff']:,.2f}",
                 'time_str': format_time_ago(d_dt),
-                'actor': 'CHINNA REDDY',
+                'actor': get_current_actor(),
                 'date': lr[4]
             })
 
@@ -5412,9 +5472,9 @@ def get_member_folio(member_id):
                 'total_months_count': total_months_count,
                 'progress_percent': round((months_paid_count / max(1, total_months_count)) * 100),
                 'active_loans_count': len([l for l in member_loans if l['status'] == 'active']),
-                'total_loan_balance': round(tot_active_loan_balance, 2),
-                'total_loan_principal': round(tot_active_loan_principal, 2),
-                'total_loan_interest': round(tot_active_loan_accrued_interest, 2)
+                'total_loan_balance': round_curr(tot_active_loan_balance),
+                'total_loan_principal': round_curr(tot_active_loan_principal),
+                'total_loan_interest': round_curr(tot_active_loan_accrued_interest)
             },
             'chits': chits,
             'payments': payments,
@@ -5511,7 +5571,7 @@ def member_detail_or_update(member_id):
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
             VALUES (%s, %s, %s, %s, %s, %s);
-        """, ('CHINNA REDDY', 'ADMIN', 'MEMBER_PROFILE_UPDATED', 'MEMBER', member_id,
+        """, (get_current_actor(), get_current_actor_role(), 'MEMBER_PROFILE_UPDATED', 'MEMBER', member_id,
               json.dumps({'full_name': full_name, 'phone': phone, 'customer_id': cust_id})))
         conn.commit()
 
@@ -5569,7 +5629,7 @@ def delete_member(member_id):
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
             VALUES (%s, %s, %s, %s, %s, %s);
-        """, ('CHINNA REDDY', 'ADMIN', 'MEMBER_DELETED', 'MEMBER', member_id, json.dumps({'deleted_member_id': member_id})))
+        """, (get_current_actor(), get_current_actor_role(), 'MEMBER_DELETED', 'MEMBER', member_id, json.dumps({'deleted_member_id': member_id})))
         conn.commit()
 
         return jsonify({'success': True, 'message': 'Subscriber deleted successfully'})

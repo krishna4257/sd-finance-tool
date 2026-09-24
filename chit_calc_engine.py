@@ -26,7 +26,12 @@ BONUS_25M_BASE_5000 = [
 ]
 
 def round_curr(val):
-    return float(Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+    if val is None or val == "":
+        return 0.0
+    try:
+        return float(Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+    except Exception:
+        return 0.0
 
 def generate_chit_schedule(chit_value: float, duration_months: int, start_month_year: str = None, commission_pct: float = 3.0, is_month1_company: bool = False):
     """
