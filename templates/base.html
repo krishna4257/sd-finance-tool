@@ -168,7 +168,6 @@
     <a href="/add_customer"                   class="nav-link {% if request.endpoint == 'add_customer' %}active{% endif %}"><i class="fas fa-user-plus"></i> Add Customer</a>
     <a href="/posting"                        class="nav-link {% if request.endpoint == 'posting_page' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Posting</a>
     <a href="{{ url_for('view_customers') }}" class="nav-link {% if request.endpoint == 'view_customers' %}active{% endif %}"><i class="fas fa-users"></i> Customers</a>
-    <a href="/search"                         class="nav-link {% if request.endpoint == 'search_customer' %}active{% endif %}"><i class="fas fa-search"></i> Search | Edit</a>
     {% endif %}
     {% endblock %}
 
