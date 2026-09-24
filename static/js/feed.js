@@ -24,6 +24,22 @@ function handleFeedAction(url, successMessage, failureFallback, body = null) {
 }
 
 function accept(feed_id) {
+  const dupeDataEl = document.getElementById(`cust-dupe-data-${feed_id}`);
+  let dupes = [];
+  if (dupeDataEl) {
+    try {
+      dupes = JSON.parse(dupeDataEl.textContent || '[]');
+    } catch (e) {}
+  }
+
+  if (dupes && dupes.length > 0) {
+    const proceed = confirm(`⚠️ DUPLICATE AADHAAR WARNING:\n\nThis customer has ${dupes.length} existing account(s) registered under the same Aadhaar card across villages.\n\n• Click OK to confirm and accept this customer into records.\n• Click Cancel to review the duplicate accounts.`);
+    if (!proceed) {
+      openAadhaarModalFromData(feed_id);
+      return false;
+    }
+  }
+
   return handleFeedAction(
     `/feed/customer/accept/${feed_id}`,
     "Customer accepted successfully",
@@ -128,6 +144,337 @@ function saveCustomerEdit(e) {
   );
   closeEditModal("editCustomerModal");
 }
+
+/* ----------------------------------------------------
+   Inline Customer Feed Auto-Save & Highlight Sync
+---------------------------------------------------- */
+let custInlineTimerMap = {};
+
+function onInlineCustomerEdit(feed_id, fieldName, fieldValue) {
+  const tile = document.getElementById(`cust-tile-${feed_id}`);
+  if (!tile) return;
+
+  if (fieldName === "name") {
+    document.querySelectorAll(`.hl-display-name-${feed_id}, #hl-name-${feed_id}`).forEach(el => {
+      el.innerText = fieldValue || (el.tagName === 'SPAN' ? '-' : 'Unnamed Customer');
+    });
+  } else if (fieldName === "ano") {
+    document.querySelectorAll(`.hl-display-ano-${feed_id}`).forEach(el => {
+      el.innerText = fieldValue ? `#${fieldValue}` : '—';
+    });
+  } else if (fieldName === "vid") {
+    const vName = (window.villageMap && window.villageMap[fieldValue]) ? window.villageMap[fieldValue] : (`Village ${fieldValue}`);
+    document.querySelectorAll(`.hl-display-village-${feed_id}`).forEach(el => {
+      el.innerText = vName;
+    });
+    const hlAddressDoc = document.getElementById(`hl-address-${feed_id}`);
+    if (hlAddressDoc && (!hlAddressDoc.innerText || hlAddressDoc.innerText.startsWith('Village'))) {
+      hlAddressDoc.innerText = vName;
+    }
+  } else if (fieldName === "aadhaar_number") {
+    const hlAadhaarDoc = document.getElementById(`hl-aadhaar-${feed_id}`);
+    if (hlAadhaarDoc) hlAadhaarDoc.innerText = fieldValue || "-";
+
+    // Debounced dynamic Aadhaar duplicate re-check
+    const cleanAadhaar = (fieldValue || "").replace(/[^0-9]/g, "");
+    const dupeDataEl = document.getElementById(`cust-dupe-data-${feed_id}`);
+    const warnBanner = document.getElementById(`cust-aadhaar-warn-${feed_id}`);
+    const countEl = document.getElementById(`cust-dupe-count-${feed_id}`);
+    const tileBadge = document.getElementById(`cust-tile-dupe-badge-${feed_id}`);
+
+    if (cleanAadhaar.length === 12) {
+      fetch(`/api/customer/check_aadhaar?aadhaar=${cleanAadhaar}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.duplicate && data.accounts && data.accounts.length > 0) {
+            if (dupeDataEl) dupeDataEl.textContent = JSON.stringify(data.accounts);
+            if (countEl) countEl.textContent = data.accounts.length;
+            if (warnBanner) warnBanner.style.display = 'block';
+            if (tileBadge) {
+              tileBadge.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Dupe (${data.accounts.length})`;
+              tileBadge.style.display = 'inline-flex';
+            }
+          } else {
+            if (dupeDataEl) dupeDataEl.textContent = '[]';
+            if (warnBanner) warnBanner.style.display = 'none';
+            if (tileBadge) tileBadge.style.display = 'none';
+          }
+        })
+        .catch(err => console.error("Error re-checking Aadhaar:", err));
+    } else {
+      if (dupeDataEl) dupeDataEl.textContent = '[]';
+      if (warnBanner) warnBanner.style.display = 'none';
+      if (tileBadge) tileBadge.style.display = 'none';
+    }
+  } else if (fieldName === "notes") {
+    const hlAddressDoc = document.getElementById(`hl-address-${feed_id}`);
+    if (hlAddressDoc) hlAddressDoc.innerText = fieldValue || "-";
+  }
+
+  if (custInlineTimerMap[feed_id]) {
+    clearTimeout(custInlineTimerMap[feed_id]);
+  }
+
+  custInlineTimerMap[feed_id] = setTimeout(() => {
+    const inputs = tile.querySelectorAll(".feed-inline-input");
+    const payload = {};
+    inputs.forEach(inp => {
+      const field = inp.getAttribute("onchange");
+      if (field) {
+        const match = field.match(/onInlineCustomerEdit\('[^']+',\s*'([^']+)'/);
+        if (match && match[1]) {
+          payload[match[1]] = inp.value.trim();
+        }
+      }
+    });
+
+    csrfFetch(`/feed/customer/edit/${feed_id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || "Failed to update customer details");
+        }
+      })
+      .catch(err => console.error("Customer inline edit save error:", err));
+  }, 600);
+}
+
+/* ----------------------------------------------------
+   Open/Close Customer Detail Full-Page Overlay
+---------------------------------------------------- */
+function openCustDetail(feed_id) {
+  const overlay = document.getElementById(`cust-detail-${feed_id}`);
+  if (!overlay) return;
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCustDetail(feed_id) {
+  const overlay = document.getElementById(`cust-detail-${feed_id}`);
+  if (!overlay) return;
+  overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close overlay when clicking backdrop (outside the panel)
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('cust-detail-overlay')) {
+    e.target.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+});
+
+// Close overlay with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const activeOverlay = document.querySelector('.cust-detail-overlay.active');
+    if (activeOverlay) {
+      activeOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  }
+});
+
+
+
+/* ----------------------------------------------------
+   Open/Close Account Closure Detail Full-Page Overlay
+---------------------------------------------------- */
+function openClosureDetail(feed_id) {
+  const overlay = document.getElementById(`closure-detail-${feed_id}`);
+  if (!overlay) return;
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeClosureDetail(feed_id) {
+  const overlay = document.getElementById(`closure-detail-${feed_id}`);
+  if (!overlay) return;
+  overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function toggleClosurePayload(feed_id) {
+  const block = document.getElementById(`closure-payload-content-${feed_id}`);
+  const btn = document.getElementById(`closure-btn-payload-${feed_id}`);
+  if (!block) return;
+  const isHidden = (block.style.display === "none" || !block.style.display);
+  block.style.display = isHidden ? "block" : "none";
+  if (btn) {
+    btn.innerHTML = isHidden 
+      ? '<i class="fas fa-eye-slash me-1"></i> 📦 Hide Payload'
+      : '<i class="fas fa-code me-1"></i> &lt;/&gt; View JSON';
+  }
+}
+
+function closeZeroBalanceCustomer(feed_id, cid, name) {
+  if (!confirm(`Are you sure you want to close customer account for ${name || 'Customer'}? Balance is ₹0.`)) {
+    return;
+  }
+  acceptClosure(feed_id, cid, null);
+}
+
+/* ----------------------------------------------------
+   Inline Closure Feed Auto-Save
+---------------------------------------------------- */
+let closureInlineTimerMap = {};
+
+function onInlineClosureEdit(feed_id, fieldName, fieldValue) {
+  const tile = document.getElementById(`closure-tile-${feed_id}`);
+  if (!tile) return;
+
+  if (closureInlineTimerMap[feed_id]) {
+    clearTimeout(closureInlineTimerMap[feed_id]);
+  }
+
+  closureInlineTimerMap[feed_id] = setTimeout(() => {
+    const inputs = tile.querySelectorAll(".feed-inline-input");
+    const payload = {};
+    inputs.forEach(inp => {
+      const field = inp.getAttribute("onchange");
+      if (field) {
+        const match = field.match(/onInlineClosureEdit\('[^']+',\s*'([^']+)'/);
+        if (match && match[1]) {
+          payload[match[1]] = inp.value.trim();
+        }
+      }
+    });
+
+    csrfFetch(`/feed/closure/edit/${feed_id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || "Failed to update closure entry");
+        }
+      })
+      .catch(err => console.error("Closure inline edit save error:", err));
+  }, 600);
+}
+
+/* ----------------------------------------------------
+   Unified Customer Closure Modal Handler (mirrors customer dashboard view_customer.js)
+---------------------------------------------------- */
+let activeClosureFeedId = null;
+let activeClosureCid = null;
+let activeClosureBalance = 0;
+
+function openClosureSettlementModal(feed_id, cid, name, balanceAmount, interestAmount) {
+  const balance = parseFloat(balanceAmount || 0);
+  const interest = parseFloat(interestAmount || 0);
+
+  activeClosureFeedId = feed_id;
+  activeClosureCid = cid;
+  activeClosureBalance = balance;
+
+  const modal = document.getElementById("popCloseAccountModal");
+  const statusMsg = document.getElementById("popCloseAccountStatusMsg");
+  const optionsContainer = document.getElementById("popCloseAccountOptions");
+  const discountSection = document.getElementById("popDiscountSection");
+  const discountInput = document.getElementById("popDiscountInput");
+
+  if (!modal || !statusMsg || !optionsContainer) {
+    console.error("Close options modal element not found.");
+    return;
+  }
+
+  optionsContainer.innerHTML = "";
+  if (discountSection) discountSection.style.display = "none";
+  if (discountInput) discountInput.value = "";
+
+  if (balance <= 0) {
+    // Automatically close without popup (identical to Customer Dashboard view_customer.js lines 2068-2073)
+    const action = balance < 0 ? "written_off" : null;
+    const actionLabel = balance < 0 ? "written off" : "zero balance";
+    if (!confirm(`Are you sure you want to close account for ${name || 'Customer'}? (${actionLabel})`)) {
+      return;
+    }
+    acceptClosure(feed_id, cid, action);
+    return;
+  }
+
+  // Balance > 0 (identical to Customer Dashboard view_customer.js lines 2075-2108):
+  statusMsg.innerHTML = `Remaining Balance is <strong>₹${balance.toFixed(0)}</strong>.<br>This account will be closed and marked as <strong>Defaulted</strong>.`;
+
+  // Option 1: Default
+  const defaultBtn = document.createElement("button");
+  defaultBtn.className = "neumorphic-btn small danger-btn";
+  defaultBtn.style.width = "100%";
+  defaultBtn.style.justifyContent = "center";
+  defaultBtn.style.fontWeight = "bold";
+  defaultBtn.textContent = "Close Account";
+  defaultBtn.addEventListener("click", () => {
+    modal.style.display = "none";
+    acceptClosure(feed_id, cid, "defaulted");
+  });
+  optionsContainer.appendChild(defaultBtn);
+
+  // Option 2: Discount Interest (only if balance <= interestAmount)
+  if (balance <= interest && interest > 0) {
+    const discountBtn = document.createElement("button");
+    discountBtn.className = "neumorphic-btn small primary-save-btn glow-cyan";
+    discountBtn.style.width = "100%";
+    discountBtn.style.justifyContent = "center";
+    discountBtn.style.fontWeight = "bold";
+    discountBtn.style.marginTop = "10px";
+    discountBtn.textContent = "Discount Interest";
+    discountBtn.addEventListener("click", () => {
+      if (discountSection) discountSection.style.display = "block";
+      if (discountInput) {
+        discountInput.value = balance.toFixed(0);
+        discountInput.focus();
+      }
+    });
+    optionsContainer.appendChild(discountBtn);
+  }
+
+  modal.style.display = "flex";
+}
+
+function openClosureProcessModal(feed_id, cid, name, balanceAmount, interestAmount) {
+  openClosureSettlementModal(feed_id, cid, name, balanceAmount, interestAmount);
+}
+
+function closePopCloseAccountModal() {
+  const modal = document.getElementById("popCloseAccountModal");
+  if (modal) modal.style.display = "none";
+}
+
+// Bind Confirm Discount button (matching customer dashboard view_customer.js lines 2143-2160)
+document.addEventListener("DOMContentLoaded", function () {
+  const popConfirmDiscountBtn = document.getElementById("popConfirmDiscountBtn");
+  if (popConfirmDiscountBtn) {
+    popConfirmDiscountBtn.addEventListener("click", function () {
+      const discountInput = document.getElementById("popDiscountInput");
+      const val = parseFloat(discountInput ? discountInput.value : 0) || 0;
+      if (val <= 0) {
+        showToast("Discount must be greater than 0");
+        return;
+      }
+      if (val > activeClosureBalance) {
+        showToast("Discount cannot exceed balance");
+        return;
+      }
+      closePopCloseAccountModal();
+      acceptClosureWithDiscount(activeClosureFeedId, activeClosureCid, val);
+    });
+  }
+
+  // Close modal when clicking on backdrop
+  window.addEventListener("click", function (event) {
+    const modal = document.getElementById("popCloseAccountModal");
+    if (modal && event.target === modal) {
+      modal.style.display = "none";
+    }
+  });
+});
 
 /* Edit Payment Feed */
 function editPayment(feed_payment_id) {
@@ -274,14 +621,87 @@ function togglePayload(button) {
   const isOpen = !payload.hasAttribute("hidden");
   if (isOpen) {
     payload.setAttribute("hidden", "hidden");
-    button.textContent = "📦 View Payload";
+    button.innerHTML = '<i class="fas fa-code"></i> View JSON';
     button.setAttribute("aria-expanded", "false");
   } else {
     payload.removeAttribute("hidden");
-    button.textContent = "📦 Hide Payload";
+    button.innerHTML = '<i class="fas fa-box"></i> Hide Payload';
     button.setAttribute("aria-expanded", "true");
   }
 }
+
+function openAadhaarModalFromData(feed_id) {
+  const dupeDataEl = document.getElementById(`cust-dupe-data-${feed_id}`);
+  let accounts = [];
+  if (dupeDataEl) {
+    try {
+      accounts = JSON.parse(dupeDataEl.textContent || '[]');
+    } catch (e) {}
+  }
+
+  const tile = document.getElementById(`cust-tile-${feed_id}`);
+  let currentAadhaar = "—";
+  if (tile) {
+    const aadhaarInp = tile.querySelector('input[onchange*="aadhaar_number"]');
+    if (aadhaarInp && aadhaarInp.value) {
+      currentAadhaar = aadhaarInp.value.trim();
+    }
+  }
+
+  const modal = document.getElementById('duplicateAadhaarModal');
+  const tbody = document.getElementById('dupeAccountsTableBody');
+  const emptyNotice = document.getElementById('dupeAccountsEmptyNotice');
+  const aadhaarSpan = document.getElementById('dupeModalAadhaar');
+  const countBadge = document.getElementById('dupeModalCountBadge');
+
+  if (!modal) return;
+
+  if (aadhaarSpan) aadhaarSpan.textContent = currentAadhaar;
+  if (countBadge) countBadge.textContent = `${accounts.length} Accounts`;
+
+  if (tbody) {
+    tbody.innerHTML = '';
+    if (accounts.length === 0) {
+      if (emptyNotice) emptyNotice.style.display = 'block';
+    } else {
+      if (emptyNotice) emptyNotice.style.display = 'none';
+      accounts.forEach(acc => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border)';
+        const isOpen = acc.status === 'open' || acc.status === 'active';
+        const statusBadge = isOpen
+          ? '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">OPEN</span>'
+          : '<span style="background: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">CLOSED</span>';
+
+        tr.innerHTML = `
+          <td style="padding: 10px 14px; font-weight: 700; font-family: monospace;">#${acc.ano}</td>
+          <td style="padding: 10px 14px; font-weight: 600;">${acc.name}</td>
+          <td style="padding: 10px 14px; color: var(--text-secondary);"><i class="fas fa-map-marker-alt text-danger me-1"></i>${acc.village_name}</td>
+          <td style="padding: 10px 14px; font-family: monospace;">${acc.phone_number || '—'}</td>
+          <td style="padding: 10px 14px; font-weight: 600;">₹${Number(acc.total_amount).toLocaleString('en-IN')}</td>
+          <td style="padding: 10px 14px; font-weight: 700; color: ${Number(acc.balance_amount) > 0 ? '#ef4444' : 'var(--text)'};">₹${Number(acc.balance_amount).toLocaleString('en-IN')}</td>
+          <td style="padding: 10px 14px; text-align: center;">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closeAadhaarDuplicatesModal() {
+  const modal = document.getElementById('duplicateAadhaarModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Close duplicate Aadhaar modal on backdrop click
+document.addEventListener('click', function (e) {
+  const modal = document.getElementById('duplicateAadhaarModal');
+  if (modal && e.target === modal) {
+    modal.style.display = 'none';
+  }
+});
 
 function openImageModal(label, base64Data) {
   const modal = document.getElementById("imageModal");
@@ -302,9 +722,23 @@ function closeImageModal() {
   image.src = "";
 }
 
+function showImageModal(src, label) {
+  const modal = document.getElementById("imageModal");
+  const image = document.getElementById("modalImage");
+  if (!modal || !image) return;
+
+  if (!src) return;
+  image.src = src.startsWith("data:") ? src : `data:image/jpeg;base64,${src}`;
+  image.alt = label || "Document Preview";
+  modal.style.display = "flex";
+}
+
 function showToast(msg) {
   const toast = document.getElementById("toast");
-  if (!toast) return;
+  if (!toast) {
+    alert(msg);
+    return;
+  }
 
   toast.innerText = msg;
   toast.style.display = "block";
@@ -314,46 +748,432 @@ function showToast(msg) {
 }
 
 function toggleAll(source) {
-  document.querySelectorAll(".pay-checkbox").forEach(cb => {
+  document.querySelectorAll(".pay-checkbox:not(:disabled)").forEach(cb => {
     cb.checked = source.checked;
   });
   updateTotalPayment();
 }
 
 function selectAllPayments() {
-  document.querySelectorAll(".pay-checkbox").forEach(cb => {
-    cb.checked = true;
+  toggleSelectAllFeedPayments();
+}
+
+/* ----------------------------------------------------
+   PhonePe Audio & Modal Animation
+---------------------------------------------------- */
+function playPhonePeChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc2.frequency.setValueAtTime(880.00, ctx.currentTime + 0.08); // A5
+
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(ctx.currentTime);
+    osc2.start(ctx.currentTime + 0.08);
+    osc1.stop(ctx.currentTime + 0.6);
+    osc2.stop(ctx.currentTime + 0.6);
+  } catch (e) {
+    console.log("Audio playback error or deferred", e);
+  }
+}
+
+function showPhonePeSuccessModal(totalAmt, count) {
+  const modal = document.getElementById("phonepeSuccessModal");
+  const amtEl = document.getElementById("phonepeModalAmount");
+  const countEl = document.getElementById("phonepeModalCount");
+
+  if (amtEl) amtEl.innerText = `₹${parseFloat(totalAmt || 0).toLocaleString("en-IN")}`;
+  if (countEl) countEl.innerText = `${count} Payment${count > 1 ? "s" : ""}`;
+
+  if (modal) {
+    modal.style.display = "flex";
+    playPhonePeChime();
+  } else {
+    alert(`Success! ${count} payments (₹${totalAmt}) accepted into ledger.`);
+    location.reload();
+  }
+}
+
+function closePhonePeModalAndReload() {
+  const modal = document.getElementById("phonepeSuccessModal");
+  if (modal) modal.style.display = "none";
+  location.reload();
+}
+
+/* ----------------------------------------------------
+   Inline Feed Edit Mode & Validation
+---------------------------------------------------- */
+let inlineEditTimerMap = {};
+
+function onInlineFeedEdit(inputEl, feed_payment_id, fieldType) {
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (!row) return;
+
+  const anoInput = row.querySelector(".ano-input");
+  const dateInput = row.querySelector(".date-input");
+  const amtInput = row.querySelector(".amt-input");
+
+  const newAno = anoInput ? anoInput.value.trim() : row.dataset.ano;
+  const newDate = dateInput ? dateInput.value.trim() : row.dataset.date;
+  const newAmt = amtInput ? parseFloat(amtInput.value) || 0 : parseFloat(row.dataset.amount) || 0;
+
+  row.dataset.ano = newAno;
+  row.dataset.date = newDate;
+  row.dataset.amount = newAmt;
+
+  checkDuplicatesAndUnmapped();
+  recalculateCumulativeAmounts();
+  renderDateTiles();
+  updateTotalPayment();
+
+  if (inlineEditTimerMap[feed_payment_id]) {
+    clearTimeout(inlineEditTimerMap[feed_payment_id]);
+  }
+
+  inlineEditTimerMap[feed_payment_id] = setTimeout(() => {
+    csrfFetch(`/feed/payment/edit/${feed_payment_id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ano: newAno,
+        payment_date: newDate,
+        amt: newAmt
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || "Failed to update payment item");
+        } else {
+          const statusCell = row.querySelector(".status-cell");
+          if (res.mapped === true) {
+            row.classList.remove("row-unmapped");
+            row.dataset.cid = res.cid || "";
+            if (statusCell) {
+              statusCell.innerHTML = '<span class="feed-status-pill status-pending"><i class="fas fa-clock me-1"></i> Pending</span>';
+            }
+          } else if (res.mapped === false) {
+            row.classList.add("row-unmapped");
+            row.dataset.cid = "";
+            if (statusCell) {
+              statusCell.innerHTML = '<span class="feed-status-pill status-unmapped" title="Account unmapped for this village"><i class="fas fa-exclamation-triangle me-1"></i> Unmapped</span>';
+            }
+          }
+        }
+      })
+      .catch(err => console.error("Inline edit save error:", err));
+  }, 600);
+}
+
+/* ----------------------------------------------------
+   Duplicate Prevention & Unmapped Highlighting
+---------------------------------------------------- */
+function checkDuplicatesAndUnmapped() {
+  const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+  const pairCounts = {};
+
+  rows.forEach(row => {
+    const ano = (row.dataset.ano || "").trim();
+    const date = (row.dataset.date || "").trim();
+
+    if (ano && date) {
+      const key = `${ano}__${date}`;
+      pairCounts[key] = (pairCounts[key] || 0) + 1;
+    }
   });
+
+  rows.forEach(row => {
+    const ano = (row.dataset.ano || "").trim();
+    const date = (row.dataset.date || "").trim();
+    const key = `${ano}__${date}`;
+    const cb = row.querySelector(".pay-checkbox");
+    const statusCell = row.querySelector(".status-cell");
+    const isDuplicate = pairCounts[key] > 1;
+
+    row.classList.remove("row-duplicate");
+    const oldDupBadge = statusCell ? statusCell.querySelector(".badge-duplicate") : null;
+    if (oldDupBadge) oldDupBadge.remove();
+
+    if (isDuplicate) {
+      row.classList.add("row-duplicate");
+      if (cb) {
+        cb.checked = false;
+        cb.disabled = true;
+      }
+      if (statusCell) {
+        const dupBadge = document.createElement("span");
+        dupBadge.className = "badge bg-warning text-dark ms-1 badge-duplicate";
+        dupBadge.style.fontSize = "10px";
+        dupBadge.title = "Duplicate Account Number and Date entry";
+        dupBadge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Duplicate';
+        statusCell.appendChild(dupBadge);
+      }
+    } else {
+      if (cb) cb.disabled = false;
+    }
+  });
+}
+
+/* ----------------------------------------------------
+   Cumulative Amount Calculation
+---------------------------------------------------- */
+function recalculateCumulativeAmounts() {
+  const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+  let runningTotal = 0;
+
+  rows.forEach(row => {
+    if (row.style.display === "none") return;
+
+    const amt = parseFloat(row.dataset.amount) || 0;
+    runningTotal += amt;
+
+    const cumCell = row.querySelector(".cumulative-cell");
+    if (cumCell) {
+      cumCell.innerHTML = `<span class="posting-cumul-badge posting-cumul-readonly" title="Auto-calculated running balance (Read-Only)"><i class="fas fa-calculator me-1 text-muted" style="font-size: 10px;"></i> <span>₹${runningTotal.toLocaleString("en-IN")}</span></span>`;
+    }
+  });
+}
+
+/* ----------------------------------------------------
+   Date Grouping Filter Tiles
+---------------------------------------------------- */
+let activeDateFilter = "ALL";
+
+function renderDateTiles() {
+  const container = document.getElementById("feedDateTilesContainer");
+  if (!container) return;
+
+  const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+  const dateMap = {};
+  let grandTotal = 0;
+  let grandCount = 0;
+
+  rows.forEach(row => {
+    const d = (row.dataset.date || row.dataset.isoDate || "").trim();
+    const amt = parseFloat(row.dataset.amount) || 0;
+
+    if (d) {
+      if (!dateMap[d]) dateMap[d] = { count: 0, total: 0 };
+      dateMap[d].count += 1;
+      dateMap[d].total += amt;
+
+      grandCount += 1;
+      grandTotal += amt;
+    }
+  });
+
+  const uniqueDates = Object.keys(dateMap).sort();
+
+  if (uniqueDates.length < 2) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "flex";
+  let html = `<button type="button" class="date-tile-btn ${activeDateFilter === "ALL" ? "active" : ""}" onclick="filterFeedByDate('ALL')">
+    <i class="fas fa-layer-group text-primary"></i>
+    <span class="date-tile-title">All Dates</span>
+    <span class="date-tile-count">${grandCount}</span>
+    <span class="date-tile-amount">₹${grandTotal.toLocaleString("en-IN")}</span>
+  </button>`;
+
+  uniqueDates.forEach(d => {
+    const item = dateMap[d];
+    html += `<button type="button" class="date-tile-btn ${activeDateFilter === d ? "active" : ""}" onclick="filterFeedByDate('${d}')">
+      <i class="fas fa-calendar-day"></i>
+      <span class="date-tile-title">${d}</span>
+      <span class="date-tile-count">${item.count}</span>
+      <span class="date-tile-amount">₹${item.total.toLocaleString("en-IN")}</span>
+    </button>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function filterFeedByDate(targetDate) {
+  activeDateFilter = targetDate;
+  const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+
+  rows.forEach(row => {
+    const rowDate = (row.dataset.date || row.dataset.isoDate || "").trim();
+    if (targetDate === "ALL" || rowDate === targetDate) {
+      row.style.display = "";
+    } else {
+      row.style.display = "none";
+    }
+  });
+
+  renderDateTiles();
+  recalculateCumulativeAmounts();
+  updateTotalPayment();
+}
+
+/* ----------------------------------------------------
+   Selection & Dynamic Totals
+---------------------------------------------------- */
+function toggleSelectAllFeedPayments() {
+  const visibleRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+  const enabledCbs = [];
+
+  visibleRows.forEach(row => {
+    if (row.style.display === "none") return;
+    // Skip duplicate entries and unmapped accounts from bulk selection
+    if (row.classList.contains("row-duplicate") || row.classList.contains("row-unmapped")) return;
+    const cb = row.querySelector(".pay-checkbox:not(:disabled)");
+    if (cb) enabledCbs.push(cb);
+  });
+
+  if (enabledCbs.length === 0) return;
+
+  const allChecked = enabledCbs.every(cb => cb.checked);
+  const targetState = !allChecked;
+
+  enabledCbs.forEach(cb => {
+    cb.checked = targetState;
+  });
+
+  const headerCheck = document.getElementById("feedHeaderCheck");
+  if (headerCheck) headerCheck.checked = targetState;
+
+  const btn = document.getElementById("feedSelectAllBtn");
+  if (btn) {
+    btn.innerHTML = targetState ? '<i class="fas fa-times me-1"></i> Deselect' : '<i class="fas fa-check-double me-1"></i> Select All';
+  }
+
   updateTotalPayment();
 }
 
 function updateTotalPayment() {
-  let total = 0;
+  let selectedTotal = 0;
+  let selectedCount = 0;
+  let grandTotal = 0;
+  let grandCount = 0;
 
-  document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
-    const row = cb.closest("tr");
-    if (!row) return;
+  const visibleRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
 
-    const amountEl = row.querySelector("[data-money]");
-    const raw = amountEl ? amountEl.getAttribute("data-money") || "0" : "0";
-    total += parseFloat(raw || 0);
+  visibleRows.forEach(row => {
+    if (row.style.display === "none") return;
+    const isDup = row.classList.contains("row-duplicate");
+    const amt = parseFloat(row.dataset.amount) || 0;
+
+    if (!isDup) {
+      grandTotal += amt;
+      grandCount += 1;
+    }
+
+    const cb = row.querySelector(".pay-checkbox");
+    if (cb && cb.checked && !isDup) {
+      selectedTotal += amt;
+      selectedCount += 1;
+      row.classList.add("row-selected");
+    } else {
+      row.classList.remove("row-selected");
+    }
   });
 
+  const labelEl = document.getElementById("totalBadgeLabel");
   const totalEl = document.getElementById("selectedTotal");
-  if (totalEl) {
-    totalEl.innerText = total.toLocaleString("en-IN");
+  const acceptBtn = document.getElementById("acceptBtn");
+
+  if (selectedCount > 0) {
+    if (labelEl) labelEl.innerText = `Selected (${selectedCount} of ${grandCount}):`;
+    if (totalEl) totalEl.innerText = selectedTotal.toLocaleString("en-IN");
+    if (acceptBtn) {
+      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1.5"></i> Accept Selected (${selectedCount})`;
+      acceptBtn.disabled = false;
+      acceptBtn.style.opacity = "1";
+    }
+  } else {
+    if (labelEl) labelEl.innerText = `Grand Total (${grandCount} items):`;
+    if (totalEl) totalEl.innerText = grandTotal.toLocaleString("en-IN");
+    if (acceptBtn) {
+      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1.5"></i> Accept Selected`;
+    }
   }
+
+  const headerCheck = document.getElementById("feedHeaderCheck");
+  if (headerCheck) {
+    headerCheck.checked = (selectedCount > 0 && selectedCount === grandCount);
+  }
+}
+
+/* ----------------------------------------------------
+   Payment Accept Handlers with PhonePe Animation
+---------------------------------------------------- */
+function acceptSinglePaymentRow(feed_payment_id, btnEl) {
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (!row) return;
+
+  const amount = parseFloat(row.dataset.amount) || 0;
+  const ano = (row.dataset.ano || "").trim();
+
+  if (row.classList.contains("row-duplicate")) {
+    alert("Cannot accept duplicate payment entry. There is already another entry with the same account and date.");
+    return;
+  }
+
+  if (row.classList.contains("row-unmapped")) {
+    alert(`Account #${ano} is not mapped to an active customer in this village.\n\nPlease verify the account number or approve the new customer registration first.`);
+    return;
+  }
+
+  const originalHtml = btnEl ? btnEl.innerHTML : "";
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  }
+
+  csrfFetch(`/feed/payment/accept/${feed_payment_id}`, {
+    method: "POST"
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showPhonePeSuccessModal(amount, 1);
+      } else {
+        alert(data.error || "Failed to accept payment");
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.innerHTML = originalHtml;
+        }
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Server error");
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.innerHTML = originalHtml;
+      }
+    });
 }
 
 function acceptSelected() {
   const btn = document.getElementById("acceptBtn");
-  const selected = [];
+  const selectedIds = [];
+  let selectedSum = 0;
 
   document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
-    selected.push(cb.value);
+    const row = cb.closest("tr");
+    if (row && !row.classList.contains("row-duplicate")) {
+      selectedIds.push(cb.value);
+      selectedSum += parseFloat(row.dataset.amount) || 0;
+    }
   });
 
-  if (selected.length === 0) {
+  if (selectedIds.length === 0) {
     showToast("Select at least one payment");
     return;
   }
@@ -369,15 +1189,30 @@ function acceptSelected() {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ ids: selected })
+    body: JSON.stringify({ ids: selectedIds })
   })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        showToast(data.message || "Payments accepted");
-        setTimeout(() => location.reload(), 1000);
+        if (data.failed_items && data.failed_items.length > 0) {
+          const failedDetails = data.failed_items.map(f => `• Account #${f.ano}: ${f.reason}`).join("\n");
+          if (data.accepted_count > 0) {
+            alert(`✅ Successfully posted ${data.accepted_count} payment(s).\n\n⚠️ ${data.failed_items.length} payment(s) were NOT posted and remain in the queue:\n${failedDetails}`);
+            showPhonePeSuccessModal(data.accepted_sum || selectedSum, data.accepted_count);
+          } else {
+            alert(`⚠️ None of the selected payments were posted. The following items require attention:\n\n${failedDetails}`);
+            location.reload();
+          }
+        } else {
+          showPhonePeSuccessModal(data.accepted_sum || selectedSum, data.accepted_count || selectedIds.length);
+        }
       } else {
-        showToast(data.error || "Failed");
+        if (data.failed_items && data.failed_items.length > 0) {
+          const failedDetails = data.failed_items.map(f => `• Account #${f.ano}: ${f.reason}`).join("\n");
+          alert(`❌ Unable to post payments:\n\n${failedDetails}`);
+        } else {
+          alert(data.error || "Failed to accept payments");
+        }
         if (btn) {
           btn.disabled = false;
           btn.innerText = originalText;
@@ -410,23 +1245,26 @@ function acceptClosure(feed_id, cid, action) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert("Account closed and moved to closed customers!");
-        location.reload();
+        showToast("Account closed successfully!");
+        setTimeout(() => location.reload(), 1000);
       } else {
-        alert(data.error || "Failed to close account");
+        showToast(data.error || "Failed to close account");
       }
     })
     .catch(err => {
       console.error(err);
-      alert("Server error");
+      showToast("Server error");
     });
 }
 
-function acceptClosureWithDiscount(feed_id, cid) {
-  const discountInput = document.getElementById(`discount-${feed_id}`);
-  const val = parseFloat(discountInput.value) || 0;
+function acceptClosureWithDiscount(feed_id, cid, discountVal) {
+  let val = discountVal;
+  if (val === undefined || val === null) {
+    const discountInput = document.getElementById("popDiscountInput") || document.getElementById(`discount-${feed_id}`);
+    val = parseFloat(discountInput ? discountInput.value : 0) || 0;
+  }
   if (val <= 0) {
-    alert("Discount must be greater than 0");
+    showToast("Discount must be greater than 0");
     return;
   }
 
@@ -442,33 +1280,23 @@ function acceptClosureWithDiscount(feed_id, cid) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert("Account closed with discount successfully!");
-        location.reload();
+        showToast("Account closed with discount successfully!");
+        setTimeout(() => location.reload(), 1000);
       } else {
-        alert(data.error || "Failed to close account");
+        showToast(data.error || "Failed to close account");
       }
     })
     .catch(err => {
       console.error(err);
-      alert("Server error");
+      showToast("Server error");
     });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  checkDuplicatesAndUnmapped();
+  recalculateCumulativeAmounts();
+  renderDateTiles();
   updateTotalPayment();
-
-  if (document.getElementById("feedPaymentTable")) {
-    $('#feedPaymentTable').DataTable({
-      paging: false,
-      info: false,
-      searching: true,
-      ordering: true,
-      autoWidth: false,
-      columnDefs: [
-        { targets: [0, 6], orderable: false }
-      ]
-    });
-  }
 
   const groupByEl = document.getElementById("groupBy");
   const groupSelect = document.getElementById("groupSelect");
@@ -553,3 +1381,4 @@ document.addEventListener("DOMContentLoaded", function () {
     updateTotalPayment();
   });
 });
+

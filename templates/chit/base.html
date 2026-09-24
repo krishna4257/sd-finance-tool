@@ -14,7 +14,57 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}Siva Durga Chit Fund{% endblock %}</title>
+
+  <!-- CSRF Protection Helper & Automated Fetch Interceptor -->
+  <script>
+    (function () {
+      window.getCSRFToken = function () {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+      };
+
+      const originalFetch = window.fetch;
+      window.fetch = function (resource, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+          const token = window.getCSRFToken();
+          if (token) {
+            if (init.headers instanceof Headers) {
+              if (!init.headers.has('X-CSRFToken') && !init.headers.has('X-CSRF-Token')) {
+                init.headers.append('X-CSRFToken', token);
+              }
+            } else if (Array.isArray(init.headers)) {
+              const hasHeader = init.headers.some(([k]) => k.toLowerCase() === 'x-csrftoken' || k.toLowerCase() === 'x-csrf-token');
+              if (!hasHeader) {
+                init.headers.push(['X-CSRFToken', token]);
+              }
+            } else {
+              init.headers = init.headers || {};
+              if (!init.headers['X-CSRFToken'] && !init.headers['X-CSRF-Token']) {
+                init.headers['X-CSRFToken'] = token;
+              }
+            }
+          }
+        }
+        return originalFetch.call(this, resource, init);
+      };
+
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form').forEach(form => {
+          if (!form.querySelector('input[name="csrf_token"]')) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = window.getCSRFToken();
+            form.appendChild(csrfInput);
+          }
+        });
+      });
+    })();
+  </script>
 
   <!-- Favicon / Tab Icon -->
   <link rel="icon" type="image/svg+xml" href="/static/images/chit-logo.svg">

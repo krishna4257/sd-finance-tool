@@ -40,14 +40,14 @@
       <!-- Item 1: Payment recorded -->
       <div class="p-3.5 flex items-start gap-3">
         <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center font-bold text-[10px] select-none shrink-0 mt-0.5">
-          CR
+          {{ session.get('username', 'Ad')[0] | upper }}{{ session.get('username', 'Ad')[1:2] | upper }}
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-xs font-bold text-slate-900 dark:text-slate-100">
             <span class="text-emerald-700 dark:text-emerald-400 money-fig font-extrabold">₹25,000</span> recorded — Aaa
           </p>
           <div class="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-            <span class="font-semibold text-slate-600 dark:text-slate-400">CHINNA REDDY</span>
+            <span class="font-semibold text-slate-600 dark:text-slate-400">{{ session.get('username', 'Admin') }}</span>
             <span>·</span>
             <span>Chit 1 - ₹5L · 20M · 20 Months</span>
           </div>
@@ -58,12 +58,12 @@
       <!-- Item 2: Chit Group created -->
       <div class="p-3.5 flex items-start gap-3">
         <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 text-white flex items-center justify-center font-bold text-[10px] select-none shrink-0 mt-0.5">
-          CR
+          {{ session.get('username', 'Ad')[0] | upper }}{{ session.get('username', 'Ad')[1:2] | upper }}
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-xs font-bold text-slate-900 dark:text-slate-100">Chit group created</p>
           <div class="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-            <span class="font-semibold text-slate-600 dark:text-slate-400">CHINNA REDDY</span>
+            <span class="font-semibold text-slate-600 dark:text-slate-400">{{ session.get('username', 'Admin') }}</span>
             <span>·</span>
             <span>Chit 1 - ₹5L · 20M · 20 Months</span>
           </div>
