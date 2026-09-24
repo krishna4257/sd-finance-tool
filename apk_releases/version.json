@@ -1,11 +1,11 @@
 {
-  "latest_version": "1.1.2",
-  "latest_version_code": 15,
+  "latest_version": "1.1.4",
+  "latest_version_code": 17,
   "min_supported_version_code": 5,
-  "force_update": false,
-  "sha256": "69fbbb255ba7b44e77dccf2ee772e8856bcba9003c42cfd0219d3f293eb9db3a",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.2",
-  "release_notes": "Sync is now manual only — payments and customers are submitted only when you press the Sync button. Improved app stability.",
-  "released_at": "2026-09-18T09:25:00+05:30",
+  "force_update": true,
+  "sha256": "877dd0ccfa0c4a01f242d76250279bd41116a5cef2482af3bce0cf0f02130db6",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.4",
+  "release_notes": "Removed auto-submit: data is now only submitted when employee clicks the Submit button. Bug fixes and improvements.",
+  "released_at": "2026-09-22T19:40:11+05:30",
   "published_by": "admin"
 }
