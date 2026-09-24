@@ -11,14 +11,14 @@
     <div class="cb-card card-shine p-5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm flex items-center justify-between">
       <div class="flex items-center gap-3.5">
         <div class="h-11 w-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white font-extrabold text-sm select-none">
-          CR
+          {{ session.get('username', 'Ad')[0] | upper }}{{ session.get('username', 'Ad')[1:2] | upper }}
         </div>
         <div>
-          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-tight">CHINNA REDDY</h3>
-          <p class="text-xs text-slate-400 dark:text-slate-400 mt-0.5">chinnareddy88888@gmail.com</p>
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-tight">{{ session.get('username', 'Admin') | upper }}</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-400 mt-0.5">{{ session.get('email', '') or 'Smart Counting' }}</p>
           <div class="flex items-center gap-2 mt-1">
-            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">CHINNA REDDY's Organization</span>
-            <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-400 font-mono text-[9px] font-bold tracking-wider">OWNER</span>
+            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">Siva Durga Chit Fund</span>
+            <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-400 font-mono text-[9px] font-bold tracking-wider">{{ (session.get('level') or 'admin') | upper }}</span>
           </div>
         </div>
       </div>
@@ -32,7 +32,7 @@
       <div class="p-4 flex items-center justify-between">
         <div>
           <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">ORGANISATION NAME</p>
-          <p class="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5" id="settingsOrgName">CHINNA REDDY's Organization</p>
+          <p class="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5" id="settingsOrgName">Siva Durga Chit Fund</p>
         </div>
         <button class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-chitDark-elevated text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05]">
           Edit

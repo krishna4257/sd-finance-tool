@@ -34,7 +34,9 @@ from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
+from flask_wtf.csrf import CSRFError
 from psycopg2.extras import execute_values
+from chit_calc_engine import round_curr
 load_dotenv()
 
 
@@ -254,6 +256,13 @@ def _canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def get_mobile_queue_hmac_secret():
+    secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET")
+    if not secret:
+        raise RuntimeError("MOBILE_QUEUE_HMAC_SECRET environment variable is not set")
+    return secret
+
+
 def verify_queue_integrity(data, token_data):
     if not isinstance(data, dict):
         return False, "invalid envelope"
@@ -297,7 +306,7 @@ def verify_queue_integrity(data, token_data):
     if age_seconds > 900:
         return False, "stale timestamp"
 
-    signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+    signing_secret = get_mobile_queue_hmac_secret()
 
     signed_payload = {
         "type": data.get("type"),
@@ -667,6 +676,10 @@ if not secret_key:
 
 app.secret_key = secret_key
 
+mobile_queue_hmac_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET")
+if not mobile_queue_hmac_secret:
+    raise RuntimeError("MOBILE_QUEUE_HMAC_SECRET environment variable is not set")
+
 app.config["WTF_CSRF_ENABLED"] = True
 # Disable CSRF token time expiry — the default 3600s (1 hour) was causing
 # sudden logouts when employees kept a page open for over an hour and then
@@ -697,7 +710,6 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 # ChitBase Blueprint Registration
 from chit_controller import chit_bp
-csrf.exempt(chit_bp)
 app.register_blueprint(chit_bp)
 
 # Custom mobile rate limit key function
@@ -898,6 +910,13 @@ def is_ajax_request():
         or request.is_json
         or "application/json" in request.headers.get("Accept", "")
     )
+
+@app.errorhandler(CSRFError)
+def csrf_error_response(e):
+    reason = getattr(e, 'description', str(e))
+    if is_ajax_request() or request.path.startswith("/chit/api/"):
+        return jsonify(success=False, error=f"CSRF token missing or invalid: {reason}", csrf_error=True), 400
+    return f"CSRF validation failed: {reason}", 400
 
 def login_required(f):
     @wraps(f)
@@ -2142,8 +2161,8 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
             "paid_date": paid_date_val,
             "status": display_status,
             "allocated": allocated_val,
-            "penalty": float(round(penalty, 2)),
-            "score_after": float(round(score, 2))
+            "penalty": float(round_curr(penalty)),
+            "score_after": float(round_curr(score))
         })
 
     # Apply Closure Recovery Bonus ONLY if balance_amount <= 0
@@ -2152,7 +2171,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
         closure_bonus = bonus_installments * 5.0
         score = min(100.0, score + closure_bonus)
         if week_details:
-            week_details[-1]["score_after"] = float(round(score, 2))
+            week_details[-1]["score_after"] = float(round_curr(score))
 
     # Score must always be clamped
     score = min(max(score, 0.0), 100.0)
@@ -2176,7 +2195,7 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     else:
         risk_level = "Critical"
 
-    return float(round(score, 2)), risk_level, overdue_penalty, week_details
+    return float(round_curr(score)), risk_level, overdue_penalty, week_details
 
 
 def calculate_behavioral_analytics(start_date, end_date, installment_amount, period, payments, balance_amount, week_details, loan_type="W", today=None):
@@ -3016,9 +3035,9 @@ def mobile_cashbag_get():
                 if base_amt <= 0.0:
                     ir = float(ir_db or 0)
                     cr = float(cr_db or 0)
-                    interest = round(total_amt * (ir / 100.0), 2)
-                    cutting_amt = round(total_amt * (cr / 100.0), 2)
-                    base_amt = round(total_amt - interest - cutting_amt, 2)
+                    interest = round_curr(total_amt * (ir / 100.0))
+                    cutting_amt = round_curr(total_amt * (cr / 100.0))
+                    base_amt = round_curr(total_amt - interest - cutting_amt)
 
                 loans_disbursed += base_amt
                 loan_commission += cutting_amt
@@ -3293,9 +3312,9 @@ def mobile_ledger_get():
             if base_amt <= 0.0:
                 ir = float(ir_db or 0)
                 cr = float(cr_db or 0)
-                interest = round(total_amt * (ir / 100.0), 2)
-                cutting_amt = round(total_amt * (cr / 100.0), 2)
-                base_amt = round(total_amt - interest - cutting_amt, 2)
+                interest = round_curr(total_amt * (ir / 100.0))
+                cutting_amt = round_curr(total_amt * (cr / 100.0))
+                base_amt = round_curr(total_amt - interest - cutting_amt)
 
             loans_disbursed_h += base_amt
             loan_commission_h += cutting_amt
@@ -3378,10 +3397,10 @@ def mobile_ledger_get():
 
             ir = float(ir_db or 0)
             cr = float(cr_db or 0)
-            interest = round(total_amt * (ir / 100.0), 2)
+            interest = round_curr(total_amt * (ir / 100.0))
             if base_amt <= 0.0:
-                cutting_amt = round(total_amt * (cr / 100.0), 2)
-                base_amt = round(total_amt - interest - cutting_amt, 2)
+                cutting_amt = round_curr(total_amt * (cr / 100.0))
+                base_amt = round_curr(total_amt - interest - cutting_amt)
 
             dates_data[d_str]["loans"].append({
                 "ano": ano,
@@ -3798,7 +3817,7 @@ def customer_feed():
         if age_seconds > 900:
             return jsonify({"error": "stale timestamp"}), 400
 
-        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+        signing_secret = get_mobile_queue_hmac_secret()
 
         signed_payload = {
             "type": data.get("type"),
@@ -4075,7 +4094,7 @@ def close_account_feed():
         if age_seconds > 900:
             return jsonify({"error": "stale timestamp"}), 400
 
-        signing_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or "dev-mobile-queue-secret"
+        signing_secret = get_mobile_queue_hmac_secret()
 
         signed_payload = {
             "type": data.get("type"),
@@ -4980,7 +4999,7 @@ def add_customer():
             total_amount = float(raw_total)
         except (ValueError, TypeError):
             return jsonify(error="Total amount must be a valid number"), 400
-        installment_amount = round(total_amount / period, 2)
+        installment_amount = round_curr(total_amount / period)
         paid_amount = 0.0
         balance_amount = total_amount
         payload = {
@@ -6120,9 +6139,9 @@ def post_payment_analytics():
 
         # Format and round data
         for w in weeks:
-            w["expected_collection"] = round(w["expected_collection"], 2)
-            w["actual_collection"] = round(w["actual_collection"], 2)
-            w["failed_to_collect"] = round(w["failed_to_collect"], 2)
+            w["expected_collection"] = round_curr(w["expected_collection"])
+            w["actual_collection"] = round_curr(w["actual_collection"])
+            w["failed_to_collect"] = round_curr(w["failed_to_collect"])
             w["start"] = format_date_display(w["start"])
             w["end"] = format_date_display(w["end"])
 
@@ -6507,16 +6526,9 @@ def view_bulk_capture_mobile(session_id):
 
     if not sdata:
         return render_template(
-            "error_generic.html" if os.path.exists(os.path.join(app.root_path, "templates", "error_generic.html")) else "login.html",
+            "bulk_capture_expired.html",
+            title="Session Expired",
             error_message="This capture session has expired or was closed on desktop. Please scan a new QR code from the Bulk Payments window."
-        ) if False else (
-            f"<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-            f"<title>Session Expired</title><style>body{{font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:32px;text-align:center;}}"
-            f".card{{background:#1e293b;border-radius:14px;padding:24px;border:1px solid rgba(255,255,255,0.1);max-width:400px;margin:40px auto;}}"
-            f"h2{{color:#ef4444;margin-bottom:12px;}}p{{color:#94a3b8;font-size:14px;line-height:1.5;}}</style></head>"
-            f"<body><div class='card'><h2>⚠️ Session Expired</h2>"
-            f"<p>This capture session is no longer active or was closed on the computer.<br><br>Please click <strong>Capture with Phone</strong> in Bulk Payments to generate a fresh QR code.</p>"
-            f"</div></body></html>"
         ), 404
 
     # Mark as connected
@@ -10478,8 +10490,8 @@ def update_customer_pg():
         else:
             end_date = start_date + timedelta(weeks=period)
 
-        installment_amount = round(total_amount / period, 2)
-        balance_amount = round(total_amount - paid_amount - interest_discount, 2)
+        installment_amount = round_curr(total_amount / period)
+        balance_amount = round_curr(total_amount - paid_amount - interest_discount)
 
         # 🔸 Update customer
         if table_name == "customer":
@@ -11374,37 +11386,37 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             "metrics_breakdown": {
                 "avg_rating": {
                     "value": round(avg_rating, 1),
-                    "contribution": round(avg_rating * 0.65, 2)
+                    "contribution": round_curr(avg_rating * 0.65)
                 },
                 "stability": {
                     "value": round(stability_pct, 1),
-                    "contribution": round(stability_pct * 0.15, 2)
+                    "contribution": round_curr(stability_pct * 0.15)
                 },
                 "default_rate": {
                     "value": round(default_rate * 100.0, 1),
-                    "contribution": round(default_score, 2)
+                    "contribution": round_curr(default_score)
                 },
                 "overdue_penalty": {
                     "value": round(overdue_pct, 1),
-                    "contribution": round(-overdue_pct * 0.3, 2)
+                    "contribution": round_curr(-overdue_pct * 0.3)
                 },
                 "severe_risk_penalty": {
                     "value": round(high_risk_pct, 1),
-                    "contribution": round(-high_risk_pct * 0.3, 2)
+                    "contribution": round_curr(-high_risk_pct * 0.3)
                 },
                 "collection_drop": {
-                    "expected": round(expected_collection, 2),
-                    "actual": round(actual_collected, 2),
+                    "expected": round_curr(expected_collection),
+                    "actual": round_curr(actual_collected),
                     "drop_pct": round(drop_pct * 100.0, 1),
-                    "contribution": round(-collection_drop_penalty, 2)
+                    "contribution": round_curr(-collection_drop_penalty)
                 },
                 "customer_count_scale": {
                     "count": active_count,
-                    "contribution": round(customer_count_adjustment, 2)
+                    "contribution": round_curr(customer_count_adjustment)
                 },
                 "portfolio_size_factor": {
-                    "loan_sum": round(active_loan_sum, 2),
-                    "contribution": round(portfolio_adjustment, 2)
+                    "loan_sum": round_curr(active_loan_sum),
+                    "contribution": round_curr(portfolio_adjustment)
                 }
             }
         }
@@ -12848,9 +12860,9 @@ def api_ledger():
             if base_amt <= 0.0:
                 ir = float(ir_db or 0)
                 cr = float(cr_db or 0)
-                interest = round(total_amt * (ir / 100.0), 2)
-                cutting_amt = round(total_amt * (cr / 100.0), 2)
-                base_amt = round(total_amt - interest - cutting_amt, 2)
+                interest = round_curr(total_amt * (ir / 100.0))
+                cutting_amt = round_curr(total_amt * (cr / 100.0))
+                base_amt = round_curr(total_amt - interest - cutting_amt)
 
             loans_disbursed_h += base_amt
             loan_commission_h += cutting_amt
@@ -12957,10 +12969,10 @@ def api_ledger():
 
             ir = float(ir_db or 0)
             cr = float(cr_db or 0)
-            interest = round(total_amt * (ir / 100.0), 2)
+            interest = round_curr(total_amt * (ir / 100.0))
             if base_amt <= 0.0:
-                cutting_amt = round(total_amt * (cr / 100.0), 2)
-                base_amt = round(total_amt - interest - cutting_amt, 2)
+                cutting_amt = round_curr(total_amt * (cr / 100.0))
+                base_amt = round_curr(total_amt - interest - cutting_amt)
 
             dates_data[d_str]["loans"].append({
                 "ano": ano,
@@ -13271,10 +13283,10 @@ def api_cashbag_breakdown():
 
                 ir = float(ir_db or 0)
                 cr = float(cr_db or 0)
-                interest = interest_amt if interest_amt > 0 else round(total_amt * (ir / 100.0), 2)
+                interest = interest_amt if interest_amt > 0 else round_curr(total_amt * (ir / 100.0))
                 if base_amt <= 0.0:
-                    cutting_amt = round(total_amt * (cr / 100.0), 2)
-                    base_amt = round(total_amt - interest - cutting_amt, 2)
+                    cutting_amt = round_curr(total_amt * (cr / 100.0))
+                    base_amt = round_curr(total_amt - interest - cutting_amt)
 
                 if breakdown_type == 'loans':
                     amt = base_amt
