@@ -1969,15 +1969,11 @@
         border-bottom-color: rgba(56, 189, 248, 0.2);
     }
 
-    /* ─── Actions Column: Hidden by Default, Only Appears When Any Row Is Selected ─── */
+    /* ─── Actions Column: Always part of table layout with smooth hover/selection reveal ─── */
     table#feedPaymentTable th.th-actions,
     table#feedPaymentTable td.td-actions {
-        display: none;
-    }
-
-    table#feedPaymentTable.has-selection th.th-actions,
-    table#feedPaymentTable.has-selection td.td-actions {
         display: table-cell;
+        width: 85px;
     }
 
     /* ─── Editable Cells: Centered, Dynamic Size, Sleek Focus ─── */
@@ -2150,10 +2146,30 @@
         white-space: nowrap;
     }
 
-    .feed-pay-row.row-selected .row-actions-container {
+    .feed-pay-row.row-selected .row-actions-container,
+    .feed-pay-row:hover .row-actions-container,
+    .feed-pay-row.row-duplicate .row-actions-container {
         opacity: 1;
         transform: scale(1) translateY(0);
         pointer-events: auto;
+    }
+
+    /* Duplicate rows: disable single submit, highlight delete */
+    .feed-pay-row.row-duplicate .posting-action-circle.submit {
+        opacity: 0.25;
+        cursor: not-allowed;
+        filter: grayscale(1);
+        pointer-events: none;
+    }
+    .feed-pay-row.row-duplicate .posting-action-circle.submit:hover {
+        transform: none;
+        box-shadow: none;
+        background: rgba(16, 185, 129, 0.22);
+    }
+    .feed-pay-row.row-duplicate .posting-action-circle.delete {
+        opacity: 1;
+        border-color: rgba(239, 68, 68, 0.8);
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
     }
 
     .posting-action-circle {
@@ -4370,13 +4386,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-id-card"></i> Aadhaar Front</span>
                                         {% if row.aadhaar_front_pic %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Front', '{{ row.aadhaar_front_pic|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Front', this.closest('.detail-doc-card').querySelector('img') || '{{ row.aadhaar_front_pic|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.aadhaar_front_pic %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar Front" onclick="openImageModal('Aadhaar Front', '{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar Front" onclick="openImageModal('Aadhaar Front', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-image me-2"></i> No Aadhaar front image uploaded</div>
                                     {% endif %}
@@ -4391,13 +4407,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-id-card"></i> Aadhaar Back</span>
                                         {% if row.aadhaar_back_pic %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Back', '{{ row.aadhaar_back_pic|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Back', this.closest('.detail-doc-card').querySelector('img') || '{{ row.aadhaar_back_pic|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.aadhaar_back_pic %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar Back" onclick="openImageModal('Aadhaar Back', '{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar Back" onclick="openImageModal('Aadhaar Back', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-image me-2"></i> No Aadhaar back image uploaded</div>
                                     {% endif %}
@@ -4411,13 +4427,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-home"></i> House Photo</span>
                                         {% if row.house_photo %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('House Photo', '{{ row.house_photo|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('House Photo', this.closest('.detail-doc-card').querySelector('img') || '{{ row.house_photo|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.house_photo %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House Photo" onclick="openImageModal('House Photo', '{{ row.house_photo|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House Photo" onclick="openImageModal('House Photo', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-home me-2"></i> No house photo uploaded</div>
                                     {% endif %}
@@ -4534,10 +4550,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</span>
                                     </div>
                                     {% if row.aadhaar_front_pic %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('Aadhaar Front', this.closest('.feed-doc-card').querySelector('img') || '{{ row.aadhaar_front_pic|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview Front
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('Aadhaar Front', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Front photo</div>
                                     {% endif %}
@@ -4550,10 +4566,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</span>
                                     </div>
                                     {% if row.aadhaar_back_pic %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('Aadhaar Back', this.closest('.feed-doc-card').querySelector('img') || '{{ row.aadhaar_back_pic|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview Back
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('Aadhaar Back', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Back photo</div>
                                     {% endif %}
@@ -4566,10 +4582,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.house_photo else 'Missing' }}</span>
                                     </div>
                                     {% if row.house_photo %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('House Photo', this.closest('.feed-doc-card').querySelector('img') || '{{ row.house_photo|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview House
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('House Photo', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-home me-1"></i> No House photo</div>
                                     {% endif %}
@@ -5067,6 +5083,36 @@
       </button>
     </div>
   </div>
+</div>
+
+<!-- Full View Document Image Modal (Lightbox) -->
+<div id="imageModal" class="modal custom-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 14, 22, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 20000; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeImageModal()">
+    <div class="image-modal-content card-glass" style="position: relative; max-width: 92vw; max-height: 92vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 18px 22px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);">
+        <!-- Close Button -->
+        <button type="button" class="image-modal-close" onclick="closeImageModal()" aria-label="Close image preview" style="position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; box-shadow: var(--shadow-md); z-index: 20;">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <!-- Header / Label & Download -->
+        <div style="width: 100%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+            <span id="modalImageLabel" style="font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; color: var(--text);">
+                <i class="fas fa-id-card me-1.5 text-primary"></i> Document Preview
+            </span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <a id="modalImageDownloadBtn" href="" download="document.jpg" class="neumorphic-btn small btn-outline" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none;" target="_blank">
+                    <i class="fas fa-download me-1"></i> Download
+                </a>
+                <button type="button" class="neumorphic-btn small btn-outline" onclick="closeImageModal()" style="padding: 4px 10px; font-size: 0.75rem;">
+                    Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Image Container -->
+        <div style="max-height: 75vh; max-width: 85vw; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2);">
+            <img id="modalImage" class="image-modal-img" src="" alt="Document Preview" style="max-width: 100%; max-height: 75vh; object-fit: contain; border-radius: 10px; display: block;">
+        </div>
+    </div>
 </div>
 {% endblock %}
 

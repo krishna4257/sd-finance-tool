@@ -606,11 +606,46 @@ function deletePayment(feed_payment_id) {
   if (!confirm("Are you sure you want to delete this payment feed entry permanently?")) {
     return;
   }
-  return handleFeedAction(
-    `/feed/payment/delete/${feed_payment_id}`,
-    "Payment feed entry deleted successfully",
-    "Failed to delete payment feed entry"
-  );
+
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (row) {
+    row.style.opacity = "0.4";
+    row.style.pointerEvents = "none";
+  }
+
+  csrfFetch(`/feed/payment/delete/${feed_payment_id}`, {
+    method: "POST"
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast("Payment feed entry deleted successfully");
+        if (row) row.remove();
+        checkDuplicatesAndUnmapped();
+        renderDateTiles();
+        recalculateCumulativeAmounts();
+        updateTotalPayment();
+
+        const remainingRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+        if (remainingRows.length === 0) {
+          window.location.reload();
+        }
+      } else {
+        if (row) {
+          row.style.opacity = "1";
+          row.style.pointerEvents = "auto";
+        }
+        alert(data.error || "Failed to delete payment feed entry");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      if (row) {
+        row.style.opacity = "1";
+        row.style.pointerEvents = "auto";
+      }
+      alert("Server error deleting payment feed entry");
+    });
 }
 
 function togglePayload(button) {
@@ -708,29 +743,70 @@ function openImageModal(label, base64Data) {
   const image = document.getElementById("modalImage");
   if (!modal || !image) return;
 
-  image.src = `data:image/jpeg;base64,${base64Data}`;
-  image.alt = label;
+  let src = "";
+  if (!base64Data) {
+    return;
+  } else if (typeof base64Data === "string") {
+    src = base64Data.trim();
+    if (!src.startsWith("data:") && !src.startsWith("http") && !src.startsWith("/")) {
+      src = `data:image/jpeg;base64,${src}`;
+    }
+  } else if (base64Data instanceof HTMLElement) {
+    src = base64Data.src || base64Data.getAttribute("src") || "";
+  } else if (base64Data && base64Data.src) {
+    src = base64Data.src;
+  }
+
+  if (!src) return;
+
+  let cleanLabel = label || "Document Preview";
+  if (cleanLabel.toLowerCase() === "aadhaar_front" || cleanLabel.toLowerCase() === "aadhaar front") {
+    cleanLabel = "Aadhaar Front";
+  } else if (cleanLabel.toLowerCase() === "aadhaar_back" || cleanLabel.toLowerCase() === "aadhaar back") {
+    cleanLabel = "Aadhaar Back";
+  } else if (cleanLabel.toLowerCase() === "house" || cleanLabel.toLowerCase() === "house photo") {
+    cleanLabel = "House Photo";
+  }
+
+  const iconClass = cleanLabel.includes("House") ? "fa-home" : "fa-id-card";
+
+  image.src = src;
+  image.alt = cleanLabel;
+
+  const labelEl = document.getElementById("modalImageLabel");
+  if (labelEl) {
+    labelEl.innerHTML = `<i class="fas ${iconClass} me-1.5 text-primary"></i> ${cleanLabel}`;
+  }
+  const dlBtn = document.getElementById("modalImageDownloadBtn");
+  if (dlBtn) {
+    dlBtn.href = src;
+    dlBtn.download = `${cleanLabel.toLowerCase().replace(/\s+/g, "_")}.jpg`;
+  }
+
   modal.style.display = "flex";
 }
 
 function closeImageModal() {
   const modal = document.getElementById("imageModal");
   const image = document.getElementById("modalImage");
-  if (!modal || !image) return;
+  if (!modal) return;
 
   modal.style.display = "none";
-  image.src = "";
+  if (image) image.src = "";
 }
 
-function showImageModal(src, label) {
-  const modal = document.getElementById("imageModal");
-  const image = document.getElementById("modalImage");
-  if (!modal || !image) return;
+// Close image modal on Escape key press
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    const modal = document.getElementById("imageModal");
+    if (modal && modal.style.display !== "none") {
+      closeImageModal();
+    }
+  }
+});
 
-  if (!src) return;
-  image.src = src.startsWith("data:") ? src : `data:image/jpeg;base64,${src}`;
-  image.alt = label || "Document Preview";
-  modal.style.display = "flex";
+function showImageModal(src, label) {
+  openImageModal(label || "Document Preview", src);
 }
 
 function showToast(msg) {
@@ -1010,17 +1086,20 @@ function checkDuplicatesAndUnmapped() {
     if (isDuplicate) {
       row.classList.add("row-duplicate");
       if (cb) {
-        cb.checked = false;
-        cb.disabled = true;
+        cb.disabled = false;
+        cb.title = "Duplicate entry: Select to delete";
       }
       if (anoWrap) {
         const dupDot = document.createElement("span");
         dupDot.className = "row-warn-dot duplicate";
-        dupDot.title = "Duplicate Account Number and Date entry";
+        dupDot.title = "Duplicate Account Number and Date entry (delete or edit to resolve)";
         anoWrap.appendChild(dupDot);
       }
     } else {
-      if (cb) cb.disabled = false;
+      if (cb) {
+        cb.disabled = false;
+        cb.title = "";
+      }
     }
   });
 }
@@ -1172,6 +1251,7 @@ function updateTotalPayment() {
   let selectedCount = 0;
   let grandTotal = 0;
   let grandCount = 0;
+  let hasSelectedDuplicates = false;
 
   const visibleRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
 
@@ -1186,10 +1266,13 @@ function updateTotalPayment() {
     }
 
     const cb = row.querySelector(".pay-checkbox");
-    if (cb && cb.checked && !isDup) {
+    if (cb && cb.checked) {
       selectedTotal += amt;
       selectedCount += 1;
       row.classList.add("row-selected");
+      if (isDup) {
+        hasSelectedDuplicates = true;
+      }
     } else {
       row.classList.remove("row-selected");
     }
@@ -1203,17 +1286,24 @@ function updateTotalPayment() {
   if (selectedCount > 0) {
     if (labelEl) labelEl.innerText = `Selected (${selectedCount} of ${grandCount}):`;
     if (totalEl) totalEl.innerText = selectedTotal.toLocaleString("en-IN");
-    if (acceptBtn) {
-      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1"></i> Submit (${selectedCount})`;
-      acceptBtn.style.display = "inline-flex";
-      acceptBtn.disabled = false;
-      acceptBtn.style.opacity = "1";
-    }
     if (deleteBtn) {
       deleteBtn.innerHTML = `<i class="fas fa-trash-alt me-1"></i> Delete (${selectedCount})`;
       deleteBtn.style.display = "inline-flex";
       deleteBtn.disabled = false;
       deleteBtn.style.opacity = "1";
+    }
+    if (acceptBtn) {
+      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1"></i> Submit (${selectedCount})`;
+      acceptBtn.style.display = "inline-flex";
+      if (hasSelectedDuplicates) {
+        acceptBtn.disabled = true;
+        acceptBtn.style.opacity = "0.45";
+        acceptBtn.title = "Cannot submit: Duplicate rows selected. Delete duplicates or uncheck them before submitting.";
+      } else {
+        acceptBtn.disabled = false;
+        acceptBtn.style.opacity = "1";
+        acceptBtn.title = "Submit selected payments to ledger";
+      }
     }
   } else {
     if (labelEl) labelEl.innerText = `Grand Total (${grandCount} items):`;
@@ -1237,7 +1327,13 @@ function updateTotalPayment() {
 
   const headerCheck = document.getElementById("feedHeaderCheck");
   if (headerCheck) {
-    headerCheck.checked = (selectedCount > 0 && selectedCount === grandCount);
+    headerCheck.checked = (selectedCount > 0 && selectedCount === grandCount && !hasSelectedDuplicates);
+  }
+
+  const countPill = document.querySelector(".posting-count-pill");
+  if (countPill) {
+    const totalCount = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row").length;
+    countPill.innerHTML = `<i class="fas fa-layer-group me-1"></i> ${totalCount} Records`;
   }
 }
 
@@ -1252,7 +1348,7 @@ function acceptSinglePaymentRow(feed_payment_id, btnEl) {
   const ano = (row.dataset.ano || "").trim();
 
   if (row.classList.contains("row-duplicate")) {
-    alert("Cannot accept duplicate payment entry. There is already another entry with the same account and date.");
+    alert(`Cannot submit duplicate payment entry for Account #${ano}.\n\nPlease delete one of the duplicate entries or edit the account number first.`);
     return;
   }
 
@@ -1294,6 +1390,24 @@ function acceptSinglePaymentRow(feed_payment_id, btnEl) {
 
 function acceptSelected() {
   const btn = document.getElementById("acceptBtn");
+
+  // Guard against any selected duplicates
+  const selectedDuplicates = [];
+  document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
+    const row = cb.closest("tr");
+    if (row && row.classList.contains("row-duplicate")) {
+      const ano = (row.dataset.ano || "").trim();
+      if (ano && !selectedDuplicates.includes(ano)) {
+        selectedDuplicates.push(ano);
+      }
+    }
+  });
+
+  if (selectedDuplicates.length > 0) {
+    alert(`Cannot submit payments while duplicate rows are selected.\n\nDuplicate Account(s): ${selectedDuplicates.join(", ")}\n\nPlease delete the duplicate row(s) or edit the account number before submitting.`);
+    return;
+  }
+
   const selectedIds = [];
   let selectedSum = 0;
 

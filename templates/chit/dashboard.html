@@ -866,20 +866,76 @@
     }
   }
 
+  function getOldestCurrentMonthChit(groups) {
+    if (!groups || groups.length === 0) return null;
+    const ongoing = groups.filter(g => 
+      (g.status === 'Active' || !g.status) && 
+      (!g.duration_months || (g.current_month_index || 1) <= g.duration_months)
+    );
+    const candidateList = ongoing.length > 0 ? ongoing : groups;
+
+    // Sort by:
+    // 1. current_month_index ASC (oldest/earliest unclosed cycle)
+    // 2. start_month_year ASC (earliest start date if available)
+    // 3. duration_months DESC (maximum duration for full month pills)
+    const sorted = [...candidateList].sort((a, b) => {
+      const mA = parseInt(a.current_month_index, 10) || 1;
+      const mB = parseInt(b.current_month_index, 10) || 1;
+      if (mA !== mB) return mA - mB;
+
+      const dateA = a.start_month_year || '9999-99';
+      const dateB = b.start_month_year || '9999-99';
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+      const durA = parseInt(a.duration_months, 10) || 0;
+      const durB = parseInt(b.duration_months, 10) || 0;
+      return durB - durA;
+    });
+
+    return sorted[0] || groups[0];
+  }
+
+  function getOldestCurrentMonthIndex(groups) {
+    const chit = getOldestCurrentMonthChit(groups);
+    return chit ? (parseInt(chit.current_month_index, 10) || 1) : 1;
+  }
+
+  function getMaxDurationChit(groups) {
+    if (!groups || groups.length === 0) return null;
+    let maxDur = 0;
+    let maxChit = groups[0];
+    groups.forEach(g => {
+      const d = parseInt(g.duration_months, 10) || 0;
+      if (d > maxDur) {
+        maxDur = d;
+        maxChit = g;
+      }
+    });
+    return maxChit;
+  }
+
   async function selectChitGroup(chitId) {
     activeChitId = chitId;
     paymentsExpandedInitialized = false;
     renderChitSelectorTabs(allChits);
     if (window.lucide) { lucide.createIcons(); }
 
-    let targetChit = allChits.find(g => g.id === chitId);
-    if (!targetChit && allChits.length > 0) {
-      targetChit = allChits[0];
-    }
+    if (chitId === 'all') {
+      activeMonthIndex = getOldestCurrentMonthIndex(allChits);
+      const timelineChit = getMaxDurationChit(allChits) || getOldestCurrentMonthChit(allChits);
+      if (timelineChit) {
+        await loadMonthsForChit(timelineChit.id);
+      }
+    } else {
+      let targetChit = allChits.find(g => g.id === chitId);
+      if (!targetChit && allChits.length > 0) {
+        targetChit = allChits[0];
+      }
 
-    if (targetChit) {
-      activeMonthIndex = targetChit.current_month_index || 1;
-      await loadMonthsForChit(targetChit.id);
+      if (targetChit) {
+        activeMonthIndex = targetChit.current_month_index || 1;
+        await loadMonthsForChit(targetChit.id);
+      }
     }
   }
 
@@ -890,7 +946,7 @@
       const months = await res.json();
       allMonths = months;
       renderMonthPills(months);
-    if (window.lucide) { lucide.createIcons(); }
+      if (window.lucide) { lucide.createIcons(); }
       await loadDashboardData(activeChitId, activeMonthIndex);
     } catch (e) {
       console.error('Error loading months:', e);
@@ -900,7 +956,7 @@
   function renderMonthPills(months) {
     const container = document.getElementById('monthsPillsList');
     container.innerHTML = '';
-        if (window.lucide) { lucide.createIcons(); }
+    if (window.lucide) { lucide.createIcons(); }
 
     let activeBtn = null;
     months.forEach(m => {
@@ -916,7 +972,7 @@
         ${isActive ? '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>' : ''}
         <span>${m.month_label}</span>
       `;
-        if (window.lucide) { lucide.createIcons(); }
+      if (window.lucide) { lucide.createIcons(); }
       btn.onclick = () => {
         activeMonthIndex = m.month_index;
         paymentsExpandedInitialized = false;
@@ -949,8 +1005,9 @@
     const banner = document.getElementById('futureMonthBanner');
     if (!banner) return;
     
-    let target = activeChitId === 'all' ? allChits[0] : allChits.find(g => g.id === activeChitId);
-    let curMonth = (target ? target.current_month_index : 1) || 1;
+    let curMonth = activeChitId === 'all' 
+      ? getOldestCurrentMonthIndex(allChits)
+      : ((allChits.find(g => g.id === activeChitId)?.current_month_index) || 1);
     let mObj = allMonths.find(m => m.month_index === monthIndex);
     let mLabel = mObj ? mObj.month_label : `Month ${monthIndex}`;
 
@@ -992,8 +1049,9 @@
   }
 
   function goToCurrentMonth() {
-    let target = activeChitId === 'all' ? allChits[0] : allChits.find(g => g.id === activeChitId);
-    let curMonth = (target ? target.current_month_index : 1) || 1;
+    let curMonth = activeChitId === 'all' 
+      ? getOldestCurrentMonthIndex(allChits)
+      : ((allChits.find(g => g.id === activeChitId)?.current_month_index) || 1);
     activeMonthIndex = curMonth;
     paymentsExpandedInitialized = false;
     renderMonthPills(allMonths);
@@ -1253,6 +1311,12 @@
                     <i data-lucide="chevron-down" class="w-3 h-3 stroke-[2]"></i>
                   </button>
                 ` : ''}
+                ${(m.credit_deduction && m.credit_deduction > 0) ? `
+                  <button type="button" onclick="event.stopPropagation(); toggleRowBreakdown('${m.installment_id}')" class="text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md text-[10px] transition-colors inline-flex items-center gap-1 cursor-pointer" title="Click to view credit deduction breakdown">
+                    <span>- ${formatINR(m.credit_deduction)} credit deduction</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 stroke-[2]"></i>
+                  </button>
+                ` : ''}
                 ${(m.sub_tickets && m.sub_tickets.length > 1) ? `
                   <button type="button" onclick="event.stopPropagation(); toggleRowBreakdown('${m.installment_id}')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md text-[10px] transition-colors inline-flex items-center gap-1 cursor-pointer" title="Click to view ticket split breakdown">
                     <span>${m.sub_tickets.length} tickets split</span>
@@ -1322,11 +1386,13 @@
           </div>
           ${(m.due_breakdown || []).map(b => `
             <div class="flex justify-between items-center text-xs py-0.5">
-              <span class="flex items-center gap-2 font-medium ${b.is_closed ? 'text-rose-700 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}">
-                <span class="h-1.5 w-1.5 rounded-full ${b.is_closed ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+              <span class="flex items-center gap-2 font-medium ${b.is_credit ? 'text-emerald-700 dark:text-emerald-400' : (b.is_closed ? 'text-rose-700 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200')}">
+                <span class="h-1.5 w-1.5 rounded-full ${b.is_credit ? 'bg-emerald-500' : (b.is_closed ? 'bg-rose-500' : 'bg-emerald-500')}"></span>
                 <span>${b.tag || b.month_year}</span>
               </span>
-              <span class="font-extrabold money-fig text-slate-900 dark:text-slate-100">${formatINR(b.amount)}</span>
+              <span class="font-extrabold money-fig ${b.is_credit ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}">
+                ${b.is_credit ? '- ' : ''}${formatINR(b.amount)}
+              </span>
             </div>
           `).join('')}
           <div class="flex justify-between items-center text-xs font-black border-t border-slate-200/60 dark:border-slate-700/40 pt-1.5 text-slate-900 dark:text-slate-100">
@@ -1350,7 +1416,8 @@
             m.group_id || '',
             m.prev_dues || 0,
             m.current_month_pending || 0,
-            m.installment_type || 'incremental'
+            m.installment_type || 'incremental',
+            m.credit_deduction || 0
           );
         };
       }
@@ -1629,7 +1696,7 @@
   }
 
   // 10. Record & Edit Payment Modal Handlers
-  function openRecordPaymentModal(installmentId, membershipId, name, pendingAmount, ticketNo, fullDue, chitName, groupId, prevDues = 0, curPending = 0, installmentType = '') {
+  function openRecordPaymentModal(installmentId, membershipId, name, pendingAmount, ticketNo, fullDue, chitName, groupId, prevDues = 0, curPending = 0, installmentType = '', creditDeduction = 0) {
     document.getElementById('modalPaymentId').value = '';
     document.getElementById('modalActionTitle').textContent = 'Record payment';
 
@@ -1651,7 +1718,8 @@
     const chit = allChits.find(g => g.id === (groupId || (activeChitId === 'all' ? (allChits[0]?.id) : activeChitId)));
     const gName = chitName || (chit ? chit.name : 'Chit');
     const planText = installmentType ? ` · ${installmentType.charAt(0).toUpperCase() + installmentType.slice(1)}` : '';
-    const chitLabel = `${gName} · Account #${ticketNo} · Month ${activeMonthIndex}${planText}`;
+    const creditText = creditDeduction > 0 ? ` · -₹${formatINR(creditDeduction)} credit applied` : '';
+    const chitLabel = `${gName} · Account #${ticketNo} · Month ${activeMonthIndex}${planText}${creditText}`;
     document.getElementById('modalChitDetailsText').textContent = chitLabel;
 
     document.getElementById('modalInstallmentId').value = installmentId;
@@ -1965,6 +2033,10 @@
 
   // 15. Close Month Modal & Celebratory Flow (ChitBase Replica)
   function handleCloseMonthCycle() {
+    if (activeChitId === 'all') {
+      showToast('Please select a specific chit group tab to close its month.');
+      return;
+    }
     openCloseMonthModal();
   }
 
@@ -2177,7 +2249,9 @@
         // 5. Refresh chit group metadata and transition to next month
         const resChits = await fetch('/chit/api/chitgroups');
         if (resChits.ok) {
-          allChits = await resChits.json();
+          const chitsData = await resChits.json();
+          allChits = chitsData.groups || (Array.isArray(chitsData) ? chitsData : []);
+          allChits = sortChitsBySavedOrder(allChits);
         }
         activeMonthIndex = data.new_current_month;
         await loadMonthsForChit(targetChitId);
@@ -2203,6 +2277,10 @@
 
   // 16. Lift / Winner Modal
   function openLiftModal() {
+    if (activeChitId === 'all') {
+      showToast('Please select a specific chit group tab to record its lift / payout.');
+      return;
+    }
     if (!currentDuesData) return;
     document.getElementById('liftModalSub').textContent = `Month ${activeMonthIndex} · ${currentDuesData.month_year || ''}`;
     document.getElementById('liftModalAmt').textContent = formatINR(currentDuesData.amount_received_if_lifted);
