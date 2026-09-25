@@ -2102,7 +2102,7 @@ def update_chit_group(group_id):
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
     status = data.get('status', 'Active')
-    start_month = data.get('start_month_year')
+    start_month = (data.get('start_month_year') or '').strip()[:7] if data.get('start_month_year') else None
     rules_notes = data.get('rules_notes', '')
     is_month1_company = bool(data.get('is_month1_company_month', False))
     total_members = data.get('total_members')
@@ -2111,6 +2111,53 @@ def update_chit_group(group_id):
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
+        # Check current group state
+        cur.execute("""
+            SELECT id, name, chit_total_value, duration_months, total_members,
+                   commission_percent, start_month_year, is_month1_company_month,
+                   default_installment_type
+            FROM chit_groups WHERE id = %s;
+        """, (group_id,))
+        grow = cur.fetchone()
+        if not grow:
+            return jsonify({'error': 'Chit group not found'}), 404
+
+        cur_name, chit_total_val, cur_dur, cur_members = grow[1], float(grow[2]), int(grow[3]), int(grow[4])
+        comm_pct, cur_start_month, cur_co_m1 = float(grow[5] or 3.0), grow[6], bool(grow[7])
+
+        # Check existing payments and lifts
+        cur.execute("""
+            SELECT COUNT(*) 
+            FROM chit_payments p 
+            JOIN chit_installments i ON p.installment_id = i.id 
+            WHERE i.chit_group_id = %s;
+        """, (group_id,))
+        payments_count = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT COUNT(*) 
+            FROM chit_schedules 
+            WHERE chit_group_id = %s AND (payout_status = 'paid' OR lifted_by_membership_id IS NOT NULL);
+        """, (group_id,))
+        lifts_count = cur.fetchone()[0]
+
+        has_financial_activity = (payments_count > 0 or lifts_count > 0)
+
+        target_duration = int(duration_months) if duration_months is not None else cur_dur
+        target_start_month = start_month if start_month else cur_start_month
+
+        duration_changed = (target_duration != cur_dur)
+        start_month_changed = (target_start_month != cur_start_month)
+
+        if has_financial_activity and (duration_changed or start_month_changed):
+            return jsonify({
+                'error': f"Cannot change start month or duration: this scheme already has {payments_count} recorded payment(s) and {lifts_count} prize lift(s). Historical schedule is protected."
+            }), 400
+
+        # Calculate monthly installment
+        base_installment = chit_total_val / float(target_duration)
+
+        # Update chit_groups
         cur.execute("""
             UPDATE chit_groups
             SET name = COALESCE(NULLIF(%s, ''), name),
@@ -2119,14 +2166,87 @@ def update_chit_group(group_id):
                 rules_notes = %s,
                 is_month1_company_month = %s,
                 total_members = COALESCE(%s, total_members),
-                duration_months = COALESCE(%s, duration_months)
+                duration_months = %s,
+                monthly_installment = %s
             WHERE id = %s;
         """, (
-            name, status, start_month, rules_notes, is_month1_company,
+            name, status, target_start_month, rules_notes, is_month1_company,
             int(total_members) if total_members is not None else None,
-            int(duration_months) if duration_months is not None else None,
+            target_duration, base_installment,
             group_id
         ))
+
+        # If fresh scheme and schedule timing/duration changed, safely synchronize chit_schedules & Month 1 installments
+        if not has_financial_activity and (duration_changed or start_month_changed):
+            new_schedule = ce.generate_chit_schedule(
+                chit_total_val, target_duration, target_start_month, comm_pct, is_month1_company
+            )
+
+            # Upsert / sync chit_schedules
+            for row in new_schedule:
+                cur.execute("SELECT id FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, row['month_index']))
+                existing_s = cur.fetchone()
+                if existing_s:
+                    cur.execute("""
+                        UPDATE chit_schedules
+                        SET month_year = %s, chit_loss = %s, amount_received = %s,
+                            bonus = %s, installment_kattubadi = %s, is_company_month = %s
+                        WHERE id = %s;
+                    """, (
+                        row['month_year'], row['chit_loss'], row['amount_received'],
+                        row['bonus'], row['installment_kattubadi'], row.get('is_company_month', False),
+                        existing_s[0]
+                    ))
+                else:
+                    cur.execute("""
+                        INSERT INTO chit_schedules (
+                            chit_group_id, month_index, month_year, chit_loss,
+                            amount_received, bonus, installment_kattubadi, status, is_company_month
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'Open', %s);
+                    """, (
+                        group_id, row['month_index'], row['month_year'],
+                        row['chit_loss'], row['amount_received'], row['bonus'],
+                        row['installment_kattubadi'], row.get('is_company_month', False)
+                    ))
+
+            # Delete excess months if duration decreased
+            cur.execute("""
+                DELETE FROM chit_schedules 
+                WHERE chit_group_id = %s AND month_index > %s;
+            """, (group_id, target_duration))
+
+            # Update Month 1 installments for enrolled members
+            m1_row = new_schedule[0]
+            cur.execute("""
+                SELECT id, share_units, COALESCE(installment_type, 'incremental')
+                FROM chit_memberships 
+                WHERE chit_group_id = %s;
+            """, (group_id,))
+            memberships = cur.fetchall()
+
+            for ms_id, sh_units, inst_type in memberships:
+                sh = float(sh_units or 1.0)
+                if inst_type == 'fixed':
+                    fixed_base = ce.get_fixed_installment_amount(chit_total_val, target_duration)
+                    katt = round(fixed_base * sh, 2)
+                    gross = round((chit_total_val / float(target_duration)) * sh, 2)
+                    bon = round(gross - katt, 2)
+                else:
+                    katt = round(float(m1_row['installment_kattubadi']) * sh, 2)
+                    bon = round(float(m1_row['bonus']) * sh, 2)
+                    gross = katt + bon
+
+                cur.execute("""
+                    UPDATE chit_installments
+                    SET month_year = %s,
+                        gross_amount = %s,
+                        dividend_discount = %s,
+                        net_due_amount = %s,
+                        pending_amount = %s,
+                        kattubadi_due = %s,
+                        bonus_discount = %s
+                    WHERE membership_id = %s AND month_index = 1 AND status != 'paid';
+                """, (m1_row['month_year'], gross, bon, katt, katt, katt, bon, ms_id))
 
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
@@ -2135,11 +2255,20 @@ def update_chit_group(group_id):
             get_current_actor(),
             get_current_actor_role(),
             str(group_id),
-            json.dumps({'name': name, 'status': status, 'total_members': total_members})
+            json.dumps({
+                'name': name or cur_name,
+                'status': status,
+                'duration_months': target_duration,
+                'start_month_year': target_start_month,
+                'total_members': total_members
+            })
         ))
 
         conn.commit()
         return jsonify({'success': True, 'id': str(group_id)})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         cur.close()
         conn.close()
@@ -2372,6 +2501,248 @@ def update_group_members(group_id):
                     """, (group_id, ms_id, cur_m, srow[0], gross, bon, katt, katt, katt, bon))
 
             # Sync total_members if enrolled count now exceeds existing target
+            cur.execute("""
+                UPDATE chit_groups
+                SET total_members = GREATEST(total_members, (SELECT COUNT(*) FROM chit_memberships WHERE chit_group_id = %s))
+                WHERE id = %s;
+            """, (group_id, group_id))
+
+        elif action == 'toggle_member' and member_id:
+            cur.execute("SELECT id FROM chit_memberships WHERE chit_group_id = %s AND member_id = %s;", (group_id, member_id))
+            existing_ms = cur.fetchone()
+            if existing_ms:
+                # Member is enrolled -> check if any payments made
+                ms_id = existing_ms[0]
+                cur.execute("SELECT COUNT(*) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.membership_id = %s;", (ms_id,))
+                p_cnt = cur.fetchone()[0]
+                if p_cnt > 0:
+                    return jsonify({'error': 'Cannot unenroll subscriber: they already have recorded payments.'}), 400
+                cur.execute("DELETE FROM chit_installments WHERE membership_id = %s AND chit_group_id = %s;", (ms_id, group_id))
+                cur.execute("DELETE FROM chit_memberships WHERE id = %s;", (ms_id,))
+                conn.commit()
+                return jsonify({'success': True, 'enrolled': False})
+            else:
+                # Member is not enrolled -> enroll with next sequential account number
+                cur.execute("SELECT account_number FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+                existing_accs = set(str(r[0]).strip() for r in cur.fetchall() if r[0])
+                next_n = 1
+                while str(next_n) in existing_accs:
+                    next_n += 1
+                raw_acc = str(next_n)
+
+                cur.execute("SELECT current_month_index, duration_months, chit_total_value, COALESCE(default_installment_type, 'incremental') FROM chit_groups WHERE id = %s;", (group_id,))
+                grow = cur.fetchone()
+                if not grow:
+                    return jsonify({'error': 'Chit group not found'}), 404
+                cur_m, dur, g_val, def_itype = grow[0], grow[1], float(grow[2]), grow[3]
+
+                inst_type = (data.get('installment_type') or def_itype or 'incremental').strip().lower()
+
+                try:
+                    ticket_val = int(raw_acc)
+                except Exception:
+                    cur.execute("SELECT COALESCE(MAX(ticket_number), 0) + 1 FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+                    ticket_val = cur.fetchone()[0]
+
+                cur.execute("""
+                    INSERT INTO chit_memberships (chit_group_id, member_id, ticket_number, account_number, share_units, start_month_index, installment_type)
+                    VALUES (%s, %s, %s, %s, 1.0, 1, %s)
+                    RETURNING id;
+                """, (group_id, member_id, ticket_val, raw_acc, inst_type))
+                ms_id = cur.fetchone()[0]
+
+                cur.execute("SELECT month_year, installment_kattubadi, bonus FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, cur_m))
+                srow = cur.fetchone()
+                if srow:
+                    if inst_type == 'fixed':
+                        fixed_base = ce.get_fixed_installment_amount(g_val, dur)
+                        katt = round(fixed_base, 2)
+                        gross = round(g_val / float(dur), 2)
+                        bon = round(gross - katt, 2)
+                    else:
+                        katt = round(float(srow[1]), 2)
+                        bon = round(float(srow[2]), 2)
+                        gross = katt + bon
+
+                    cur.execute("""
+                        INSERT INTO chit_installments (
+                            chit_group_id, membership_id, month_index, month_year,
+                            gross_amount, dividend_discount, net_due_amount, paid_amount,
+                            pending_amount, status, kattubadi_due, bonus_discount
+                        ) VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s, 0.00,
+                            %s, 'due', %s, %s
+                        );
+                    """, (group_id, ms_id, cur_m, srow[0], gross, bon, katt, katt, katt, bon))
+
+                cur.execute("""
+                    UPDATE chit_groups
+                    SET total_members = GREATEST(total_members, (SELECT COUNT(*) FROM chit_memberships WHERE chit_group_id = %s))
+                    WHERE id = %s;
+                """, (group_id, group_id))
+
+                conn.commit()
+                return jsonify({'success': True, 'enrolled': True, 'account_number': raw_acc})
+
+        elif action == 'quick_add_members':
+            new_members = data.get('members') or []
+            if not new_members:
+                return jsonify({'error': 'No members provided'}), 400
+
+            cur.execute("SELECT current_month_index, duration_months, chit_total_value, COALESCE(default_installment_type, 'incremental') FROM chit_groups WHERE id = %s;", (group_id,))
+            grow = cur.fetchone()
+            if not grow:
+                return jsonify({'error': 'Chit group not found'}), 404
+            cur_m, dur, g_val, def_itype = grow[0], grow[1], float(grow[2]), grow[3]
+
+            cur.execute("SELECT month_year, installment_kattubadi, bonus FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, cur_m))
+            srow = cur.fetchone()
+
+            cur.execute("SELECT account_number FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+            existing_accs = set(str(r[0]).strip() for r in cur.fetchall() if r[0])
+
+            created_count = 0
+            for m in new_members:
+                member_name = (m.get('full_name') or m.get('name') or '').strip()
+                if not member_name:
+                    continue
+                phone = str(m.get('phone') or '').strip()
+                raw_acc = str(m.get('account_number') or '').strip()
+                share = float(m.get('share_units') or 1.0)
+                m_inst = (m.get('installment_type') or def_itype or 'incremental').strip().lower()
+
+                if not raw_acc:
+                    n = 1
+                    while str(n) in existing_accs:
+                        n += 1
+                    raw_acc = str(n)
+
+                if raw_acc in existing_accs:
+                    conn.rollback()
+                    return jsonify({'error': f"Account number '{raw_acc}' is already in use in this group."}), 400
+                existing_accs.add(raw_acc)
+
+                # Create member in chit_members
+                cur.execute("SELECT COALESCE(MAX(customer_id::integer), 10000) + 1 FROM chit_members WHERE customer_id ~ '^[0-9]{5}$';")
+                next_cid = f"{(cur.fetchone()[0] or 10001):05d}"
+                cur.execute("""
+                    INSERT INTO chit_members (customer_id, full_name, phone, member_portal_enabled)
+                    VALUES (%s, %s, %s, TRUE) RETURNING id;
+                """, (next_cid, member_name, phone))
+                new_m_id = cur.fetchone()[0]
+
+                try:
+                    ticket_val = int(raw_acc)
+                except Exception:
+                    cur.execute("SELECT COALESCE(MAX(ticket_number), 0) + 1 FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+                    ticket_val = cur.fetchone()[0]
+
+                cur.execute("""
+                    INSERT INTO chit_memberships (chit_group_id, member_id, ticket_number, account_number, share_units, start_month_index, installment_type)
+                    VALUES (%s, %s, %s, %s, %s, 1, %s)
+                    RETURNING id;
+                """, (group_id, new_m_id, ticket_val, raw_acc, share, m_inst))
+                ms_id = cur.fetchone()[0]
+
+                if srow:
+                    if m_inst == 'fixed':
+                        fixed_base = ce.get_fixed_installment_amount(g_val, dur)
+                        katt = round(fixed_base * share, 2)
+                        gross = round((g_val / float(dur)) * share, 2)
+                        bon = round(gross - katt, 2)
+                    else:
+                        katt = round(float(srow[1]) * share, 2)
+                        bon = round(float(srow[2]) * share, 2)
+                        gross = katt + bon
+
+                    cur.execute("""
+                        INSERT INTO chit_installments (
+                            chit_group_id, membership_id, month_index, month_year,
+                            gross_amount, dividend_discount, net_due_amount, paid_amount,
+                            pending_amount, status, kattubadi_due, bonus_discount
+                        ) VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s, 0.00,
+                            %s, 'due', %s, %s
+                        );
+                    """, (group_id, ms_id, cur_m, srow[0], gross, bon, katt, katt, katt, bon))
+                created_count += 1
+
+            cur.execute("""
+                UPDATE chit_groups
+                SET total_members = GREATEST(total_members, (SELECT COUNT(*) FROM chit_memberships WHERE chit_group_id = %s))
+                WHERE id = %s;
+            """, (group_id, group_id))
+
+        elif action == 'batch_add':
+            member_ids = data.get('member_ids') or []
+            if not member_ids:
+                return jsonify({'error': 'No member IDs provided'}), 400
+
+            cur.execute("SELECT current_month_index, duration_months, chit_total_value, COALESCE(default_installment_type, 'incremental') FROM chit_groups WHERE id = %s;", (group_id,))
+            grow = cur.fetchone()
+            if not grow:
+                return jsonify({'error': 'Chit group not found'}), 404
+            cur_m, dur, g_val, def_itype = grow[0], grow[1], float(grow[2]), grow[3]
+
+            cur.execute("SELECT month_year, installment_kattubadi, bonus FROM chit_schedules WHERE chit_group_id = %s AND month_index = %s;", (group_id, cur_m))
+            srow = cur.fetchone()
+
+            cur.execute("SELECT account_number FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+            existing_accs = set(str(r[0]).strip() for r in cur.fetchall() if r[0])
+
+            cur.execute("SELECT member_id FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+            enrolled_m_ids = set(str(r[0]) for r in cur.fetchall())
+
+            next_acc_num = 1
+            for mid in member_ids:
+                mid_str = str(mid)
+                if mid_str in enrolled_m_ids:
+                    continue
+
+                while str(next_acc_num) in existing_accs:
+                    next_acc_num += 1
+                raw_acc = str(next_acc_num)
+                existing_accs.add(raw_acc)
+
+                try:
+                    ticket_val = int(raw_acc)
+                except Exception:
+                    cur.execute("SELECT COALESCE(MAX(ticket_number), 0) + 1 FROM chit_memberships WHERE chit_group_id = %s;", (group_id,))
+                    ticket_val = cur.fetchone()[0]
+
+                cur.execute("""
+                    INSERT INTO chit_memberships (chit_group_id, member_id, ticket_number, account_number, share_units, start_month_index, installment_type)
+                    VALUES (%s, %s, %s, %s, 1.0, 1, %s)
+                    RETURNING id;
+                """, (group_id, mid, ticket_val, raw_acc, def_itype))
+                ms_id = cur.fetchone()[0]
+
+                if srow:
+                    if def_itype == 'fixed':
+                        fixed_base = ce.get_fixed_installment_amount(g_val, dur)
+                        katt = round(fixed_base, 2)
+                        gross = round(g_val / float(dur), 2)
+                        bon = round(gross - katt, 2)
+                    else:
+                        katt = round(float(srow[1]), 2)
+                        bon = round(float(srow[2]), 2)
+                        gross = katt + bon
+
+                    cur.execute("""
+                        INSERT INTO chit_installments (
+                            chit_group_id, membership_id, month_index, month_year,
+                            gross_amount, dividend_discount, net_due_amount, paid_amount,
+                            pending_amount, status, kattubadi_due, bonus_discount
+                        ) VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s, 0.00,
+                            %s, 'due', %s, %s
+                        );
+                    """, (group_id, ms_id, cur_m, srow[0], gross, bon, katt, katt, katt, bon))
+                enrolled_m_ids.add(mid_str)
+
             cur.execute("""
                 UPDATE chit_groups
                 SET total_members = GREATEST(total_members, (SELECT COUNT(*) FROM chit_memberships WHERE chit_group_id = %s))

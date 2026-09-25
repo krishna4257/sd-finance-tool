@@ -684,6 +684,11 @@ document.addEventListener("DOMContentLoaded", function () {
           if (cardStatusCell) {
             cardStatusCell.innerHTML = `<span class="status-badge status-${data.status}">${statusText}</span>`;
           }
+          const cardPill = card.querySelector(".status-pill");
+          if (cardPill) {
+            cardPill.className = `status-pill status-${data.status}`;
+            cardPill.innerHTML = `<span class="status-dot"></span> ${statusText}`;
+          }
           if (cardBtn) {
             cardBtn.innerText = isActive ? "Deactivate" : "Activate";
             if (isActive) {
@@ -778,3 +783,59 @@ function refreshEmployeeDropdown() {
       console.error("Employee dropdown refresh failed:", err);
     });
 }
+
+/* ===== TILE PHOTO UPLOAD ===== */
+let activeTileUploadEid = null;
+
+window.triggerPhotoUpload = function(eid) {
+  activeTileUploadEid = eid;
+  const fileInput = document.getElementById("tilePhotoInput");
+  if (fileInput) {
+    fileInput.value = "";
+    fileInput.click();
+  }
+};
+
+document.addEventListener("DOMContentLoaded", function() {
+  const fileInput = document.getElementById("tilePhotoInput");
+  if (fileInput) {
+    fileInput.addEventListener("change", async function() {
+      if (!this.files || !this.files[0] || !activeTileUploadEid) return;
+      const file = this.files[0];
+      const formData = new FormData();
+      formData.append("eid", activeTileUploadEid);
+      formData.append("photo", file);
+
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                          document.querySelector('input[name="csrf_token"]')?.value || "";
+        const res = await fetch("/api/employee/upload_photo", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken
+          },
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          const card = document.querySelector(`.employee-card[data-eid="${activeTileUploadEid}"]`);
+          if (card) {
+            const squircle = card.querySelector(".avatar-squircle");
+            if (squircle) {
+              squircle.innerHTML = `<img src="${data.photo_url}" alt="Employee Photo" class="avatar-img" id="avatarImg-${activeTileUploadEid}">`;
+            }
+          }
+          if (typeof showToast === "function") {
+            showToast("Photo uploaded successfully!", "success");
+          } else {
+            alert("Photo uploaded successfully!");
+          }
+        } else {
+          alert(data.error || "Failed to upload photo");
+        }
+      } catch (err) {
+        alert("Upload error: " + err.message);
+      }
+    });
+  }
+});

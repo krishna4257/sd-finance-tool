@@ -1798,6 +1798,430 @@
         box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
     }
 
+    .posting-tool-btn.danger-btn {
+        background: #ef4444;
+        color: #ffffff;
+        border-color: #ef4444;
+        box-shadow: 0 2px 10px rgba(239, 68, 68, 0.25);
+    }
+
+    .posting-tool-btn.danger-btn:hover {
+        background: #dc2626;
+        border-color: #dc2626;
+        color: #ffffff;
+        filter: brightness(1.08);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    }
+
+    /* ─── Ocean Glassy & Matt Steel Table (Pixel-perfect recreation of reference design) ─── */
+    .posting-table-stage {
+        position: relative;
+        padding: 24px 8px 36px 8px;
+        background: radial-gradient(ellipse 750px 320px at 50% 0%, rgba(2, 132, 199, 0.28) 0%, rgba(2, 132, 199, 0.05) 55%, transparent 75%);
+        border-radius: 20px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .admin-table-wrapper.matt-steel-table {
+        background: #080c14;
+        border-radius: 14px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        box-shadow: 
+            0 0 0 1px rgba(255, 255, 255, 0.06),
+            0 24px 55px -12px rgba(0, 0, 0, 0.85),
+            0 0 45px -5px rgba(2, 132, 199, 0.22);
+        overflow: hidden;
+        position: relative;
+        width: fit-content;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    /* Specular light streak on top edge */
+    .admin-table-wrapper.matt-steel-table::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, 
+            transparent 0%, 
+            rgba(186, 230, 253, 0.2) 10%, 
+            rgba(224, 242, 254, 0.95) 50%, 
+            rgba(186, 230, 253, 0.2) 90%, 
+            transparent 100%
+        );
+        z-index: 10;
+        pointer-events: none;
+    }
+
+    .matt-steel-table table {
+        width: auto;
+        min-width: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 0;
+        table-layout: auto;
+    }
+
+    /* ─── Ocean Glassy Header ─── */
+    .matt-steel-table thead tr {
+        background: linear-gradient(180deg, #0284c7 0%, #0369a1 40%, #075985 80%, #0c4a6e 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .matt-steel-table thead th {
+        background: transparent;
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 13.5px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        text-transform: none;
+        padding: 13px 20px;
+        border: none;
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .matt-steel-table thead th:last-child {
+        border-right: none;
+    }
+
+    .matt-steel-table thead th .th-content {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+    }
+
+    .matt-steel-table thead th .th-text {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .matt-steel-table thead th .th-glyph-fx {
+        color: #38bdf8;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 14.5px;
+        font-family: 'Times New Roman', serif;
+        line-height: 1;
+    }
+
+    .matt-steel-table thead th .th-glyph-sigma {
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    .matt-steel-table thead th.sortable-th {
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s ease;
+    }
+
+    .matt-steel-table thead th.sortable-th:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* ─── Table Body Rows & Cells (Centered, Minimalist, Same Background Across Columns) ─── */
+    .matt-steel-table tbody tr.feed-pay-row {
+        transition: background 0.18s ease;
+        cursor: pointer;
+    }
+
+    .matt-steel-table tbody tr.feed-pay-row td {
+        background: #090e18;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-right: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 0;
+        height: 48px;
+        vertical-align: middle;
+        text-align: center;
+        white-space: nowrap;
+        transition: background 0.18s ease;
+    }
+
+    .matt-steel-table tbody tr.feed-pay-row td:last-child {
+        border-right: none;
+    }
+
+    /* Row Hover */
+    .matt-steel-table tbody tr.feed-pay-row:hover td {
+        background: #0d1524;
+    }
+
+    /* Row Selected State */
+    .matt-steel-table tbody tr.feed-pay-row.row-selected td {
+        background: rgba(14, 165, 233, 0.12) !important;
+        border-bottom-color: rgba(56, 189, 248, 0.2);
+    }
+
+    /* ─── Actions Column: Hidden by Default, Only Appears When Any Row Is Selected ─── */
+    table#feedPaymentTable th.th-actions,
+    table#feedPaymentTable td.td-actions {
+        display: none;
+    }
+
+    table#feedPaymentTable.has-selection th.th-actions,
+    table#feedPaymentTable.has-selection td.td-actions {
+        display: table-cell;
+    }
+
+    /* ─── Editable Cells: Centered, Dynamic Size, Sleek Focus ─── */
+    .feed-table-cell-input {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        outline: none;
+        padding: 13px 14px;
+        margin: 0;
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        transition: all 0.15s ease;
+    }
+
+    /* Account Number Cell Input - Center Aligned */
+    .feed-table-cell-input.ano-input {
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+        text-align: center;
+    }
+
+    /* Date Cell Input - Center Aligned */
+    .feed-table-cell-input.date-input {
+        color: #cbd5e1;
+        font-weight: 400;
+        font-size: 13.5px;
+        text-align: center;
+    }
+
+    /* Focus State: High-precision glassy blue glow */
+    .feed-table-cell-input:focus {
+        border-color: rgba(56, 189, 248, 0.6);
+        background: rgba(14, 165, 233, 0.08);
+        box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+    }
+
+    .feed-table-cell-input:hover:not(:focus) {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Wrapper for Account Number with indicator dots */
+    .row-ano-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+    }
+
+    .row-warn-dot {
+        position: absolute;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        pointer-events: auto;
+    }
+
+    .row-warn-dot.unmapped {
+        background: #f59e0b;
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+    }
+
+    .row-warn-dot.duplicate {
+        background: #ef4444;
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+    }
+
+    /* Wrapper for Date Cell with subtle calendar trigger */
+    .date-cell-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+    }
+
+    .cell-date-picker-icon {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: #475569;
+        padding: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        opacity: 0;
+        transition: opacity 0.15s ease, color 0.15s ease;
+        outline: none;
+    }
+
+    .date-cell-wrap:hover .cell-date-picker-icon,
+    .date-cell-wrap:focus-within .cell-date-picker-icon {
+        opacity: 1;
+    }
+
+    .cell-date-picker-icon:hover {
+        color: #38bdf8;
+    }
+
+    /* Wrapper for Amount Cell with ₹ prefix - Centered */
+    .amt-cell-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+        box-sizing: border-box;
+    }
+
+    .amt-currency-symbol {
+        color: #64748b;
+        font-size: 13.5px;
+        font-weight: 500;
+        margin-right: 4px;
+        user-select: none;
+    }
+
+    .feed-table-cell-input.amt-input {
+        padding: 13px 0;
+        color: #cbd5e1;
+        font-weight: 400;
+        font-size: 13.5px;
+        text-align: center;
+        width: auto;
+    }
+
+    .amt-cell-wrap:focus-within {
+        border-color: rgba(56, 189, 248, 0.6);
+        background: rgba(14, 165, 233, 0.08);
+        box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+        border-radius: 4px;
+    }
+
+    /* Cumulative Cell: Pure text typography, centered */
+    .cell-plain-val {
+        display: block;
+        padding: 13px 20px;
+        color: #94a3b8;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13.5px;
+        font-weight: 400;
+        text-align: center;
+        user-select: none;
+    }
+
+    /* Row Actions on Selection: Green Tick & Red Dustbin with Animation */
+    .row-actions-container {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        opacity: 0;
+        transform: scale(0.65) translateY(2px);
+        pointer-events: none;
+        transition: opacity 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+        white-space: nowrap;
+    }
+
+    .feed-pay-row.row-selected .row-actions-container {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: auto;
+    }
+
+    .posting-action-circle {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        outline: none;
+    }
+
+    .posting-action-circle.submit {
+        background: rgba(16, 185, 129, 0.22);
+        border-color: rgba(16, 185, 129, 0.6);
+        color: #34d399;
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    }
+
+    .posting-action-circle.submit:hover {
+        background: #10b981;
+        border-color: #10b981;
+        color: #ffffff;
+        transform: scale(1.12);
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+    }
+
+    .posting-action-circle.delete {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: rgba(239, 68, 68, 0.6);
+        color: #f87171;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+    }
+
+    .posting-action-circle.delete:hover {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #ffffff;
+        transform: scale(1.12);
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
+    }
+
+    /* Subtle row warning indicators */
+    .row-ano-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .row-warn-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .row-warn-dot.unmapped {
+        background: #ef4444;
+        box-shadow: 0 0 8px #ef4444;
+    }
+    .row-warn-dot.duplicate {
+        background: #f59e0b;
+        box-shadow: 0 0 8px #f59e0b;
+    }
+
     .payment-total-badge {
         background: rgba(16, 185, 129, 0.1);
         border: 1px solid rgba(16, 185, 129, 0.25);
@@ -4177,25 +4601,17 @@
                     </div>
                     <h5 class="posting-title">Temporary Payments Queue</h5>
                     <span class="posting-count-pill"><i class="fas fa-layer-group me-1"></i> {{ payments_count }} Records</span>
-                    <div class="posting-topbar-divider"></div>
-                    <div class="toolbar-filter-pill">
-                        <i class="fas fa-filter text-secondary" style="font-size: 11px;"></i>
-                        <span class="toolbar-label">Group By:</span>
-                        <select id="groupBy" class="toolbar-select">
-                            <option value="none">None</option>
-                            <option value="date">Date</option>
-                            <option value="ano">Account No</option>
-                        </select>
-                    </div>
-                    <select id="groupSelect" class="toolbar-select toolbar-filter-pill" style="display:none;"></select>
                 </div>
 
                 <div class="posting-topbar-right">
                     <button id="feedSelectAllBtn" class="posting-tool-btn" onclick="toggleSelectAllFeedPayments()">
                         <i class="fas fa-check-square me-1"></i> Select All
                     </button>
-                    <button id="acceptBtn" class="posting-tool-btn primary-btn" onclick="acceptSelected()">
-                        <i class="fas fa-check-double me-1"></i> Accept Selected
+                    <button id="acceptBtn" class="posting-tool-btn primary-btn" onclick="acceptSelected()" style="display: none;">
+                        <i class="fas fa-check-double me-1"></i> Submit
+                    </button>
+                    <button id="deleteSelectedBtn" class="posting-tool-btn danger-btn" onclick="deleteSelectedPayments()" style="display: none;">
+                        <i class="fas fa-trash-alt me-1"></i> Delete
                     </button>
                     <div class="payment-total-badge" id="paymentTotalBadge">
                         <span id="totalBadgeLabel">Total:</span> <strong>₹<span id="selectedTotal">0</span></strong>
@@ -4209,86 +4625,132 @@
                 <!-- Date Filter Tiles Container (shown dynamically if 2+ unique dates exist) -->
                 <div id="feedDateTilesContainer" class="posting-date-tiles-track" style="display: none; margin-bottom: 14px;"></div>
 
-                <div class="admin-table-wrapper table-responsive">
-                    <table id="feedPaymentTable" class="admin-table customer-table payment-feed-table table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:46px; text-align:center;">
-                                    <label class="modern-check-label">
-                                        <input type="checkbox" id="feedHeaderCheck" style="display:none;" onchange="toggleSelectAllFeedPayments(this)">
-                                        <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
-                                    </label>
-                                </th>
-                                <th style="min-width: 140px;">Account Number</th>
-                                <th style="min-width: 140px;">Payment Date</th>
-                                <th style="min-width: 140px;">Amount Paid</th>
-                                <th style="min-width: 130px;">Cumulative</th>
-                                <th style="min-width: 120px;">Status</th>
-                                <th class="text-end" style="width:130px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in payments %}
-                            {% set date_parts = row.pdt.split('-') %}
-                            {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
-                            {% set row_ano = row.edit.ano if (row.edit and row.edit.ano) else row.ano %}
-                            {% set row_amt = row.edit.amt if (row.edit and row.edit.amt) else row.amt %}
-                            {% set row_pdt = row.edit.pdt if (row.edit and row.edit.pdt) else row.pdt %}
-                            <tr id="pay-row-{{ row.feed_payment_id }}"
-                                data-feed-id="{{ row.feed_payment_id }}"
-                                data-date="{{ row_pdt }}"
-                                data-iso-date="{{ iso_date }}"
-                                data-ano="{{ row_ano }}"
-                                data-amount="{{ row_amt }}"
-                                data-cid="{{ row.cid if row.cid else '' }}"
-                                class="feed-pay-row {% if not row.cid %}row-unmapped{% endif %}">
-                                <td style="text-align:center;">
-                                    <label class="modern-check-label">
-                                        <input type="checkbox" class="pay-checkbox" style="display:none;" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()">
-                                        <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
-                                    </label>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap">
-                                        <span class="posting-affix">#</span>
-                                        <input type="text" class="feed-inline-input ano-input" value="{{ row_ano }}" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'ano')">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap" style="max-width: 155px;">
-                                        <input type="date" class="feed-inline-input date-input" value="{{ iso_date }}" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'pdt')">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap">
-                                        <span class="posting-affix">₹</span>
-                                        <input type="number" class="feed-inline-input amt-input" value="{{ row_amt }}" step="any" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'amt')">
-                                    </div>
-                                </td>
-                                <td class="cumulative-cell">
-                                    <span class="posting-cumul-badge posting-cumul-readonly" title="Auto-calculated running balance (Read-Only)"><i class="fas fa-calculator me-1 text-muted" style="font-size: 10px;"></i> <span>₹0</span></span>
-                                </td>
-                                <td class="status-cell">
-                                    {% if not row.cid %}
-                                    <span class="feed-status-pill status-unmapped" title="Account unmapped for this village"><i class="fas fa-exclamation-triangle me-1"></i> Unmapped</span>
-                                    {% else %}
-                                    <span class="feed-status-pill status-pending"><i class="fas fa-clock me-1"></i> Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    <div class="posting-actions-cell">
-                                        <button type="button" class="posting-btn-action accept btn-accept-row" title="Accept payment entry" onclick="acceptSinglePaymentRow('{{ row.feed_payment_id }}', this)">
-                                            <i class="fas fa-check"></i> <span>Accept</span>
-                                        </button>
-                                        <button type="button" class="posting-btn-action delete" title="Delete entry" onclick="deletePayment('{{ row.feed_payment_id }}')">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="posting-table-stage">
+                    <div class="admin-table-wrapper table-responsive matt-steel-table">
+                        <table id="feedPaymentTable" class="payment-feed-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="th-check" style="width: 44px; text-align: center;">
+                                        <label class="modern-check-label">
+                                            <input type="checkbox" id="feedHeaderCheck" style="display:none;" onchange="toggleSelectAllFeedPayments(this)">
+                                            <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
+                                        </label>
+                                    </th>
+                                    <th class="sortable-th col-ano" data-col="ano" title="Click to sort by Account Number">
+                                        <div class="th-content">
+                                            <span class="th-text">Account Number</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-pdt" data-col="pdt" title="Click to sort by Payment Date">
+                                        <div class="th-content">
+                                            <span class="th-text">Payment Date</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-amt" data-col="amt" title="Click to sort by Amount Paid">
+                                        <div class="th-content">
+                                            <span class="th-glyph-fx">𝑓𝑥</span>
+                                            <span class="th-text">Amount Paid</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-cumulative" data-col="cumulative" title="Click to sort by Cumulative Balance">
+                                        <div class="th-content">
+                                            <span class="th-glyph-sigma">&Sigma;</span>
+                                            <span class="th-text">Cumulative</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="th-actions" style="width: 90px; text-align: center;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in payments %}
+                                {% set row_ano = row.edit.ano if (row.edit and row.edit.ano) else row.ano %}
+                                {% set row_amt = row.edit.amt if (row.edit and row.edit.amt) else row.amt %}
+                                {% set row_pdt = row.display_date if row.display_date else (row.edit.pdt if (row.edit and row.edit.pdt) else row.pdt) %}
+                                {% set row_iso = row.iso_date if row.iso_date else '' %}
+                                <tr id="pay-row-{{ row.feed_payment_id }}"
+                                    data-feed-id="{{ row.feed_payment_id }}"
+                                    data-date="{{ row_pdt }}"
+                                    data-iso-date="{{ row_iso }}"
+                                    data-ano="{{ row_ano }}"
+                                    data-amount="{{ row_amt }}"
+                                    data-cid="{{ row.cid if row.cid else '' }}"
+                                    class="feed-pay-row {% if not row.cid %}row-unmapped{% endif %}">
+                                    <td class="td-check" style="text-align: center;">
+                                        <label class="modern-check-label">
+                                            <input type="checkbox" class="pay-checkbox" style="display:none;" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()">
+                                            <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
+                                        </label>
+                                    </td>
+                                    <td class="col-ano">
+                                        <div class="row-ano-wrap">
+                                            <input type="text"
+                                                   class="feed-table-cell-input ano-input"
+                                                   value="{{ row_ano }}"
+                                                   size="7"
+                                                   autocomplete="off"
+                                                   spellcheck="false"
+                                                   onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'ano')">
+                                            {% if not row.cid %}
+                                            <span class="row-warn-dot unmapped" title="Unmapped account for this village"></span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="col-date">
+                                        <div class="date-cell-wrap">
+                                            <input type="text"
+                                                   class="feed-table-cell-input date-input"
+                                                   value="{{ row_pdt }}"
+                                                   placeholder="DD-MM-YYYY"
+                                                   pattern="\d{2}-\d{2}-\d{4}"
+                                                   size="10"
+                                                   autocomplete="off"
+                                                   title="Date format: DD-MM-YYYY (Double click to open calendar)"
+                                                   onchange="onInlineDateTextEdit(this, '{{ row.feed_payment_id }}')"
+                                                   ondblclick="openNativeDatePicker(this)">
+                                            <button type="button" class="cell-date-picker-icon" onclick="openNativeDatePicker(this)" title="Choose date from calendar">
+                                                <i class="fas fa-calendar-alt"></i>
+                                            </button>
+                                            <input type="date"
+                                                   class="hidden-date-trigger"
+                                                   value="{{ row_iso }}"
+                                                   style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;"
+                                                   onchange="onHiddenDatePicked(this, '{{ row.feed_payment_id }}')">
+                                        </div>
+                                    </td>
+                                    <td class="col-amt">
+                                        <div class="amt-cell-wrap">
+                                            <span class="amt-currency-symbol">₹</span>
+                                            <input type="number"
+                                                   class="feed-table-cell-input amt-input"
+                                                   value="{{ row_amt }}"
+                                                   step="any"
+                                                   size="8"
+                                                   autocomplete="off"
+                                                   onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'amt')">
+                                        </div>
+                                    </td>
+                                    <td class="cumulative-cell">
+                                        <span class="cell-plain-val cumul-val">₹0</span>
+                                    </td>
+                                    <td class="td-actions text-center">
+                                        <div class="row-actions-container">
+                                            <button type="button" class="posting-action-circle submit" title="Submit this payment" onclick="acceptSinglePaymentRow('{{ row.feed_payment_id }}', this)">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button type="button" class="posting-action-circle delete" title="Delete this entry" onclick="deletePayment('{{ row.feed_payment_id }}')">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% else %}
                 <div class="empty-state-card">
@@ -4484,6 +4946,7 @@
                     <select id="edit_pay_type" class="search-input">
                         <option value="cash">Cash</option>
                         <option value="upi">UPI</option>
+                        <option value="partial">Partial (Cash + UPI)</option>
                     </select>
                 </div>
             </div>

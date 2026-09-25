@@ -211,6 +211,22 @@ def ensure_feed_tables_exist(cur):
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    # Ensure payment.payment_type check constraint includes 'partial'
+    try:
+        cur.execute("""
+            SELECT pg_get_constraintdef(c.oid)
+            FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid
+            WHERE t.relname = 'payment' AND c.conname = 'payment_payment_type_chk'
+        """)
+        chk_row = cur.fetchone()
+        if chk_row and "'partial'" not in chk_row[0]:
+            cur.execute("""
+                ALTER TABLE payment DROP CONSTRAINT IF EXISTS payment_payment_type_chk;
+                ALTER TABLE payment ADD CONSTRAINT payment_payment_type_chk 
+                    CHECK (lower(payment_type) = ANY (ARRAY['cash', 'upi', 'partial', 'mixed']));
+            """)
+    except Exception:
+        pass
 
 
 def ensure_user_devices_table(cur):
@@ -8202,8 +8218,10 @@ def feed():
 
         payments = [dict(zip(columns, r)) for r in rows]
         for p in payments:
-            if p.get("pdt"):
-                p["pdt"] = format_date_display(p["pdt"])
+            raw_pdt = p.get("pdt")
+            p["display_date"] = format_date_display(raw_pdt)
+            p["iso_date"] = format_date_iso(raw_pdt)
+            p["pdt"] = p["display_date"]
 
         cur.execute("""
             SELECT
@@ -9606,6 +9624,61 @@ def delete_payment_feed(feed_payment_id):
         if conn:
             conn.rollback()
         logger.error(f"Error deleting payment feed item: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+@app.post("/feed/payment/delete_batch")
+@login_required
+def delete_payment_batch():
+    data = request.get_json() or {}
+    ids = data.get("ids", [])
+    try:
+        ids = [int(i) for i in ids]
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid IDs format"}), 400
+
+    if not ids:
+        return jsonify({"success": False, "error": "No payments selected"}), 400
+
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # Find local_uuids to clean up associated pending edits
+        cur.execute("SELECT local_uuid FROM payment_feed_items WHERE feed_payment_id = ANY(%s::bigint[]) AND local_uuid IS NOT NULL", (ids,))
+        local_uuids = [r[0] for r in cur.fetchall() if r[0]]
+
+        cur.execute("DELETE FROM payment_feed_items WHERE feed_payment_id = ANY(%s::bigint[])", (ids,))
+        if local_uuids:
+            try:
+                cur.execute("DELETE FROM payment_feed_edits WHERE local_uuid = ANY(%s)", (local_uuids,))
+            except Exception:
+                pass
+
+        conn.commit()
+        audit_log(
+            action="delete_payment_batch",
+            entity_type="payment_feed",
+            entity_id=None,
+            details={
+                "deleted_by": session.get("employee_id") or session.get("eid"),
+                "count": len(ids),
+                "ids": ids
+            }
+        )
+        return jsonify({"success": True, "count": len(ids)})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error batch deleting payment feed items: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if cur:
@@ -13335,6 +13408,18 @@ def api_geocode_coordinates():
 # ----------------------------------------------------
 # EMPLOYEE DB HELPERS (Postgres)
 # ----------------------------------------------------
+def get_employee_photo_url(eid):
+    """Return URL of employee photo if it exists on disk, else None (0 DB changes)."""
+    upload_dir = os.path.join(app.root_path, 'static', 'uploads', 'employees')
+    if not os.path.exists(upload_dir):
+        return None
+    for ext in ['.jpg', '.jpeg', '.png', '.webp']:
+        path = os.path.join(upload_dir, f"{eid}{ext}")
+        if os.path.exists(path):
+            mtime = int(os.path.getmtime(path))
+            return f"/static/uploads/employees/{eid}{ext}?v={mtime}"
+    return None
+
 def get_all_employees():
     conn = get_pg_connection()
     cur = conn.cursor()
@@ -13359,7 +13444,12 @@ def get_all_employees():
     cur.close()
     conn.close()
 
-    return [dict(zip(headers, r)) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(zip(headers, r))
+        d['photo_url'] = get_employee_photo_url(d['eid'])
+        result.append(d)
+    return result
 
 
 def update_employee_in_db(data):
@@ -13540,6 +13630,225 @@ def delete_employee():
         return jsonify(success=True)
     except Exception as e:
         return jsonify(success=False, error=str(e))
+
+@app.route("/employee/<int:eid>")
+@login_required
+@admin_required
+def employee_detail_page(eid):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Fetch employee details
+        cur.execute("""
+            SELECT eid, name, phone_number, city, state, joining_date, level, is_active, created_at
+            FROM employee
+            WHERE eid = %s
+        """, (eid,))
+        emp_row = cur.fetchone()
+        if not emp_row:
+            flash("Employee not found", "danger")
+            return redirect(url_for("employee_page"))
+        
+        emp_headers = [desc[0] for desc in cur.description]
+        emp = dict(zip(emp_headers, emp_row))
+        emp['photo_url'] = get_employee_photo_url(eid)
+
+        # 2. Fetch linked user account
+        cur.execute("""
+            SELECT id, username, is_active, created_at
+            FROM users
+            WHERE employee_id = %s
+            LIMIT 1
+        """, (eid,))
+        user_row = cur.fetchone()
+        user = None
+        user_id = None
+        if user_row:
+            user = {
+                "id": user_row[0],
+                "username": user_row[1],
+                "is_active": user_row[2],
+                "created_at": user_row[3]
+            }
+            user_id = user["id"]
+
+        # 3. Fetch registered devices (if user exists)
+        devices = []
+        if user_id:
+            ensure_user_devices_table(cur)
+            cur.execute("""
+                SELECT id, device_id, device_model, last_active, is_active
+                FROM user_devices
+                WHERE user_id = %s
+                ORDER BY last_active DESC NULLS LAST, id DESC
+            """, (user_id,))
+            for r in cur.fetchall():
+                is_pending = (r[1] == 'PENDING')
+                formatted_last_active = "Never" if (is_pending or not r[3]) else r[3].strftime("%d-%m-%Y %I:%M %p")
+                devices.append({
+                    "id": r[0],
+                    "device_id": "Pending Bind" if is_pending else r[1],
+                    "raw_device_id": r[1],
+                    "device_model": r[2] or "Mobile Device",
+                    "last_active": formatted_last_active,
+                    "is_active": r[4]
+                })
+
+        # 4. Fetch assigned villages
+        assigned_vids = set()
+        if user_id:
+            cur.execute("SELECT village_id FROM user_village_access WHERE user_id = %s", (user_id,))
+            assigned_vids.update(r[0] for r in cur.fetchall())
+
+        cur.execute("SELECT vid FROM village WHERE emp1 = %s OR emp2 = %s", (eid, eid))
+        assigned_vids.update(r[0] for r in cur.fetchall())
+
+        # 5. Fetch all villages
+        cur.execute("SELECT vid, village_name, district FROM village ORDER BY village_name")
+        all_villages = [
+            {
+                "vid": r[0],
+                "village_name": r[1],
+                "district": r[2] or "",
+                "is_assigned": r[0] in assigned_vids
+            }
+            for r in cur.fetchall()
+        ]
+
+        assigned_villages = [v for v in all_villages if v["is_assigned"]]
+
+        user_level = session.get("level")
+        is_admin = (user_level in ["admin", "superadmin"])
+
+        return render_template(
+            "employee_detail.html",
+            emp=emp,
+            user=user,
+            devices=devices,
+            assigned_villages=assigned_villages,
+            all_villages=all_villages,
+            user_level=user_level,
+            is_admin=is_admin
+        )
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/employee/upload_photo", methods=["POST"])
+@login_required
+@admin_required
+def upload_employee_photo():
+    eid = request.form.get("eid")
+    if not eid:
+        return jsonify(success=False, error="Employee ID is required"), 400
+    
+    if "photo" not in request.files:
+        return jsonify(success=False, error="No photo file provided"), 400
+    
+    file = request.files["photo"]
+    if not file or not file.filename:
+        return jsonify(success=False, error="No file selected"), 400
+    
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        return jsonify(success=False, error="Invalid image type. Supported: JPG, PNG, WEBP"), 400
+    
+    upload_dir = os.path.join(app.root_path, "static", "uploads", "employees")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Remove older formats
+    for old_ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        old_file = os.path.join(upload_dir, f"{eid}{old_ext}")
+        if os.path.exists(old_file):
+            try:
+                os.remove(old_file)
+            except Exception:
+                pass
+                
+    save_path = os.path.join(upload_dir, f"{eid}{ext}")
+    file.save(save_path)
+    
+    mtime = int(os.path.getmtime(save_path))
+    new_url = f"/static/uploads/employees/{eid}{ext}?v={mtime}"
+    
+    return jsonify(success=True, photo_url=new_url)
+
+@app.route("/api/employee/<int:eid>/update_villages", methods=["POST"])
+@login_required
+@admin_required
+def update_employee_villages(eid):
+    data = request.get_json() or {}
+    village_ids = data.get("village_ids", [])
+    
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # Check if user exists for this employee
+        cur.execute("SELECT id FROM users WHERE employee_id = %s", (eid,))
+        user_row = cur.fetchone()
+        if user_row:
+            user_id = user_row[0]
+            cur.execute("DELETE FROM user_village_access WHERE user_id = %s", (user_id,))
+            for vid in village_ids:
+                cur.execute("INSERT INTO user_village_access (user_id, village_id) VALUES (%s, %s)", (user_id, vid))
+        
+        conn.commit()
+        return jsonify(ok=True, success=True)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(ok=False, success=False, error=str(e)), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/employee/<int:eid>/create_user", methods=["POST"])
+@login_required
+@admin_required
+def create_employee_user(eid):
+    if session.get("level") not in ["admin", "superadmin"]:
+        return jsonify(ok=False, msg="Admin privilege required"), 403
+
+    data = request.get_json() or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify(ok=False, msg="Username and password are required")
+
+    hashed = generate_password_hash(password, method="pbkdf2:sha256")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
+        if cur.fetchone():
+            return jsonify(ok=False, msg=f"Username '{username}' already exists")
+
+        cur.execute("""
+            INSERT INTO users (username, password_hash, employee_id, is_active)
+            VALUES (%s, %s, %s, TRUE)
+            RETURNING id
+        """, (username, hashed, eid))
+        new_uid = cur.fetchone()[0]
+
+        # Auto-assign villages from village table where emp1 or emp2 is eid
+        cur.execute("SELECT vid FROM village WHERE emp1 = %s OR emp2 = %s", (eid, eid))
+        vids = cur.fetchall()
+        for v in vids:
+            cur.execute("""
+                INSERT INTO user_village_access (user_id, village_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+            """, (new_uid, v[0]))
+
+        conn.commit()
+        return jsonify(ok=True, success=True, user_id=new_uid, username=username)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(ok=False, msg=str(e))
+    finally:
+        cur.close()
+        conn.close()
 # ----------------------------------------------------
 # ROUTES
 # ----------------------------------------------------
@@ -14023,6 +14332,9 @@ def delete_user():
 @login_required
 @admin_required
 def reset_user_device():
+    if session.get("level") not in ("admin", "superadmin"):
+        return jsonify(ok=False, msg="Access denied: Admin role required"), 403
+
     data = request.get_json()
     user_id = data.get("id") if data else None
 
@@ -14103,6 +14415,9 @@ def reset_user_password():
 @app.route("/api/users/toggle_status", methods=["POST"])
 @admin_required
 def toggle_user_status():
+    if session.get("level") not in ("admin", "superadmin"):
+        return jsonify(ok=False, msg="Access denied: Admin role required"), 403
+
     data = request.get_json()
     user_id = data.get("id")
 
@@ -15416,7 +15731,7 @@ def generate_download_link():
       - employee_id: int
     Generates a cryptographically signed token valid for 30 minutes.
     """
-    if session.get("level") not in ("admin", "mgmt", "superadmin"):
+    if session.get("level") not in ("admin", "superadmin"):
         return jsonify({"error": "admin access required"}), 403
 
     data = request.json or {}

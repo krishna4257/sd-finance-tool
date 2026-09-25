@@ -64,35 +64,55 @@
         <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Use for current collections</p>
       </div>
 
+      <!-- Lifecycle Status Banner -->
+      <div id="lifecycleStatusBanner" class="p-3.5 rounded-2xl bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border text-xs flex items-center gap-2.5 transition-all">
+        <i data-lucide="loader" class="w-4 h-4 animate-spin text-slate-400"></i>
+        <span>Checking scheme status...</span>
+      </div>
+
       <!-- Size & Timing Section -->
       <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-chitDark-border">
         <div>
           <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">Size & timing</h3>
-          <p class="text-xs text-slate-400 dark:text-slate-500">Key fields</p>
+          <p class="text-xs text-slate-400 dark:text-slate-500">Key fields — adjust members, duration, and start month</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Member Shares -->
           <div class="space-y-1.5">
             <div class="flex justify-between text-xs">
               <span class="font-bold text-slate-700 dark:text-slate-300">Member shares *</span>
               <span class="text-slate-400 dark:text-slate-500" id="assignedSharesBadge">20 of 20 assigned</span>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" onclick="adjustShares(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">-</button>
-              <input type="number" id="editMemberShares" readonly class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl">
-              <button type="button" onclick="adjustShares(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">+</button>
+              <button type="button" onclick="adjustShares(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-chitDark-elevated">-</button>
+              <input type="number" id="editMemberShares" min="2" max="100" oninput="onMemberSharesChanged()" class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100">
+              <button type="button" onclick="adjustShares(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-chitDark-elevated">+</button>
+            </div>
+            <div class="flex items-center gap-1.5 pt-1">
+              <button type="button" onclick="setShares(10)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">10</button>
+              <button type="button" onclick="setShares(20)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">20</button>
+              <button type="button" onclick="setShares(25)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">25</button>
+              <button type="button" onclick="setShares(50)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">50</button>
             </div>
           </div>
 
+          <!-- Duration (Months) -->
           <div class="space-y-1.5">
             <div class="flex justify-between text-xs">
-              <span class="font-bold text-slate-700 dark:text-slate-300">Duration *</span>
+              <span class="font-bold text-slate-700 dark:text-slate-300">Duration (Months) *</span>
               <span class="text-slate-400 dark:text-slate-500" id="durationBadge">20 planned, 20 filled</span>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" onclick="adjustDuration(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">-</button>
-              <input type="number" id="editDuration" readonly class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl">
-              <button type="button" onclick="adjustDuration(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated">+</button>
+              <button type="button" id="btnDurMinus" onclick="adjustDuration(-1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-chitDark-elevated">-</button>
+              <input type="number" id="editDuration" min="2" max="100" oninput="onDurationChanged()" class="w-full h-10 text-center font-extrabold text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100">
+              <button type="button" id="btnDurPlus" onclick="adjustDuration(1)" class="h-10 w-10 rounded-xl border border-slate-200 dark:border-chitDark-border bg-slate-50 dark:bg-chitDark-bg text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-chitDark-elevated">+</button>
+            </div>
+            <div id="durationPresetsContainer" class="flex items-center gap-1.5 pt-1">
+              <button type="button" onclick="setDuration(10)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">10M</button>
+              <button type="button" onclick="setDuration(20)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">20M</button>
+              <button type="button" onclick="setDuration(25)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">25M</button>
+              <button type="button" onclick="setDuration(50)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">50M</button>
             </div>
           </div>
         </div>
@@ -104,16 +124,22 @@
           </div>
           <div class="bg-slate-50 dark:bg-chitDark-bg p-3 rounded-xl border border-slate-100 dark:border-chitDark-border">
             <p class="font-bold text-slate-700 dark:text-slate-300">MONTHS LIVE: <span id="monthsLiveDisplay" class="font-mono font-extrabold">20 / 20</span></p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Duration and monthly plan are ready.</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5" id="monthsLiveDesc">Duration and monthly plan are ready.</p>
           </div>
         </div>
       </div>
 
       <!-- Start Month -->
       <div class="space-y-1.5 pt-4 border-t border-slate-100 dark:border-chitDark-border">
-        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Start Month *</label>
-        <input type="month" id="editStartMonth" class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100">
-        <p class="text-[11px] text-slate-400 dark:text-slate-500">Changing the start month shifts dashboard months only before this chit has payments, lifts, or closed months.</p>
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Start Month *</label>
+          <div id="startMonthQuickBtns" class="flex items-center gap-2">
+            <button type="button" onclick="setEditStartMonthQuick(0)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">This month</button>
+            <button type="button" onclick="setEditStartMonthQuick(1)" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.05]">Next month</button>
+          </div>
+        </div>
+        <input type="month" id="editStartMonth" class="w-full h-11 px-3.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100">
+        <p class="text-[11px] text-slate-400 dark:text-slate-500" id="startMonthHelperText">Changing start month updates the entire schedule and dashboard month timeline when the scheme has 0 payments.</p>
       </div>
 
       <!-- Headline Value -->
@@ -218,47 +244,96 @@
 
   <!-- ==================== TAB 2: MEMBERS ==================== -->
   <div id="tabContentMembers" class="space-y-6 hidden">
-    <div class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border shadow-sm space-y-5">
-      <div class="flex items-center justify-between">
+    <div class="cb-card card-shine p-6 md:p-8 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border shadow-sm space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Members</h3>
-          <p class="text-xs text-slate-400 dark:text-slate-500" id="membersTabCounterLabel">Loading members...</p>
+          <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Enrolled Members</h3>
+          <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5" id="membersTabCounterLabel">Loading members...</p>
         </div>
-        <button type="button" onclick="openAddMemberToGroupModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-sm flex items-center gap-1">
-          <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[1.8]"></i>
-          <span>Add Member</span>
-        </button>
-      </div>
-
-      <!-- Bulk Installment Plan Action Bar -->
-      <div class="flex items-center justify-between flex-wrap gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-chitDark-bg border border-slate-200/80 dark:border-chitDark-border">
         <div class="flex items-center gap-2">
-          <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Set All Members Plan:</span>
-          <button type="button" onclick="bulkChangeInstallmentType('incremental')" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-chitDark-elevated transition-all cursor-pointer">
-            All Incremental
+          <button type="button" onclick="selectAllAvailableForGroup()" class="px-3 h-9 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated shadow-2xs">
+            Select All
           </button>
-          <button type="button" onclick="bulkChangeInstallmentType('fixed')" class="px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all cursor-pointer">
-            All Fixed
+          <button type="button" onclick="toggleEditQuickAddBox()" class="px-3 h-9 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.05]">
+            + Quick Add
+          </button>
+          <button type="button" onclick="openAddMemberToGroupModal()" class="px-3.5 h-9 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 shadow-sm flex items-center gap-1">
+            <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+            <span>Custom Add</span>
           </button>
         </div>
-        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono" id="editFixedAmountBadge">Fixed: ₹0/mo</span>
       </div>
 
-      <!-- Open Seats Quick Action Banner -->
-      <div id="unfilledSeatsBanner" class="hidden p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/80 dark:border-amber-800/30 flex items-center justify-between text-xs">
-        <div>
-          <p class="font-extrabold text-amber-950 dark:text-amber-100 text-xs" id="unfilledSeatsBannerTitle">Seats still open</p>
-          <p class="text-[11px] text-amber-800 dark:text-amber-400/90 dark:text-amber-200/90 mt-0.5">Click "Fill Seat" to select from customer directory or register a new customer.</p>
+      <!-- Quick Add New Subscribers Inline Grid -->
+      <div id="editQuickAddBox" class="hidden p-4 rounded-2xl bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Register new subscribers directly (with unique Account Numbers):</p>
+          <span class="text-[10px] text-slate-400 dark:text-slate-500">Account # must be unique</span>
         </div>
-        <button type="button" onclick="openAddMemberToGroupModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-bold text-xs shadow-sm hover:bg-slate-800 dark:hover:bg-slate-200 flex items-center gap-1.5">
-          <i data-lucide="user-plus" class="w-3.5 h-3.5 stroke-[1.8]"></i>
-          <span>Fill Seat Now</span>
-        </button>
+        <div id="editQuickAddRowsContainer" class="space-y-2">
+          <!-- Injected via JS -->
+        </div>
+        <div class="flex justify-between items-center pt-2 border-t border-slate-200/60 dark:border-chitDark-border">
+          <button type="button" onclick="addEditQuickAddRow()" class="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline">+ Add another row</button>
+          <button type="button" onclick="saveEditQuickAddMembers()" class="px-4 py-1.5 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors">Create & Enroll</button>
+        </div>
       </div>
 
-      <!-- Member Rows with Steppers & Joining/Splits Drawer -->
-      <div id="editGroupMembersContainer" class="space-y-3">
-        <!-- Injected via JS -->
+      <!-- Customer Directory Chips Selector (Click to Enroll / Unenroll) -->
+      <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-chitDark-border">
+        <div class="flex items-center gap-2">
+          <div class="flex-1 relative">
+            <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-3.5 h-3.5 stroke-[1.8]"></i>
+            <input type="text" id="editCustomerSearchInput" oninput="renderEditAvailableChips()" placeholder="Search directory by name or phone..."
+                   class="w-full h-10 pl-9 pr-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs dark:text-slate-100 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-chitDark-surface focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100">
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+            <span>SUBSCRIBER DIRECTORY (CLICK TO ENROLL / UNENROLL):</span>
+            <span id="editAvailableChipsBadge">Loading...</span>
+          </div>
+          <div id="editAvailableChipsContainer" class="max-h-28 overflow-y-auto p-2 border border-slate-200 dark:border-chitDark-border rounded-2xl bg-slate-50/50 dark:bg-chitDark-bg flex flex-wrap gap-2 transition-all">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Installment Plan Action Bar & Duplicate Alert -->
+      <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-chitDark-border">
+        <div class="flex items-center justify-between flex-wrap gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-chitDark-bg border border-slate-200/80 dark:border-chitDark-border">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Set All Members Plan:</span>
+            <button type="button" onclick="bulkChangeInstallmentType('incremental')" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-chitDark-elevated transition-all cursor-pointer">
+              All Incremental
+            </button>
+            <button type="button" onclick="bulkChangeInstallmentType('fixed')" class="px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all cursor-pointer">
+              All Fixed
+            </button>
+          </div>
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono" id="editFixedAmountBadge">Fixed: ₹0/mo</span>
+        </div>
+
+        <!-- Duplicate Account Warning Alert -->
+        <div id="editAccountDuplicateWarning" class="hidden p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-xs font-semibold flex items-start gap-2.5">
+          <i data-lucide="alert-triangle" class="text-rose-600 dark:text-rose-500 mt-0.5 shrink-0 w-4 h-4 stroke-[1.8]"></i>
+          <div>
+            <p class="font-bold">Duplicate Account Number Detected!</p>
+            <p class="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5" id="editAccountDuplicateWarningText">Each subscriber in this chit scheme must have a unique account number.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enrolled Member Cards List -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">SELECTED SUBSCRIBERS — SET ACCOUNT # & SHARES</p>
+          <span class="text-[11px] text-slate-400 dark:text-slate-500">Edit account # or share multiplier directly</span>
+        </div>
+        <div id="editGroupMembersContainer" class="space-y-3">
+          <!-- Injected via JS -->
+        </div>
       </div>
 
       <!-- Footer Buttons -->
@@ -508,25 +583,70 @@
       : 'px-6 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-all';
   }
 
+  let isGroupProtected = false;
+  let allDirectoryCustomers = [];
+  let selectedCandidateId = null;
+
   function adjustShares(delta) {
     const el = document.getElementById('editMemberShares');
     const curVal = parseInt(el.value) || 20;
     const newVal = Math.max(2, curVal + delta);
     el.value = newVal;
-    if (groupPayload?.group) {
-      document.getElementById('sharesLiveDisplay').textContent = `${groupPayload.group.shares_assigned} / ${newVal}`;
-      document.getElementById('assignedSharesBadge').textContent = `${groupPayload.group.shares_assigned} of ${newVal} assigned`;
-    }
+    onMemberSharesChanged();
+  }
+
+  function setShares(val) {
+    const el = document.getElementById('editMemberShares');
+    el.value = parseInt(val) || 20;
+    onMemberSharesChanged();
+  }
+
+  function onMemberSharesChanged() {
+    const val = parseInt(document.getElementById('editMemberShares').value) || 20;
+    const assigned = groupPayload?.group?.shares_assigned || 0;
+    document.getElementById('sharesLiveDisplay').textContent = `${assigned} / ${val}`;
+    document.getElementById('assignedSharesBadge').textContent = `${assigned} of ${val} assigned`;
   }
 
   function adjustDuration(delta) {
+    if (isGroupProtected) {
+      alert('Duration is protected because this scheme has recorded payments or lifts.');
+      return;
+    }
     const el = document.getElementById('editDuration');
     const curVal = parseInt(el.value) || 20;
     const newVal = Math.max(2, curVal + delta);
     el.value = newVal;
-    if (groupPayload?.group) {
-      document.getElementById('durationBadge').textContent = `${newVal} planned`;
+    onDurationChanged();
+  }
+
+  function setDuration(val) {
+    if (isGroupProtected) {
+      alert('Duration is protected because this scheme has recorded payments or lifts.');
+      return;
     }
+    const el = document.getElementById('editDuration');
+    el.value = parseInt(val) || 20;
+    onDurationChanged();
+  }
+
+  function onDurationChanged() {
+    const val = parseInt(document.getElementById('editDuration').value) || 20;
+    const curIdx = groupPayload?.group?.current_month_index || 1;
+    document.getElementById('durationBadge').textContent = `${val} planned`;
+    document.getElementById('monthsLiveDisplay').textContent = `${curIdx} / ${val}`;
+  }
+
+  function setEditStartMonthQuick(offset) {
+    if (isGroupProtected) {
+      alert('Start Month is protected because this scheme has recorded payments or lifts.');
+      return;
+    }
+    const d = new Date();
+    d.setMonth(d.getMonth() + offset);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    document.getElementById('editStartMonth').value = `${yyyy}-${mm}`;
   }
 
   async function loadGroupDetails() {
@@ -557,6 +677,53 @@
       document.getElementById('monthsLiveDisplay').textContent = `${g.current_month_index} / ${g.duration_months}`;
       document.getElementById('durationBadge').textContent = `${g.duration_months} planned, ${g.shares_assigned} filled`;
 
+      // Lifecycle status protection check
+      const aud = data.impact_audit || {};
+      const paymentsCount = parseInt(aud.payments_count) || 0;
+      const liftsCount = parseInt(aud.lifts_count) || 0;
+      isGroupProtected = (paymentsCount > 0 || liftsCount > 0);
+
+      const banner = document.getElementById('lifecycleStatusBanner');
+      if (banner) {
+        if (isGroupProtected) {
+          banner.className = 'p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2.5 transition-all';
+          banner.innerHTML = `
+            <i data-lucide="lock" class="w-4 h-4 stroke-[1.8] text-amber-600 dark:text-amber-400 shrink-0"></i>
+            <div>
+              <strong>Lifecycle Protection Active:</strong> This scheme has <strong>${paymentsCount} recorded payment(s)</strong> and <strong>${liftsCount} prize lift(s)</strong>.
+              Duration & Start Month are locked to protect past transaction ledgers and customer receipts.
+            </div>
+          `;
+          document.getElementById('editDuration').readOnly = true;
+          document.getElementById('editDuration').classList.add('bg-slate-100', 'dark:bg-chitDark-elevated', 'cursor-not-allowed');
+          document.getElementById('btnDurMinus').disabled = true;
+          document.getElementById('btnDurPlus').disabled = true;
+          document.getElementById('durationPresetsContainer').classList.add('hidden');
+          document.getElementById('editStartMonth').readOnly = true;
+          document.getElementById('editStartMonth').classList.add('bg-slate-100', 'dark:bg-chitDark-elevated', 'cursor-not-allowed');
+          document.getElementById('startMonthQuickBtns').classList.add('hidden');
+          document.getElementById('startMonthHelperText').textContent = 'Start month is locked because transactions/receipts have been recorded.';
+        } else {
+          banner.className = 'p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2.5 transition-all';
+          banner.innerHTML = `
+            <i data-lucide="check-circle" class="w-4 h-4 stroke-[1.8] text-emerald-600 dark:text-emerald-400 shrink-0"></i>
+            <div>
+              <strong>Fresh Scheme (Safe to Edit):</strong> 0 payments and 0 lifts recorded.
+              Changing <strong>Duration</strong> or <strong>Start Month</strong> will automatically recalculate the monthly schedule and first month Kattubadi dues without data loss.
+            </div>
+          `;
+          document.getElementById('editDuration').readOnly = false;
+          document.getElementById('editDuration').classList.remove('bg-slate-100', 'dark:bg-chitDark-elevated', 'cursor-not-allowed');
+          document.getElementById('btnDurMinus').disabled = false;
+          document.getElementById('btnDurPlus').disabled = false;
+          document.getElementById('durationPresetsContainer').classList.remove('hidden');
+          document.getElementById('editStartMonth').readOnly = false;
+          document.getElementById('editStartMonth').classList.remove('bg-slate-100', 'dark:bg-chitDark-elevated', 'cursor-not-allowed');
+          document.getElementById('startMonthQuickBtns').classList.remove('hidden');
+          document.getElementById('startMonthHelperText').textContent = 'Changing start month shifts the entire monthly schedule and dashboard timeline.';
+        }
+      }
+
       // Margins
       const m = data.margins;
       document.getElementById('marginTotalCollected').textContent = formatINR(m.total_collected);
@@ -566,11 +733,16 @@
       // Render Matrix Table
       renderMarginMatrix(m.matrix);
 
-      // Render Members
+      // Render Members Tab
       renderMembersTab(data.members, g);
 
+      // Validate account numbers across enrolled members
+      validateEditAccountNumbers();
+
+      // Load directory customers chips
+      loadDirectoryMembersForEdit();
+
       // Audit info
-      const aud = data.impact_audit;
       document.getElementById('trashImpactGroupName').textContent = g.name;
       document.getElementById('trashStatMembers').textContent = aud.members_count;
       document.getElementById('trashStatMonths').textContent = aud.months_ratio;
@@ -582,6 +754,7 @@
       document.getElementById('trashEffectLifts').textContent = aud.lifts_count;
       document.getElementById('trashEffectMembers').textContent = aud.members_count;
 
+      if (window.lucide) lucide.createIcons();
     } catch (e) {
       console.error(e);
     }
@@ -623,69 +796,68 @@
     }
 
     if (members.length === 0) {
-      container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">No members assigned to this group yet. Click "+ Add Member" above to enroll customers.</p>';
+      container.innerHTML = '<p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">No members assigned to this group yet. Select subscribers above or click "+ Quick Add" to enroll.</p>';
       return;
     }
 
     container.innerHTML = '';
-    members.forEach((m, idx) => {
+    members.forEach((m) => {
       const card = document.createElement('div');
       card.className = 'cb-card card-shine p-4 border border-slate-200 dark:border-chitDark-border bg-white dark:bg-chitDark-surface space-y-3';
       card.innerHTML = `
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-2 py-0.5 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-extrabold text-[11px] tracking-tight">A/C #${m.account_number || m.ticket_number}</span>
-              ${m.customer_id ? `<span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold font-mono text-[11px]">#${m.customer_id}</span>` : ''}
-              <span class="font-extrabold text-xs text-slate-900 dark:text-slate-100">${m.full_name}</span>
-              <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${m.installment_type === 'fixed' ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' : 'bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">${m.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
-              ${m.has_lifted ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-400 text-[10px] font-bold">Lifted M${m.lifted_month_index}</span>` : ''}
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-chitDark-elevated px-2.5 py-1 rounded-xl border border-slate-200 dark:border-chitDark-border">
+              <span class="text-[10px] font-extrabold uppercase text-slate-400">A/C #</span>
+              <input type="text" value="${m.account_number || m.ticket_number}"
+                     onchange="updateMemberAccountNumber('${m.membership_id}', this.value)"
+                     class="w-16 h-7 px-1 text-center font-mono font-extrabold text-xs bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900">
             </div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Pays ≈ ${formatINR(m.estimated_monthly_payment)}/mo · wins up to ${formatINR(m.max_win_amount)} · ${m.phone || 'No phone'}
-            </p>
+
+            ${m.customer_id ? `<span class="px-2 py-1 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold font-mono text-[11px]">#${m.customer_id}</span>` : ''}
+            <span class="font-extrabold text-xs text-slate-900 dark:text-slate-100">${m.full_name}</span>
+            <span class="text-[11px] text-slate-400 font-mono">${m.phone || ''}</span>
+            ${m.has_lifted ? `<span class="px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-400 text-[10px] font-bold">Lifted M${m.lifted_month_index}</span>` : ''}
           </div>
 
-          <div class="flex items-center gap-3">
-            <button type="button" onclick="removeMemberFromGroup('${m.membership_id}', '${m.full_name}')" class="text-slate-300 dark:text-slate-600 hover:text-rose-600 text-xs">
+          <div class="flex items-center gap-2">
+            <!-- Plan Dropdown directly on card -->
+            <select onchange="updateMemberInstallmentType('${m.membership_id}', this.value)" 
+                    class="h-8 px-2.5 rounded-xl border text-xs font-bold transition-all ${
+                      m.installment_type === 'fixed'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60'
+                        : 'bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 border-slate-200 dark:border-chitDark-border'
+                    }">
+              <option value="incremental" ${m.installment_type !== 'fixed' ? 'selected' : ''}>Incremental Plan</option>
+              <option value="fixed" ${m.installment_type === 'fixed' ? 'selected' : ''}>Fixed Plan</option>
+            </select>
+
+            <button type="button" onclick="removeMemberFromGroup('${m.membership_id}', '${m.full_name}')" class="h-8 w-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
               <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8]"></i>
             </button>
           </div>
         </div>
 
-        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-chitDark-border">
-          <div class="flex items-center gap-2 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl p-1">
-            <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units - 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">-</button>
-            <span class="w-8 text-center text-xs font-extrabold">${m.share_units}x</span>
-            <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units + 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">+</button>
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-chitDark-border text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-400 font-bold uppercase">Shares:</span>
+            <div class="flex items-center gap-1 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl p-0.5">
+              <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units - 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">-</button>
+              <span class="w-10 text-center text-xs font-extrabold">${m.share_units}x</span>
+              <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units + 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">+</button>
+            </div>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400 ml-2">Pays ≈ ${formatINR(m.estimated_monthly_payment)}/mo</span>
           </div>
 
           <button type="button" onclick="toggleJoiningSplits('${m.membership_id}')" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-slate-100 flex items-center gap-1">
-            <span>Joining & splits</span>
+            <span>More settings</span>
             <i data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[1.8]"></i>
           </button>
         </div>
 
         <!-- Joining & splits drawer matching ChitBase PDF Page 12 -->
         <div id="splitsDrawer_${m.membership_id}" class="hidden p-3.5 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl space-y-3 text-xs">
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Account #</label>
-              <input type="text" value="${m.account_number || m.ticket_number}"
-                     onchange="updateMemberAccountNumber('${m.membership_id}', this.value)"
-                     class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-400">
-            </div>
-            <div>
-              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Share Multiplier</label>
-              <select onchange="changeMemberShare('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
-                <option value="0.5" ${m.share_units === 0.5 ? 'selected' : ''}>0.5x</option>
-                <option value="1.0" ${m.share_units === 1.0 ? 'selected' : ''}>1x</option>
-                <option value="1.5" ${m.share_units === 1.5 ? 'selected' : ''}>1.5x</option>
-                <option value="2.0" ${m.share_units === 2.0 ? 'selected' : ''}>2x</option>
-                <option value="3.0" ${m.share_units === 3.0 ? 'selected' : ''}>3x</option>
-                <option value="5.0" ${m.share_units === 5.0 ? 'selected' : ''}>5x</option>
-              </select>
-            </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Joins from Month</label>
               <select onchange="updateJoinsFrom('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
@@ -695,11 +867,10 @@
               </select>
             </div>
             <div>
-              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Installment Plan</label>
-              <select onchange="updateMemberInstallmentType('${m.membership_id}', this.value)" class="w-full h-9 px-2.5 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg text-xs font-bold">
-                <option value="incremental" ${m.installment_type !== 'fixed' ? 'selected' : ''}>Incremental</option>
-                <option value="fixed" ${m.installment_type === 'fixed' ? 'selected' : ''}>Fixed (${formatINR((group.fixed_installment_amount || 0) * (m.share_units || 1))}/mo)</option>
-              </select>
+              <label class="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Max Win Potential</label>
+              <p class="h-9 px-3 flex items-center bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-lg font-mono font-bold text-slate-700 dark:text-slate-300">
+                ${formatINR(m.max_win_amount)}
+              </p>
             </div>
           </div>
 
@@ -751,16 +922,19 @@
   }
 
   async function changeMemberShare(membershipId, newShare) {
+    newShare = Math.max(0.5, parseFloat(newShare) || 1.0);
     try {
       const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_share', membership_id: membershipId, share_units: parseFloat(newShare) })
+        body: JSON.stringify({ action: 'update_share', membership_id: membershipId, share_units: newShare })
       });
       const data = await res.json();
       if (data.success) {
         showToast('Updated share multiplier!');
         loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to update share multiplier');
       }
     } catch (e) {
       alert('Error updating shares');
@@ -774,6 +948,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'update_share', membership_id: membershipId, start_month_index: parseInt(monthIdx) })
       });
+      const data = await res.json();
       if (data.success) {
         showToast('Updated start month for seat!');
       }
@@ -794,6 +969,8 @@
       if (data.success) {
         showToast(`Removed ${name} from chit`);
         loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to remove member');
       }
     } catch (e) {
       alert('Error removing member');
@@ -811,6 +988,8 @@
       if (d.success) {
         showToast('Transferred ticket share!');
         loadGroupDetails();
+      } else {
+        alert(d.error || 'Transfer failed');
       }
     });
   }
@@ -857,10 +1036,301 @@
     }
   }
 
-  // Add Member Modal Logic
-  let allDirectoryCustomers = [];
-  let selectedCandidateId = null;
+  // Customer Directory Chips in Edit Tab
+  async function loadDirectoryMembersForEdit() {
+    try {
+      const res = await fetch('/chit/api/members');
+      allDirectoryCustomers = await res.json();
+      renderEditAvailableChips();
+    } catch (e) {
+      console.error('Failed to load directory customers', e);
+    }
+  }
 
+  function renderEditAvailableChips() {
+    const container = document.getElementById('editAvailableChipsContainer');
+    const badge = document.getElementById('editAvailableChipsBadge');
+    if (!container) return;
+
+    const q = (document.getElementById('editCustomerSearchInput')?.value || '').trim().toLowerCase();
+    const enrolledMap = new Map();
+    (groupPayload?.members || []).forEach(m => {
+      enrolledMap.set(String(m.member_id || m.id), m);
+    });
+
+    let list = allDirectoryCustomers;
+    if (q) {
+      list = allDirectoryCustomers.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.customer_id && c.customer_id.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q))
+      );
+    }
+
+    if (badge) {
+      badge.textContent = `${enrolledMap.size} enrolled · ${list.length} shown`;
+    }
+
+    if (list.length === 0) {
+      container.innerHTML = '<p class="text-[11px] text-slate-400 dark:text-slate-500 py-2 w-full text-center">No customers found.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    list.forEach(c => {
+      const cId = String(c.id);
+      const isEnrolled = enrolledMap.has(cId);
+      const enrolledData = enrolledMap.get(cId);
+
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = `px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+        isEnrolled
+          ? 'bg-slate-900 dark:bg-white dark:text-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 shadow-xs'
+          : 'bg-white dark:bg-chitDark-surface border-slate-200 dark:border-chitDark-border text-slate-700 dark:text-slate-300 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-chitDark-elevated'
+      }`;
+
+      chip.innerHTML = `
+        <i data-lucide="${isEnrolled ? 'check' : 'plus'}" class="w-3.5 h-3.5 stroke-[2] ${isEnrolled ? 'text-emerald-400 dark:text-emerald-600' : 'opacity-60'}"></i>
+        ${c.customer_id ? `<span class="font-mono text-[10px] opacity-75 font-extrabold">#${c.customer_id}</span>` : ''}
+        <span>${c.name}</span>
+        ${isEnrolled ? `<span class="text-[10px] bg-white/20 dark:bg-black/20 px-1 rounded font-mono font-bold">A/C #${enrolledData.account_number || enrolledData.ticket_number}</span>` : ''}
+      `;
+
+      chip.onclick = () => toggleEnrollMember(c, isEnrolled, enrolledData);
+      container.appendChild(chip);
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+
+  async function toggleEnrollMember(customer, isEnrolled, enrolledData) {
+    if (isEnrolled) {
+      if (enrolledData?.has_lifted) {
+        alert(`${customer.name} has already lifted a prize in this chit. Unenrolling is prohibited.`);
+        return;
+      }
+      if (!confirm(`Unenroll ${customer.name} (A/C #${enrolledData?.account_number || enrolledData?.ticket_number}) from this chit group?`)) return;
+      try {
+        const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove', membership_id: enrolledData.membership_id })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Unenrolled ${customer.name}`);
+          await loadGroupDetails();
+        } else {
+          alert(data.error || 'Failed to unenroll member');
+        }
+      } catch (e) {
+        alert('Error unenrolling member');
+      }
+    } else {
+      try {
+        const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'toggle_member', member_id: customer.id })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Enrolled ${customer.name} (A/C #${data.account_number})`);
+          await loadGroupDetails();
+        } else {
+          alert(data.error || 'Failed to enroll member');
+        }
+      } catch (e) {
+        alert('Error enrolling member');
+      }
+    }
+  }
+
+  async function selectAllAvailableForGroup() {
+    const enrolledIds = new Set((groupPayload?.members || []).map(m => String(m.member_id || m.id)));
+    const toEnroll = allDirectoryCustomers.filter(c => !enrolledIds.has(String(c.id)));
+
+    if (toEnroll.length === 0) {
+      showToast('All available directory customers are already enrolled.');
+      return;
+    }
+
+    if (!confirm(`Enroll all ${toEnroll.length} available subscribers into this chit group?`)) return;
+
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'batch_add',
+          member_ids: toEnroll.map(c => c.id)
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Enrolled ${toEnroll.length} members into scheme!`);
+        await loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to enroll members in batch');
+      }
+    } catch (e) {
+      alert('Error batch enrolling members');
+    }
+  }
+
+  // Quick Add Inline Grid
+  function toggleEditQuickAddBox() {
+    const box = document.getElementById('editQuickAddBox');
+    const isHidden = box.classList.toggle('hidden');
+    if (!isHidden) {
+      const container = document.getElementById('editQuickAddRowsContainer');
+      if (container.children.length === 0) {
+        addEditQuickAddRow();
+        addEditQuickAddRow();
+      }
+    }
+  }
+
+  function getNextAvailableEditAccountNumber() {
+    const existing = new Set((groupPayload?.members || []).map(m => String(m.account_number || '').trim()));
+    document.querySelectorAll('.edit-qa-acc').forEach(inp => {
+      const val = inp.value.trim();
+      if (val) existing.add(val);
+    });
+    let n = 1;
+    while (existing.has(String(n))) {
+      n++;
+    }
+    return n;
+  }
+
+  function addEditQuickAddRow() {
+    const container = document.getElementById('editQuickAddRowsContainer');
+    const nextAcc = getNextAvailableEditAccountNumber();
+    const row = document.createElement('div');
+    row.className = 'edit-qa-row grid grid-cols-12 gap-2 items-center';
+    row.innerHTML = `
+      <div class="col-span-4">
+        <input type="text" placeholder="Subscriber Name *" class="edit-qa-name w-full h-9 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-900">
+      </div>
+      <div class="col-span-3">
+        <input type="tel" placeholder="Phone (optional)" class="edit-qa-phone w-full h-9 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900">
+      </div>
+      <div class="col-span-2">
+        <input type="text" value="${nextAcc}" placeholder="A/C #" oninput="validateEditAccountNumbers()" class="edit-qa-acc w-full h-9 px-2 text-center bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-slate-900">
+      </div>
+      <div class="col-span-2">
+        <select class="edit-qa-share w-full h-9 px-2 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="0.5">0.5x</option>
+          <option value="1.0" selected>1.0x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2.0x</option>
+        </select>
+      </div>
+      <div class="col-span-1 flex justify-center">
+        <button type="button" onclick="this.closest('.edit-qa-row').remove(); validateEditAccountNumbers();" class="text-slate-400 hover:text-rose-600 transition-colors">
+          <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+        </button>
+      </div>
+    `;
+    container.appendChild(row);
+    if (window.lucide) lucide.createIcons();
+    validateEditAccountNumbers();
+  }
+
+  async function saveEditQuickAddMembers() {
+    const rows = document.querySelectorAll('.edit-qa-row');
+    const membersToCreate = [];
+    const accSet = new Set((groupPayload?.members || []).map(m => String(m.account_number || '').trim()));
+
+    for (const r of rows) {
+      const name = r.querySelector('.edit-qa-name')?.value.trim();
+      const phone = r.querySelector('.edit-qa-phone')?.value.trim();
+      const acc = r.querySelector('.edit-qa-acc')?.value.trim();
+      const share = parseFloat(r.querySelector('.edit-qa-share')?.value) || 1.0;
+
+      if (!name) continue;
+
+      if (!acc) {
+        alert(`Please enter an Account Number for subscriber "${name}".`);
+        return;
+      }
+
+      if (accSet.has(acc)) {
+        alert(`Account Number "${acc}" is duplicate. Each subscriber must have a unique account number.`);
+        return;
+      }
+      accSet.add(acc);
+
+      membersToCreate.push({
+        full_name: name,
+        phone: phone,
+        account_number: acc,
+        share_units: share
+      });
+    }
+
+    if (membersToCreate.length === 0) {
+      alert('Please fill in at least one subscriber name to enroll.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'quick_add_members',
+          members: membersToCreate
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Created & enrolled ${membersToCreate.length} subscribers!`);
+        document.getElementById('editQuickAddRowsContainer').innerHTML = '';
+        toggleEditQuickAddBox();
+        await loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to quick-add subscribers');
+      }
+    } catch (e) {
+      alert('Error saving subscribers');
+    }
+  }
+
+  function validateEditAccountNumbers() {
+    const seen = new Map();
+    const duplicates = new Set();
+
+    (groupPayload?.members || []).forEach(m => {
+      const acc = String(m.account_number || m.ticket_number || '').trim();
+      if (acc) {
+        if (seen.has(acc)) duplicates.add(acc);
+        else seen.set(acc, m.full_name);
+      }
+    });
+
+    document.querySelectorAll('.edit-qa-acc').forEach(inp => {
+      const acc = inp.value.trim();
+      if (acc) {
+        if (seen.has(acc)) duplicates.add(acc);
+        else seen.set(acc, 'Quick Add');
+      }
+    });
+
+    const banner = document.getElementById('editAccountDuplicateWarning');
+    const txt = document.getElementById('editAccountDuplicateWarningText');
+    if (banner && txt) {
+      if (duplicates.size > 0) {
+        banner.classList.remove('hidden');
+        txt.textContent = `Duplicate account number(s) found: [ ${Array.from(duplicates).join(', ')} ]. Each subscriber must have a unique account number.`;
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+  }
+
+  // Add Member Modal Logic (Custom Add)
   async function openAddMemberToGroupModal() {
     const modal = document.getElementById('addMemberModal');
     modal.classList.remove('hidden');
@@ -1071,9 +1541,11 @@
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         showToast('Updated chit scheme parameters!');
-        loadGroupDetails();
+        await loadGroupDetails();
+      } else {
+        alert(data.error || 'Failed to update group');
       }
     } catch (e) {
       alert('Error updating group');
