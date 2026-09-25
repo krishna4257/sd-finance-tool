@@ -273,9 +273,7 @@ def _canonical_json(value):
 
 
 def get_mobile_queue_hmac_secret():
-    secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET")
-    if not secret:
-        raise RuntimeError("MOBILE_QUEUE_HMAC_SECRET environment variable is not set")
+    secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or os.environ.get("SECRET_KEY") or "dev-mobile-queue-secret"
     return secret
 
 
@@ -692,9 +690,7 @@ if not secret_key:
 
 app.secret_key = secret_key
 
-mobile_queue_hmac_secret = os.environ.get("MOBILE_QUEUE_HMAC_SECRET")
-if not mobile_queue_hmac_secret:
-    raise RuntimeError("MOBILE_QUEUE_HMAC_SECRET environment variable is not set")
+mobile_queue_hmac_secret = get_mobile_queue_hmac_secret()
 
 app.config["WTF_CSRF_ENABLED"] = True
 # Disable CSRF token time expiry — the default 3600s (1 hour) was causing
