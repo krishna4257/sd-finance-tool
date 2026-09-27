@@ -74,7 +74,7 @@
       <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
     </button>
 
-    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full" id="chitSelectorContainer">
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full min-w-0" id="chitSelectorContainer">
       <!-- Rendered via JS -->
     </div>
 
@@ -82,6 +82,42 @@
             class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0">
       <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
     </button>
+
+    <!-- Chit Groups Dropdown Menu Trigger & Panel -->
+    <div class="relative shrink-0" id="chitGroupDropdownWrapper">
+      <button type="button" id="btnChitGroupDropdown" onclick="toggleChitGroupDropdown(event)" 
+              title="All chit schemes" aria-label="Select chit scheme from dropdown"
+              class="h-7 w-7 rounded-full flex items-center justify-center border border-slate-200/90 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:bg-slate-50 dark:hover:bg-white/[0.05] shadow-2xs hover:shadow-xs active:scale-95 transition-all text-xs cursor-pointer focus:outline-none">
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[2] transition-transform duration-200" id="chitGroupDropdownChevron"></i>
+      </button>
+
+      <!-- Chit Groups Floating Dropdown Menu -->
+      <div id="chitGroupDropdownMenu" 
+           class="hidden absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white/95 dark:bg-chitDark-surface/95 backdrop-blur-xl rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div class="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
+          <div class="flex items-center gap-2">
+            <span class="flex h-5 w-5 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+              <i data-lucide="layers" class="w-3 h-3 stroke-[2.2]"></i>
+            </span>
+            <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Chit Schemes</span>
+          </div>
+          <span id="chitGroupDropdownCount" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"></span>
+        </div>
+
+        <div class="p-2 border-b border-slate-100 dark:border-slate-800/80" id="chitGroupSearchWrap">
+          <div class="relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="chitGroupDropdownSearch" placeholder="Search chit scheme..." 
+                   oninput="filterChitGroupDropdown(this.value)"
+                   class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-chitDark-surfaceSecondary border border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+        </div>
+
+        <div id="chitGroupDropdownList" class="max-h-64 overflow-y-auto p-1.5 space-y-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ==================== FUTURE / PAST MONTH NOTICE BANNER ==================== -->
@@ -118,13 +154,40 @@
       <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
     </button>
     
-    <div id="monthsPillsList" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full">
+    <div id="monthsPillsList" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full min-w-0">
       <!-- Rendered via JS -->
     </div>
 
     <button id="btnNextMonth" onclick="navigateMonth(1)" class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors text-xs shrink-0">
       <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
     </button>
+
+    <!-- Month Timeline Dropdown Menu Trigger & Panel -->
+    <div class="relative shrink-0" id="monthDropdownWrapper">
+      <button type="button" id="btnMonthDropdown" onclick="toggleMonthDropdown(event)" 
+              title="All months" aria-label="Select month cycle from dropdown"
+              class="h-7 w-7 rounded-full flex items-center justify-center border border-slate-200/90 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:bg-slate-50 dark:hover:bg-white/[0.05] shadow-2xs hover:shadow-xs active:scale-95 transition-all text-xs cursor-pointer focus:outline-none">
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[2] transition-transform duration-200" id="monthDropdownChevron"></i>
+      </button>
+
+      <!-- Month Floating Dropdown Menu -->
+      <div id="monthDropdownMenu" 
+           class="hidden absolute right-0 top-full mt-2 w-64 sm:w-72 bg-white/95 dark:bg-chitDark-surface/95 backdrop-blur-xl rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div class="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
+          <div class="flex items-center gap-2">
+            <span class="flex h-5 w-5 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+              <i data-lucide="calendar" class="w-3 h-3 stroke-[2.2]"></i>
+            </span>
+            <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Month Timeline</span>
+          </div>
+          <span id="monthDropdownCount" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"></span>
+        </div>
+
+        <div id="monthDropdownList" class="max-h-72 overflow-y-auto p-1.5 space-y-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ==================== CARD 1: COLLECTION PROGRESS ==================== -->
@@ -696,8 +759,272 @@
   document.addEventListener('DOMContentLoaded', async () => {
     updateClock();
     setInterval(updateClock, 1000);
+    enableHorizontalWheelScroll('chitSelectorContainer');
+    enableHorizontalWheelScroll('monthsPillsList');
     await loadChitGroups();
   });
+
+  function enableHorizontalWheelScroll(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+  }
+
+  // Global outside-click and escape listeners for dropdowns
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#chitGroupDropdownWrapper')) {
+      closeChitGroupDropdown();
+    }
+    if (!e.target.closest('#monthDropdownWrapper')) {
+      closeMonthDropdown();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeChitGroupDropdown();
+      closeMonthDropdown();
+    }
+  });
+
+  // Chit Group Dropdown Functions
+  function toggleChitGroupDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('chitGroupDropdownMenu');
+    const btn = document.getElementById('btnChitGroupDropdown');
+    const chevron = document.getElementById('chitGroupDropdownChevron');
+    if (!menu) return;
+
+    const isHidden = menu.classList.contains('hidden');
+    closeMonthDropdown();
+
+    if (isHidden) {
+      renderChitGroupDropdownItems();
+      menu.classList.remove('hidden');
+      btn?.classList.add('ring-2', 'ring-emerald-500/20', 'border-emerald-500', 'text-emerald-600', 'dark:border-emerald-400', 'dark:text-emerald-400');
+      chevron?.classList.add('rotate-180');
+      const searchInput = document.getElementById('chitGroupDropdownSearch');
+      if (searchInput) {
+        searchInput.value = '';
+        setTimeout(() => searchInput.focus(), 50);
+      }
+      setTimeout(() => {
+        const activeItem = menu.querySelector('.dropdown-active-item');
+        if (activeItem) activeItem.scrollIntoView({ block: 'nearest' });
+      }, 50);
+    } else {
+      closeChitGroupDropdown();
+    }
+  }
+
+  function closeChitGroupDropdown() {
+    const menu = document.getElementById('chitGroupDropdownMenu');
+    const btn = document.getElementById('btnChitGroupDropdown');
+    const chevron = document.getElementById('chitGroupDropdownChevron');
+    if (!menu || menu.classList.contains('hidden')) return;
+    menu.classList.add('hidden');
+    btn?.classList.remove('ring-2', 'ring-emerald-500/20', 'border-emerald-500', 'text-emerald-600', 'dark:border-emerald-400', 'dark:text-emerald-400');
+    chevron?.classList.remove('rotate-180');
+  }
+
+  function filterChitGroupDropdown(query) {
+    renderChitGroupDropdownItems(query);
+  }
+
+  function renderChitGroupDropdownItems(query = '') {
+    const listEl = document.getElementById('chitGroupDropdownList');
+    const countEl = document.getElementById('chitGroupDropdownCount');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const q = (query || '').toLowerCase().trim();
+    const groups = allChits || [];
+    if (countEl) {
+      countEl.textContent = `${groups.length} schemes`;
+    }
+
+    // "All Groups" option
+    if (!q || 'all groups consolidated overview'.includes(q)) {
+      const isAllActive = activeChitId === 'all';
+      const allItem = document.createElement('button');
+      allItem.type = 'button';
+      allItem.className = `w-full text-left px-3 py-2 rounded-xl flex items-center justify-between text-xs transition-colors ${
+        isAllActive 
+          ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 font-bold dropdown-active-item' 
+          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated'
+      }`;
+      allItem.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg ${isAllActive ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'} shrink-0">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          </span>
+          <div class="min-w-0">
+            <p class="truncate leading-tight font-semibold">All Groups</p>
+            <p class="text-[10.5px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5 truncate">Consolidated overview</p>
+          </div>
+        </div>
+        ${isAllActive ? '<i data-lucide="check" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>' : ''}
+      `;
+      allItem.onclick = () => {
+        selectChitGroup('all');
+        closeChitGroupDropdown();
+      };
+      listEl.appendChild(allItem);
+    }
+
+    const filtered = groups.filter(g => {
+      if (!q) return true;
+      return (g.name && g.name.toLowerCase().includes(q)) ||
+             (g.chit_value && g.chit_value.toString().includes(q));
+    });
+
+    if (filtered.length === 0 && q) {
+      listEl.innerHTML += `<div class="py-4 text-center text-xs text-slate-400">No schemes found</div>`;
+    }
+
+    filtered.forEach(g => {
+      const isActive = g.id === activeChitId;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `w-full text-left px-3 py-2 rounded-xl flex items-center justify-between text-xs transition-colors ${
+        isActive 
+          ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 font-bold dropdown-active-item' 
+          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated'
+      }`;
+      const valueStr = g.chit_value ? formatINR(g.chit_value) : '';
+      const durStr = g.duration_months ? `${g.duration_months}M` : '';
+      const subtitleParts = [valueStr, durStr].filter(Boolean).join(' · ');
+
+      item.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="h-2 w-2 rounded-full ${isActive ? 'bg-emerald-500 ring-2 ring-emerald-300/60' : 'bg-slate-400 dark:bg-slate-600'} shrink-0 ml-1"></span>
+          <div class="min-w-0">
+            <p class="truncate leading-tight font-semibold">${g.name}</p>
+            ${subtitleParts ? `<p class="text-[10.5px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5 truncate">${subtitleParts}</p>` : ''}
+          </div>
+        </div>
+        ${isActive ? '<i data-lucide="check" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>' : ''}
+      `;
+      item.onclick = () => {
+        selectChitGroup(g.id);
+        closeChitGroupDropdown();
+      };
+      listEl.appendChild(item);
+    });
+
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  // Month Timeline Dropdown Functions
+  function toggleMonthDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('monthDropdownMenu');
+    const btn = document.getElementById('btnMonthDropdown');
+    const chevron = document.getElementById('monthDropdownChevron');
+    if (!menu) return;
+
+    const isHidden = menu.classList.contains('hidden');
+    closeChitGroupDropdown();
+
+    if (isHidden) {
+      renderMonthDropdownItems();
+      menu.classList.remove('hidden');
+      btn?.classList.add('ring-2', 'ring-emerald-500/20', 'border-emerald-500', 'text-emerald-600', 'dark:border-emerald-400', 'dark:text-emerald-400');
+      chevron?.classList.add('rotate-180');
+      setTimeout(() => {
+        const activeItem = menu.querySelector('.dropdown-active-item');
+        if (activeItem) activeItem.scrollIntoView({ block: 'nearest' });
+      }, 50);
+    } else {
+      closeMonthDropdown();
+    }
+  }
+
+  function closeMonthDropdown() {
+    const menu = document.getElementById('monthDropdownMenu');
+    const btn = document.getElementById('btnMonthDropdown');
+    const chevron = document.getElementById('monthDropdownChevron');
+    if (!menu || menu.classList.contains('hidden')) return;
+    menu.classList.add('hidden');
+    btn?.classList.remove('ring-2', 'ring-emerald-500/20', 'border-emerald-500', 'text-emerald-600', 'dark:border-emerald-400', 'dark:text-emerald-400');
+    chevron?.classList.remove('rotate-180');
+  }
+
+  function selectMonth(monthIndex) {
+    activeMonthIndex = monthIndex;
+    paymentsExpandedInitialized = false;
+    renderMonthPills(allMonths);
+    loadDashboardData(activeChitId, activeMonthIndex);
+  }
+
+  function renderMonthDropdownItems() {
+    const listEl = document.getElementById('monthDropdownList');
+    const countEl = document.getElementById('monthDropdownCount');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const months = allMonths || [];
+    if (countEl) {
+      countEl.textContent = `${activeMonthIndex} of ${months.length}`;
+    }
+
+    let curMonth = 1;
+    if (activeChitId === 'all') {
+      curMonth = getOldestCurrentMonthIndex(allChits);
+    } else {
+      const chit = (allChits || []).find(g => g.id === activeChitId);
+      curMonth = chit ? (chit.current_month_index || 1) : 1;
+    }
+
+    months.forEach(m => {
+      const isActive = m.month_index === activeMonthIndex;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `w-full text-left px-3 py-2 rounded-xl flex items-center justify-between text-xs transition-colors ${
+        isActive 
+          ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 font-bold dropdown-active-item' 
+          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-chitDark-elevated'
+      }`;
+
+      let badgeHtml = '';
+      if (m.month_index < curMonth) {
+        badgeHtml = `<span class="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">Closed</span>`;
+      } else if (m.month_index === curMonth) {
+        badgeHtml = `<span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Current</span>`;
+      } else {
+        badgeHtml = `<span class="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400">Upcoming</span>`;
+      }
+
+      item.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="flex h-6 w-6 items-center justify-center rounded-lg text-[10.5px] font-extrabold ${
+            isActive 
+              ? 'bg-emerald-500 text-white' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+          } shrink-0">
+            M${m.month_index}
+          </span>
+          <span class="truncate font-semibold">${m.month_label}</span>
+          ${badgeHtml}
+        </div>
+        ${isActive ? '<i data-lucide="check" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>' : ''}
+      `;
+
+      item.onclick = () => {
+        selectMonth(m.month_index);
+        closeMonthDropdown();
+      };
+
+      listEl.appendChild(item);
+    });
+
+    if (window.lucide) { lucide.createIcons(); }
+  }
 
   function updateClock() {
     const now = new Date();
@@ -974,10 +1301,7 @@
       `;
       if (window.lucide) { lucide.createIcons(); }
       btn.onclick = () => {
-        activeMonthIndex = m.month_index;
-        paymentsExpandedInitialized = false;
-        renderMonthPills(allMonths);
-        loadDashboardData(activeChitId, activeMonthIndex);
+        selectMonth(m.month_index);
       };
       container.appendChild(btn);
       if (window.lucide) { lucide.createIcons(); }
@@ -994,10 +1318,7 @@
   function navigateMonth(delta) {
     const nextIdx = activeMonthIndex + delta;
     if (nextIdx >= 1 && nextIdx <= allMonths.length) {
-      activeMonthIndex = nextIdx;
-      paymentsExpandedInitialized = false;
-      renderMonthPills(allMonths);
-      loadDashboardData(activeChitId, activeMonthIndex);
+      selectMonth(nextIdx);
     }
   }
 
