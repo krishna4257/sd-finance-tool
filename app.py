@@ -1881,6 +1881,52 @@ def ano_exists(ano, vid):
             """, (ano, vid))
             return cur.fetchone() is not None
 
+def is_village_monthly(vid, cur=None):
+    """
+    Check if a village operates on a monthly installment schedule ('M').
+    Criteria:
+      1. Village name or village code ends with '-M' or contains '-M'.
+      2. OR majority of active customers in the village are type 'M'.
+    """
+    if not vid:
+        return False
+    
+    close_cur = False
+    conn = None
+    if cur is None:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        close_cur = True
+        
+    try:
+        cur.execute("SELECT village_name, village_code FROM village WHERE vid = %s", (vid,))
+        row = cur.fetchone()
+        if not row:
+            return False
+        v_name, v_code = (row[0] or "").upper(), (row[1] or "").upper()
+        if "-M" in v_name or "-M" in v_code:
+            return True
+            
+        cur.execute("""
+            SELECT COUNT(*) FILTER (WHERE type = 'M'), COUNT(*)
+            FROM customer
+            WHERE vid = %s
+        """, (vid,))
+        c_row = cur.fetchone()
+        if c_row and c_row[1] and c_row[1] > 0:
+            if (c_row[0] / c_row[1]) >= 0.5:
+                return True
+                
+        return False
+    except Exception as e:
+        logger.error(f"Error checking if village {vid} is monthly: {e}")
+        return False
+    finally:
+        if close_cur and cur is not None:
+            cur.close()
+            if conn is not None:
+                conn.close()
+
 def insert_customer(data):
     with get_pg_connection() as conn:
         with conn.cursor() as cur:
@@ -2155,12 +2201,13 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
             # Overdue weeks beyond period - display only, no repair
             display_status = "OVERDUE"
             
-            # Apply overdue penalty week-by-week (starts from 3 weeks past period, i.e. 21 days)
-            # Only apply if payment is NOT made (p_actual == 0) and past the 2 weeks grace period (weeks_past >= 3)
+            # Apply overdue penalty period-by-period
+            # Only apply if payment is NOT made (p_actual == 0) and past the grace period
             penalty = 0.0
             if p_actual == 0:
-                weeks_past = w - int(period)
-                if weeks_past >= 3:
+                periods_past = w - int(period)
+                grace_threshold = 2 if loan_type == "M" else (3 if loan_type == "W" else 3)
+                if periods_past >= grace_threshold:
                     if due_dt <= today:
                         penalty = 5.0
                         score = max(0.0, score - penalty)
@@ -2188,14 +2235,23 @@ def calculate_customer_rating_details(start_date, end_date, installment_amount, 
     # Score must always be clamped
     score = min(max(score, 0.0), 100.0)
 
-    # Overdue end date penalties are already applied week-by-week inside the loop above.
+    # Overdue end date penalties are already applied period-by-period inside the loop above.
     # Calculate overdue_penalty for return value only (informational), do NOT subtract again.
     overdue_penalty = 0.0
     if rem_balance > 0 and today > end_date: # type: ignore
         days_overdue = (today - end_date).days # type: ignore
-        if days_overdue >= 21:
-            overdue_weeks = ((days_overdue - 21) // 7) + 1
-            overdue_penalty = overdue_weeks * 5.0
+        if loan_type == "M":
+            if days_overdue >= 30:
+                overdue_months = ((days_overdue - 30) // 30) + 1
+                overdue_penalty = overdue_months * 5.0
+        elif loan_type == "D":
+            if days_overdue >= 3:
+                overdue_days = ((days_overdue - 3) // 1) + 1
+                overdue_penalty = overdue_days * 5.0
+        else:
+            if days_overdue >= 21:
+                overdue_weeks = ((days_overdue - 21) // 7) + 1
+                overdue_penalty = overdue_weeks * 5.0
 
     rounded_score = int(round(score))
     if rounded_score >= 90:
@@ -2373,7 +2429,8 @@ def calculate_behavioral_analytics(start_date, end_date, installment_amount, per
     else:
         if today > end_date:# type: ignore
             days_overdue = (today - end_date).days# type: ignore
-            if days_overdue >= 42:
+            default_threshold_days = 180 if loan_type == "M" else (42 if loan_type == "W" else 30)
+            if days_overdue >= default_threshold_days:
                 status = "To Be Defaulted"
             else:
                 status = "Overdue"
@@ -5936,72 +5993,114 @@ def payment_day_stats():
 
     try:
 
-        cur.execute("""
-            WITH village_collection_day AS (
-                SELECT DISTINCT ON (p.vid)
-                    p.vid,
-                    TRIM(TO_CHAR(p.payment_date, 'Day'))
-                        AS collection_day,
-                    COUNT(*) AS payment_count
-                FROM (
-                    SELECT payment_date, vid FROM payment
-                    UNION ALL
-                    SELECT payment_date, vid FROM closed_cust_payment
-                ) p
-                WHERE p.vid = %s
-                GROUP BY
-                    p.vid,
-                    collection_day
-                ORDER BY
-                    p.vid,
-                    payment_count DESC
-            ),
-            eligible_customers AS (
+        is_monthly = is_village_monthly(vid, cur)
+
+        if is_monthly:
+            cur.execute("""
+                WITH eligible_customers AS (
+                    SELECT
+                        COUNT(*) AS expected_accounts
+                    FROM (
+                        SELECT start_date, NULL::timestamptz AS closed_at, vid FROM customer
+                        UNION ALL
+                        SELECT start_date, closed_at, vid FROM closed_cust_account
+                    ) c
+                    WHERE c.vid = %s
+                      AND (c.closed_at IS NULL OR c.closed_at::date > %s::date)
+                      AND c.start_date <= %s::date
+                ),
+                actual_payments AS (
+                    SELECT
+                        COUNT(DISTINCT ano) AS paid_accounts
+                    FROM (
+                        SELECT ano, vid, payment_date FROM payment
+                        UNION ALL
+                        SELECT ano, vid, payment_date FROM closed_cust_payment
+                    ) all_p
+                    WHERE vid = %s
+                      AND payment_date = %s
+                )
                 SELECT
-                    COUNT(*) AS expected_accounts
-                FROM (
-                    SELECT type, start_date, NULL::timestamptz AS closed_at, vid FROM customer
-                    UNION ALL
-                    SELECT type, start_date, closed_at, vid FROM closed_cust_account
-                ) c
-                JOIN village_collection_day vcd
-                    ON vcd.vid = c.vid
-                WHERE c.vid = %s
-                  AND c.type = 'W'
-                  AND (c.closed_at IS NULL OR c.closed_at::date > %s::date)
-                  AND (
-                        c.start_date + INTERVAL '7 days'
-                      )::date <= %s
-                  AND TRIM(TO_CHAR(%s::date, 'Day'))
-                      = vcd.collection_day
-            ),
-            actual_payments AS (
+                    COALESCE(ec.expected_accounts, 0)
+                        AS expected_accounts,
+                    COALESCE(ap.paid_accounts, 0)
+                        AS already_paid
+                FROM eligible_customers ec
+                CROSS JOIN actual_payments ap
+            """, (
+                vid,
+                payment_date,
+                payment_date,
+                vid,
+                payment_date
+            ))
+        else:
+            cur.execute("""
+                WITH village_collection_day AS (
+                    SELECT DISTINCT ON (p.vid)
+                        p.vid,
+                        TRIM(TO_CHAR(p.payment_date, 'Day'))
+                            AS collection_day,
+                        COUNT(*) AS payment_count
+                    FROM (
+                        SELECT payment_date, vid FROM payment
+                        UNION ALL
+                        SELECT payment_date, vid FROM closed_cust_payment
+                    ) p
+                    WHERE p.vid = %s
+                    GROUP BY
+                        p.vid,
+                        collection_day
+                    ORDER BY
+                        p.vid,
+                        payment_count DESC
+                ),
+                eligible_customers AS (
+                    SELECT
+                        COUNT(*) AS expected_accounts
+                    FROM (
+                        SELECT type, start_date, NULL::timestamptz AS closed_at, vid FROM customer
+                        UNION ALL
+                        SELECT type, start_date, closed_at, vid FROM closed_cust_account
+                    ) c
+                    JOIN village_collection_day vcd
+                        ON vcd.vid = c.vid
+                    WHERE c.vid = %s
+                      AND c.type = 'W'
+                      AND (c.closed_at IS NULL OR c.closed_at::date > %s::date)
+                      AND (
+                            c.start_date + INTERVAL '7 days'
+                          )::date <= %s
+                      AND TRIM(TO_CHAR(%s::date, 'Day'))
+                          = vcd.collection_day
+                ),
+                actual_payments AS (
+                    SELECT
+                        COUNT(DISTINCT ano) AS paid_accounts
+                    FROM (
+                        SELECT ano, vid, payment_date FROM payment
+                        UNION ALL
+                        SELECT ano, vid, payment_date FROM closed_cust_payment
+                    ) all_p
+                    WHERE vid = %s
+                      AND payment_date = %s
+                )
                 SELECT
-                    COUNT(DISTINCT ano) AS paid_accounts
-                FROM (
-                    SELECT ano, vid, payment_date FROM payment
-                    UNION ALL
-                    SELECT ano, vid, payment_date FROM closed_cust_payment
-                ) all_p
-                WHERE vid = %s
-                  AND payment_date = %s
-            )
-            SELECT
-                COALESCE(ec.expected_accounts, 0)
-                    AS expected_accounts,
-                COALESCE(ap.paid_accounts, 0)
-                    AS already_paid
-            FROM eligible_customers ec
-            CROSS JOIN actual_payments ap
-        """, (
-            vid,
-            vid,
-            payment_date,
-            payment_date,
-            payment_date,
-            vid,
-            payment_date
-        ))
+                    COALESCE(ec.expected_accounts, 0)
+                        AS expected_accounts,
+                    COALESCE(ap.paid_accounts, 0)
+                        AS already_paid
+                FROM eligible_customers ec
+                CROSS JOIN actual_payments ap
+            """, (
+                vid,
+                vid,
+                payment_date,
+                payment_date,
+                payment_date,
+                vid,
+                payment_date
+            ))
 
         row = cur.fetchone()
 
@@ -6093,61 +6192,110 @@ def post_payment_analytics():
                 payments_by_cid[cid] = []
             payments_by_cid[cid].append(p)
 
-        # Calculate weeks: We generate 5 weeks ending at last_date
-        # Week 0: [last_date - 6, last_date]
-        # Week 1: [last_date - 13, last_date - 7]
-        # Week 2: [last_date - 20, last_date - 14]
-        # Week 3: [last_date - 27, last_date - 21]
-        # Week 4: [last_date - 34, last_date - 28]
-        weeks = []
-        for i in range(4, -1, -1):
-            w_end = last_date - timedelta(days=7 * i)
-            w_start = w_end - timedelta(days=6)
-            
-            label = "This Week" if i == 0 else f"{i} Wk{'s' if i > 1 else ''} Ago"
-            
-            weeks.append({
-                "label": label,
-                "start": w_start,
-                "end": w_end,
-                "active_customers": 0,
-                "paid_customers": 0,
-                "unpaid_customers": 0,
-                "expected_collection": 0.0,
-                "actual_collection": 0.0,
-                "failed_to_collect": 0.0
-            })
+        is_monthly = is_village_monthly(vid, cur)
 
-        for w in weeks:
-            start_dt = w["start"]
-            end_dt = w["end"]
+        if is_monthly:
+            cur.execute("""
+                SELECT DISTINCT payment_date 
+                FROM (
+                    SELECT payment_date FROM payment WHERE vid = %s
+                    UNION ALL
+                    SELECT payment_date FROM closed_cust_payment WHERE vid = %s
+                ) p
+                WHERE payment_date IS NOT NULL
+                ORDER BY payment_date DESC
+            """, (vid, vid))
+            posting_dates = [r[0] for r in cur.fetchall()]
+            target_dates = list(reversed(posting_dates[:5])) if posting_dates else [last_date]
             
-            for c in customers:
-                # Check if customer loan started on or before the end of the week
-                if c["start_date"] and c["start_date"] <= end_dt:
-                    # If customer was closed before start_dt, they are not active in this week
-                    if c["closed_at"]:
-                        cl_dt = c["closed_at"].date() if isinstance(c["closed_at"], datetime) else c["closed_at"]
-                        if cl_dt < start_dt:
-                            continue
-                    cust_payments = payments_by_cid.get(c["cid"], [])
-                    # Calculate total paid before this week
-                    paid_before = sum(p["amt"] for p in cust_payments if p["payment_date"] < start_dt)
-                    
-                    # If loan balance at start of week was greater than 0, they were active
-                    if c["total_amount"] - paid_before > 0.01:
-                        w["active_customers"] += 1
-                        w["expected_collection"] += c["installment_amount"]
+            weeks = []
+            for idx, p_dt in enumerate(target_dates):
+                active_c = [
+                    c for c in customers
+                    if c["start_date"] and c["start_date"] <= p_dt
+                    and (not c["closed_at"] or (c["closed_at"].date() if isinstance(c["closed_at"], datetime) else c["closed_at"]) > p_dt)
+                ]
+                expected = sum(c["installment_amount"] for c in active_c)
+                
+                pmts_at_dt = [p for p in payments if p["payment_date"] == p_dt]
+                actual = sum(p["amt"] for p in pmts_at_dt)
+                paying_cids = {p["cid"] for p in pmts_at_dt}
+                
+                paid_cnt = len(paying_cids)
+                active_cnt = len(active_c)
+                unpaid_cnt = max(0, active_cnt - paid_cnt)
+                failed = max(0.0, expected - actual)
+                
+                offset = len(target_dates) - 1 - idx
+                label = "This Month" if offset == 0 else (f"{offset} Mos Ago" if offset > 1 else "1 Mo Ago")
+                
+                weeks.append({
+                    "label": label,
+                    "start": p_dt,
+                    "end": p_dt,
+                    "active_customers": active_cnt,
+                    "paid_customers": paid_cnt,
+                    "unpaid_customers": unpaid_cnt,
+                    "expected_collection": expected,
+                    "actual_collection": actual,
+                    "failed_to_collect": failed
+                })
+        else:
+            # Calculate weeks: We generate 5 weeks ending at last_date
+            # Week 0: [last_date - 6, last_date]
+            # Week 1: [last_date - 13, last_date - 7]
+            # Week 2: [last_date - 20, last_date - 14]
+            # Week 3: [last_date - 27, last_date - 21]
+            # Week 4: [last_date - 34, last_date - 28]
+            weeks = []
+            for i in range(4, -1, -1):
+                w_end = last_date - timedelta(days=7 * i)
+                w_start = w_end - timedelta(days=6)
+                
+                label = "This Week" if i == 0 else f"{i} Wk{'s' if i > 1 else ''} Ago"
+                
+                weeks.append({
+                    "label": label,
+                    "start": w_start,
+                    "end": w_end,
+                    "active_customers": 0,
+                    "paid_customers": 0,
+                    "unpaid_customers": 0,
+                    "expected_collection": 0.0,
+                    "actual_collection": 0.0,
+                    "failed_to_collect": 0.0
+                })
+
+            for w in weeks:
+                start_dt = w["start"]
+                end_dt = w["end"]
+                
+                for c in customers:
+                    # Check if customer loan started on or before the end of the week
+                    if c["start_date"] and c["start_date"] <= end_dt:
+                        # If customer was closed before start_dt, they are not active in this week
+                        if c["closed_at"]:
+                            cl_dt = c["closed_at"].date() if isinstance(c["closed_at"], datetime) else c["closed_at"]
+                            if cl_dt < start_dt:
+                                continue
+                        cust_payments = payments_by_cid.get(c["cid"], [])
+                        # Calculate total paid before this week
+                        paid_before = sum(p["amt"] for p in cust_payments if p["payment_date"] < start_dt)
                         
-                        # Calculate paid during this week
-                        paid_this_week = sum(p["amt"] for p in cust_payments if start_dt <= p["payment_date"] <= end_dt)
-                        
-                        if paid_this_week > 0.01:
-                            w["paid_customers"] += 1
-                            w["actual_collection"] += paid_this_week
-                        else:
-                            w["unpaid_customers"] += 1
-                            w["failed_to_collect"] += c["installment_amount"]
+                        # If loan balance at start of week was greater than 0, they were active
+                        if c["total_amount"] - paid_before > 0.01:
+                            w["active_customers"] += 1
+                            w["expected_collection"] += c["installment_amount"]
+                            
+                            # Calculate paid during this week
+                            paid_this_week = sum(p["amt"] for p in cust_payments if start_dt <= p["payment_date"] <= end_dt)
+                            
+                            if paid_this_week > 0.01:
+                                w["paid_customers"] += 1
+                                w["actual_collection"] += paid_this_week
+                            else:
+                                w["unpaid_customers"] += 1
+                                w["failed_to_collect"] += c["installment_amount"]
 
         # Format and round data
         for w in weeks:
@@ -6159,7 +6307,8 @@ def post_payment_analytics():
 
         return jsonify(
             last_posting_date=last_date_str,
-            weeks=weeks
+            weeks=weeks,
+            is_monthly=is_monthly
         )
 
     except Exception as e:
@@ -10762,6 +10911,7 @@ def village_page():
     )
 
 def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range="weekly"):
+    is_monthly = is_village_monthly(vid, cur)
 
     # 1. Parse and clean input dates to datetime.date objects
     parsed_dates = []
@@ -10873,8 +11023,8 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             "cumulative_paid": running_totals[cid]
         })
 
-    # Helper function to check 6 weeks overdue
-    def check_is_overdue_6_weeks(wk_details, ref_date, end_dt, balance, inst_amt, period):
+    # Helper function to check overdue threshold (42 days for weekly, 180 days for monthly)
+    def check_is_overdue_threshold(wk_details, ref_date, end_dt, balance, inst_amt, period):
         oldest_unpaid_due = None
         for wk in wk_details:
             due_dt = datetime.fromisoformat(wk["due_date"]).date()
@@ -10886,14 +11036,16 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         if not oldest_unpaid_due and ref_date > end_dt and balance > 0:
             oldest_unpaid_due = end_dt
         if oldest_unpaid_due:
-            return (ref_date - oldest_unpaid_due).days > 42
+            threshold_days = 180 if is_monthly else 42
+            return (ref_date - oldest_unpaid_due).days > threshold_days
         return False
 
-    # Collect all evaluation dates needed (the missing dates + their preceding 7 days for stability check)
+    # Collect all evaluation dates needed (the missing dates + their preceding cycle for stability check)
+    days_step = 30 if is_monthly else 7
     calc_dates_needed = set()
     for d in uncached_dates:
         calc_dates_needed.add(d)
-        calc_dates_needed.add(d - timedelta(days=7))
+        calc_dates_needed.add(d - timedelta(days=days_step))
     calc_dates_needed = sorted(list(calc_dates_needed))
     
     # Store ratings and statuses by date, then customer cid
@@ -10969,13 +11121,13 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
             
             ratings_by_date[d][c["cid"]] = score_h
             statuses_by_date[d][c["cid"]] = beh_h["status"]
-            overdue_6_w_by_date[d][c["cid"]] = check_is_overdue_6_weeks(wk_details_h, d, c["end_dt"], bal_at_d, c["installment_amount"], c["period"])
+            overdue_6_w_by_date[d][c["cid"]] = check_is_overdue_threshold(wk_details_h, d, c["end_dt"], bal_at_d, c["installment_amount"], c["period"])
             
 
     # Now calculate and cache the metrics for the uncached dates
     insert_cache_rows = []
     for d in uncached_dates:
-        d_prev = d - timedelta(days=7)
+        d_prev = d - timedelta(days=days_step)
         
         # Filter customers in the evaluated pool as of d
         pool = []
@@ -11062,10 +11214,11 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
                 active_count += 1
                 active_loan_sum += c["total_amount"]
                 
+        lookback_days = 30 if is_monthly else 7
         actual_collected = 0.0
         for c, bal in pool:
             for p in c["payments"]:
-                if d - timedelta(days=7) < p["payment_date"] <= d:
+                if d - timedelta(days=lookback_days) < p["payment_date"] <= d:
                     actual_collected += float(p["amt"])
                     
         collection_drop_penalty = 0.0
@@ -11189,6 +11342,10 @@ def api_village_health_history(vid):
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
+        is_monthly = is_village_monthly(vid, cur)
+        if is_monthly and time_range == "weekly":
+            time_range = "monthly"
+
         if force_recalc:
             cur.execute("DELETE FROM village_health_cache WHERE vid = %s", (vid,))
 
@@ -11210,8 +11367,10 @@ def api_village_health_history(vid):
             if isinstance(latest_payment_in_village, datetime):
                 latest_payment_in_village = latest_payment_in_village.date()
             lag_days = (today - latest_payment_in_village).days
-            if lag_days > 7:
-                shift_days = min(lag_days, 14)
+            lag_threshold = 35 if is_monthly else 7
+            max_shift = 60 if is_monthly else 14
+            if lag_days > lag_threshold:
+                shift_days = min(lag_days, max_shift)
                 eval_today = today - timedelta(days=shift_days)
 
         # Generate evaluation dates based on range
@@ -11301,7 +11460,7 @@ def api_village_health_history(vid):
             })
 
         conn.commit()
-        return jsonify(success=True, history=history_points, events=events)
+        return jsonify(success=True, is_monthly=is_monthly, history=history_points, events=events)
     except Exception as e:
         traceback.print_exc()
         return jsonify(success=False, error=str(e)), 500
@@ -11317,6 +11476,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     if not v_row:
         raise ValueError("Village not found")
     v_name, v_code = v_row
+    is_monthly = is_village_monthly(vid, cur)
 
     # Shifting reference date to mitigate posting lag
     cur.execute("""
@@ -11336,8 +11496,10 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         if isinstance(latest_payment_in_village, datetime):
             latest_payment_in_village = latest_payment_in_village.date()
         lag_days = (today - latest_payment_in_village).days
-        if lag_days > 7:
-            shift_days = min(lag_days, 14)
+        lag_threshold = 35 if is_monthly else 7
+        max_shift = 60 if is_monthly else 14
+        if lag_days > lag_threshold:
+            shift_days = min(lag_days, max_shift)
             eval_today = today - timedelta(days=shift_days)
 
     if force_recalc:
@@ -11430,7 +11592,8 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         p_dt = p_date.date() if isinstance(p_date, datetime) else p_date
         payments_by_cid[cid].append({"amt": Decimal(str(amt)), "payment_date": p_dt})
 
-    dates = [eval_today - timedelta(days=7 * i) for i in range(5, -1, -1)]
+    cycle_days = 30 if is_monthly else 7
+    dates = [eval_today - timedelta(days=cycle_days * i) for i in range(5, -1, -1)]
     
     historical_ratings = {i: {} for i in range(6)}
     historical_status = {i: {} for i in range(6)}
@@ -11532,8 +11695,8 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
             historical_missed[idx][cid] = 0
 
     t0 = pytime.perf_counter()
-    # Run 6-week shared health history calculator
-    history_points = calculate_village_health_history(vid, cur, view, sub_view, dates)
+    # Run 6-cycle shared health history calculator
+    history_points = calculate_village_health_history(vid, cur, view, sub_view, dates, time_range=("monthly" if is_monthly else "weekly"))
     print(
            f"Health history took "
            f"{pytime.perf_counter() - t0:.2f}s"
@@ -11650,50 +11813,54 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         })
 
     stress_alerts = []
-    weekly_payments = {1: Decimal(0), 2: Decimal(0), 3: Decimal(0)}
+    cycle_name = "month" if is_monthly else "week"
+    cycle_Name = "Month" if is_monthly else "Week"
+    cycle_step = 30 if is_monthly else 7
+
+    period_payments = {1: Decimal(0), 2: Decimal(0), 3: Decimal(0)}
     for p_list in payments_by_cid.values():
         for p in p_list:
             p_dt = p["payment_date"].date() if isinstance(p["payment_date"], datetime) else p["payment_date"]
-            if eval_today - timedelta(days=7) < p_dt <= eval_today:
-                weekly_payments[1] += Decimal(str(p["amt"]))
-            elif eval_today - timedelta(days=14) < p_dt <= eval_today - timedelta(days=7):
-                weekly_payments[2] += Decimal(str(p["amt"]))
-            elif eval_today - timedelta(days=21) < p_dt <= eval_today - timedelta(days=14):
-                weekly_payments[3] += Decimal(str(p["amt"]))
+            if eval_today - timedelta(days=cycle_step) < p_dt <= eval_today:
+                period_payments[1] += Decimal(str(p["amt"]))
+            elif eval_today - timedelta(days=cycle_step * 2) < p_dt <= eval_today - timedelta(days=cycle_step):
+                period_payments[2] += Decimal(str(p["amt"]))
+            elif eval_today - timedelta(days=cycle_step * 3) < p_dt <= eval_today - timedelta(days=cycle_step * 2):
+                period_payments[3] += Decimal(str(p["amt"]))
                 
-    if weekly_payments[1] < weekly_payments[2] < weekly_payments[3]:
+    if period_payments[1] < period_payments[2] < period_payments[3]:
         stress_alerts.append({
             "type": "Collection Slowdown",
-            "message": f"Collections slowing: Weekly payment volume decreased continuously for the last 3 weeks ({weekly_payments[3]:,.0f} → {weekly_payments[2]:,.0f} → {weekly_payments[1]:,.0f}).",
+            "message": f"Collections slowing: {cycle_Name}ly payment volume decreased continuously for the last 3 {cycle_name}s ({period_payments[3]:,.0f} → {period_payments[2]:,.0f} → {period_payments[1]:,.0f}).",
             "severity": "High"
         })
         
     partial_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] == "PARTIAL")
-    partial_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid, "OnTrack") == "PARTIAL")
-    if partial_today > partial_last_week:
-        pct_inc = ((partial_today - partial_last_week) / partial_last_week * 100.0) if partial_last_week > 0 else 100.0
+    partial_last_cycle = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid, "OnTrack") == "PARTIAL")
+    if partial_today > partial_last_cycle:
+        pct_inc = ((partial_today - partial_last_cycle) / partial_last_cycle * 100.0) if partial_last_cycle > 0 else 100.0
         if pct_inc >= 15.0:
             stress_alerts.append({
                 "type": "Quality Decline",
-                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last week ({partial_last_week} → {partial_today}).",
+                "message": f"Partial repayments increased by {pct_inc:.0f}% compared to last {cycle_name} ({partial_last_cycle} → {partial_today}).",
                 "severity": "Medium"
             })
             
     overdue_today = sum(1 for cid in cust_details.keys() if historical_status[5][cid] in ["Overdue", "To Be Defaulted"])
-    overdue_last_week = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid) in ["Overdue", "To Be Defaulted"])
-    if overdue_today > overdue_last_week:
+    overdue_last_cycle = sum(1 for cid in cust_details.keys() if historical_status[4].get(cid) in ["Overdue", "To Be Defaulted"])
+    if overdue_today > overdue_last_cycle:
         stress_alerts.append({
             "type": "Increasing Delay",
-            "message": f"Active overdue/delayed cases increased from {overdue_last_week} to {overdue_today} this week.",
+            "message": f"Active overdue/delayed cases increased from {overdue_last_cycle} to {overdue_today} this {cycle_name}.",
             "severity": "High"
         })
         
     avg_rating_today = health_trend[-1]["avg_rating"]
-    avg_rating_3_weeks_ago = health_trend[-4]["avg_rating"] if len(health_trend) >= 4 else avg_rating_today
-    if avg_rating_today < avg_rating_3_weeks_ago - 5.0:
+    avg_rating_3_cycles_ago = health_trend[-4]["avg_rating"] if len(health_trend) >= 4 else avg_rating_today
+    if avg_rating_today < avg_rating_3_cycles_ago - 5.0:
         stress_alerts.append({
             "type": "Portfolio Stress",
-            "message": f"Deteriorating portfolio: Village average rating dropped from {avg_rating_3_weeks_ago:.1f} to {avg_rating_today:.1f} over the last 3 weeks.",
+            "message": f"Deteriorating portfolio: Village average rating dropped from {avg_rating_3_cycles_ago:.1f} to {avg_rating_today:.1f} over the last 3 {cycle_name}s.",
             "severity": "Critical"
         })
 
@@ -11730,6 +11897,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
         "village_name": v_name,
         "village_code": v_code,
         "empty": False,
+        "is_monthly": is_monthly,
         "health": {
             "score": round(current_health, 1),
             "status": health_status,
@@ -12300,14 +12468,24 @@ def api_dashboard_posting_analytics(vid):
         t0 = unique_dates[0]
         t0_stats = get_stats_for_date(t0)
 
+        is_monthly = is_village_monthly(vid, cur)
+
         # Elapsed days since latest posting
         elapsed_days = (today - t0).days
-        if elapsed_days <= 7:
-            lag_status = "active"
-        elif elapsed_days <= 14:
-            lag_status = "delayed"
+        if is_monthly:
+            if elapsed_days <= 32:
+                lag_status = "active"
+            elif elapsed_days <= 45:
+                lag_status = "delayed"
+            else:
+                lag_status = "critical"
         else:
-            lag_status = "critical"
+            if elapsed_days <= 7:
+                lag_status = "active"
+            elif elapsed_days <= 14:
+                lag_status = "delayed"
+            else:
+                lag_status = "critical"
 
         # T1 (Previous Week)
         t1 = unique_dates[1] if len(unique_dates) > 1 else None
@@ -12429,6 +12607,7 @@ def api_dashboard_posting_analytics(vid):
 
         return jsonify(success=True, data={
             "empty": False,
+            "is_monthly": is_monthly,
             "recent_posting": {
                 "last_date": format_date_display(t0),
                 "elapsed_days": elapsed_days,

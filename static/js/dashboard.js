@@ -130,7 +130,7 @@ async function loadDashboardData(vid, forceRecalc = false) {
       return;
     }
 
-
+    window.isMonthlyVillage = !!data.is_monthly;
 
     // Populate Headers
     const nameEl = document.getElementById("vpopNameTitle");
@@ -143,6 +143,10 @@ async function loadDashboardData(vid, forceRecalc = false) {
     const scoreEl = document.getElementById("vpopHealthScore");
     const riskEl = document.getElementById("vpopPredictedRisk");
     const trendEl = document.getElementById("vpopWeeklyTrend");
+    const trendPeriodEl = document.getElementById("lblHealthTrendPeriod");
+    if (trendPeriodEl) {
+      trendPeriodEl.textContent = window.isMonthlyVillage ? "Monthly Trend" : "Weekly Trend";
+    }
     if (scoreEl) scoreEl.textContent = score;
 
     const ring = document.getElementById("vpopHealthProgressRing");
@@ -537,6 +541,10 @@ function inspectCohortFlow(key) {
 
   if (clickedElement) clickedElement.classList.add("active");
 
+  const periodUnit = window.isMonthlyVillage ? "month" : "week";
+  const periodUnitPlural = window.isMonthlyVillage ? "months" : "weeks";
+  const periodUnitCap = window.isMonthlyVillage ? "Month" : "Week";
+
   let list = [];
   let title = "";
   let subtitle = "";
@@ -555,15 +563,15 @@ function inspectCohortFlow(key) {
       "LowRisk_HighRisk": "Low Risk → High Risk"
     };
     title = `${labelMap[key]} Transitions`;
-    subtitle = `${list.length} customers downgraded this week`;
+    subtitle = `${list.length} customers downgraded this ${periodUnit}`;
   } else if (key === "Recovered") {
     list = cachedTransitions ? cachedTransitions.Recovered : [];
     title = "Recovered Customers";
     subtitle = `${list.length} customers moved from overdue/delay back to On-Track status`;
   } else if (key === "Newly_Overdue") {
     list = cachedTransitions ? cachedTransitions.Newly_Overdue : [];
-    title = "Newly Overdue (This Week)";
-    subtitle = `${list.length} customers entered overdue status this week`;
+    title = `Newly Overdue (This ${periodUnitCap})`;
+    subtitle = `${list.length} customers entered overdue status this ${periodUnit}`;
   } else if (["Missed4Plus", "RapidCollapse", "SevereOverdue", "RatingBelow40"].includes(key)) {
     const group = cachedAttention ? cachedAttention[key] : null;
     list = group ? group.list : [];
@@ -576,7 +584,7 @@ function inspectCohortFlow(key) {
   } else if (key === "FirstTimeSkippers") {
     list = cachedFirstTimeSkippers || [];
     title = "First-Time Skippers (Streak of 2+ paid prior)";
-    subtitle = `${list.length} active customers skipped this week but paid the previous 2+ weeks consecutive`;
+    subtitle = `${list.length} active customers skipped this ${periodUnit} but paid the previous 2+ ${periodUnitPlural} consecutive`;
   }
 
   document.getElementById("vCohortInspectorTitle").textContent = title;
@@ -818,26 +826,28 @@ function openHistoryModal(category) {
   if (!modal || !cachedDashboardHistory) return;
 
   currentModalCategory = category;
-  currentModalRange = "weekly";
+  currentModalRange = window.isMonthlyVillage ? "monthly" : "weekly";
 
   // Reset toggle buttons active state
   document.querySelectorAll(".modal-time-toggle .time-btn").forEach(btn => {
     btn.classList.remove("active");
   });
-  const btnWeekly = document.getElementById("btnTimeWeekly");
-  if (btnWeekly) btnWeekly.classList.add("active");
+  const activeBtnId = currentModalRange === "weekly" ? "btnTimeWeekly" : "btnTimeMonthly";
+  const defaultBtn = document.getElementById(activeBtnId);
+  if (defaultBtn) defaultBtn.classList.add("active");
 
   const titleEl = document.getElementById("modalChartTitle");
   if (titleEl) {
-    if (category === "customers") titleEl.textContent = "Historical Customers Trend (Last 12 Weeks)";
-    else if (category === "loan_amount") titleEl.textContent = "Historical Loan Amount Trend (Last 12 Weeks)";
-    else if (category === "balance") titleEl.textContent = "Historical Outstanding Balance Trend (Last 12 Weeks)";
+    const rangeText = currentModalRange === "weekly" ? "Last 12 Weeks" : "Last 12 Months";
+    if (category === "customers") titleEl.textContent = `Historical Customers Trend (${rangeText})`;
+    else if (category === "loan_amount") titleEl.textContent = `Historical Loan Amount Trend (${rangeText})`;
+    else if (category === "balance") titleEl.textContent = `Historical Outstanding Balance Trend (${rangeText})`;
   }
 
   modal.classList.add("show");
   
   setTimeout(() => {
-    renderHistoryChart(category, "weekly");
+    renderHistoryChart(category, currentModalRange);
   }, 100);
 }
 
@@ -1179,13 +1189,13 @@ function openHealthModal(category) {
   if (!modal) return;
   
   activeHealthModalCategory = category;
-  activeHealthModalRange = "weekly";
+  activeHealthModalRange = window.isMonthlyVillage ? "monthly" : "weekly";
   
   // Reset toggle buttons active state
   document.querySelectorAll("#vHealthModalTimeToggle .time-btn").forEach(btn => {
     btn.classList.remove("active");
   });
-  const defaultBtn = document.querySelector(`#vHealthModalTimeToggle .time-btn[data-range="weekly"]`);
+  const defaultBtn = document.querySelector(`#vHealthModalTimeToggle .time-btn[data-range="${activeHealthModalRange}"]`);
   if (defaultBtn) defaultBtn.classList.add("active");
   
   // Set subtitle/title
@@ -1483,7 +1493,13 @@ function populatePostingAnalytics(data) {
     }
   }
 
+  const isMonthly = !!data.is_monthly;
+
   // Card 2: Recent Collection
+  const card2TitleEl = document.getElementById("lblPostingCard2Title");
+  if (card2TitleEl) {
+    card2TitleEl.textContent = isMonthly ? "Latest Month Collection" : "Latest Week Collection";
+  }
   const stats = data.recent_week_stats;
   const amtCollectedEl = document.getElementById("lblPostingAmtCollected");
   if (amtCollectedEl) {
@@ -1524,12 +1540,21 @@ function populatePostingAnalytics(data) {
   if (unpaidAmtEl) {
     unpaidAmtEl.textContent = formatRupee(stats.unpaid_amount);
   }
+  const missedPeriodEl = document.getElementById("lblPostingMissedPeriod");
+  if (missedPeriodEl) {
+    missedPeriodEl.textContent = isMonthly ? "monthly" : "weekly";
+  }
 
   const compPrevEl = document.getElementById("lblPostingSkippingvsPrev");
   if (compPrevEl) {
     const val = data.comparisons.previous_week.skipping_change_pct || 0;
-    compPrevEl.textContent = `${val >= 0 ? "+" : ""}${val.toFixed(1)}% vs prev week`;
+    compPrevEl.textContent = `${val >= 0 ? "+" : ""}${val.toFixed(1)}% vs prev ${isMonthly ? "month" : "week"}`;
     compPrevEl.style.color = val <= 0 ? "#10b981" : "#ef4444";
+  }
+
+  const chartPeriodEl = document.getElementById("lblPostingChartPeriod");
+  if (chartPeriodEl) {
+    chartPeriodEl.textContent = isMonthly ? "Months" : "Weeks";
   }
 
   const consSkippersEl = document.getElementById("lblPostingConsecutiveSkippers");
