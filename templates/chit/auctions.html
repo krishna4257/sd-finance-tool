@@ -424,8 +424,7 @@
     const curMonthObj = (data.months || []).find(m => m.month_index === activeMonthIndex);
     const mLabel = curMonthObj ? curMonthObj.month_label : `Month ${activeMonthIndex}`;
 
-    document.getElementById('payoutSubtitle').textContent = 
-      `${c.name} · ₹${Number(c.chit_total_value/100000).toFixed(0)}L · ${c.duration_months}M · ${c.duration_months} Months · ${mLabel}`;
+    document.getElementById('payoutSubtitle').textContent = `${c.name} · ${mLabel}`;
 
     document.getElementById('payoutsTakenCount').textContent = data.payouts_taken_count || 0;
     document.getElementById('payoutsTotalCount').textContent = data.total_shares_count || 20;
@@ -484,7 +483,7 @@
       }`;
       btn.innerHTML = `
         <span class="h-2 w-2 rounded-full ${isActive ? 'bg-emerald-400 dark:bg-emerald-300' : 'bg-emerald-500 dark:bg-slate-600'}"></span>
-        <span>${g.name} - ₹${Number(g.chit_total_value/100000).toFixed(0)}L · ${g.duration_months}M</span>
+        <span>${g.name}</span>
       `;
 
       let lpTimer = null;
