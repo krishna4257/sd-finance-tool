@@ -340,7 +340,27 @@
     </div>
   </div>
 
-  <!-- ==================== CARD 3: COLLECTIONS CHART ==================== -->
+  <!-- ==================== CARD 3: PAYMENTS SECTION ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-violet border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-4">
+    
+    <!-- Centered Collapsible Header -->
+    <div class="flex items-center justify-center cursor-pointer py-1 select-none" onclick="togglePaymentsCard()">
+      <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors">
+        <span class="text-xs font-bold uppercase tracking-wider" id="paymentsHeaderTitle">
+          PAYMENTS 0 members
+        </span>
+        <i data-lucide="chevron-up" id="paymentsCardChevron" class="w-3.5 h-3.5 stroke-[1.8] text-xs transition-transform"></i>
+      </div>
+    </div>
+
+    <!-- Payments Container by Member -->
+    <div id="paymentsListContainer" class="space-y-5 divide-y divide-slate-100 pt-2">
+      <!-- Rendered via JS -->
+    </div>
+
+  </div>
+
+  <!-- ==================== CARD 4: COLLECTIONS CHART ==================== -->
   <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-blue border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-5">
     
     <div class="flex items-center justify-between">
@@ -385,26 +405,6 @@
       <div id="perChitContainer" class="space-y-3">
         <!-- Rendered via JS -->
       </div>
-    </div>
-
-  </div>
-
-  <!-- ==================== CARD 4: PAYMENTS SECTION ==================== -->
-  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-violet border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-4">
-    
-    <!-- Centered Collapsible Header -->
-    <div class="flex items-center justify-center cursor-pointer py-1 select-none" onclick="togglePaymentsCard()">
-      <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors">
-        <span class="text-xs font-bold uppercase tracking-wider" id="paymentsHeaderTitle">
-          PAYMENTS 0 members
-        </span>
-        <i data-lucide="chevron-up" class="w-3.5 h-3.5 stroke-[1.8] text-xs transition-transform"></i>
-      </div>
-    </div>
-
-    <!-- Payments Container by Member -->
-    <div id="paymentsListContainer" class="space-y-5 divide-y divide-slate-100 pt-2">
-      <!-- Rendered via JS -->
     </div>
 
   </div>
