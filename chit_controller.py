@@ -2,6 +2,7 @@ import os
 import math
 import json
 import uuid
+import logging
 from collections import defaultdict
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -10,6 +11,8 @@ from flask import Blueprint, request, jsonify, render_template, session, redirec
 from db import get_pg_connection
 import chit_calc_engine as ce
 from chit_calc_engine import round_curr
+
+logger = logging.getLogger(__name__)
 
 chit_bp = Blueprint('chit_bp', __name__, url_prefix='/chit')
 
@@ -3098,30 +3101,27 @@ def rescale_and_rebalance_member_installments(cur, member_id, group_id=None):
             tot_direct_payments = sum(direct_payments.values())
             tot_available = max(tot_direct_payments, tot_paid_month, tot_payments_month)
 
-            # Check closed credit available prior to m_idx for these siblings
+            # Check cumulative credit available prior to m_idx for these siblings across all prior cycles
             cur.execute("""
                 SELECT 
-                    COALESCE(SUM(ci.net_due_amount), 0) as closed_due,
+                    COALESCE(SUM(ci.net_due_amount), 0) as prior_due,
                     COALESCE((
                         SELECT SUM(p.amount)
                         FROM chit_payments p
                         JOIN chit_installments pci ON p.installment_id = pci.id
-                        JOIN chit_schedules pcs ON pci.chit_group_id = pcs.chit_group_id AND pci.month_index = pcs.month_index
                         WHERE pci.membership_id::text = ANY(%s)
                           AND pci.month_index < %s
-                          AND pcs.status = 'Closed'
-                    ), 0) as closed_paid
+                    ), 0) as prior_paid
                 FROM chit_installments ci
-                JOIN chit_schedules cs ON ci.chit_group_id = cs.chit_group_id AND ci.month_index = cs.month_index
                 WHERE ci.membership_id::text = ANY(%s)
-                  AND ci.month_index < %s
-                  AND cs.status = 'Closed';
+                  AND ci.month_index < %s;
             """, (sib_ids, m_idx, sib_ids, m_idx))
             c_stat = cur.fetchone()
             c_due = float(c_stat[0] or 0.0) if c_stat else 0.0
             c_paid = float(c_stat[1] or 0.0) if c_stat else 0.0
             month_credit_avail = max(0.0, c_paid - c_due)
 
+            rem_credit = month_credit_avail
             for item in sib_info:
                 ms_id = item['sib']['id']
                 share = item['sib']['share_units']
@@ -3140,10 +3140,10 @@ def rescale_and_rebalance_member_installments(cur, member_id, group_id=None):
                     sib_paid = round_curr(tot_available * ratio)
                     
                 m_credit = 0.0
-                if month_credit_avail > 0:
-                    sib_share_ratio = (katt / tot_net_due) if tot_net_due > 0 else (share / total_ticket_shares)
-                    sib_avail_credit = round_curr(month_credit_avail * sib_share_ratio)
-                    m_credit = min(sib_avail_credit, max(0.0, katt - sib_paid))
+                if rem_credit > 0:
+                    needed = max(0.0, katt - sib_paid)
+                    m_credit = min(rem_credit, needed)
+                    rem_credit = max(0.0, rem_credit - m_credit)
 
                 pending = max(0.0, round_curr(katt - sib_paid - m_credit))
                 st = 'paid' if pending <= 0.01 else ('partial' if sib_paid > 0 else 'due')
@@ -3382,51 +3382,46 @@ def get_month_dues(chit_id, month_index):
         all_ms_ids = list({str(r[1]) for r in rows})
         all_member_ids = list({str(r[4]) for r in rows})
 
-        # Batch 1: Query previous unpaid dues from CLOSED months for all memberships
+        # Batch 1: Query previous unpaid dues from prior months for all memberships
         arrears_by_ms = defaultdict(list)
         if all_ms_ids:
             cur.execute("""
-                SELECT i.membership_id::text, i.id, i.month_index, i.month_year, i.pending_amount, s.month_year as sched_my
+                SELECT i.membership_id::text, i.id, i.month_index, i.month_year, i.pending_amount, s.month_year as sched_my, s.status as sched_status
                 FROM chit_installments i
                 JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
                 WHERE i.membership_id::text = ANY(%s)
                   AND i.month_index < %s 
-                  AND s.status = 'Closed' 
                   AND i.pending_amount > 0
                 ORDER BY i.month_index ASC;
             """, (all_ms_ids, month_index))
             for ar in cur.fetchall():
                 arrears_by_ms[str(ar[0])].append(ar[1:])
 
-        # Batch 2: Query closed-month credit surplus for all memberships
+        # Batch 2: Query cumulative credit surplus across all prior months for all memberships
         credits_by_ms = {}
         if all_ms_ids:
             cur.execute("""
-                WITH closed_dues AS (
+                WITH prior_dues AS (
                     SELECT i.membership_id::text as ms_id, COALESCE(SUM(i.net_due_amount), 0) as total_due
                     FROM chit_installments i
-                    JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
                     WHERE i.membership_id::text = ANY(%s)
                       AND i.month_index < %s
-                      AND s.status = 'Closed'
                     GROUP BY i.membership_id
                 ),
-                closed_payments AS (
+                prior_payments AS (
                     SELECT ci.membership_id::text as ms_id, COALESCE(SUM(p.amount), 0) as total_paid
                     FROM chit_payments p
                     JOIN chit_installments ci ON p.installment_id = ci.id
-                    JOIN chit_schedules cs ON ci.chit_group_id = cs.chit_group_id AND ci.month_index = cs.month_index
                     WHERE ci.membership_id::text = ANY(%s)
                       AND ci.month_index < %s
-                      AND cs.status = 'Closed'
                     GROUP BY ci.membership_id
                 )
                 SELECT 
-                    d.ms_id,
-                    d.total_due,
+                    COALESCE(d.ms_id, p.ms_id) as ms_id,
+                    COALESCE(d.total_due, 0) as total_due,
                     COALESCE(p.total_paid, 0) as total_paid
-                FROM closed_dues d
-                LEFT JOIN closed_payments p ON d.ms_id = p.ms_id;
+                FROM prior_dues d
+                FULL OUTER JOIN prior_payments p ON d.ms_id = p.ms_id;
             """, (all_ms_ids, month_index, all_ms_ids, month_index))
             for cr in cur.fetchall():
                 tot_c_due = float(cr[1] or 0.0)
@@ -3477,21 +3472,22 @@ def get_month_dues(chit_id, month_index):
             earliest_unpaid_my = arrears_rows[0][2] if arrears_rows else None
             due_since_str = format_month_year(earliest_unpaid_my) if earliest_unpaid_my else ''
 
-            # Look up credit surplus from CLOSED months for this membership
+            # Look up cumulative credit surplus across prior months for this membership
             avail_credit = credits_by_ms.get(ms_id_val, 0.0)
             credit_deduction = min(avail_credit, max(0.0, net - paid))
 
             # Build detailed due breakdown
             breakdown = []
             for ar in arrears_rows:
+                is_closed_sched = (len(ar) > 5 and ar[5] == 'Closed')
                 breakdown.append({
                     'installment_id': str(ar[0]),
                     'month_index': ar[1],
                     'month_year': format_month_year(ar[2]) or f"Month {ar[1]}",
                     'amount': float(ar[3] or 0.0),
-                    'is_closed': True,
+                    'is_closed': is_closed_sched,
                     'is_credit': False,
-                    'tag': f"Arrear (M{ar[1]} · Closed)"
+                    'tag': f"Arrear (M{ar[1]} · Closed)" if is_closed_sched else f"Arrear (M{ar[1]})"
                 })
             cur_month_due = max(0.0, net - paid)
             if cur_month_due > 0:
@@ -4560,6 +4556,22 @@ def handle_payment_item(payment_id):
             """, (diff, diff, diff, diff, installment_id))
             inst_res = cur.fetchone()
 
+            # Rebalance all installments for this member to cascade credit updates
+            cur.execute("""
+                SELECT m.id, ms.chit_group_id 
+                FROM chit_installments ci
+                JOIN chit_memberships ms ON ci.membership_id = ms.id
+                JOIN chit_members m ON ms.member_id = m.id
+                WHERE ci.id = %s;
+            """, (installment_id,))
+            mem_info = cur.fetchone()
+            if mem_info:
+                rescale_and_rebalance_member_installments(cur, mem_info[0], mem_info[1])
+                cur.execute("SELECT paid_amount, pending_amount, status FROM chit_installments WHERE id = %s;", (installment_id,))
+                updated_inst = cur.fetchone()
+                if updated_inst:
+                    inst_res = updated_inst
+
             cur.execute("""
                 INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
                 VALUES (%s, %s, 'Updated payment entry', 'chit_payments', %s, %s);
@@ -4603,6 +4615,22 @@ def handle_payment_item(payment_id):
                 RETURNING paid_amount, pending_amount, status;
             """, (amount, amount, amount, amount, installment_id))
             inst_res = cur.fetchone()
+
+            # Rebalance all installments for this member to cascade credit reversals
+            cur.execute("""
+                SELECT m.id, ms.chit_group_id 
+                FROM chit_installments ci
+                JOIN chit_memberships ms ON ci.membership_id = ms.id
+                JOIN chit_members m ON ms.member_id = m.id
+                WHERE ci.id = %s;
+            """, (installment_id,))
+            mem_info = cur.fetchone()
+            if mem_info:
+                rescale_and_rebalance_member_installments(cur, mem_info[0], mem_info[1])
+                cur.execute("SELECT paid_amount, pending_amount, status FROM chit_installments WHERE id = %s;", (installment_id,))
+                updated_inst = cur.fetchone()
+                if updated_inst:
+                    inst_res = updated_inst
 
             cur.execute("""
                 INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
@@ -4673,14 +4701,13 @@ def process_payment_record(data):
             if t_row:
                 target_month_idx = int(t_row[0])
 
-        # Find all unpaid installments from CLOSED months prior to target installment across all tickets
+        # Find all unpaid installments prior to target installment across all tickets
         cur.execute("""
             SELECT i.id, i.month_index, i.pending_amount, i.net_due_amount, i.paid_amount, s.month_year, i.membership_id
             FROM chit_installments i
             JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
             WHERE i.membership_id::text = ANY(%s)
               AND i.month_index < %s
-              AND s.status = 'Closed'
               AND i.pending_amount > 0
             ORDER BY i.month_index ASC, i.membership_id ASC;
         """, (sib_ms_ids, target_month_idx))
@@ -5505,50 +5532,49 @@ def get_member_folio(member_id):
         """, (member_id,))
         m_rows = cur.fetchall()
 
-        ms_ids = [mr[0] for mr in m_rows]
-        group_ids = list({mr[1] for mr in m_rows})
+        ms_ids = [str(mr[0]) for mr in m_rows]
+        group_ids = list({str(mr[1]) for mr in m_rows})
 
         # Batch-fetch installments for all memberships (eliminates N+1 query)
         inst_map_by_ms = defaultdict(dict)
         if ms_ids:
             cur.execute("""
-                SELECT membership_id, id, month_index, month_year, net_due_amount, paid_amount, pending_amount, status
+                SELECT membership_id::text, id, month_index, month_year, net_due_amount, paid_amount, pending_amount, status
                 FROM chit_installments
-                WHERE membership_id = ANY(%s)
+                WHERE membership_id::text = ANY(%s)
                 ORDER BY month_index ASC;
             """, (ms_ids,))
             for r in cur.fetchall():
-                inst_map_by_ms[r[0]][r[2]] = r[1:]
+                inst_map_by_ms[str(r[0])][r[2]] = r[1:]
 
-        # Batch-fetch closed arrears for all memberships (eliminates N+1 query)
+        # Batch-fetch prior arrears for all memberships (eliminates N+1 query)
         closed_arrears_by_ms = defaultdict(list)
         if ms_ids:
             cur.execute("""
-                SELECT i.membership_id, i.id, i.month_index, i.month_year, i.pending_amount, i.net_due_amount, s.month_year
+                SELECT i.membership_id::text, i.id, i.month_index, i.month_year, i.pending_amount, i.net_due_amount, s.month_year, s.status
                 FROM chit_installments i
                 JOIN chit_groups g ON i.chit_group_id = g.id
                 JOIN chit_schedules s ON i.chit_group_id = s.chit_group_id AND i.month_index = s.month_index
-                WHERE i.membership_id = ANY(%s)
+                WHERE i.membership_id::text = ANY(%s)
                   AND i.month_index < g.current_month_index
-                  AND s.status = 'Closed'
                   AND i.pending_amount > 0
                 ORDER BY i.month_index ASC;
             """, (ms_ids,))
             for ca in cur.fetchall():
-                closed_arrears_by_ms[ca[0]].append(ca[1:])
+                closed_arrears_by_ms[str(ca[0])].append(ca[1:])
 
         # Batch-fetch schedules for all chit groups (eliminates N+1 query)
         sched_rows_by_group = defaultdict(list)
         sched_map_by_group = defaultdict(dict)
         if group_ids:
             cur.execute("""
-                SELECT chit_group_id, month_index, chit_loss, amount_received, bonus, installment_kattubadi
+                SELECT chit_group_id::text, month_index, chit_loss, amount_received, bonus, installment_kattubadi
                 FROM chit_schedules
-                WHERE chit_group_id = ANY(%s)
+                WHERE chit_group_id::text = ANY(%s)
                 ORDER BY month_index ASC;
             """, (group_ids,))
             for sr in cur.fetchall():
-                grp_id = sr[0]
+                grp_id = str(sr[0])
                 row_data = sr[1:]
                 sched_rows_by_group[grp_id].append(row_data)
                 sched_map_by_group[grp_id][row_data[0]] = row_data
@@ -5572,7 +5598,7 @@ def get_member_folio(member_id):
             total_months_count += duration
 
             # Installments (pre-fetched in batch)
-            inst_map = inst_map_by_ms.get(ms_id, {})
+            inst_map = inst_map_by_ms.get(str(ms_id), {})
 
             group_paid_months = 0
             group_collected = 0.0
@@ -5605,9 +5631,10 @@ def get_member_folio(member_id):
             months_paid_count += group_paid_months
             total_paid_in += group_collected
 
-            # Query unpaid closed months for this membership (pre-fetched in batch)
-            closed_arrears = closed_arrears_by_ms.get(ms_id, [])
+            # Query unpaid prior months for this membership (pre-fetched in batch)
+            closed_arrears = closed_arrears_by_ms.get(str(ms_id), [])
             for ca in closed_arrears:
+                is_closed_sched = (len(ca) > 6 and ca[6] == 'Closed')
                 all_unpaid_items.append({
                     'installment_id': str(ca[0]),
                     'membership_id': str(ms_id),
@@ -5618,8 +5645,8 @@ def get_member_folio(member_id):
                     'month_year': format_month_year(ca[2]) or f"Month {ca[1]}",
                     'amount': float(ca[3]),
                     'net_due_amount': float(ca[4]),
-                    'is_closed': True,
-                    'tag': f"M{ca[1]} · {format_month_year(ca[2]) or f'Month {ca[1]}'} (Closed Arrear)",
+                    'is_closed': is_closed_sched,
+                    'tag': f"M{ca[1]} · {format_month_year(ca[2]) or f'Month {ca[1]}'} ({'Closed Arrear' if is_closed_sched else 'Prior Due'})",
                     'installment_type': inst_type
                 })
 
@@ -5661,8 +5688,8 @@ def get_member_folio(member_id):
                 }
 
             # Schedules for payout (pre-fetched in batch)
-            sched_rows = sched_rows_by_group.get(g_id, [])
-            sched_map = sched_map_by_group.get(g_id, {})
+            sched_rows = sched_rows_by_group.get(str(g_id), [])
+            sched_map = sched_map_by_group.get(str(g_id), {})
 
             if has_lift and lift_m:
                 s_row = sched_map.get(lift_m)
@@ -6018,6 +6045,9 @@ def get_member_folio(member_id):
             'loans': member_loans,
             'activity': activity
         })
+    except Exception as e:
+        logger.error(f"[CHIT_MEMBER_FOLIO] Error loading folio for member {member_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load member folio', 'details': str(e)}), 500
     finally:
         cur.close()
         conn.close()
