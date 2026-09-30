@@ -606,11 +606,46 @@ function deletePayment(feed_payment_id) {
   if (!confirm("Are you sure you want to delete this payment feed entry permanently?")) {
     return;
   }
-  return handleFeedAction(
-    `/feed/payment/delete/${feed_payment_id}`,
-    "Payment feed entry deleted successfully",
-    "Failed to delete payment feed entry"
-  );
+
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (row) {
+    row.style.opacity = "0.4";
+    row.style.pointerEvents = "none";
+  }
+
+  csrfFetch(`/feed/payment/delete/${feed_payment_id}`, {
+    method: "POST"
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast("Payment feed entry deleted successfully");
+        if (row) row.remove();
+        checkDuplicatesAndUnmapped();
+        renderDateTiles();
+        recalculateCumulativeAmounts();
+        updateTotalPayment();
+
+        const remainingRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+        if (remainingRows.length === 0) {
+          window.location.reload();
+        }
+      } else {
+        if (row) {
+          row.style.opacity = "1";
+          row.style.pointerEvents = "auto";
+        }
+        alert(data.error || "Failed to delete payment feed entry");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      if (row) {
+        row.style.opacity = "1";
+        row.style.pointerEvents = "auto";
+      }
+      alert("Server error deleting payment feed entry");
+    });
 }
 
 function togglePayload(button) {
@@ -708,29 +743,70 @@ function openImageModal(label, base64Data) {
   const image = document.getElementById("modalImage");
   if (!modal || !image) return;
 
-  image.src = `data:image/jpeg;base64,${base64Data}`;
-  image.alt = label;
+  let src = "";
+  if (!base64Data) {
+    return;
+  } else if (typeof base64Data === "string") {
+    src = base64Data.trim();
+    if (!src.startsWith("data:") && !src.startsWith("http") && !src.startsWith("/")) {
+      src = `data:image/jpeg;base64,${src}`;
+    }
+  } else if (base64Data instanceof HTMLElement) {
+    src = base64Data.src || base64Data.getAttribute("src") || "";
+  } else if (base64Data && base64Data.src) {
+    src = base64Data.src;
+  }
+
+  if (!src) return;
+
+  let cleanLabel = label || "Document Preview";
+  if (cleanLabel.toLowerCase() === "aadhaar_front" || cleanLabel.toLowerCase() === "aadhaar front") {
+    cleanLabel = "Aadhaar Front";
+  } else if (cleanLabel.toLowerCase() === "aadhaar_back" || cleanLabel.toLowerCase() === "aadhaar back") {
+    cleanLabel = "Aadhaar Back";
+  } else if (cleanLabel.toLowerCase() === "house" || cleanLabel.toLowerCase() === "house photo") {
+    cleanLabel = "House Photo";
+  }
+
+  const iconClass = cleanLabel.includes("House") ? "fa-home" : "fa-id-card";
+
+  image.src = src;
+  image.alt = cleanLabel;
+
+  const labelEl = document.getElementById("modalImageLabel");
+  if (labelEl) {
+    labelEl.innerHTML = `<i class="fas ${iconClass} me-1.5 text-primary"></i> ${cleanLabel}`;
+  }
+  const dlBtn = document.getElementById("modalImageDownloadBtn");
+  if (dlBtn) {
+    dlBtn.href = src;
+    dlBtn.download = `${cleanLabel.toLowerCase().replace(/\s+/g, "_")}.jpg`;
+  }
+
   modal.style.display = "flex";
 }
 
 function closeImageModal() {
   const modal = document.getElementById("imageModal");
   const image = document.getElementById("modalImage");
-  if (!modal || !image) return;
+  if (!modal) return;
 
   modal.style.display = "none";
-  image.src = "";
+  if (image) image.src = "";
 }
 
-function showImageModal(src, label) {
-  const modal = document.getElementById("imageModal");
-  const image = document.getElementById("modalImage");
-  if (!modal || !image) return;
+// Close image modal on Escape key press
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    const modal = document.getElementById("imageModal");
+    if (modal && modal.style.display !== "none") {
+      closeImageModal();
+    }
+  }
+});
 
-  if (!src) return;
-  image.src = src.startsWith("data:") ? src : `data:image/jpeg;base64,${src}`;
-  image.alt = label || "Document Preview";
-  modal.style.display = "flex";
+function showImageModal(src, label) {
+  openImageModal(label || "Document Preview", src);
 }
 
 function showToast(msg) {
@@ -813,6 +889,98 @@ function closePhonePeModalAndReload() {
 }
 
 /* ----------------------------------------------------
+   Date Normalization Helpers (Strict DD-MM-YYYY)
+---------------------------------------------------- */
+function normalizeToDisplayDate(val) {
+  if (!val) return "";
+  const s = String(val).trim();
+  // YYYY-MM-DD -> DD-MM-YYYY
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-");
+    return `${d}-${m}-${y}`;
+  }
+  // DD-MM-YYYY -> DD-MM-YYYY
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    return s;
+  }
+  if (typeof formatDate === "function") {
+    const formatted = formatDate(s);
+    if (formatted) return formatted;
+  }
+  return s;
+}
+
+function normalizeToIsoDate(val) {
+  if (!val) return "";
+  const s = String(val).trim();
+  // DD-MM-YYYY -> YYYY-MM-DD
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [d, m, y] = s.split("-");
+    return `${y}-${m}-${d}`;
+  }
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s;
+  }
+  if (typeof formatDateToISO === "function") {
+    const iso = formatDateToISO(s);
+    if (iso) return iso;
+  }
+  return s;
+}
+
+function onInlineDateTextEdit(inputEl, feed_payment_id) {
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (!row) return;
+
+  const rawVal = inputEl.value.trim();
+  const displayVal = normalizeToDisplayDate(rawVal);
+  const isoVal = normalizeToIsoDate(rawVal);
+
+  if (displayVal) {
+    inputEl.value = displayVal;
+    row.dataset.date = displayVal;
+    row.dataset.isoDate = isoVal;
+    const hiddenPicker = row.querySelector(".hidden-date-trigger");
+    if (hiddenPicker && isoVal) hiddenPicker.value = isoVal;
+  }
+
+  onInlineFeedEdit(inputEl, feed_payment_id, "pdt");
+}
+
+function openNativeDatePicker(btnEl) {
+  const wrap = btnEl.closest(".date-cell-wrap") || btnEl.closest(".posting-input-wrap") || btnEl.closest("td");
+  if (!wrap) return;
+  const picker = wrap.querySelector(".hidden-date-trigger");
+  if (!picker) return;
+
+  if (typeof picker.showPicker === "function") {
+    try {
+      picker.showPicker();
+      return;
+    } catch (e) {}
+  }
+  picker.focus();
+  picker.click();
+}
+
+function onHiddenDatePicked(pickerEl, feed_payment_id) {
+  const row = document.getElementById(`pay-row-${feed_payment_id}`);
+  if (!row) return;
+
+  const isoVal = pickerEl.value;
+  const displayVal = normalizeToDisplayDate(isoVal);
+
+  const textInput = row.querySelector(".date-input");
+  if (textInput) textInput.value = displayVal;
+
+  row.dataset.date = displayVal;
+  row.dataset.isoDate = isoVal;
+
+  onInlineFeedEdit(textInput || pickerEl, feed_payment_id, "pdt");
+}
+
+/* ----------------------------------------------------
    Inline Feed Edit Mode & Validation
 ---------------------------------------------------- */
 let inlineEditTimerMap = {};
@@ -826,11 +994,15 @@ function onInlineFeedEdit(inputEl, feed_payment_id, fieldType) {
   const amtInput = row.querySelector(".amt-input");
 
   const newAno = anoInput ? anoInput.value.trim() : row.dataset.ano;
-  const newDate = dateInput ? dateInput.value.trim() : row.dataset.date;
+  const rawDate = dateInput ? dateInput.value.trim() : (row.dataset.date || row.dataset.isoDate);
   const newAmt = amtInput ? parseFloat(amtInput.value) || 0 : parseFloat(row.dataset.amount) || 0;
 
+  const normDisplayDate = normalizeToDisplayDate(rawDate);
+  const normIsoDate = normalizeToIsoDate(rawDate);
+
   row.dataset.ano = newAno;
-  row.dataset.date = newDate;
+  row.dataset.date = normDisplayDate;
+  row.dataset.isoDate = normIsoDate;
   row.dataset.amount = newAmt;
 
   checkDuplicatesAndUnmapped();
@@ -848,7 +1020,8 @@ function onInlineFeedEdit(inputEl, feed_payment_id, fieldType) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ano: newAno,
-        payment_date: newDate,
+        payment_date: normDisplayDate,
+        pdt: normDisplayDate,
         amt: newAmt
       })
     })
@@ -857,18 +1030,22 @@ function onInlineFeedEdit(inputEl, feed_payment_id, fieldType) {
         if (!res.success) {
           showToast(res.error || "Failed to update payment item");
         } else {
-          const statusCell = row.querySelector(".status-cell");
+          const anoWrap = row.querySelector(".row-ano-wrap");
           if (res.mapped === true) {
             row.classList.remove("row-unmapped");
             row.dataset.cid = res.cid || "";
-            if (statusCell) {
-              statusCell.innerHTML = '<span class="feed-status-pill status-pending"><i class="fas fa-clock me-1"></i> Pending</span>';
+            if (anoWrap) {
+              const dot = anoWrap.querySelector(".row-warn-dot.unmapped");
+              if (dot) dot.remove();
             }
           } else if (res.mapped === false) {
             row.classList.add("row-unmapped");
             row.dataset.cid = "";
-            if (statusCell) {
-              statusCell.innerHTML = '<span class="feed-status-pill status-unmapped" title="Account unmapped for this village"><i class="fas fa-exclamation-triangle me-1"></i> Unmapped</span>';
+            if (anoWrap && !anoWrap.querySelector(".row-warn-dot.unmapped")) {
+              const dot = document.createElement("span");
+              dot.className = "row-warn-dot unmapped";
+              dot.title = "Unmapped account for this village";
+              anoWrap.appendChild(dot);
             }
           }
         }
@@ -886,7 +1063,7 @@ function checkDuplicatesAndUnmapped() {
 
   rows.forEach(row => {
     const ano = (row.dataset.ano || "").trim();
-    const date = (row.dataset.date || "").trim();
+    const date = normalizeToDisplayDate(row.dataset.date || row.dataset.isoDate || "");
 
     if (ano && date) {
       const key = `${ano}__${date}`;
@@ -896,38 +1073,39 @@ function checkDuplicatesAndUnmapped() {
 
   rows.forEach(row => {
     const ano = (row.dataset.ano || "").trim();
-    const date = (row.dataset.date || "").trim();
+    const date = normalizeToDisplayDate(row.dataset.date || row.dataset.isoDate || "");
     const key = `${ano}__${date}`;
     const cb = row.querySelector(".pay-checkbox");
-    const statusCell = row.querySelector(".status-cell");
+    const anoWrap = row.querySelector(".row-ano-wrap");
     const isDuplicate = pairCounts[key] > 1;
 
     row.classList.remove("row-duplicate");
-    const oldDupBadge = statusCell ? statusCell.querySelector(".badge-duplicate") : null;
-    if (oldDupBadge) oldDupBadge.remove();
+    const oldDupDot = anoWrap ? anoWrap.querySelector(".row-warn-dot.duplicate") : null;
+    if (oldDupDot) oldDupDot.remove();
 
     if (isDuplicate) {
       row.classList.add("row-duplicate");
       if (cb) {
-        cb.checked = false;
-        cb.disabled = true;
+        cb.disabled = false;
+        cb.title = "Duplicate entry: Select to delete";
       }
-      if (statusCell) {
-        const dupBadge = document.createElement("span");
-        dupBadge.className = "badge bg-warning text-dark ms-1 badge-duplicate";
-        dupBadge.style.fontSize = "10px";
-        dupBadge.title = "Duplicate Account Number and Date entry";
-        dupBadge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Duplicate';
-        statusCell.appendChild(dupBadge);
+      if (anoWrap) {
+        const dupDot = document.createElement("span");
+        dupDot.className = "row-warn-dot duplicate";
+        dupDot.title = "Duplicate Account Number and Date entry (delete or edit to resolve)";
+        anoWrap.appendChild(dupDot);
       }
     } else {
-      if (cb) cb.disabled = false;
+      if (cb) {
+        cb.disabled = false;
+        cb.title = "";
+      }
     }
   });
 }
 
 /* ----------------------------------------------------
-   Cumulative Amount Calculation
+   Cumulative Amount Calculation (Plain Elegant Typography)
 ---------------------------------------------------- */
 function recalculateCumulativeAmounts() {
   const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
@@ -941,13 +1119,24 @@ function recalculateCumulativeAmounts() {
 
     const cumCell = row.querySelector(".cumulative-cell");
     if (cumCell) {
-      cumCell.innerHTML = `<span class="posting-cumul-badge posting-cumul-readonly" title="Auto-calculated running balance (Read-Only)"><i class="fas fa-calculator me-1 text-muted" style="font-size: 10px;"></i> <span>₹${runningTotal.toLocaleString("en-IN")}</span></span>`;
+      cumCell.innerHTML = `<span class="cell-plain-val cumul-val">₹${runningTotal.toLocaleString("en-IN")}</span>`;
     }
   });
 }
 
+function focusLastRowInput() {
+  const lastRow = document.querySelector("#feedPaymentTable tbody tr.feed-pay-row:last-child");
+  if (lastRow) {
+    const anoInput = lastRow.querySelector(".ano-input");
+    if (anoInput) {
+      anoInput.focus();
+      anoInput.select();
+    }
+  }
+}
+
 /* ----------------------------------------------------
-   Date Grouping Filter Tiles
+   Date Grouping Filter Tiles (Standardized DD-MM-YYYY)
 ---------------------------------------------------- */
 let activeDateFilter = "ALL";
 
@@ -961,7 +1150,7 @@ function renderDateTiles() {
   let grandCount = 0;
 
   rows.forEach(row => {
-    const d = (row.dataset.date || row.dataset.isoDate || "").trim();
+    const d = normalizeToDisplayDate(row.dataset.date || row.dataset.isoDate || "");
     const amt = parseFloat(row.dataset.amount) || 0;
 
     if (d) {
@@ -974,7 +1163,9 @@ function renderDateTiles() {
     }
   });
 
-  const uniqueDates = Object.keys(dateMap).sort();
+  const uniqueDates = Object.keys(dateMap).sort((a, b) => {
+    return normalizeToIsoDate(a).localeCompare(normalizeToIsoDate(b));
+  });
 
   if (uniqueDates.length < 2) {
     container.style.display = "none";
@@ -1007,7 +1198,7 @@ function filterFeedByDate(targetDate) {
   const rows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
 
   rows.forEach(row => {
-    const rowDate = (row.dataset.date || row.dataset.isoDate || "").trim();
+    const rowDate = normalizeToDisplayDate(row.dataset.date || row.dataset.isoDate || "");
     if (targetDate === "ALL" || rowDate === targetDate) {
       row.style.display = "";
     } else {
@@ -1060,6 +1251,7 @@ function updateTotalPayment() {
   let selectedCount = 0;
   let grandTotal = 0;
   let grandCount = 0;
+  let hasSelectedDuplicates = false;
 
   const visibleRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
 
@@ -1074,10 +1266,13 @@ function updateTotalPayment() {
     }
 
     const cb = row.querySelector(".pay-checkbox");
-    if (cb && cb.checked && !isDup) {
+    if (cb && cb.checked) {
       selectedTotal += amt;
       selectedCount += 1;
       row.classList.add("row-selected");
+      if (isDup) {
+        hasSelectedDuplicates = true;
+      }
     } else {
       row.classList.remove("row-selected");
     }
@@ -1086,26 +1281,59 @@ function updateTotalPayment() {
   const labelEl = document.getElementById("totalBadgeLabel");
   const totalEl = document.getElementById("selectedTotal");
   const acceptBtn = document.getElementById("acceptBtn");
+  const deleteBtn = document.getElementById("deleteSelectedBtn");
 
   if (selectedCount > 0) {
     if (labelEl) labelEl.innerText = `Selected (${selectedCount} of ${grandCount}):`;
     if (totalEl) totalEl.innerText = selectedTotal.toLocaleString("en-IN");
+    if (deleteBtn) {
+      deleteBtn.innerHTML = `<i class="fas fa-trash-alt me-1"></i> Delete (${selectedCount})`;
+      deleteBtn.style.display = "inline-flex";
+      deleteBtn.disabled = false;
+      deleteBtn.style.opacity = "1";
+    }
     if (acceptBtn) {
-      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1.5"></i> Accept Selected (${selectedCount})`;
-      acceptBtn.disabled = false;
-      acceptBtn.style.opacity = "1";
+      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1"></i> Submit (${selectedCount})`;
+      acceptBtn.style.display = "inline-flex";
+      if (hasSelectedDuplicates) {
+        acceptBtn.disabled = true;
+        acceptBtn.style.opacity = "0.45";
+        acceptBtn.title = "Cannot submit: Duplicate rows selected. Delete duplicates or uncheck them before submitting.";
+      } else {
+        acceptBtn.disabled = false;
+        acceptBtn.style.opacity = "1";
+        acceptBtn.title = "Submit selected payments to ledger";
+      }
     }
   } else {
     if (labelEl) labelEl.innerText = `Grand Total (${grandCount} items):`;
     if (totalEl) totalEl.innerText = grandTotal.toLocaleString("en-IN");
     if (acceptBtn) {
-      acceptBtn.innerHTML = `<i class="fas fa-check-double me-1.5"></i> Accept Selected`;
+      acceptBtn.style.display = "none";
+    }
+    if (deleteBtn) {
+      deleteBtn.style.display = "none";
+    }
+  }
+
+  const feedTable = document.getElementById("feedPaymentTable");
+  if (feedTable) {
+    if (selectedCount > 0) {
+      feedTable.classList.add("has-selection");
+    } else {
+      feedTable.classList.remove("has-selection");
     }
   }
 
   const headerCheck = document.getElementById("feedHeaderCheck");
   if (headerCheck) {
-    headerCheck.checked = (selectedCount > 0 && selectedCount === grandCount);
+    headerCheck.checked = (selectedCount > 0 && selectedCount === grandCount && !hasSelectedDuplicates);
+  }
+
+  const countPill = document.querySelector(".posting-count-pill");
+  if (countPill) {
+    const totalCount = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row").length;
+    countPill.innerHTML = `<i class="fas fa-layer-group me-1"></i> ${totalCount} Records`;
   }
 }
 
@@ -1120,7 +1348,7 @@ function acceptSinglePaymentRow(feed_payment_id, btnEl) {
   const ano = (row.dataset.ano || "").trim();
 
   if (row.classList.contains("row-duplicate")) {
-    alert("Cannot accept duplicate payment entry. There is already another entry with the same account and date.");
+    alert(`Cannot submit duplicate payment entry for Account #${ano}.\n\nPlease delete one of the duplicate entries or edit the account number first.`);
     return;
   }
 
@@ -1162,6 +1390,24 @@ function acceptSinglePaymentRow(feed_payment_id, btnEl) {
 
 function acceptSelected() {
   const btn = document.getElementById("acceptBtn");
+
+  // Guard against any selected duplicates
+  const selectedDuplicates = [];
+  document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
+    const row = cb.closest("tr");
+    if (row && row.classList.contains("row-duplicate")) {
+      const ano = (row.dataset.ano || "").trim();
+      if (ano && !selectedDuplicates.includes(ano)) {
+        selectedDuplicates.push(ano);
+      }
+    }
+  });
+
+  if (selectedDuplicates.length > 0) {
+    alert(`Cannot submit payments while duplicate rows are selected.\n\nDuplicate Account(s): ${selectedDuplicates.join(", ")}\n\nPlease delete the duplicate row(s) or edit the account number before submitting.`);
+    return;
+  }
+
   const selectedIds = [];
   let selectedSum = 0;
 
@@ -1178,10 +1424,10 @@ function acceptSelected() {
     return;
   }
 
-  const originalText = btn ? btn.innerText : "";
+  const originalHtml = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.innerText = "Processing...";
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Submitting...';
   }
 
   csrfFetch("/feed/payment/accept_batch", {
@@ -1211,11 +1457,11 @@ function acceptSelected() {
           const failedDetails = data.failed_items.map(f => `• Account #${f.ano}: ${f.reason}`).join("\n");
           alert(`❌ Unable to post payments:\n\n${failedDetails}`);
         } else {
-          alert(data.error || "Failed to accept payments");
+          alert(data.error || "Failed to submit payments");
         }
         if (btn) {
           btn.disabled = false;
-          btn.innerText = originalText;
+          btn.innerHTML = originalHtml;
         }
       }
     })
@@ -1224,7 +1470,72 @@ function acceptSelected() {
       showToast("Error processing payments");
       if (btn) {
         btn.disabled = false;
-        btn.innerText = originalText;
+        btn.innerHTML = originalHtml;
+      }
+    });
+}
+
+function deleteSelectedPayments() {
+  const selectedCbs = document.querySelectorAll(".pay-checkbox:checked");
+  const selectedIds = [];
+  selectedCbs.forEach(cb => {
+    if (cb.value) selectedIds.push(cb.value);
+  });
+
+  if (selectedIds.length === 0) {
+    showToast("Select at least one payment to delete");
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to permanently delete the ${selectedIds.length} selected payment entries?`)) {
+    return;
+  }
+
+  const btn = document.getElementById("deleteSelectedBtn");
+  const originalHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Deleting...';
+  }
+
+  csrfFetch("/feed/payment/delete_batch", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ ids: selectedIds })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast(`${selectedIds.length} payments deleted successfully`);
+        selectedIds.forEach(id => {
+          const row = document.getElementById(`pay-row-${id}`);
+          if (row) row.remove();
+        });
+        checkDuplicatesAndUnmapped();
+        renderDateTiles();
+        recalculateCumulativeAmounts();
+        updateTotalPayment();
+
+        const remainingRows = document.querySelectorAll("#feedPaymentTable tbody tr.feed-pay-row");
+        if (remainingRows.length === 0) {
+          window.location.reload();
+        }
+      } else {
+        alert(data.error || "Failed to delete payments");
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Server error deleting payments");
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
       }
     });
 }
@@ -1292,93 +1603,132 @@ function acceptClosureWithDiscount(feed_id, cid, discountVal) {
     });
 }
 
+/* ----------------------------------------------------
+   Feed Payment Table Column Sorting
+---------------------------------------------------- */
+let currentSortCol = null;
+let currentSortDir = "none"; // "asc", "desc", "none" (default submission order)
+
+function initFeedTableSorting() {
+  const table = document.getElementById("feedPaymentTable");
+  if (!table) return;
+  const tbody = table.querySelector("tbody");
+  if (!tbody) return;
+
+  // Stamp original submission order on each row once
+  const initialRows = Array.from(tbody.querySelectorAll("tr.feed-pay-row"));
+  initialRows.forEach((row, idx) => {
+    if (!row.dataset.originalIndex) {
+      row.dataset.originalIndex = String(idx);
+    }
+  });
+
+  const headers = table.querySelectorAll("th.sortable-th");
+  headers.forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      let nextDir = "asc";
+      if (currentSortCol === col) {
+        if (currentSortDir === "asc") nextDir = "desc";
+        else if (currentSortDir === "desc") nextDir = "none";
+        else nextDir = "asc";
+      }
+
+      currentSortCol = nextDir === "none" ? null : col;
+      currentSortDir = nextDir;
+
+      // Update header icons and styles
+      headers.forEach(h => {
+        const iconSpan = h.querySelector(".sort-icon");
+        if (!iconSpan) return;
+        if (h === th && nextDir === "asc") {
+          iconSpan.innerHTML = '<i class="fas fa-sort-up text-primary ms-1" style="font-size: 11px;"></i>';
+          h.classList.add("sorted-header");
+        } else if (h === th && nextDir === "desc") {
+          iconSpan.innerHTML = '<i class="fas fa-sort-down text-primary ms-1" style="font-size: 11px;"></i>';
+          h.classList.add("sorted-header");
+        } else {
+          iconSpan.innerHTML = '<i class="fas fa-sort text-muted ms-1" style="font-size: 11px;"></i>';
+          h.classList.remove("sorted-header");
+        }
+      });
+
+      // Sort rows
+      const rows = Array.from(tbody.querySelectorAll("tr.feed-pay-row"));
+      rows.sort((a, b) => {
+        if (nextDir === "none") {
+          return parseInt(a.dataset.originalIndex, 10) - parseInt(b.dataset.originalIndex, 10);
+        }
+
+        if (col === "ano") {
+          const inpA = a.querySelector(".ano-input");
+          const inpB = b.querySelector(".ano-input");
+          const valA = parseInt(inpA ? inpA.value : a.dataset.ano, 10) || 0;
+          const valB = parseInt(inpB ? inpB.value : b.dataset.ano, 10) || 0;
+          return nextDir === "asc" ? valA - valB : valB - valA;
+        }
+
+        if (col === "pdt") {
+          const inpA = a.querySelector(".date-input");
+          const inpB = b.querySelector(".date-input");
+          const rawA = (inpA ? inpA.value : a.dataset.date || a.dataset.isoDate || "").trim();
+          const rawB = (inpB ? inpB.value : b.dataset.date || b.dataset.isoDate || "").trim();
+          const valA = normalizeToIsoDate(rawA);
+          const valB = normalizeToIsoDate(rawB);
+          return nextDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+
+        if (col === "amt" || col === "cumulative") {
+          const inpA = a.querySelector(".amt-input");
+          const inpB = b.querySelector(".amt-input");
+          const valA = parseFloat(inpA ? inpA.value : a.dataset.amount) || 0;
+          const valB = parseFloat(inpB ? inpB.value : b.dataset.amount) || 0;
+          return nextDir === "asc" ? valA - valB : valB - valA;
+        }
+
+        if (col === "status") {
+          const getStatusWeight = (row) => {
+            if (row.classList.contains("row-unmapped")) return "1_unmapped";
+            if (row.classList.contains("row-duplicate")) return "2_duplicate";
+            return "0_pending";
+          };
+          const valA = getStatusWeight(a);
+          const valB = getStatusWeight(b);
+          return nextDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+
+        return 0;
+      });
+
+      // Move rows in DOM to new order
+      rows.forEach(row => tbody.appendChild(row));
+
+      // Re-calculate running cumulative amounts based on current sorted order
+      recalculateCumulativeAmounts();
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   checkDuplicatesAndUnmapped();
   recalculateCumulativeAmounts();
   renderDateTiles();
   updateTotalPayment();
+  initFeedTableSorting();
 
-  const groupByEl = document.getElementById("groupBy");
-  const groupSelect = document.getElementById("groupSelect");
-  if (!groupByEl || !groupSelect) return;
-
-  function populateGroupSelect(type) {
-    groupSelect.innerHTML = "";
-
-    if (type === "none") {
-      groupSelect.style.display = "none";
-      document.querySelectorAll(".pay-checkbox").forEach(cb => {
-        cb.checked = false;
-      });
-      updateTotalPayment();
-      return;
-    }
-
-    groupSelect.style.display = "inline-block";
-
-    const uniqueValues = new Set();
-    const rows = document.querySelectorAll(".payment-feed-table tbody tr");
-
-    rows.forEach(row => {
-      if (type === "date") {
-        const d = (row.dataset.date || row.dataset.isoDate || "").trim();
-        if (d) uniqueValues.add(d);
-      } else if (type === "ano") {
-        const a = (row.dataset.ano || "").trim();
-        if (a) uniqueValues.add(a);
+  // Allow clicking anywhere on a row to toggle selection and reveal actions
+  const feedTable = document.getElementById("feedPaymentTable");
+  if (feedTable) {
+    feedTable.addEventListener("click", function (e) {
+      if (e.target.closest("input, button, a, label, select, .posting-action-circle")) return;
+      const row = e.target.closest("tr.feed-pay-row");
+      if (!row) return;
+      const cb = row.querySelector(".pay-checkbox:not(:disabled)");
+      if (cb) {
+        cb.checked = !cb.checked;
+        updateTotalPayment();
       }
     });
-
-    const defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = type === "date" ? "-- Select Date --" : "-- Select ANO --";
-    groupSelect.appendChild(defaultOpt);
-
-    const sortedValues = Array.from(uniqueValues).sort((a, b) => {
-      if (type === "ano") {
-        return (parseInt(a) || 0) - (parseInt(b) || 0);
-      }
-      return a.localeCompare(b);
-    });
-
-    sortedValues.forEach(val => {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = val;
-      groupSelect.appendChild(opt);
-    });
-
-    document.querySelectorAll(".pay-checkbox").forEach(cb => {
-      cb.checked = false;
-    });
-    updateTotalPayment();
   }
-
-  groupByEl.addEventListener("change", function () {
-    populateGroupSelect(this.value);
-  });
-
-  groupSelect.addEventListener("change", function () {
-    const type = groupByEl.value;
-    const selectedVal = this.value.trim();
-
-    document.querySelectorAll(".payment-feed-table tbody tr").forEach(row => {
-      const cb = row.querySelector(".pay-checkbox");
-      if (!cb) return;
-
-      if (!selectedVal) {
-        cb.checked = false;
-      } else if (type === "date") {
-        const rowDate = (row.dataset.date || "").trim();
-        const rowIsoDate = (row.dataset.isoDate || "").trim();
-        cb.checked = (rowDate === selectedVal || rowIsoDate === selectedVal);
-      } else if (type === "ano") {
-        const rowAno = (row.dataset.ano || "").trim();
-        cb.checked = (rowAno === selectedVal);
-      }
-    });
-
-    updateTotalPayment();
-  });
 });
 

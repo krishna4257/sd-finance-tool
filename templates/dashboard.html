@@ -224,7 +224,7 @@
                       <span id="vpopPredictedRisk" style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; color: #fbbf24; margin-top: 1px;">-</span>
                     </div>
                     <div class="health-trend-box" style="display: flex; flex-direction: column; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
-                      <span class="health-trend-label" style="font-size: 0.6rem; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em;">Weekly Trend</span>
+                      <span id="lblHealthTrendPeriod" class="health-trend-label" style="font-size: 0.6rem; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em;">Weekly Trend</span>
                       <span id="vpopWeeklyTrend" style="font-size: 0.9rem; font-weight: 800; color: #94a3b8; margin-top: 1px;">-</span>
                     </div>
                   </div>
@@ -473,7 +473,7 @@
             <div class="card-glass posting-anal-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-color: #e5e7eb; cursor: pointer;" ondblclick="openPostingChartModal()" title="Double click to view trend chart">
               <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <span style="font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Latest Week Collection</span>
+                  <span id="lblPostingCard2Title" style="font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Latest Week Collection</span>
                   <span id="lblPostingAmountvsHist" style="font-size: 0.7rem; font-weight: 700; color: #10b981;">+0% vs hist</span>
                 </div>
                 <div style="display: flex; align-items: baseline; gap: 6px; margin: 4px 0;">
@@ -502,7 +502,7 @@
                   <span id="lblPostingSkippingPct" style="font-size: 1.8rem; font-weight: 900; color: #ef4444; line-height: 1;">0%</span>
                   <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">unpaid / <span id="lblPostingSkippedCustomers">0</span> customers skipped</span>
                 </div>
-                <span style="font-size: 0.725rem; color: #94a3b8; font-weight: 600; display: block; margin-top: 2px;">Expected weekly installments missed: <span id="lblPostingAmtUnpaid" style="color:#ef4444;font-weight:700;">₹0</span></span>
+                <span style="font-size: 0.725rem; color: #94a3b8; font-weight: 600; display: block; margin-top: 2px;">Expected <span id="lblPostingMissedPeriod">weekly</span> installments missed: <span id="lblPostingAmtUnpaid" style="color:#ef4444;font-weight:700;">₹0</span></span>
               </div>
               <div style="border-top: 1px solid rgba(226, 232, 240, 0.6); padding-top: 8px; display: flex; gap: 8px; justify-content: space-between; align-items: center;">
                 <button id="vAuxConsecutiveSkippers" class="aux-flow-btn danger small" onclick="inspectCohortFlow('ConsecutiveSkippers')" style="margin: 0; padding: 2px 8px; font-size: 0.65rem; font-weight: 800; border-radius: 8px; flex: 1; text-align: center;" title="Consecutive Skippers">
@@ -529,7 +529,7 @@
       <div class="card-glass" style="width: 95%; max-width: 1000px; padding: 24px; position: relative; display: flex; flex-direction: column; gap: 16px; border-color: #e5e7eb;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(226, 232, 240, 0.8); padding-bottom: 12px;">
           <span class="posting-chart-title" style="font-size: 0.95rem; font-weight: 700; color: #1a4d2e; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px;">
-            <i class="fas fa-chart-line"></i> Collection Trend & Coverage (Last 10 Weeks)
+            <i class="fas fa-chart-line"></i> Collection Trend & Coverage (Last 10 <span id="lblPostingChartPeriod">Weeks</span>)
           </span>
           <button class="popup-close-btn" onclick="closePostingChartModal()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-muted);">&times;</button>
         </div>

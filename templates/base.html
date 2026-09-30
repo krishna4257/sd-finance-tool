@@ -143,6 +143,11 @@
   </div>
 
   <aside>
+    <!-- Mobile Close Button (visible on mobile / tablet) -->
+    <button id="sidebar-close-btn" class="sidebar-close-btn" title="Close navigation" aria-label="Close navigation">
+      <i class="fas fa-times"></i>
+    </button>
+
     <div class="logo-container">
       <a href="/village"><img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Smart Counting Logo"></a>
     </div>
@@ -150,11 +155,11 @@
     <div class="nav-section-label">MENU</div>
 
     {% block sidebar %}
-    {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'users_page', 'admin_control'] %}
+    {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'users_page', 'admin_control'] %}
     <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
     <a href="/village"  class="nav-link {% if request.endpoint == 'village_page' %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Village</a>
-    <a href="/employee" class="nav-link {% if request.endpoint == 'employee_page' %}active{% endif %}"><i class="fas fa-user-tie"></i> Employee</a>
+    <a href="/employee" class="nav-link {% if request.endpoint in ['employee_page', 'employee_detail_page'] %}active{% endif %}"><i class="fas fa-user-tie"></i> Employee</a>
     {% endif %}
     {% if session.level == 'admin' %}
     <a href="/users"         class="nav-link {% if request.endpoint == 'users_page' %}active{% endif %}"><i class="fas fa-users-cog"></i> User Management</a>
@@ -503,25 +508,29 @@
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const toggleBtn = document.getElementById("sidebar-toggle");
+      const closeBtn = document.getElementById("sidebar-close-btn");
       const aside = document.querySelector("aside");
       const overlay = document.getElementById("sidebar-overlay");
 
-      if (toggleBtn && aside && overlay) {
-        toggleBtn.addEventListener("click", () => {
-          aside.classList.add("open");
-          overlay.classList.add("show");
-        });
+      const closeDrawer = () => {
+        if (aside) aside.classList.remove("open");
+        if (overlay) overlay.classList.remove("show");
+        document.body.style.overflow = "";
+      };
 
-        overlay.addEventListener("click", () => {
-          aside.classList.remove("open");
-          overlay.classList.remove("show");
-        });
+      const openDrawer = () => {
+        if (aside) aside.classList.add("open");
+        if (overlay) overlay.classList.add("show");
+        document.body.style.overflow = "hidden";
+      };
+
+      if (toggleBtn && aside && overlay) {
+        toggleBtn.addEventListener("click", openDrawer);
+        overlay.addEventListener("click", closeDrawer);
+        if (closeBtn) closeBtn.addEventListener("click", closeDrawer);
 
         aside.querySelectorAll("a.nav-link").forEach(link => {
-          link.addEventListener("click", () => {
-            aside.classList.remove("open");
-            overlay.classList.remove("show");
-          });
+          link.addEventListener("click", closeDrawer);
         });
       }
     });

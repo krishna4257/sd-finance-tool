@@ -1798,6 +1798,446 @@
         box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
     }
 
+    .posting-tool-btn.danger-btn {
+        background: #ef4444;
+        color: #ffffff;
+        border-color: #ef4444;
+        box-shadow: 0 2px 10px rgba(239, 68, 68, 0.25);
+    }
+
+    .posting-tool-btn.danger-btn:hover {
+        background: #dc2626;
+        border-color: #dc2626;
+        color: #ffffff;
+        filter: brightness(1.08);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    }
+
+    /* ─── Ocean Glassy & Matt Steel Table (Pixel-perfect recreation of reference design) ─── */
+    .posting-table-stage {
+        position: relative;
+        padding: 24px 8px 36px 8px;
+        background: radial-gradient(ellipse 750px 320px at 50% 0%, rgba(2, 132, 199, 0.28) 0%, rgba(2, 132, 199, 0.05) 55%, transparent 75%);
+        border-radius: 20px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .admin-table-wrapper.matt-steel-table {
+        background: #080c14;
+        border-radius: 14px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        box-shadow: 
+            0 0 0 1px rgba(255, 255, 255, 0.06),
+            0 24px 55px -12px rgba(0, 0, 0, 0.85),
+            0 0 45px -5px rgba(2, 132, 199, 0.22);
+        overflow: hidden;
+        position: relative;
+        width: fit-content;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    /* Specular light streak on top edge */
+    .admin-table-wrapper.matt-steel-table::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, 
+            transparent 0%, 
+            rgba(186, 230, 253, 0.2) 10%, 
+            rgba(224, 242, 254, 0.95) 50%, 
+            rgba(186, 230, 253, 0.2) 90%, 
+            transparent 100%
+        );
+        z-index: 10;
+        pointer-events: none;
+    }
+
+    .matt-steel-table table {
+        width: auto;
+        min-width: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 0;
+        table-layout: auto;
+    }
+
+    /* ─── Ocean Glassy Header ─── */
+    .matt-steel-table thead tr {
+        background: linear-gradient(180deg, #0284c7 0%, #0369a1 40%, #075985 80%, #0c4a6e 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .matt-steel-table thead th {
+        background: transparent;
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 13.5px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        text-transform: none;
+        padding: 13px 20px;
+        border: none;
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .matt-steel-table thead th:last-child {
+        border-right: none;
+    }
+
+    .matt-steel-table thead th .th-content {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+    }
+
+    .matt-steel-table thead th .th-text {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .matt-steel-table thead th .th-glyph-fx {
+        color: #38bdf8;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 14.5px;
+        font-family: 'Times New Roman', serif;
+        line-height: 1;
+    }
+
+    .matt-steel-table thead th .th-glyph-sigma {
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    .matt-steel-table thead th.sortable-th {
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s ease;
+    }
+
+    .matt-steel-table thead th.sortable-th:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* ─── Table Body Rows & Cells (Centered, Minimalist, Same Background Across Columns) ─── */
+    .matt-steel-table tbody tr.feed-pay-row {
+        transition: background 0.18s ease;
+        cursor: pointer;
+    }
+
+    .matt-steel-table tbody tr.feed-pay-row td {
+        background: #090e18;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-right: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 0;
+        height: 48px;
+        vertical-align: middle;
+        text-align: center;
+        white-space: nowrap;
+        transition: background 0.18s ease;
+    }
+
+    .matt-steel-table tbody tr.feed-pay-row td:last-child {
+        border-right: none;
+    }
+
+    /* Row Hover */
+    .matt-steel-table tbody tr.feed-pay-row:hover td {
+        background: #0d1524;
+    }
+
+    /* Row Selected State */
+    .matt-steel-table tbody tr.feed-pay-row.row-selected td {
+        background: rgba(14, 165, 233, 0.12) !important;
+        border-bottom-color: rgba(56, 189, 248, 0.2);
+    }
+
+    /* ─── Actions Column: Always part of table layout with smooth hover/selection reveal ─── */
+    table#feedPaymentTable th.th-actions,
+    table#feedPaymentTable td.td-actions {
+        display: table-cell;
+        width: 85px;
+    }
+
+    /* ─── Editable Cells: Centered, Dynamic Size, Sleek Focus ─── */
+    .feed-table-cell-input {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        outline: none;
+        padding: 13px 14px;
+        margin: 0;
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        transition: all 0.15s ease;
+    }
+
+    /* Account Number Cell Input - Center Aligned */
+    .feed-table-cell-input.ano-input {
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+        text-align: center;
+    }
+
+    /* Date Cell Input - Center Aligned */
+    .feed-table-cell-input.date-input {
+        color: #cbd5e1;
+        font-weight: 400;
+        font-size: 13.5px;
+        text-align: center;
+    }
+
+    /* Focus State: High-precision glassy blue glow */
+    .feed-table-cell-input:focus {
+        border-color: rgba(56, 189, 248, 0.6);
+        background: rgba(14, 165, 233, 0.08);
+        box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+    }
+
+    .feed-table-cell-input:hover:not(:focus) {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Wrapper for Account Number with indicator dots */
+    .row-ano-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+    }
+
+    .row-warn-dot {
+        position: absolute;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        pointer-events: auto;
+    }
+
+    .row-warn-dot.unmapped {
+        background: #f59e0b;
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+    }
+
+    .row-warn-dot.duplicate {
+        background: #ef4444;
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+    }
+
+    /* Wrapper for Date Cell with subtle calendar trigger */
+    .date-cell-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+    }
+
+    .cell-date-picker-icon {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: #475569;
+        padding: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        opacity: 0;
+        transition: opacity 0.15s ease, color 0.15s ease;
+        outline: none;
+    }
+
+    .date-cell-wrap:hover .cell-date-picker-icon,
+    .date-cell-wrap:focus-within .cell-date-picker-icon {
+        opacity: 1;
+    }
+
+    .cell-date-picker-icon:hover {
+        color: #38bdf8;
+    }
+
+    /* Wrapper for Amount Cell with ₹ prefix - Centered */
+    .amt-cell-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 14px;
+        box-sizing: border-box;
+    }
+
+    .amt-currency-symbol {
+        color: #64748b;
+        font-size: 13.5px;
+        font-weight: 500;
+        margin-right: 4px;
+        user-select: none;
+    }
+
+    .feed-table-cell-input.amt-input {
+        padding: 13px 0;
+        color: #cbd5e1;
+        font-weight: 400;
+        font-size: 13.5px;
+        text-align: center;
+        width: auto;
+    }
+
+    .amt-cell-wrap:focus-within {
+        border-color: rgba(56, 189, 248, 0.6);
+        background: rgba(14, 165, 233, 0.08);
+        box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+        border-radius: 4px;
+    }
+
+    /* Cumulative Cell: Pure text typography, centered */
+    .cell-plain-val {
+        display: block;
+        padding: 13px 20px;
+        color: #94a3b8;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13.5px;
+        font-weight: 400;
+        text-align: center;
+        user-select: none;
+    }
+
+    /* Row Actions on Selection: Green Tick & Red Dustbin with Animation */
+    .row-actions-container {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        opacity: 0;
+        transform: scale(0.65) translateY(2px);
+        pointer-events: none;
+        transition: opacity 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+        white-space: nowrap;
+    }
+
+    .feed-pay-row.row-selected .row-actions-container,
+    .feed-pay-row:hover .row-actions-container,
+    .feed-pay-row.row-duplicate .row-actions-container {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: auto;
+    }
+
+    /* Duplicate rows: disable single submit, highlight delete */
+    .feed-pay-row.row-duplicate .posting-action-circle.submit {
+        opacity: 0.25;
+        cursor: not-allowed;
+        filter: grayscale(1);
+        pointer-events: none;
+    }
+    .feed-pay-row.row-duplicate .posting-action-circle.submit:hover {
+        transform: none;
+        box-shadow: none;
+        background: rgba(16, 185, 129, 0.22);
+    }
+    .feed-pay-row.row-duplicate .posting-action-circle.delete {
+        opacity: 1;
+        border-color: rgba(239, 68, 68, 0.8);
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+    }
+
+    .posting-action-circle {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        outline: none;
+    }
+
+    .posting-action-circle.submit {
+        background: rgba(16, 185, 129, 0.22);
+        border-color: rgba(16, 185, 129, 0.6);
+        color: #34d399;
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    }
+
+    .posting-action-circle.submit:hover {
+        background: #10b981;
+        border-color: #10b981;
+        color: #ffffff;
+        transform: scale(1.12);
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+    }
+
+    .posting-action-circle.delete {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: rgba(239, 68, 68, 0.6);
+        color: #f87171;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+    }
+
+    .posting-action-circle.delete:hover {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #ffffff;
+        transform: scale(1.12);
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
+    }
+
+    /* Subtle row warning indicators */
+    .row-ano-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .row-warn-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .row-warn-dot.unmapped {
+        background: #ef4444;
+        box-shadow: 0 0 8px #ef4444;
+    }
+    .row-warn-dot.duplicate {
+        background: #f59e0b;
+        box-shadow: 0 0 8px #f59e0b;
+    }
+
     .payment-total-badge {
         background: rgba(16, 185, 129, 0.1);
         border: 1px solid rgba(16, 185, 129, 0.25);
@@ -3946,13 +4386,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-id-card"></i> Aadhaar Front</span>
                                         {% if row.aadhaar_front_pic %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Front', '{{ row.aadhaar_front_pic|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Front', this.closest('.detail-doc-card').querySelector('img') || '{{ row.aadhaar_front_pic|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.aadhaar_front_pic %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar Front" onclick="openImageModal('Aadhaar Front', '{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar Front" onclick="openImageModal('Aadhaar Front', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-image me-2"></i> No Aadhaar front image uploaded</div>
                                     {% endif %}
@@ -3967,13 +4407,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-id-card"></i> Aadhaar Back</span>
                                         {% if row.aadhaar_back_pic %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Back', '{{ row.aadhaar_back_pic|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('Aadhaar Back', this.closest('.detail-doc-card').querySelector('img') || '{{ row.aadhaar_back_pic|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.aadhaar_back_pic %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar Back" onclick="openImageModal('Aadhaar Back', '{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar Back" onclick="openImageModal('Aadhaar Back', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-image me-2"></i> No Aadhaar back image uploaded</div>
                                     {% endif %}
@@ -3987,13 +4427,13 @@
                                     <div class="detail-doc-header">
                                         <span class="detail-doc-label"><i class="fas fa-home"></i> House Photo</span>
                                         {% if row.house_photo %}
-                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('House Photo', '{{ row.house_photo|b64encode }}')">
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="openImageModal('House Photo', this.closest('.detail-doc-card').querySelector('img') || '{{ row.house_photo|b64encode }}')">
                                             <i class="fas fa-expand me-1"></i> Full View
                                         </button>
                                         {% endif %}
                                     </div>
                                     {% if row.house_photo %}
-                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House Photo" onclick="openImageModal('House Photo', '{{ row.house_photo|b64encode }}')">
+                                    <img class="detail-doc-img" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House Photo" onclick="openImageModal('House Photo', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="detail-doc-empty"><i class="fas fa-home me-2"></i> No house photo uploaded</div>
                                     {% endif %}
@@ -4110,10 +4550,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_front_pic else 'Missing' }}</span>
                                     </div>
                                     {% if row.aadhaar_front_pic %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('Aadhaar Front', this.closest('.feed-doc-card').querySelector('img') || '{{ row.aadhaar_front_pic|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview Front
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('aadhaar_front','{{ row.aadhaar_front_pic|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_front_pic|b64encode }}" alt="Aadhaar front preview" onclick="openImageModal('Aadhaar Front', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Front photo</div>
                                     {% endif %}
@@ -4126,10 +4566,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.aadhaar_back_pic else 'Missing' }}</span>
                                     </div>
                                     {% if row.aadhaar_back_pic %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('Aadhaar Back', this.closest('.feed-doc-card').querySelector('img') || '{{ row.aadhaar_back_pic|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview Back
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('aadhaar_back','{{ row.aadhaar_back_pic|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.aadhaar_back_pic|b64encode }}" alt="Aadhaar back preview" onclick="openImageModal('Aadhaar Back', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-image me-1"></i> No Back photo</div>
                                     {% endif %}
@@ -4142,10 +4582,10 @@
                                         <span class="badge bg-light text-dark" style="font-size:10px;">{{ 'Available' if row.house_photo else 'Missing' }}</span>
                                     </div>
                                     {% if row.house_photo %}
-                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    <button class="neumorphic-btn small" style="margin-top:10px; width:100%;" onclick="openImageModal('House Photo', this.closest('.feed-doc-card').querySelector('img') || '{{ row.house_photo|b64encode }}')">
                                         <i class="fas fa-eye"></i> Preview House
                                     </button>
-                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('house','{{ row.house_photo|b64encode }}')">
+                                    <img class="feed-doc-preview" src="data:image/jpeg;base64,{{ row.house_photo|b64encode }}" alt="House preview" onclick="openImageModal('House Photo', this)" style="cursor: pointer;" title="Click for full view">
                                     {% else %}
                                     <div class="feed-doc-empty"><i class="fas fa-home me-1"></i> No House photo</div>
                                     {% endif %}
@@ -4177,25 +4617,17 @@
                     </div>
                     <h5 class="posting-title">Temporary Payments Queue</h5>
                     <span class="posting-count-pill"><i class="fas fa-layer-group me-1"></i> {{ payments_count }} Records</span>
-                    <div class="posting-topbar-divider"></div>
-                    <div class="toolbar-filter-pill">
-                        <i class="fas fa-filter text-secondary" style="font-size: 11px;"></i>
-                        <span class="toolbar-label">Group By:</span>
-                        <select id="groupBy" class="toolbar-select">
-                            <option value="none">None</option>
-                            <option value="date">Date</option>
-                            <option value="ano">Account No</option>
-                        </select>
-                    </div>
-                    <select id="groupSelect" class="toolbar-select toolbar-filter-pill" style="display:none;"></select>
                 </div>
 
                 <div class="posting-topbar-right">
                     <button id="feedSelectAllBtn" class="posting-tool-btn" onclick="toggleSelectAllFeedPayments()">
                         <i class="fas fa-check-square me-1"></i> Select All
                     </button>
-                    <button id="acceptBtn" class="posting-tool-btn primary-btn" onclick="acceptSelected()">
-                        <i class="fas fa-check-double me-1"></i> Accept Selected
+                    <button id="acceptBtn" class="posting-tool-btn primary-btn" onclick="acceptSelected()" style="display: none;">
+                        <i class="fas fa-check-double me-1"></i> Submit
+                    </button>
+                    <button id="deleteSelectedBtn" class="posting-tool-btn danger-btn" onclick="deleteSelectedPayments()" style="display: none;">
+                        <i class="fas fa-trash-alt me-1"></i> Delete
                     </button>
                     <div class="payment-total-badge" id="paymentTotalBadge">
                         <span id="totalBadgeLabel">Total:</span> <strong>₹<span id="selectedTotal">0</span></strong>
@@ -4209,86 +4641,132 @@
                 <!-- Date Filter Tiles Container (shown dynamically if 2+ unique dates exist) -->
                 <div id="feedDateTilesContainer" class="posting-date-tiles-track" style="display: none; margin-bottom: 14px;"></div>
 
-                <div class="admin-table-wrapper table-responsive">
-                    <table id="feedPaymentTable" class="admin-table customer-table payment-feed-table table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:46px; text-align:center;">
-                                    <label class="modern-check-label">
-                                        <input type="checkbox" id="feedHeaderCheck" style="display:none;" onchange="toggleSelectAllFeedPayments(this)">
-                                        <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
-                                    </label>
-                                </th>
-                                <th style="min-width: 140px;">Account Number</th>
-                                <th style="min-width: 140px;">Payment Date</th>
-                                <th style="min-width: 140px;">Amount Paid</th>
-                                <th style="min-width: 130px;">Cumulative</th>
-                                <th style="min-width: 120px;">Status</th>
-                                <th class="text-end" style="width:130px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in payments %}
-                            {% set date_parts = row.pdt.split('-') %}
-                            {% set iso_date = date_parts[2] ~ '-' ~ date_parts[1] ~ '-' ~ date_parts[0] if date_parts|length == 3 else row.pdt %}
-                            {% set row_ano = row.edit.ano if (row.edit and row.edit.ano) else row.ano %}
-                            {% set row_amt = row.edit.amt if (row.edit and row.edit.amt) else row.amt %}
-                            {% set row_pdt = row.edit.pdt if (row.edit and row.edit.pdt) else row.pdt %}
-                            <tr id="pay-row-{{ row.feed_payment_id }}"
-                                data-feed-id="{{ row.feed_payment_id }}"
-                                data-date="{{ row_pdt }}"
-                                data-iso-date="{{ iso_date }}"
-                                data-ano="{{ row_ano }}"
-                                data-amount="{{ row_amt }}"
-                                data-cid="{{ row.cid if row.cid else '' }}"
-                                class="feed-pay-row {% if not row.cid %}row-unmapped{% endif %}">
-                                <td style="text-align:center;">
-                                    <label class="modern-check-label">
-                                        <input type="checkbox" class="pay-checkbox" style="display:none;" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()">
-                                        <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
-                                    </label>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap">
-                                        <span class="posting-affix">#</span>
-                                        <input type="text" class="feed-inline-input ano-input" value="{{ row_ano }}" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'ano')">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap" style="max-width: 155px;">
-                                        <input type="date" class="feed-inline-input date-input" value="{{ iso_date }}" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'pdt')">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="posting-input-wrap">
-                                        <span class="posting-affix">₹</span>
-                                        <input type="number" class="feed-inline-input amt-input" value="{{ row_amt }}" step="any" onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'amt')">
-                                    </div>
-                                </td>
-                                <td class="cumulative-cell">
-                                    <span class="posting-cumul-badge posting-cumul-readonly" title="Auto-calculated running balance (Read-Only)"><i class="fas fa-calculator me-1 text-muted" style="font-size: 10px;"></i> <span>₹0</span></span>
-                                </td>
-                                <td class="status-cell">
-                                    {% if not row.cid %}
-                                    <span class="feed-status-pill status-unmapped" title="Account unmapped for this village"><i class="fas fa-exclamation-triangle me-1"></i> Unmapped</span>
-                                    {% else %}
-                                    <span class="feed-status-pill status-pending"><i class="fas fa-clock me-1"></i> Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    <div class="posting-actions-cell">
-                                        <button type="button" class="posting-btn-action accept btn-accept-row" title="Accept payment entry" onclick="acceptSinglePaymentRow('{{ row.feed_payment_id }}', this)">
-                                            <i class="fas fa-check"></i> <span>Accept</span>
-                                        </button>
-                                        <button type="button" class="posting-btn-action delete" title="Delete entry" onclick="deletePayment('{{ row.feed_payment_id }}')">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="posting-table-stage">
+                    <div class="admin-table-wrapper table-responsive matt-steel-table">
+                        <table id="feedPaymentTable" class="payment-feed-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="th-check" style="width: 44px; text-align: center;">
+                                        <label class="modern-check-label">
+                                            <input type="checkbox" id="feedHeaderCheck" style="display:none;" onchange="toggleSelectAllFeedPayments(this)">
+                                            <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
+                                        </label>
+                                    </th>
+                                    <th class="sortable-th col-ano" data-col="ano" title="Click to sort by Account Number">
+                                        <div class="th-content">
+                                            <span class="th-text">Account Number</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-pdt" data-col="pdt" title="Click to sort by Payment Date">
+                                        <div class="th-content">
+                                            <span class="th-text">Payment Date</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-amt" data-col="amt" title="Click to sort by Amount Paid">
+                                        <div class="th-content">
+                                            <span class="th-glyph-fx">𝑓𝑥</span>
+                                            <span class="th-text">Amount Paid</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="sortable-th col-cumulative" data-col="cumulative" title="Click to sort by Cumulative Balance">
+                                        <div class="th-content">
+                                            <span class="th-glyph-sigma">&Sigma;</span>
+                                            <span class="th-text">Cumulative</span>
+                                            <span class="sort-icon"><i class="fas fa-sort text-muted ms-1" style="font-size: 10px;"></i></span>
+                                        </div>
+                                    </th>
+                                    <th class="th-actions" style="width: 90px; text-align: center;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in payments %}
+                                {% set row_ano = row.edit.ano if (row.edit and row.edit.ano) else row.ano %}
+                                {% set row_amt = row.edit.amt if (row.edit and row.edit.amt) else row.amt %}
+                                {% set row_pdt = row.display_date if row.display_date else (row.edit.pdt if (row.edit and row.edit.pdt) else row.pdt) %}
+                                {% set row_iso = row.iso_date if row.iso_date else '' %}
+                                <tr id="pay-row-{{ row.feed_payment_id }}"
+                                    data-feed-id="{{ row.feed_payment_id }}"
+                                    data-date="{{ row_pdt }}"
+                                    data-iso-date="{{ row_iso }}"
+                                    data-ano="{{ row_ano }}"
+                                    data-amount="{{ row_amt }}"
+                                    data-cid="{{ row.cid if row.cid else '' }}"
+                                    class="feed-pay-row {% if not row.cid %}row-unmapped{% endif %}">
+                                    <td class="td-check" style="text-align: center;">
+                                        <label class="modern-check-label">
+                                            <input type="checkbox" class="pay-checkbox" style="display:none;" value="{{ row.feed_payment_id }}" onchange="updateTotalPayment()">
+                                            <span class="modern-check-pill"><i class="fas fa-check" style="font-size: 10px;"></i></span>
+                                        </label>
+                                    </td>
+                                    <td class="col-ano">
+                                        <div class="row-ano-wrap">
+                                            <input type="text"
+                                                   class="feed-table-cell-input ano-input"
+                                                   value="{{ row_ano }}"
+                                                   size="7"
+                                                   autocomplete="off"
+                                                   spellcheck="false"
+                                                   onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'ano')">
+                                            {% if not row.cid %}
+                                            <span class="row-warn-dot unmapped" title="Unmapped account for this village"></span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="col-date">
+                                        <div class="date-cell-wrap">
+                                            <input type="text"
+                                                   class="feed-table-cell-input date-input"
+                                                   value="{{ row_pdt }}"
+                                                   placeholder="DD-MM-YYYY"
+                                                   pattern="\d{2}-\d{2}-\d{4}"
+                                                   size="10"
+                                                   autocomplete="off"
+                                                   title="Date format: DD-MM-YYYY (Double click to open calendar)"
+                                                   onchange="onInlineDateTextEdit(this, '{{ row.feed_payment_id }}')"
+                                                   ondblclick="openNativeDatePicker(this)">
+                                            <button type="button" class="cell-date-picker-icon" onclick="openNativeDatePicker(this)" title="Choose date from calendar">
+                                                <i class="fas fa-calendar-alt"></i>
+                                            </button>
+                                            <input type="date"
+                                                   class="hidden-date-trigger"
+                                                   value="{{ row_iso }}"
+                                                   style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;"
+                                                   onchange="onHiddenDatePicked(this, '{{ row.feed_payment_id }}')">
+                                        </div>
+                                    </td>
+                                    <td class="col-amt">
+                                        <div class="amt-cell-wrap">
+                                            <span class="amt-currency-symbol">₹</span>
+                                            <input type="number"
+                                                   class="feed-table-cell-input amt-input"
+                                                   value="{{ row_amt }}"
+                                                   step="any"
+                                                   size="8"
+                                                   autocomplete="off"
+                                                   onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'amt')">
+                                        </div>
+                                    </td>
+                                    <td class="cumulative-cell">
+                                        <span class="cell-plain-val cumul-val">₹0</span>
+                                    </td>
+                                    <td class="td-actions text-center">
+                                        <div class="row-actions-container">
+                                            <button type="button" class="posting-action-circle submit" title="Submit this payment" onclick="acceptSinglePaymentRow('{{ row.feed_payment_id }}', this)">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button type="button" class="posting-action-circle delete" title="Delete this entry" onclick="deletePayment('{{ row.feed_payment_id }}')">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% else %}
                 <div class="empty-state-card">
@@ -4484,6 +4962,7 @@
                     <select id="edit_pay_type" class="search-input">
                         <option value="cash">Cash</option>
                         <option value="upi">UPI</option>
+                        <option value="partial">Partial (Cash + UPI)</option>
                     </select>
                 </div>
             </div>
@@ -4604,6 +5083,36 @@
       </button>
     </div>
   </div>
+</div>
+
+<!-- Full View Document Image Modal (Lightbox) -->
+<div id="imageModal" class="modal custom-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 14, 22, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 20000; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeImageModal()">
+    <div class="image-modal-content card-glass" style="position: relative; max-width: 92vw; max-height: 92vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 18px 22px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);">
+        <!-- Close Button -->
+        <button type="button" class="image-modal-close" onclick="closeImageModal()" aria-label="Close image preview" style="position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; box-shadow: var(--shadow-md); z-index: 20;">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <!-- Header / Label & Download -->
+        <div style="width: 100%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+            <span id="modalImageLabel" style="font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; color: var(--text);">
+                <i class="fas fa-id-card me-1.5 text-primary"></i> Document Preview
+            </span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <a id="modalImageDownloadBtn" href="" download="document.jpg" class="neumorphic-btn small btn-outline" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none;" target="_blank">
+                    <i class="fas fa-download me-1"></i> Download
+                </a>
+                <button type="button" class="neumorphic-btn small btn-outline" onclick="closeImageModal()" style="padding: 4px 10px; font-size: 0.75rem;">
+                    Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Image Container -->
+        <div style="max-height: 75vh; max-width: 85vw; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,0.2);">
+            <img id="modalImage" class="image-modal-img" src="" alt="Document Preview" style="max-width: 100%; max-height: 75vh; object-fit: contain; border-radius: 10px; display: block;">
+        </div>
+    </div>
 </div>
 {% endblock %}
 

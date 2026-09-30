@@ -51,122 +51,542 @@
     z-index: 1;
   }
 
-  /* ── Employee Profile Cards Grid ── */
+  /* ── Bento Concentric Tactile Employee Cards ── */
   .employee-cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
+    gap: 22px;
     margin-top: 10px;
   }
 
-  .employee-card {
-    background: var(--surface, #ffffff);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 12px;
-    padding: 20px;
+  .bento-emp-card {
     position: relative;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 22px;
+    padding: 22px 20px 20px;
+    overflow: hidden;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
-  }
-
-  .employee-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-md, 0 4px 8px rgba(0, 0, 0, 0.06));
-    border-color: var(--primary, #1a4d2e);
-  }
-
-  .employee-card.inactive-card {
-    opacity: 0.6;
-    background: var(--input-bg, #f9fafb) !important;
-    border-color: var(--border-light, #e5e7eb) !important;
-  }
-
-  .inactive-row {
-    opacity: 0.6;
-  }
-
-  .employee-card-header {
-    display: flex;
     align-items: center;
-    gap: 14px;
-    border-bottom: 1px solid var(--border-light, #f3f4f6);
-    padding-bottom: 12px;
+    text-align: center;
+    user-select: none;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 0.3s ease,
+                box-shadow 0.3s ease;
   }
 
-  .employee-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--primary-lighter, #e8f5e9);
+  /* Dark Mode Default / Rest */
+  [data-theme="dark"] .bento-emp-card,
+  .bento-emp-card {
+    background: linear-gradient(180deg, #131620 0%, #0d0f16 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* Dark Mode Hover - Signature Green Illumination */
+  [data-theme="dark"] .bento-emp-card:hover,
+  .bento-emp-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(16, 185, 129, 0.55) !important;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 28px rgba(16, 185, 129, 0.2);
+  }
+
+  /* Light Mode Rest - Sculpted Ceramic */
+  html:not([data-theme="dark"]) .bento-emp-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8fa 100%) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02), inset 0 1px 0 #ffffff;
+  }
+
+  /* Light Mode Hover - Forest Green Illumination */
+  html:not([data-theme="dark"]) .bento-emp-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(26, 77, 46, 0.45) !important;
+    box-shadow: 0 16px 36px rgba(26, 77, 46, 0.12), 0 0 22px rgba(26, 77, 46, 0.1);
+  }
+
+  .bento-emp-card.inactive-card {
+    opacity: 0.62;
+    filter: grayscale(40%);
+  }
+
+  /* ── Matrix Code Watermark ── */
+  .bento-matrix-watermark {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 14px 14px;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+  }
+
+  html:not([data-theme="dark"]) .bento-matrix-watermark {
+    background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    opacity: 0.6;
+  }
+
+  .bento-emp-card:hover .bento-matrix-watermark {
+    opacity: 0.95;
+  }
+
+  /* ── Top Role Pill & Track Line ── */
+  .bento-top-track {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    z-index: 2;
+    margin-bottom: 2px;
+  }
+
+  .bento-role-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 14px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="dark"] .bento-role-pill,
+  .bento-role-pill {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+  }
+
+  [data-theme="dark"] .bento-role-pill i,
+  .bento-role-pill i {
+    color: #cbd5e1;
+    font-size: 0.7rem;
+    transition: color 0.3s ease;
+  }
+
+  html:not([data-theme="dark"]) .bento-role-pill {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+  }
+
+  html:not([data-theme="dark"]) .bento-role-pill i {
+    color: #64748b;
+  }
+
+  /* Hover Green Accent for Role Pill */
+  [data-theme="dark"] .bento-emp-card:hover .bento-role-pill,
+  .bento-emp-card:hover .bento-role-pill {
+    border-color: rgba(16, 185, 129, 0.55);
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.08);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .bento-role-pill i,
+  .bento-emp-card:hover .bento-role-pill i {
+    color: #34d399;
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .bento-role-pill {
+    border-color: var(--primary, #1a4d2e);
     color: var(--primary, #1a4d2e);
+    background: var(--primary-lighter, #f0fdf4);
+    box-shadow: 0 0 10px rgba(26, 77, 46, 0.12);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .bento-role-pill i {
+    color: var(--primary, #1a4d2e);
+  }
+
+  .bento-track-line {
+    width: 1.5px;
+    height: 16px;
+    margin-top: 3px;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="dark"] .bento-track-line,
+  .bento-track-line {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
+  }
+
+  html:not([data-theme="dark"]) .bento-track-line {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.02) 100%);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .bento-track-line,
+  .bento-emp-card:hover .bento-track-line {
+    background: linear-gradient(180deg, #10b981 0%, rgba(16, 185, 129, 0.2) 100%);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .bento-track-line {
+    background: linear-gradient(180deg, var(--primary, #1a4d2e) 0%, rgba(26, 77, 46, 0.2) 100%);
+  }
+
+  /* ── Concentric Biometric Rings Stage ── */
+  .bento-concentric-stage {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
-    font-weight: 700;
-    box-shadow: inset 0 0 8px rgba(26, 77, 46, 0.08);
+    width: 114px;
+    height: 114px;
+    z-index: 2;
+    margin-bottom: 12px;
   }
 
-  [data-theme="dark"] .employee-avatar {
-    background: var(--primary-light, #10b981);
-    color: #ffffff;
-  }
-
-  .employee-header-info {
-    flex: 1;
+  /* Outer Crater / Recessed Ring */
+  .concentric-ring-outer {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .employee-name {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text, #1f2937);
-    margin: 0;
-  }
-
-  .employee-level {
-    font-size: 0.75rem;
-    color: var(--text-secondary, #6b7280);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 600;
-  }
-
-  .employee-info-body {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    font-size: 0.825rem;
-  }
-
-  .employee-info-row {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .employee-info-label {
-    color: var(--text-secondary, #6b7280);
+  [data-theme="dark"] .concentric-ring-outer,
+  .concentric-ring-outer {
+    background: radial-gradient(circle, #0e1118 60%, #171b26 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7), 0 1px 1px rgba(255, 255, 255, 0.04);
+  }
+
+  html:not([data-theme="dark"]) .concentric-ring-outer {
+    background: radial-gradient(circle, #f0f4f8 60%, #e2e8f0 100%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.08), 0 1px 2px #ffffff;
+  }
+
+  /* Middle Raised Torus Bevel Ring */
+  .concentric-ring-middle {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-theme="dark"] .concentric-ring-middle,
+  .concentric-ring-middle {
+    background: linear-gradient(145deg, #1f2533 0%, #10131b 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  html:not([data-theme="dark"]) .concentric-ring-middle {
+    background: linear-gradient(145deg, #ffffff 0%, #edf2f7 100%);
+    border: 1.5px solid #cbd5e1;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;
+  }
+
+  /* Inner Concave Lens / Avatar Squircle (preserved for JS compatibility) */
+  .concentric-lens,
+  .avatar-squircle {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-theme="dark"] .concentric-lens,
+  [data-theme="dark"] .avatar-squircle,
+  .concentric-lens,
+  .avatar-squircle {
+    background: radial-gradient(circle at 35% 30%, #1e2433 0%, #0b0d13 90%);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+  }
+
+  html:not([data-theme="dark"]) .concentric-lens,
+  html:not([data-theme="dark"]) .avatar-squircle {
+    background: radial-gradient(circle at 35% 30%, #ffffff 0%, #f1f5f9 90%);
+    border: 1.5px solid #cbd5e1;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  .avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-glyph {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.7rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="dark"] .avatar-glyph,
+  .avatar-glyph {
+    color: #e2e8f0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  html:not([data-theme="dark"]) .avatar-glyph {
+    color: #1e293b;
+  }
+
+  /* Quick Photo Upload Trigger docked on bottom right */
+  .bento-upload-btn,
+  .avatar-upload-btn {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 5;
+    outline: none;
+  }
+
+  [data-theme="dark"] .bento-upload-btn,
+  [data-theme="dark"] .avatar-upload-btn,
+  .bento-upload-btn,
+  .avatar-upload-btn {
+    background: #1c202c;
+    color: #94a3b8;
+    border: 2px solid #0d0f16;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+
+  html:not([data-theme="dark"]) .bento-upload-btn,
+  html:not([data-theme="dark"]) .avatar-upload-btn {
+    background: #ffffff;
+    color: #64748b;
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  /* ── Hover Green Illumination on Concentric Stage! ── */
+  [data-theme="dark"] .bento-emp-card:hover .concentric-ring-outer,
+  .bento-emp-card:hover .concentric-ring-outer {
+    border-color: rgba(16, 185, 129, 0.35);
+    box-shadow: inset 0 0 14px rgba(16, 185, 129, 0.15), 0 0 16px rgba(16, 185, 129, 0.1);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .concentric-ring-middle,
+  .bento-emp-card:hover .concentric-ring-middle {
+    border-color: rgba(16, 185, 129, 0.75);
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.35), inset 0 0 10px rgba(16, 185, 129, 0.25);
+    transform: scale(1.03);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .concentric-lens,
+  [data-theme="dark"] .bento-emp-card:hover .avatar-squircle,
+  .bento-emp-card:hover .concentric-lens,
+  .bento-emp-card:hover .avatar-squircle {
+    border-color: #34d399;
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.4), inset 0 0 12px rgba(16, 185, 129, 0.3);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .avatar-glyph,
+  .bento-emp-card:hover .avatar-glyph {
+    color: #34d399;
+    text-shadow: 0 0 16px rgba(16, 185, 129, 0.8);
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .bento-upload-btn,
+  [data-theme="dark"] .bento-emp-card:hover .avatar-upload-btn,
+  .bento-emp-card:hover .bento-upload-btn,
+  .bento-emp-card:hover .avatar-upload-btn {
+    background: #10b981;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.6);
+    transform: scale(1.15);
+  }
+
+  /* Light Mode Hover Green Illumination */
+  html:not([data-theme="dark"]) .bento-emp-card:hover .concentric-ring-outer {
+    border-color: rgba(26, 77, 46, 0.25);
+    box-shadow: inset 0 0 10px rgba(26, 77, 46, 0.08), 0 0 14px rgba(26, 77, 46, 0.1);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .concentric-ring-middle {
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 18px rgba(26, 77, 46, 0.2), inset 0 0 8px rgba(26, 77, 46, 0.12);
+    transform: scale(1.03);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .concentric-lens,
+  html:not([data-theme="dark"]) .bento-emp-card:hover .avatar-squircle {
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 14px rgba(26, 77, 46, 0.25);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .avatar-glyph {
+    color: var(--primary, #1a4d2e);
+    text-shadow: 0 0 10px rgba(26, 77, 46, 0.3);
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .bento-upload-btn,
+  html:not([data-theme="dark"]) .bento-emp-card:hover .avatar-upload-btn {
+    background: var(--primary, #1a4d2e);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(26, 77, 46, 0.35);
+    transform: scale(1.15);
+  }
+
+  /* ── Content & Typography ── */
+  .bento-card-content,
+  .emp-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    z-index: 2;
+  }
+
+  .bento-emp-name,
+  .emp-card-name {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 4px 0 8px;
+    letter-spacing: -0.01em;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-theme="dark"] .bento-emp-name,
+  [data-theme="dark"] .emp-card-name,
+  .bento-emp-name,
+  .emp-card-name {
+    color: #f8fafc;
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-name,
+  html:not([data-theme="dark"]) .emp-card-name {
+    color: #0f172a;
+  }
+
+  .bento-card-meta,
+  .emp-card-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    transition: all 0.2s ease;
+  }
+
+  .status-pill.status-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+  }
+
+  .status-pill.status-inactive {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-active .status-dot {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+  }
+
+  .status-inactive .status-dot {
+    background: #ef4444;
+  }
+
+  .bento-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+  }
+
+  .bento-meta-item,
+  .emp-phone-meta,
+  .emp-since-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-weight: 500;
   }
 
-  .employee-info-value {
-    color: var(--text, #1f2937);
-    font-weight: 600;
+  [data-theme="dark"] .bento-meta-item,
+  [data-theme="dark"] .emp-phone-meta,
+  [data-theme="dark"] .emp-since-meta,
+  .bento-meta-item,
+  .emp-phone-meta,
+  .emp-since-meta {
+    color: #94a3b8;
   }
 
-  .employee-card-footer {
-    margin-top: auto;
-    border-top: 1px solid var(--border-light, #f3f4f6);
-    padding-top: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  html:not([data-theme="dark"]) .bento-meta-item,
+  html:not([data-theme="dark"]) .emp-phone-meta,
+  html:not([data-theme="dark"]) .emp-since-meta {
+    color: #64748b;
+  }
+
+  .bento-meta-item i,
+  .emp-phone-meta i {
+    font-size: 0.75rem;
+    transition: color 0.3s ease;
+  }
+
+  [data-theme="dark"] .bento-emp-card:hover .phone-meta i,
+  [data-theme="dark"] .bento-emp-card:hover .emp-phone-meta i,
+  .bento-emp-card:hover .phone-meta i,
+  .bento-emp-card:hover .emp-phone-meta i {
+    color: #10b981;
+  }
+
+  html:not([data-theme="dark"]) .bento-emp-card:hover .phone-meta i,
+  html:not([data-theme="dark"]) .bento-emp-card:hover .emp-phone-meta i {
+    color: var(--primary, #1a4d2e);
+  }
+
+  .since-label {
+    opacity: 0.8;
+    margin-right: 2px;
   }
 
   /* ── Table Inline Inputs & Glow ── */
@@ -301,53 +721,74 @@
 </div>
 
 <!-- TILE / CARD VIEW CONTAINER (Default View) -->
-<div class="raised-box" id="tileViewContainer" style="margin-top: 24px; padding: 20px;">
+<!-- TILE / CARD VIEW CONTAINER (Default View) -->
+<div class="raised-box" id="tileViewContainer" style="margin-top: 24px; padding: 20px; background: transparent; border: none; box-shadow: none;">
+  <!-- Hidden File Input for Direct Tile Photo Upload -->
+  <input type="file" id="tilePhotoInput" accept="image/jpeg,image/png,image/webp" style="display: none;">
+
   <div class="employee-cards-grid" id="employeeCardsGrid">
     {% for row in data %}
-    <div class="employee-card {% if not row['is_active'] %}inactive-card{% endif %}" data-eid="{{ row.eid }}">
-      <div class="employee-card-header">
-        <div class="employee-avatar">
-          {{ row['name'][:1] | upper }}
+    <div class="bento-emp-card spotlight-card employee-card {% if not row['is_active'] %}inactive-card{% endif %}"
+         data-eid="{{ row.eid }}"
+         onclick="window.location.href='/employee/{{ row.eid }}'">
+
+      <!-- Matrix Code Watermark -->
+      <div class="bento-matrix-watermark"></div>
+
+      <!-- Top Floating Role Pill & Connector Track -->
+      <div class="bento-top-track">
+        <div class="bento-role-pill">
+          <i class="fas fa-sparkles"></i>
+          <span>{{ row.level | default('STAFF', true) | upper }}</span>
         </div>
-        <div class="employee-header-info">
-          <h4 class="employee-name">{{ row['name'] }}</h4>
-          <span class="employee-level">{{ row['level'] }}</span>
-        </div>
+        <div class="bento-track-line"></div>
       </div>
-      <div class="employee-info-body">
-        <div class="employee-info-row">
-          <span class="employee-info-label">Employee ID</span>
-          <span class="employee-info-value" data-field="eid">{{ row['eid'] }}</span>
+
+      <!-- Concentric Tactile Biometric Lens Stage -->
+      <div class="bento-concentric-stage">
+        <!-- Outer Recessed Crater -->
+        <div class="concentric-ring-outer">
+          <!-- Middle Raised Torus Bevel -->
+          <div class="concentric-ring-middle">
+            <!-- Inner Concave Glassy Lens / Core -->
+            <div class="concentric-lens avatar-squircle">
+              {% if row.photo_url %}
+              <img src="{{ row.photo_url }}" alt="{{ row.name }}" class="avatar-img" id="avatarImg-{{ row.eid }}">
+              {% else %}
+              <span class="avatar-glyph" id="avatarGlyph-{{ row.eid }}">{{ row.name[:1] | upper }}</span>
+              {% endif %}
+            </div>
+          </div>
         </div>
-        <div class="employee-info-row">
-          <span class="employee-info-label">Phone Number</span>
-          <span class="employee-info-value" data-field="phone_number">{{ row['phone_number'] }}</span>
-        </div>
-        <div class="employee-info-row">
-          <span class="employee-info-label">City</span>
-          <span class="employee-info-value" data-field="city">{{ row['city'] }}</span>
-        </div>
-        <div class="employee-info-row">
-          <span class="employee-info-label">State</span>
-          <span class="employee-info-value" data-field="state">{{ row['state'] }}</span>
-        </div>
-        <div class="employee-info-row">
-          <span class="employee-info-label">Joining Date</span>
-          <span class="employee-info-value" data-field="joining_date">{{ row['joining_date'] }}</span>
-        </div>
+
+        <!-- Quick Photo Upload Trigger docked on bottom-right -->
+        <button type="button" class="bento-upload-btn avatar-upload-btn" title="Upload Photo" onclick="event.stopPropagation(); triggerPhotoUpload('{{ row.eid }}')">
+          <i class="fas fa-camera"></i>
+        </button>
       </div>
-      <div class="employee-card-footer">
-        <div class="status-cell">
-          <span class="status-badge status-{{ 'active' if row['is_active'] else 'inactive' }}">
-            {{ 'Active' if row['is_active'] else 'Inactive' }}
+
+      <!-- Card Content & Meta -->
+      <div class="bento-card-content emp-card-content">
+        <h3 class="bento-emp-name emp-card-name" title="{{ row.name }}">{{ row.name }}</h3>
+
+        <div class="bento-card-meta emp-card-meta">
+          <span class="status-pill status-{{ 'active' if row.is_active else 'inactive' }}"
+                onclick="event.stopPropagation(); toggleEmployeeStatus('{{ row.eid }}', this)"
+                title="Click to toggle status">
+            <span class="status-dot"></span>
+            {{ 'Active' if row.is_active else 'Inactive' }}
           </span>
-        </div>
-        <div class="action-buttons">
-          {% set is_active = row.get('is_active') %}
-          <button class="neumorphic-btn ultrasmall {{ 'danger-btn' if is_active else '' }}"
-            onclick="event.stopPropagation(); toggleEmployeeStatus('{{ row.eid }}', this)">
-            {{ 'Deactivate' if is_active else 'Activate' }}
-          </button>
+
+          <div class="bento-meta-row">
+            <div class="bento-meta-item phone-meta emp-phone-meta">
+              <i class="fas fa-phone-alt"></i>
+              <span data-field="phone_number">{{ row.phone_number or 'No Mobile' }}</span>
+            </div>
+            <div class="bento-meta-item since-meta emp-since-meta">
+              <span class="since-label">Since</span>
+              <span class="since-date" data-field="joining_date">{{ row.joining_date or '-' }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -111,6 +111,7 @@
             chitDark: {
               bg: '#0c1220',
               surface: '#111827',
+              surfaceSecondary: '#161f30',
               elevated: '#1a2332',
               border: '#1e293b',
             }
@@ -634,12 +635,22 @@
   </div>
   <div class="bg-dot-matrix"></div>
 
-  <!-- ==================== LEFT SIDEBAR (FIXED) ==================== -->
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="chitSidebarOverlay" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden"></div>
+
+  <!-- ==================== LEFT SIDEBAR (FIXED / RESPONSIVE DRAWER) ==================== -->
   <aside
-    class="w-64 sidebar-glass text-slate-300 flex flex-col shrink-0 fixed top-0 left-0 h-screen border-r border-slate-800/80 dark:border-slate-800/40 select-none z-40 overflow-y-auto no-scrollbar">
+    id="chitSidebar"
+    class="w-64 sidebar-glass text-slate-300 flex flex-col shrink-0 fixed top-0 left-0 h-screen border-r border-slate-800/80 dark:border-slate-800/40 select-none z-50 overflow-y-auto no-scrollbar -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
 
     <!-- Top Branding: Centered Large Animated 3D Logo (Occupies 75%+ top width) + Theme Toggle -->
     <div class="p-4 pt-3 border-b border-slate-800/60 relative flex flex-col items-center">
+      <!-- Mobile Close Button (visible on < lg screens) -->
+      <button id="chitSidebarClose" type="button" aria-label="Close navigation"
+        class="lg:hidden absolute top-3 left-3 h-8 w-8 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 border border-slate-700/40 text-slate-400 hover:text-white flex items-center justify-center transition-all duration-200 z-20">
+        <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
+      </button>
+
       <!-- Theme Toggle Button (Top Right Corner) -->
       <button id="themeToggleBtn" type="button" title="Toggle theme"
         class="absolute top-3 right-3 h-8 w-8 rounded-xl bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 flex items-center justify-center transition-all duration-300 group z-20">
@@ -785,8 +796,26 @@
   </aside>
 
   <!-- ==================== MAIN CONTENT AREA ==================== -->
-  <main class="flex-1 min-w-0 flex flex-col bg-[#f8fafc] dark:bg-chitDark-bg ml-64 overflow-y-auto min-h-screen">
-    <div class="animate-page">
+  <main class="flex-1 min-w-0 flex flex-col bg-[#f8fafc] dark:bg-chitDark-bg ml-0 lg:ml-64 overflow-y-auto min-h-screen">
+    <!-- Mobile Top Navigation Header (visible only on < lg screens) -->
+    <header class="lg:hidden flex items-center justify-between px-4 py-2.5 bg-white/90 dark:bg-chitDark-surface/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-30">
+      <div class="flex items-center gap-3">
+        <button id="chitSidebarToggle" type="button" aria-label="Open navigation" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-emerald-500 active:scale-95 transition-all">
+          <i data-lucide="menu" class="w-5 h-5 stroke-[1.8]"></i>
+        </button>
+        <a href="/chit/dashboard" class="flex items-center gap-2">
+          <img src="/static/images/chit-logo.svg" alt="Siva Durga" class="h-6 w-6 object-contain">
+          <span class="font-display font-black text-sm tracking-tight text-slate-900 dark:text-white">SIVA DURGA <span class="text-amber-500 font-extrabold text-xs">CHIT</span></span>
+        </a>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="openSearchPalette()" aria-label="Search" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-600 dark:text-slate-400">
+          <i data-lucide="search" class="w-4 h-4 stroke-[1.8]"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="animate-page flex-1 flex flex-col">
       {% block content %}{% endblock %}
     </div>
   </main>
@@ -951,7 +980,7 @@
       const modals = document.querySelectorAll('.fixed.inset-0, [id$="Modal"], [id^="modal"]');
       modals.forEach(el => {
         if (!el || !el.parentElement || el.parentElement === document.body) return;
-        if (el.id === 'searchBackdrop' || el.id === 'toastContainer' || el.id === 'searchPalette') return;
+        if (el.id === 'searchBackdrop' || el.id === 'toastContainer' || el.id === 'searchPalette' || el.id === 'chitSidebarOverlay' || el.id === 'chitSidebar') return;
         if (el.classList.contains('fixed') && (el.classList.contains('inset-0') || el.id.toLowerCase().includes('modal'))) {
           document.body.appendChild(el);
         }
@@ -971,6 +1000,40 @@
           setTimeout(teleportModalsToBody, 10);
         }
       }, true);
+
+      /* ── Mobile Sidebar Drawer Toggle ── */
+      const chitSidebar = document.getElementById('chitSidebar');
+      const chitOverlay = document.getElementById('chitSidebarOverlay');
+      const chitToggle = document.getElementById('chitSidebarToggle');
+      const chitClose = document.getElementById('chitSidebarClose');
+
+      function openChitSidebar() {
+        if (!chitSidebar || !chitOverlay) return;
+        chitSidebar.classList.remove('-translate-x-full');
+        chitOverlay.classList.remove('opacity-0', 'pointer-events-none');
+        chitOverlay.classList.add('opacity-100', 'pointer-events-auto');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeChitSidebar() {
+        if (!chitSidebar || !chitOverlay) return;
+        chitSidebar.classList.add('-translate-x-full');
+        chitOverlay.classList.remove('opacity-100', 'pointer-events-auto');
+        chitOverlay.classList.add('opacity-0', 'pointer-events-none');
+        document.body.style.overflow = '';
+      }
+
+      if (chitToggle) chitToggle.addEventListener('click', openChitSidebar);
+      if (chitClose) chitClose.addEventListener('click', closeChitSidebar);
+      if (chitOverlay) chitOverlay.addEventListener('click', closeChitSidebar);
+
+      if (chitSidebar) {
+        chitSidebar.querySelectorAll('a').forEach(a => {
+          a.addEventListener('click', () => {
+            if (window.innerWidth < 1024) closeChitSidebar();
+          });
+        });
+      }
 
       // Global Background Click Gradient Ripple Effect (Ultra-Subtle & Compact)
       window.addEventListener('pointerdown', function (e) {

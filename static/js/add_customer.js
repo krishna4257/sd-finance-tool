@@ -430,8 +430,14 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (type === 'D') {
             periodInput.placeholder = "Number of Days";
         }
-    }
     typeInput.addEventListener('change', updatePeriodPlaceholder);
+    
+    // Auto-detect monthly village from name/context and preset Type to Monthly ('M')
+    const vidInput = document.getElementById('vid');
+    const vName = (window.VILLAGE_NAME || (vidInput ? vidInput.value : "")).trim().toUpperCase();
+    if (vName.endsWith('-M') || vName.includes('-M')) {
+        typeInput.value = 'M';
+    }
     updatePeriodPlaceholder();
 
     const interestInput = document.getElementById('interest_amount');

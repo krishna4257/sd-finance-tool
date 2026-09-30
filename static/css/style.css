@@ -2783,7 +2783,7 @@ table.dataTable thead th.sorting_disabled {
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 999;
+  z-index: 990;
   opacity: 0;
   visibility: hidden;
   transition: all 0.3s ease;
@@ -2794,9 +2794,36 @@ table.dataTable thead th.sorting_disabled {
   visibility: visible;
 }
 
+.sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all var(--transition);
+}
+
+.sidebar-close-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .header-menu-btn {
+    display: flex;
+  }
+
+  .sidebar-close-btn {
     display: flex;
   }
 
@@ -2804,11 +2831,13 @@ table.dataTable thead th.sorting_disabled {
     transform: translateX(-100%);
     box-shadow: none;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1001;
   }
 
   aside.open {
     transform: translateX(0);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    z-index: 1001;
   }
 
   main {

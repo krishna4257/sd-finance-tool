@@ -203,6 +203,7 @@
 <script>
   window.VILLAGE_INTEREST_RATE = {{ interest_rate | tojson | safe }};
   window.VILLAGE_CUTTING_RATE = {{ cutting_rate | tojson | safe }};
+  window.VILLAGE_NAME = {{ village_name | tojson | safe }};
 </script>
 <script src="{{ url_for('static', filename='js/add_customer.js') }}"></script>
 {% endblock %}

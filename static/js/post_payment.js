@@ -1070,10 +1070,16 @@ function loadAnalytics() {
   fetch("/api/post_payment_analytics")
     .then(res => res.json())
     .then(data => {
+      window.isMonthlyPosting = !!data.is_monthly;
+      const thCycle = document.getElementById("thPostingCycleLabel");
+      if (thCycle) {
+        thCycle.textContent = data.is_monthly ? "Month Ending" : "Week Ending";
+      }
+
       if (data.weeks && data.weeks.length > 0) {
-        const lastWeek = data.weeks[data.weeks.length - 1];
-        lastWeekPaidCount = lastWeek.paid_customers || 0;
-        lastWeekCollection = lastWeek.actual_collection || 0;
+        const lastCycle = data.weeks[data.weeks.length - 1];
+        lastWeekPaidCount = lastCycle.paid_customers || 0;
+        lastWeekCollection = lastCycle.actual_collection || 0;
       }
       const lastPostingDisplay = document.getElementById("lastPostingDisplay");
       if (lastPostingDisplay) {

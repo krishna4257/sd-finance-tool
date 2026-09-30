@@ -1,0 +1,1129 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Dummy inputs to prevent browser credential autofill -->
+<div style="position: absolute; overflow: hidden; width: 0; height: 0; opacity: 0; pointer-events: none;">
+    <input type="text" name="dummy_username_autofill" autocomplete="username" tabindex="-1">
+    <input type="password" name="dummy_password_autofill" autocomplete="current-password" tabindex="-1">
+</div>
+
+<style>
+  .profile-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px 4px 40px;
+  }
+
+  /* ── Header Breadcrumbs ── */
+  .profile-nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .back-btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .back-btn-link:hover {
+    background: rgba(56, 189, 248, 0.1);
+    border-color: #38bdf8;
+    color: #38bdf8;
+    transform: translateX(-3px);
+  }
+
+  /* ── Hero Profile Bento Tactile Banner ── */
+  .profile-hero-card {
+    position: relative;
+    border-radius: 24px;
+    padding: 30px 32px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 0.3s ease,
+                box-shadow 0.3s ease;
+  }
+
+  [data-theme="dark"] .profile-hero-card,
+  .profile-hero-card {
+    background: linear-gradient(180deg, #131620 0%, #0d0f16 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover,
+  .profile-hero-card:hover {
+    border-color: rgba(16, 185, 129, 0.55) !important;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.2);
+    transform: translateY(-3px);
+  }
+
+  /* Light Mode Rest & Hover */
+  html:not([data-theme="dark"]) .profile-hero-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8fa 100%) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover {
+    border-color: rgba(26, 77, 46, 0.45) !important;
+    box-shadow: 0 18px 40px rgba(26, 77, 46, 0.12), 0 0 26px rgba(26, 77, 46, 0.1);
+    transform: translateY(-3px);
+  }
+
+  /* Watermark in Hero */
+  .profile-hero-card .bento-matrix-watermark {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 14px 14px;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card .bento-matrix-watermark {
+    background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    opacity: 0.6;
+  }
+
+  .profile-hero-card:hover .bento-matrix-watermark {
+    opacity: 0.95;
+  }
+
+  /* Hero Concentric Biometric Stage */
+  .hero-concentric-stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 124px;
+    height: 124px;
+    z-index: 2;
+  }
+
+  .hero-concentric-outer {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-theme="dark"] .hero-concentric-outer,
+  .hero-concentric-outer {
+    background: radial-gradient(circle, #0e1118 60%, #171b26 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7), 0 1px 1px rgba(255, 255, 255, 0.04);
+  }
+
+  html:not([data-theme="dark"]) .hero-concentric-outer {
+    background: radial-gradient(circle, #f0f4f8 60%, #e2e8f0 100%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.08), 0 1px 2px #ffffff;
+  }
+
+  .hero-concentric-middle {
+    width: 98px;
+    height: 98px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-theme="dark"] .hero-concentric-middle,
+  .hero-concentric-middle {
+    background: linear-gradient(145deg, #1f2533 0%, #10131b 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  html:not([data-theme="dark"]) .hero-concentric-middle {
+    background: linear-gradient(145deg, #ffffff 0%, #edf2f7 100%);
+    border: 1.5px solid #cbd5e1;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;
+  }
+
+  .profile-avatar-squircle {
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-theme="dark"] .profile-avatar-squircle,
+  .profile-avatar-squircle {
+    background: radial-gradient(circle at 35% 30%, #1e2433 0%, #0b0d13 90%);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+  }
+
+  html:not([data-theme="dark"]) .profile-avatar-squircle {
+    background: radial-gradient(circle at 35% 30%, #ffffff 0%, #f1f5f9 90%);
+    border: 1.5px solid #cbd5e1;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  .profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-avatar-glyph {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 2.1rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="dark"] .profile-avatar-glyph,
+  .profile-avatar-glyph {
+    color: #e2e8f0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  html:not([data-theme="dark"]) .profile-avatar-glyph {
+    color: #1e293b;
+  }
+
+  .profile-avatar-upload-btn {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 5;
+    outline: none;
+  }
+
+  [data-theme="dark"] .profile-avatar-upload-btn,
+  .profile-avatar-upload-btn {
+    background: #1c202c;
+    color: #94a3b8;
+    border: 2px solid #0d0f16;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+
+  html:not([data-theme="dark"]) .profile-avatar-upload-btn {
+    background: #ffffff;
+    color: #64748b;
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  /* ── Hero Hover Green Illumination! ── */
+  [data-theme="dark"] .profile-hero-card:hover .hero-concentric-outer,
+  .profile-hero-card:hover .hero-concentric-outer {
+    border-color: rgba(16, 185, 129, 0.35);
+    box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.15), 0 0 18px rgba(16, 185, 129, 0.1);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover .hero-concentric-middle,
+  .profile-hero-card:hover .hero-concentric-middle {
+    border-color: rgba(16, 185, 129, 0.75);
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.35), inset 0 0 12px rgba(16, 185, 129, 0.25);
+    transform: scale(1.03);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover .profile-avatar-squircle,
+  .profile-hero-card:hover .profile-avatar-squircle {
+    border-color: #34d399;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), inset 0 0 14px rgba(16, 185, 129, 0.3);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover .profile-avatar-glyph,
+  .profile-hero-card:hover .profile-avatar-glyph {
+    color: #34d399;
+    text-shadow: 0 0 18px rgba(16, 185, 129, 0.8);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover .profile-avatar-upload-btn,
+  .profile-hero-card:hover .profile-avatar-upload-btn {
+    background: #10b981;
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.6);
+    transform: scale(1.15);
+  }
+
+  [data-theme="dark"] .profile-hero-card:hover .profile-meta-item i,
+  .profile-hero-card:hover .profile-meta-item i {
+    color: #10b981;
+  }
+
+  /* Light Mode Hover Green Illumination */
+  html:not([data-theme="dark"]) .profile-hero-card:hover .hero-concentric-outer {
+    border-color: rgba(26, 77, 46, 0.25);
+    box-shadow: inset 0 0 10px rgba(26, 77, 46, 0.08), 0 0 14px rgba(26, 77, 46, 0.1);
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover .hero-concentric-middle {
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 20px rgba(26, 77, 46, 0.2), inset 0 0 10px rgba(26, 77, 46, 0.12);
+    transform: scale(1.03);
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover .profile-avatar-squircle {
+    border-color: var(--primary, #1a4d2e);
+    box-shadow: 0 0 16px rgba(26, 77, 46, 0.25);
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover .profile-avatar-glyph {
+    color: var(--primary, #1a4d2e);
+    text-shadow: 0 0 10px rgba(26, 77, 46, 0.3);
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover .profile-avatar-upload-btn {
+    background: var(--primary, #1a4d2e);
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(26, 77, 46, 0.35);
+    transform: scale(1.15);
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-card:hover .profile-meta-item i {
+    color: var(--primary, #1a4d2e);
+  }
+
+  /* Typography */
+  .profile-hero-info {
+    flex: 1;
+    min-width: 250px;
+    z-index: 2;
+  }
+
+  .profile-hero-name {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    letter-spacing: -0.02em;
+  }
+
+  [data-theme="dark"] .profile-hero-name,
+  .profile-hero-name {
+    color: #ffffff;
+  }
+
+  html:not([data-theme="dark"]) .profile-hero-name {
+    color: #0f172a;
+  }
+
+  .profile-badge-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .profile-meta-pills {
+    display: flex;
+    gap: 18px;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  [data-theme="dark"] .profile-meta-pills,
+  .profile-meta-pills {
+    color: #94a3b8;
+  }
+
+  html:not([data-theme="dark"]) .profile-meta-pills {
+    color: #64748b;
+  }
+
+  .profile-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .profile-meta-item i {
+    font-size: 0.8rem;
+    transition: color 0.3s ease;
+  }
+
+  [data-theme="dark"] .profile-meta-item i,
+  .profile-meta-item i {
+    color: #94a3b8;
+  }
+
+  html:not([data-theme="dark"]) .profile-meta-item i {
+    color: #64748b;
+  }
+
+  /* ── Segmented Navigation Tabs ── */
+  .profile-tabs-wrapper {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    padding-bottom: 2px;
+    overflow-x: auto;
+  }
+
+  .profile-tab-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 12px 20px;
+    color: var(--text-secondary);
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 0.925rem;
+    font-weight: 600;
+    border-radius: 12px 12px 0 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+
+  .profile-tab-btn:hover:not(.locked) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .profile-tab-btn.active {
+    color: #38bdf8 !important;
+    border-bottom-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.06);
+  }
+
+  .profile-tab-btn.locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .locked-tag {
+    font-size: 0.68rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  /* ── Tab Panes ── */
+  .tab-pane {
+    display: none;
+    animation: fadeInTab 0.25s ease forwards;
+  }
+
+  .tab-pane.active {
+    display: block;
+  }
+
+  @keyframes fadeInTab {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Form Card ── */
+  .profile-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .profile-card-title {
+    font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 18px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .form-input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  }
+
+  /* ── Dual Listbox Village Picker ── */
+  .dual-list-container {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-top: 14px;
+  }
+
+  .list-box-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .list-box-header {
+    font-family: var(--font-headline);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .list-box-items {
+    height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .village-option {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.15s ease;
+  }
+
+  .village-option:hover {
+    border-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  .village-option.selected {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-weight: 600;
+  }
+
+  .transfer-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .transfer-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+  }
+
+  .transfer-btn:hover {
+    background: #38bdf8;
+    color: #ffffff;
+    border-color: #38bdf8;
+  }
+
+  .assigned-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .village-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .chip-remove {
+    background: none;
+    border: none;
+    color: #f87171;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0;
+    line-height: 1;
+  }
+
+  /* ── Device & Security Cards ── */
+  .device-row-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .device-info-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .device-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+  }
+
+  .link-timer-box {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-top: 14px;
+  }
+
+  .link-share-grid {
+    display: flex;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .btn-share-portal {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    color: white;
+    transition: transform 0.15s ease;
+  }
+
+  .btn-share-portal.whatsapp { background: #25d366; }
+  .btn-share-portal.sms { background: #3b82f6; }
+  .btn-share-portal:hover { transform: translateY(-2px); }
+
+  @media (max-width: 768px) {
+    .profile-hero-card { flex-direction: column; align-items: center; text-align: center; }
+    .profile-badge-row, .profile-meta-pills { justify-content: center; }
+    .dual-list-container { flex-direction: column; }
+    .transfer-btns { flex-direction: row; justify-content: center; }
+  }
+</style>
+
+<div class="profile-container">
+  <!-- Navigation Breadcrumb -->
+  <div class="profile-nav-header">
+    <a href="/employee" class="back-btn-link">
+      <i class="fas fa-arrow-left"></i> Back to Employee Directory
+    </a>
+    
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <span class="badge-pill status-{{ 'active' if emp.is_active else 'inactive' }}">
+        <span class="status-dot"></span> {{ 'Active Employee' if emp.is_active else 'Inactive Employee' }}
+      </span>
+      {% if is_admin %}
+      <button class="neumorphic-btn ultrasmall {{ 'danger-btn' if emp.is_active else '' }}"
+              onclick="toggleEmployeeStatus('{{ emp.eid }}', this)">
+        {{ 'Deactivate' if emp.is_active else 'Activate' }}
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Hero Bento Tactile Profile Card -->
+  <div class="profile-hero-card bento-hero-card">
+    <div class="bento-matrix-watermark"></div>
+
+    <!-- Hidden Photo Input -->
+    <input type="file" id="profilePhotoInput" accept="image/jpeg,image/png,image/webp" style="display: none;">
+
+    <!-- Concentric Tactile Biometric Lens Stage -->
+    <div class="hero-concentric-stage profile-avatar-wrapper">
+      <div class="hero-concentric-outer">
+        <div class="hero-concentric-middle">
+          <div class="profile-avatar-squircle">
+            {% if emp.photo_url %}
+            <img src="{{ emp.photo_url }}" alt="{{ emp.name }}" class="profile-avatar-img" id="detailAvatarImg">
+            {% else %}
+            <span class="profile-avatar-glyph" id="detailAvatarGlyph">{{ emp.name[:1] | upper }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <button type="button" class="profile-avatar-upload-btn bento-upload-btn" title="Change Photo" onclick="document.getElementById('profilePhotoInput').click()">
+        <i class="fas fa-camera"></i>
+      </button>
+    </div>
+
+    <!-- Info details -->
+    <div class="profile-hero-info">
+      <h2 class="profile-hero-name">{{ emp.name }}</h2>
+
+      <div class="profile-badge-row">
+        <span class="badge-pill badge-role-{{ 'admin' if emp.level == 'admin' else ('mgmt' if emp.level == 'mgmt' else 'staff') }}">
+          <i class="fas fa-id-badge me-1"></i> {{ emp.level | upper }}
+        </span>
+        <span class="badge-pill" style="background: rgba(255,255,255,0.06); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1);">
+          EID #{{ emp.eid }}
+        </span>
+        {% if user %}
+        <span class="badge-pill" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25);">
+          <i class="fas fa-user-check me-1"></i> @{{ user.username }}
+        </span>
+        {% else %}
+        <span class="badge-pill" style="background: rgba(245, 158, 11, 0.1); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25);">
+          <i class="fas fa-user-slash me-1"></i> No User Login
+        </span>
+        {% endif %}
+      </div>
+
+      <div class="profile-meta-pills">
+        <div class="profile-meta-item">
+          <i class="fas fa-phone-alt"></i>
+          <span>{{ emp.phone_number or 'No Mobile Number' }}</span>
+        </div>
+        <div class="profile-meta-item">
+          <i class="fas fa-map-marker-alt"></i>
+          <span>{{ emp.city or 'N/A' }}, {{ emp.state or 'N/A' }}</span>
+        </div>
+        <div class="profile-meta-item">
+          <i class="fas fa-calendar-alt"></i>
+          <span>Joined: {{ emp.joining_date or 'N/A' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Segmented Tab Nav -->
+  <div class="profile-tabs-wrapper">
+    <button class="profile-tab-btn active" onclick="switchProfileTab('detailsTab', this)">
+      <i class="fas fa-id-card"></i> Employee Details
+    </button>
+    <button class="profile-tab-btn" onclick="switchProfileTab('villagesTab', this)">
+      <i class="fas fa-map-marked-alt"></i> Village Management ({{ assigned_villages | length }})
+    </button>
+    
+    {% if is_admin %}
+    <button class="profile-tab-btn" onclick="switchProfileTab('devicesTab', this)">
+      <i class="fas fa-mobile-alt"></i> Device Management ({{ devices | length }})
+    </button>
+    <button class="profile-tab-btn" onclick="switchProfileTab('adminTab', this)">
+      <i class="fas fa-shield-alt"></i> Admin Controls
+    </button>
+    {% else %}
+    <button class="profile-tab-btn locked" title="Administrator role required">
+      <i class="fas fa-lock"></i> Device Management <span class="locked-tag">Admin Only</span>
+    </button>
+    <button class="profile-tab-btn locked" title="Administrator role required">
+      <i class="fas fa-lock"></i> Admin Controls <span class="locked-tag">Admin Only</span>
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- TAB 1: EMPLOYEE DETAILS -->
+  <div id="detailsTab" class="tab-pane active">
+    <div class="profile-card">
+      <h3 class="profile-card-title"><i class="fas fa-user-edit" style="color: #38bdf8;"></i> Edit Employee Identity & Contact</h3>
+      
+      <form id="employeeDetailsForm" onsubmit="saveEmployeeDetails(event)">
+        <input type="hidden" name="eid" value="{{ emp.eid }}">
+        
+        <div class="form-grid-2">
+          <div class="field-group">
+            <label class="field-label">Full Legal Name</label>
+            <input type="text" name="name" class="form-input" value="{{ emp.name }}" required>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Mobile / Phone Number</label>
+            <input type="text" name="phone_number" class="form-input" value="{{ emp.phone_number or '' }}">
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Role / Authorization Level</label>
+            <select name="level" class="form-input" style="cursor: pointer;">
+              <option value="admin" {% if emp.level == 'admin' %}selected{% endif %}>Admin (Full Access)</option>
+              <option value="mgmt" {% if emp.level == 'mgmt' %}selected{% endif %}>Management (MGMT)</option>
+              <option value="s" {% if emp.level == 's' %}selected{% endif %}>Staff - Senior (S)</option>
+              <option value="m" {% if emp.level == 'm' %}selected{% endif %}>Staff - Mid (M)</option>
+              <option value="j" {% if emp.level == 'j' %}selected{% endif %}>Staff - Junior (J)</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">City / Town</label>
+            <input type="text" name="city" class="form-input" value="{{ emp.city or '' }}">
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">State</label>
+            <input type="text" name="state" class="form-input" value="{{ emp.state or '' }}">
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Joining Date (dd-mm-yyyy)</label>
+            <input type="text" name="joining_date" id="detailJoiningDate" class="form-input" value="{{ emp.joining_date or '' }}">
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="submit" class="neumorphic-btn primary-btn" style="padding: 10px 24px;">
+            <i class="fas fa-save me-1"></i> Save Details
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Linked User Account Overview -->
+    <div class="profile-card">
+      <h3 class="profile-card-title"><i class="fas fa-key" style="color: #38bdf8;"></i> Linked Login Account</h3>
+      {% if user %}
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text);">@{{ user.username }}</div>
+          <div style="font-size: 0.825rem; color: var(--text-secondary); margin-top: 4px;">
+            Status: <span style="color: {{ '#34d399' if user.is_active else '#f87171' }}; font-weight: 600;">{{ 'Active' if user.is_active else 'Disabled' }}</span>
+          </div>
+        </div>
+        {% if is_admin %}
+        <div style="display: flex; gap: 10px;">
+          <button class="neumorphic-btn small" onclick="switchProfileTab('adminTab', document.querySelectorAll('.profile-tab-btn')[3])">
+            Manage Security & Password
+          </button>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <div>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+            This employee does not currently have a portal or mobile login account created.
+          </p>
+        </div>
+        {% if is_admin %}
+        <button class="neumorphic-btn primary-btn small" onclick="switchProfileTab('adminTab', document.querySelectorAll('.profile-tab-btn')[3])">
+          <i class="fas fa-plus me-1"></i> Provision Login Account
+        </button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- TAB 2: VILLAGE MANAGEMENT -->
+  <div id="villagesTab" class="tab-pane">
+    <div class="profile-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <h3 class="profile-card-title" style="margin-bottom: 0;">
+          <i class="fas fa-map-marked-alt" style="color: #38bdf8;"></i> Village Access Allocation
+        </h3>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="neumorphic-btn ultrasmall" onclick="selectAllVillages()">Select All</button>
+          <button type="button" class="neumorphic-btn ultrasmall" onclick="clearAllVillages()">Clear All</button>
+        </div>
+      </div>
+
+      <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 8px 0 16px 0;">
+        Manage the villages this employee is authorized to view and collect postings for.
+      </p>
+
+      <div style="position: relative; margin-bottom: 12px;">
+        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem;"></i>
+        <input type="search" id="villageSearchBox" class="form-input" placeholder="Search available villages..." style="padding-left: 36px;" oninput="filterVillages()">
+      </div>
+
+      <!-- Dual List Transfer Component -->
+      <div class="dual-list-container">
+        <!-- Left: Available -->
+        <div class="list-box-col">
+          <div class="list-box-header">
+            <span>Available Villages</span>
+            <span id="availableCount">0</span>
+          </div>
+          <div id="availableVillagesList" class="list-box-items"></div>
+        </div>
+
+        <!-- Transfer Buttons -->
+        <div class="transfer-btns">
+          <button type="button" class="transfer-btn" onclick="transferSelected('right')" title="Assign Selected">&gt;&gt;</button>
+          <button type="button" class="transfer-btn" onclick="transferSelected('left')" title="Unassign Selected">&lt;&lt;</button>
+        </div>
+
+        <!-- Right: Assigned -->
+        <div class="list-box-col">
+          <div class="list-box-header">
+            <span>Assigned to {{ emp.name }}</span>
+            <span id="assignedCount">0</span>
+          </div>
+          <div id="assignedVillagesList" class="list-box-items"></div>
+        </div>
+      </div>
+
+      <!-- Quick Unassign Tag List -->
+      <div style="margin-top: 20px;">
+        <div class="field-label" style="margin-bottom: 8px;">Active Assigned Village Tags (Click × to remove):</div>
+        <div id="assignedChipsContainer" class="assigned-chips-container"></div>
+      </div>
+
+      <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+        <button type="button" class="neumorphic-btn primary-btn" style="padding: 10px 24px;" onclick="saveVillageAssignments()">
+          <i class="fas fa-check-circle me-1"></i> Save Village Assignments
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {% if is_admin %}
+  <!-- TAB 3: DEVICE MANAGEMENT (ADMIN ONLY) -->
+  <div id="devicesTab" class="tab-pane">
+    <div class="profile-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h3 class="profile-card-title" style="margin-bottom: 0;">
+          <i class="fas fa-mobile-alt" style="color: #38bdf8;"></i> Registered Mobile Hardware
+        </h3>
+        {% if user %}
+        <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}')">
+          <i class="fas fa-undo me-1"></i> Reset Device Lock
+        </button>
+        {% endif %}
+      </div>
+
+      <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 20px;">
+        To maintain strict field security, mobile access is cryptographically locked to a single physical device. 
+        Clicking <strong>Reset Device Lock</strong> releases the current binding, allowing the employee to register their new device upon next login.
+      </p>
+
+      {% if devices %}
+      {% for dev in devices %}
+      <div class="device-row-card">
+        <div class="device-info-left">
+          <div class="device-icon-box">
+            <i class="fas fa-mobile-screen"></i>
+          </div>
+          <div>
+            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">{{ dev.device_model }}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); font-family: monospace; margin-top: 2px;">
+              UUID: {{ dev.device_id }}
+            </div>
+            <div style="font-size: 0.775rem; color: #94a3b8; margin-top: 2px;">
+              Last Active: <strong>{{ dev.last_active }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="badge-pill status-{{ 'active' if dev.is_active else 'inactive' }}">
+            {{ 'Active' if dev.is_active else 'Inactive' }}
+          </span>
+          {% if user %}
+          <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}')">
+            Reset Device
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="padding: 36px 20px; text-align: center; color: var(--text-secondary); background: var(--input-bg); border-radius: 12px; border: 1px dashed var(--border);">
+        <i class="fas fa-mobile-alt" style="font-size: 2rem; color: #64748b; margin-bottom: 10px;"></i>
+        <div style="font-weight: 600; color: var(--text);">No Mobile Devices Registered</div>
+        <div style="font-size: 0.85rem; margin-top: 4px;">
+          When this employee installs the app and logs in with their credentials, their hardware fingerprint will appear here.
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- TAB 4: ADMIN CONTROLS (ADMIN ONLY) -->
+  <div id="adminTab" class="tab-pane">
+    <!-- 30-Minute Dynamic Install Link Generator -->
+    <div class="profile-card">
+      <h3 class="profile-card-title"><i class="fas fa-link" style="color: #38bdf8;"></i> Mobile App 30-Minute Installation Link</h3>
+      <p style="color: var(--text-secondary); font-size: 0.875rem;">
+        Generate a secure, single-use signed download portal link for <strong>{{ emp.name }}</strong>. 
+        For security, this link expires in <strong>exactly 30 minutes</strong> and can be dispatched directly via WhatsApp or SMS.
+      </p>
+
+      <div style="margin-top: 16px;">
+        <button type="button" class="neumorphic-btn primary-btn" onclick="generateDetailInstallLink('{{ emp.eid }}', '{{ emp.name }}')">
+          <i class="fas fa-bolt me-1"></i> Generate Install Link
+        </button>
+      </div>
+
+      <!-- Generated Link Box (Initially Hidden) -->
+      <div id="generatedLinkContainer" style="display: none; margin-top: 20px; padding: 18px; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border);">
+        <label class="field-label" style="margin-bottom: 6px; display: block;">Signed Portal URL</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="detailInstallUrlInput" class="form-input" readonly onclick="this.select()">
+          <button type="button" class="neumorphic-btn small" onclick="copyDetailLink()" style="min-width: 80px;">
+            <i class="fas fa-copy me-1"></i> Copy
+          </button>
+        </div>
+
+        <div class="link-share-grid">
+          <a id="detailWhatsappShareBtn" target="_blank" class="btn-share-portal whatsapp">
+            <i class="fab fa-whatsapp" style="font-size: 15px;"></i> Share via WhatsApp
+          </a>
+          <a id="detailSmsShareBtn" class="btn-share-portal sms">
+            <i class="fas fa-comment-sms" style="font-size: 14px;"></i> Share via SMS
+          </a>
+        </div>
+
+        <div id="detailCountdownBox" class="link-timer-box">
+          <i class="fas fa-clock"></i>
+          Expires in <strong id="detailCountdownTimer">30:00</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Password Reset / Provision User Account -->
+    <div class="profile-card">
+      <h3 class="profile-card-title"><i class="fas fa-lock" style="color: #38bdf8;"></i> Credentials & Password Management</h3>
+      
+      {% if user %}
+      <form onsubmit="resetPasswordFromDetail(event)" style="max-width: 500px;">
+        <input type="hidden" id="detailUserId" value="{{ user.id }}">
+        <div class="field-group">
+          <label class="field-label">New Password for @{{ user.username }}</label>
+          <input type="password" id="detailNewPassword" class="form-input" placeholder="Enter new password" required>
+        </div>
+        <div style="margin-top: 14px;">
+          <button type="submit" class="neumorphic-btn danger-btn small">
+            <i class="fas fa-key me-1"></i> Update Password
+          </button>
+        </div>
+      </form>
+      {% else %}
+      <form onsubmit="createUserFromDetail(event)" style="max-width: 500px;">
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Create a login username and initial password for <strong>{{ emp.name }}</strong>:
+        </p>
+        <div class="field-group" style="margin-bottom: 12px;">
+          <label class="field-label">Username</label>
+          <input type="text" id="newEmpUsername" class="form-input" placeholder="e.g. {{ emp.name.split()[0].lower() }}" required>
+        </div>
+        <div class="field-group" style="margin-bottom: 16px;">
+          <label class="field-label">Initial Password</label>
+          <input type="password" id="newEmpPassword" class="form-input" placeholder="Enter strong password" required>
+        </div>
+        <button type="submit" class="neumorphic-btn primary-btn small">
+          <i class="fas fa-user-plus me-1"></i> Create User Account
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.DETAIL_EMP_ID = {{ emp.eid }};
+  window.ALL_VILLAGES = {{ all_villages | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/employee_detail.js') }}"></script>
+{% endblock %}

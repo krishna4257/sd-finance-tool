@@ -228,3 +228,7 @@ python_files/*
 apk_releases/*.apk
 apk_releases/*.tmp
 !apk_releases/version.json
+
+# User file uploads
+static/uploads/*
+!static/uploads/.gitkeep
