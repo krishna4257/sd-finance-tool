@@ -315,12 +315,16 @@
       <div class="flex items-baseline justify-between flex-wrap gap-2">
         <div>
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500" id="chartHeaderTitle">COLLECTED TIMELINE</p>
-          <p class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 money-fig tracking-tight" id="chartTotalDisplay">₹0</p>
+          <div class="flex items-baseline gap-2.5 flex-wrap">
+            <p class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 money-fig tracking-tight" id="chartTotalDisplay">₹0</p>
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400" id="chartSubtextDisplay"></span>
+          </div>
         </div>
-        <div class="flex items-center gap-2.5 text-[10px] font-bold">
-          <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><span class="h-2 w-2 rounded-full bg-emerald-500 shadow-2xs"></span> Paid</span>
-          <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><span class="h-2 w-2 rounded-full bg-amber-400 shadow-2xs"></span> Due</span>
-          <span class="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500"><span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700"></span> Future</span>
+        <div class="flex items-center gap-3 text-[10px] font-bold flex-wrap">
+          <span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-2xs"></span> Paid</span>
+          <span class="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400"><span class="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-amber-400 to-emerald-400 shadow-2xs"></span> Partial</span>
+          <span class="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300"><span class="h-2.5 w-2.5 rounded-full bg-amber-400 border border-amber-500/80 shadow-2xs"></span> Due</span>
+          <span class="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500"><span class="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></span> Future</span>
         </div>
       </div>
 
@@ -977,12 +981,11 @@
       renderMemberHeaderAndAnalytics(folioData);
       renderLinkedMembersBar(folioData.linked_members || []);
       renderChitsView(folioData.chits || []);
+      populatePaymentFilterChits(folioData.chits || []);
       renderPaymentsView(folioData.payments || []);
       renderPayoutsView(folioData.payouts || []);
       renderActivityView(folioData.activity || []);
       renderLoansView(folioData.loans || []);
-      populatePaymentFilterChits(folioData.chits || []);
-      renderMonthlyCollectionGraph(folioData);
     } catch (e) {
       console.error('Error loading folio:', e);
       showToast('Error loading subscriber details: ' + (e.message || 'Server error'));
@@ -1069,6 +1072,12 @@
               <p class="text-2xl md:text-3xl font-black text-slate-900 dark:text-slate-100 money-fig tracking-tight mt-0.5">
                 ${formatINR(d.amount)}
               </p>
+              ${(a.available_credit && a.available_credit > 0) ? `
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-100/90 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/60 text-[11px] font-bold mt-1">
+                  <i data-lucide="wallet" class="w-3.5 h-3.5 stroke-[2]"></i>
+                  <span>Available Credit: ${formatINR(a.available_credit)}</span>
+                </div>
+              ` : ''}
               <div class="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
                 <span>${d.chit_name} · ${d.group_subtitle}</span>
                 <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold ${d.installment_type === 'fixed' ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">
@@ -1082,11 +1091,20 @@
               </div>
             </div>
 
-            <button type="button" onclick="openRecordPaymentModal('${d.installment_id}', '${d.membership_id}', ${d.amount}, '${d.chit_name}')" 
-                    class="${isDef ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-900 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500'} text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs card-shine dark:shadow-none inline-flex items-center gap-1.5 active:scale-95">
-              <i data-lucide="plus" class="w-4 h-4 stroke-[2] text-xs"></i>
-              <span>Collect</span>
-            </button>
+            <div class="flex items-center gap-2">
+              ${(a.available_credit && a.available_credit > 0) ? `
+                <button type="button" onclick="promptFolioSettleCredit('${d.installment_id}', '${d.membership_id}', ${d.amount}, ${a.available_credit})" 
+                        class="bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/60 dark:hover:bg-emerald-800/70 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-xs dark:shadow-none inline-flex items-center gap-1.5 active:scale-95 cursor-pointer" title="Settle using available advance credit">
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5 stroke-[2]"></i>
+                  <span>Settle Credit</span>
+                </button>
+              ` : ''}
+              <button type="button" onclick="openRecordPaymentModal('${d.installment_id}', '${d.membership_id}', ${d.amount}, '${d.chit_name}')" 
+                      class="${isDef ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-900 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500'} text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs card-shine dark:shadow-none inline-flex items-center gap-1.5 active:scale-95">
+                <i data-lucide="plus" class="w-4 h-4 stroke-[2] text-xs"></i>
+                <span>Collect</span>
+              </button>
+            </div>
           </div>
 
           <!-- Itemized Breakdown Accordion -->
@@ -1123,6 +1141,12 @@
             <div>
               <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">ALL DUES COLLECTED</p>
               <p class="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">This subscriber is completely caught up with all current installments.</p>
+              ${(a.available_credit && a.available_credit > 0) ? `
+                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 font-bold text-[11px] border border-emerald-300 dark:border-emerald-700/60 mt-1">
+                  <i data-lucide="wallet" class="w-3.5 h-3.5 stroke-[2]"></i>
+                  <span>Advance Credit Available: ${formatINR(a.available_credit)}</span>
+                </div>
+              ` : ''}
             </div>
           </div>
           <span class="text-xs font-black text-emerald-700 dark:text-emerald-400">✓ Up to date</span>
@@ -1521,13 +1545,20 @@
   // 6. Render Payments View (Tab 2)
   function populatePaymentFilterChits(chits) {
     const sel = document.getElementById('filterChitSelect');
+    if (!sel) return;
+    const currentVal = sel.value;
     sel.innerHTML = '<option value="all">All chits</option>';
     chits.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.group_id;
-      opt.textContent = c.group_name;
+      opt.textContent = `${c.group_name} (${formatINR(c.chit_total_value)})`;
       sel.appendChild(opt);
     });
+    if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+      sel.value = currentVal;
+    } else {
+      sel.value = 'all';
+    }
   }
 
   function filterPaymentsByChit(groupId) {
@@ -1540,228 +1571,535 @@
   }
 
   function renderPaymentsView(payments) {
-    const s = folioData?.payments_summary || { total_collected: 0, total_payouts: 0, total_penalties: 0 };
-    document.getElementById('chartTotalDisplay').textContent = formatINR(s.total_collected);
-    document.getElementById('tileCollectedDisplay').textContent = formatINR(s.total_collected);
-    document.getElementById('tilePayoutsDisplay').textContent = formatINR(s.total_payouts);
-    document.getElementById('tilePenaltiesDisplay').textContent = formatINR(s.total_penalties);
-
-    renderMonthlyCollectionGraph(folioData);
-    renderPaymentsList(payments);
+    const chitFilter = document.getElementById('filterChitSelect')?.value || 'all';
+    renderMonthlyCollectionGraph(folioData, chitFilter);
+    renderPaymentsList(payments, chitFilter);
   }
 
-  function renderMonthlyCollectionGraph(data) {
+  function renderMonthlyCollectionGraph(data, activeChitFilter = 'all') {
     const container = document.getElementById('dynamicCollectionChartContainer');
     if (!container || !data) return;
 
     const chits = data.chits || [];
     const payments = data.payments || [];
+    const payouts = data.payouts || [];
+
+    let targetChits = [];
+    let isFilteredToSingle = false;
+    let activeChit = null;
+
+    if (activeChitFilter && activeChitFilter !== 'all') {
+      activeChit = chits.find(c => c.group_id === activeChitFilter);
+      if (activeChit) {
+        targetChits = [activeChit];
+        isFilteredToSingle = true;
+      } else {
+        targetChits = chits;
+      }
+    } else {
+      targetChits = chits;
+    }
 
     let maxDuration = 0;
-    let maxCurMonth = 1;
-
-    chits.forEach(c => {
+    targetChits.forEach(c => {
       const dur = parseInt(c.duration_months, 10) || 20;
-      const cur = parseInt(c.current_month_index, 10) || 1;
       if (dur > maxDuration) maxDuration = dur;
-      if (cur > maxCurMonth) maxCurMonth = cur;
     });
 
     if (maxDuration === 0) {
-      if (payments.length > 0) {
-        payments.forEach(p => {
-          const m = parseInt(p.month_index, 10) || 1;
-          if (m > maxDuration) maxDuration = m;
-        });
-      }
-      maxDuration = Math.max(2, maxDuration);
+      payments.forEach(p => {
+        const m = parseInt(p.month_index, 10) || 1;
+        if (m > maxDuration) maxDuration = m;
+      });
+      maxDuration = Math.max(12, maxDuration);
     }
 
     const displayMonthsCount = Math.max(2, maxDuration);
 
-    let monthDataMap = {};
-    for (let i = 1; i <= displayMonthsCount; i++) {
-      monthDataMap[i] = { paid: 0, due: 0, is_paid: false, is_due: false };
-    }
-
-    chits.forEach(c => {
-      (c.schedule_preview || []).forEach(s => {
-        const mIdx = parseInt(s.month_index, 10);
-        if (mIdx && monthDataMap[mIdx]) {
-          monthDataMap[mIdx].paid += parseFloat(s.payout || 0);
-          monthDataMap[mIdx].due += parseFloat(s.kattubadi || 0);
+    // Active horizon: determine latest cycle reached (from current_month_index or any payments/paid dots)
+    let activeHorizon = 1;
+    targetChits.forEach(c => {
+      const curM = parseInt(c.current_month_index, 10) || 1;
+      if (curM > activeHorizon) activeHorizon = curM;
+      (c.dots || []).forEach(d => {
+        if ((d.is_paid || (d.amount > 0 && d.pending < d.amount)) && d.month_index > activeHorizon) {
+          activeHorizon = d.month_index;
         }
+      });
+      payments.filter(p => p.group_id === c.group_id).forEach(p => {
+        const pM = parseInt(p.month_index, 10) || 0;
+        if (pM > activeHorizon) activeHorizon = pM;
       });
     });
 
-    payments.forEach(p => {
-      const mIdx = parseInt(p.month_index, 10);
-      if (mIdx && monthDataMap[mIdx]) {
-        monthDataMap[mIdx].paid += parseFloat(p.amount || 0);
-      }
-    });
+    let totalCollectedForFilter = 0;
+    let totalDesiredForFilter = 0;
+    let fullyPaidMonthsCount = 0;
+    let partialMonthsCount = 0;
+    let dueMonthsCount = 0;
+    let futureMonthsCount = 0;
 
-    const isThin = displayMonthsCount > 8;
-    const isVeryThin = displayMonthsCount > 14;
-    const radiusClass = isVeryThin ? 'rounded-xs' : (isThin ? 'rounded-md' : 'rounded-xl');
-    const gapClass = isVeryThin ? 'gap-0.5' : (isThin ? 'gap-1' : 'gap-1.5');
-    const heightClass = 'h-10';
+    const monthsData = [];
+
+    for (let m = 1; m <= displayMonthsCount; m++) {
+      let mDesired = 0;
+      let mReceived = 0;
+      let mContributingChits = 0;
+      let mChitDetails = [];
+
+      targetChits.forEach(c => {
+        const dur = parseInt(c.duration_months, 10) || 20;
+        if (m <= dur) {
+          mContributingChits++;
+          const dot = (c.dots || []).find(d => d.month_index === m);
+          const po = payouts.find(p => p.group_id === c.group_id);
+          const sp = po?.schedule_preview?.find(s => s.month_index === m);
+
+          let cDesired = 0;
+          if (dot && parseFloat(dot.amount) > 0) {
+            cDesired = parseFloat(dot.amount);
+          } else if (sp && parseFloat(sp.kattubadi) > 0) {
+            cDesired = parseFloat(sp.kattubadi);
+          } else if (parseFloat(c.fixed_installment_amount) > 0) {
+            cDesired = parseFloat(c.fixed_installment_amount);
+          }
+
+          const cPayments = payments.filter(p => p.group_id === c.group_id && parseInt(p.month_index, 10) === m);
+          const cPaidFromPayments = cPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+          let cReceived = 0;
+          if (cPaidFromPayments > 0) {
+            cReceived = cPaidFromPayments;
+          } else if (dot && dot.is_paid && cDesired > 0) {
+            cReceived = cDesired;
+          } else if (dot && dot.amount > 0 && dot.pending < dot.amount) {
+            cReceived = dot.amount - dot.pending;
+          }
+
+          mDesired += cDesired;
+          mReceived += cReceived;
+
+          mChitDetails.push({
+            name: c.group_name,
+            desired: cDesired,
+            received: cReceived,
+            is_paid: cDesired > 0 && cReceived >= (cDesired - 0.01)
+          });
+        }
+      });
+
+      totalDesiredForFilter += mDesired;
+      totalCollectedForFilter += mReceived;
+
+      const mPending = Math.max(0, mDesired - mReceived);
+      const isPaid = mDesired > 0 && mReceived >= (mDesired - 0.01);
+      const isPartial = !isPaid && mReceived > 0;
+      const isDue = !isPaid && !isPartial && (m <= activeHorizon);
+      const isFuture = !isPaid && !isPartial && !isDue;
+
+      if (isPaid) fullyPaidMonthsCount++;
+      else if (isPartial) partialMonthsCount++;
+      else if (isDue) dueMonthsCount++;
+      else futureMonthsCount++;
+
+      const pct = mDesired > 0 ? Math.min(100, Math.round((mReceived / mDesired) * 100)) : (isPaid ? 100 : 0);
+
+      monthsData.push({
+        month: m,
+        desired: mDesired,
+        received: mReceived,
+        pending: mPending,
+        pct: pct,
+        is_paid: isPaid,
+        is_partial: isPartial,
+        is_due: isDue,
+        is_future: isFuture,
+        contributing: mContributingChits,
+        chits: mChitDetails
+      });
+    }
+
+    // Update Header and Summary Cards
+    const headerTitleEl = document.getElementById('chartHeaderTitle');
+    if (headerTitleEl) {
+      headerTitleEl.textContent = isFilteredToSingle 
+        ? `COLLECTED TIMELINE · ${activeChit.group_name}` 
+        : 'COLLECTED TIMELINE · ALL CHITS';
+    }
+
+    const chartTotalEl = document.getElementById('chartTotalDisplay');
+    if (chartTotalEl) {
+      chartTotalEl.textContent = formatINR(totalCollectedForFilter);
+    }
+
+    const chartSubtextEl = document.getElementById('chartSubtextDisplay');
+    if (chartSubtextEl) {
+      const pctTotal = totalDesiredForFilter > 0 
+        ? Math.round((totalCollectedForFilter / totalDesiredForFilter) * 100) 
+        : 0;
+      chartSubtextEl.textContent = `${formatINR(totalCollectedForFilter)} of ${formatINR(totalDesiredForFilter)} total (${pctTotal}%) · ${fullyPaidMonthsCount} of ${displayMonthsCount} mo paid`;
+    }
+
+    const tileCollected = document.getElementById('tileCollectedDisplay');
+    if (tileCollected) {
+      tileCollected.textContent = formatINR(totalCollectedForFilter);
+    }
+
+    const tilePayouts = document.getElementById('tilePayoutsDisplay');
+    if (tilePayouts) {
+      if (isFilteredToSingle) {
+        tilePayouts.textContent = activeChit?.payout?.has_taken ? formatINR(activeChit.payout.amount) : '₹0';
+      } else {
+        tilePayouts.textContent = formatINR(data.payments_summary?.total_payouts || 0);
+      }
+    }
+
+    const tilePenalties = document.getElementById('tilePenaltiesDisplay');
+    if (tilePenalties) {
+      if (isFilteredToSingle) {
+        const pPen = payments.filter(p => p.group_id === activeChitFilter && (p.notes || '').toLowerCase().includes('penalty'))
+                             .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+        tilePenalties.textContent = formatINR(pPen);
+      } else {
+        tilePenalties.textContent = formatINR(data.payments_summary?.total_penalties || 0);
+      }
+    }
+
+    // Render bars and labels
+    const isThin = displayMonthsCount > 12;
+    const isVeryThin = displayMonthsCount > 20;
+    const gapClass = isVeryThin ? 'gap-0.5 sm:gap-1' : (isThin ? 'gap-1 sm:gap-1.5' : 'gap-1.5 sm:gap-2');
+    const radiusClass = isVeryThin ? 'rounded-md' : 'rounded-lg';
 
     let barsHtml = '';
     let labelsHtml = '';
 
-    for (let i = 1; i <= displayMonthsCount; i++) {
-      const mInfo = monthDataMap[i] || {};
-      const isPastOrCurrent = i <= maxCurMonth;
-      const hasPayments = mInfo.paid > 0 || (payments.some(p => p.month_index === i));
-      const isPaid = isPastOrCurrent && (hasPayments || (chits.length > 0 && i < maxCurMonth));
-      const isDue = isPastOrCurrent && !isPaid;
-
-      let pillBgClass = '';
-      let animClass = '';
+    monthsData.forEach(d => {
+      let fillHeight = '0%';
+      let fillClass = '';
       let statusText = 'Upcoming';
+      let statusBadgeClass = 'bg-slate-700/50 text-slate-300 border border-slate-600/50';
 
-      if (isPaid) {
-        pillBgClass = 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.35)]';
-        animClass = 'animate-breath';
-        statusText = 'Paid';
-      } else if (isDue) {
-        pillBgClass = 'bg-gradient-to-t from-amber-500 via-amber-400 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.35)]';
-        animClass = 'animate-pulse-fast';
+      if (d.is_paid) {
+        fillHeight = '100%';
+        fillClass = 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-teal-400 rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.35)]';
+        statusText = 'Paid (100%)';
+        statusBadgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+      } else if (d.is_partial) {
+        fillHeight = `${Math.max(14, Math.min(94, d.pct))}%`;
+        fillClass = 'bg-gradient-to-t from-amber-500 via-amber-400 to-emerald-400 rounded-b-lg shadow-[0_0_8px_rgba(245,158,11,0.25)]';
+        statusText = `Partial (${d.pct}%)`;
+        statusBadgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
+      } else if (d.is_due) {
+        fillHeight = '22%';
+        fillClass = 'bg-amber-400/30 dark:bg-amber-400/20 border-t-2 border-amber-500 rounded-b-lg animate-pulse-fast';
         statusText = 'Due / Pending';
+        statusBadgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
       } else {
-        pillBgClass = 'bg-slate-200/90 dark:bg-chitDark-elevated/70 border border-slate-300/40 dark:border-slate-700/40';
-        animClass = '';
-        statusText = 'Future';
+        fillHeight = '0%';
+        fillClass = '';
+        statusText = 'Upcoming';
+        statusBadgeClass = 'bg-slate-700/50 text-slate-400 border border-slate-600/50';
       }
 
-      const fillHeight = isPaid ? '100%' : (isDue ? '65%' : '35%');
-
       barsHtml += `
-        <div class="flex-1 h-full flex flex-col justify-end group/cylinder relative cursor-pointer">
-          <div class="w-full ${radiusClass} ${pillBgClass} ${animClass} transition-all duration-300 group-hover/cylinder:scale-y-110 group-hover/cylinder:-translate-y-0.5" style="height: ${fillHeight};"></div>
-          
-          <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover/cylinder:flex flex-col items-center z-30 pointer-events-none">
-            <div class="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap border border-slate-800 dark:border-slate-200">
-              Month M${i} · ${statusText}
+        <div class="flex-1 min-w-[10px] sm:min-w-[14px] max-w-[42px] h-full flex flex-col justify-end group/col relative cursor-pointer select-none">
+          <!-- Pillar track -->
+          <div class="w-full h-full bg-slate-200/60 dark:bg-slate-800/60 ${radiusClass} relative overflow-hidden flex flex-col justify-end border border-slate-200/50 dark:border-slate-700/40 transition-all duration-200 group-hover/col:border-slate-400 dark:group-hover/col:border-slate-500 group-hover/col:scale-y-[1.03] group-hover/col:-translate-y-0.5">
+            <div class="w-full ${fillClass} transition-all duration-300 group-hover/col:brightness-110" style="height: ${fillHeight};"></div>
+          </div>
+
+          <!-- Tooltip Popover -->
+          <div class="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 hidden group-hover/col:flex flex-col items-center z-40 pointer-events-none animate-in fade-in duration-150">
+            <div class="bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white text-[11px] p-2.5 rounded-xl shadow-2xl border border-slate-700/80 dark:border-slate-600/80 whitespace-nowrap min-w-[155px]">
+              <div class="flex items-center justify-between gap-2.5 pb-1.5 border-b border-slate-700/60">
+                <span class="font-extrabold text-xs">Month M${d.month}</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${statusBadgeClass}">
+                  ${statusText}
+                </span>
+              </div>
+              <div class="pt-1.5 space-y-1 font-mono text-[10.5px]">
+                <div class="flex justify-between items-center text-emerald-400 font-bold">
+                  <span class="text-slate-400 font-sans font-medium text-[10px]">Received</span>
+                  <span>${formatINR(d.received)}</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-300">
+                  <span class="text-slate-400 font-sans font-medium text-[10px]">Desired</span>
+                  <span>${formatINR(d.desired)}</span>
+                </div>
+                ${d.pending > 0.01 ? `
+                  <div class="flex justify-between items-center text-amber-400 font-bold pt-0.5 border-t border-slate-800">
+                    <span class="text-slate-400 font-sans font-medium text-[10px]">Pending</span>
+                    <span>${formatINR(d.pending)}</span>
+                  </div>
+                ` : ''}
+                ${(!isFilteredToSingle && d.contributing > 1) ? `
+                  <div class="text-[9.5px] font-sans text-slate-400 pt-1 border-t border-slate-800">
+                    ${d.chits.filter(c => c.is_paid).length} of ${d.contributing} chits paid
+                  </div>
+                ` : ''}
+              </div>
             </div>
-            <div class="w-2 h-2 bg-slate-900 dark:bg-slate-100 rotate-45 -mt-1"></div>
+            <div class="w-2 h-2 bg-slate-900/95 dark:bg-slate-800/95 rotate-45 -mt-1 border-r border-b border-slate-700/80"></div>
           </div>
         </div>
       `;
 
       let showLabel = true;
-      if (displayMonthsCount > 12) {
-        showLabel = (i === 1 || i === displayMonthsCount || i % 5 === 0 || i === maxCurMonth);
+      if (displayMonthsCount > 15) {
+        showLabel = (d.month === 1 || d.month === displayMonthsCount || d.month % 5 === 0 || d.month === activeHorizon);
       }
 
       if (showLabel) {
-        labelsHtml += `<span class="${i === maxCurMonth ? 'text-slate-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-500'}">M${i}</span>`;
+        labelsHtml += `<span class="${d.month === activeHorizon ? 'text-slate-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-500'}">M${d.month}</span>`;
       } else {
-        labelsHtml += `<span class="opacity-0">.</span>`;
+        labelsHtml += `<span class="text-slate-300 dark:text-slate-700 font-black select-none">·</span>`;
       }
-    }
+    });
 
     container.innerHTML = `
-      <div class="${heightClass} w-full bg-slate-100/70 dark:bg-chitDark-elevated/40 rounded-xl overflow-hidden flex p-1 ${gapClass} items-end border border-slate-200/60 dark:border-slate-700/40">
+      <div class="h-28 sm:h-32 w-full bg-slate-50/90 dark:bg-chitDark-elevated/30 rounded-2xl p-2.5 sm:p-3 border border-slate-200/70 dark:border-slate-800/80 flex items-end ${gapClass} overflow-x-auto no-scrollbar">
         ${barsHtml}
       </div>
-      <div class="flex items-center justify-between text-[10px] font-bold uppercase mt-1.5 px-0.5 select-none">
+      <div class="flex items-center justify-between text-[10px] font-bold uppercase mt-2 px-1 select-none font-mono">
         ${labelsHtml}
       </div>
     `;
   }
 
-  function renderPaymentsList(payments) {
+  function renderPaymentsList(payments, activeChitFilter = 'all') {
     const container = document.getElementById('paymentsHistoryList');
-    document.getElementById('paymentsCountLabel').textContent = `${payments.length} payment${payments.length > 1 ? 's' : ''}`;
+    if (!container) return;
+    const countLabel = document.getElementById('paymentsCountLabel');
+    if (countLabel) {
+      countLabel.textContent = `${payments.length} payment${payments.length === 1 ? '' : 's'}`;
+    }
 
-    if (payments.length === 0) {
+    if (!payments || payments.length === 0) {
       container.innerHTML = `
-        <div class="py-8 text-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50">
-          No payment transactions found.
+        <div class="py-12 text-center bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6 space-y-2">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-chitDark-elevated text-slate-400 flex items-center justify-center">
+            <i data-lucide="receipt" class="w-6 h-6 stroke-[1.8]"></i>
+          </div>
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No payment transactions found</p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-xs mx-auto">No recorded payments match your active chit or filter criteria.</p>
         </div>
       `;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
-    container.innerHTML = '';
+    // Group payments by group_id
+    const chitOrder = (folioData?.chits || []).map(c => c.group_id);
+    const groupsMap = new Map();
+
     payments.forEach(p => {
-      let dMonth = p.date_month;
-      let dDay = p.date_day;
-      if (!dMonth || dMonth === 'undefined') {
-        const d = p.payment_date ? new Date(p.payment_date) : (p.created_at ? new Date(p.created_at) : new Date());
-        dMonth = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-        dDay = String(d.getDate()).padStart(2, '0');
+      const gId = p.group_id || 'other';
+      if (!groupsMap.has(gId)) {
+        const chitMeta = (folioData?.chits || []).find(c => c.group_id === gId);
+        groupsMap.set(gId, {
+          group_id: gId,
+          group_name: p.group_name || chitMeta?.group_name || 'Chit Group',
+          chitMeta: chitMeta,
+          payments: [],
+          totalAmount: 0
+        });
+      }
+      const gEntry = groupsMap.get(gId);
+      gEntry.payments.push(p);
+      gEntry.totalAmount += (parseFloat(p.amount) || 0);
+    });
+
+    const sortedGroups = Array.from(groupsMap.values()).sort((a, b) => {
+      const idxA = chitOrder.indexOf(a.group_id);
+      const idxB = chitOrder.indexOf(b.group_id);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.group_name.localeCompare(b.group_name);
+    });
+
+    let html = '';
+
+    sortedGroups.forEach(g => {
+      // Sort payments within the group descending by month_index, then date
+      g.payments.sort((a, b) => {
+        const mA = parseInt(a.month_index, 10) || 0;
+        const mB = parseInt(b.month_index, 10) || 0;
+        if (mA !== mB) return mB - mA;
+        const dA = new Date(a.payment_date || a.created_at || 0).getTime();
+        const dB = new Date(b.payment_date || b.created_at || 0).getTime();
+        return dB - dA;
+      });
+
+      const meta = g.chitMeta;
+      let subtitle = `${g.payments.length} installment${g.payments.length === 1 ? '' : 's'}`;
+      if (meta) {
+        const valLakhs = (parseFloat(meta.chit_total_value || 0) / 100000).toFixed(0);
+        subtitle = `₹${valLakhs}L · ${meta.duration_months} Months · ${meta.share_units || 1} Share`;
       }
 
-      const row = document.createElement('div');
-      row.className = 'bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-3.5 md:p-4 flex items-center justify-between gap-3 shadow-2xs card-shine dark:shadow-none transition-all hover:border-slate-300 dark:border-slate-600';
-      row.innerHTML = `
-        <!-- Left: Date Capsule with green strip -->
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="flex items-center gap-2 shrink-0">
-            <span class="w-1 h-9 bg-emerald-500 rounded-full"></span>
-            <div class="text-center leading-tight">
-              <span class="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 block">${dMonth}</span>
-              <span class="text-sm font-extrabold text-slate-800 dark:text-slate-200 money-fig">${dDay}</span>
+      // Chit Group Header Card
+      html += `
+        <div class="space-y-2.5 pt-2 first:pt-0">
+          <div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-chitDark-elevated/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-2xs shrink-0"></span>
+              <div class="min-w-0">
+                <h4 class="text-xs md:text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate">${escapeHtml(g.group_name)}</h4>
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">${subtitle}</p>
+              </div>
+            </div>
+            <div class="text-right shrink-0 flex items-center gap-2.5">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white dark:bg-chitDark-surface text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+                ${g.payments.length} payment${g.payments.length > 1 ? 's' : ''}
+              </span>
+              <span class="text-sm md:text-base font-extrabold text-emerald-600 dark:text-emerald-400 money-fig">
+                ${formatINR(g.totalAmount)}
+              </span>
             </div>
           </div>
 
-          <!-- Middle: Chit & Method details -->
-          <div class="min-w-0">
-            <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">${p.group_name}</p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-              Collection · ${p.month_tag} · ${p.payment_mode}
-            </p>
+          <!-- Group Payment Rows -->
+          <div class="space-y-2">
+      `;
+
+      g.payments.forEach(p => {
+        let dMonth = p.date_month;
+        let dDay = p.date_day;
+        if (!dMonth || dMonth === 'undefined') {
+          const d = p.payment_date ? new Date(p.payment_date) : (p.created_at ? new Date(p.created_at) : new Date());
+          dMonth = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+          dDay = String(d.getDate()).padStart(2, '0');
+        }
+
+        const monthTag = p.month_tag || (p.month_index ? `Month ${p.month_index}` : 'Installment');
+
+        html += `
+          <div class="bg-white dark:bg-chitDark-surface rounded-2xl border border-slate-200 dark:border-slate-700/50 p-3.5 md:p-4 flex items-center justify-between gap-3 shadow-2xs card-shine dark:shadow-none transition-all hover:border-slate-300 dark:hover:border-slate-600">
+            <!-- Left: Date Capsule with green strip -->
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="w-1 h-9 bg-emerald-500 rounded-full"></span>
+                <div class="text-center leading-tight">
+                  <span class="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 block">${dMonth}</span>
+                  <span class="text-sm font-extrabold text-slate-800 dark:text-slate-200 money-fig">${dDay}</span>
+                </div>
+              </div>
+
+              <!-- Middle: Chit & Method details -->
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-bold text-slate-900 dark:text-slate-100">${escapeHtml(monthTag)}</span>
+                  ${p.payment_mode === 'Advance Credit' ? `
+                    <span class="px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/60 dark:border-emerald-700/50">
+                      Advance Credit
+                    </span>
+                  ` : `
+                    <span class="text-[10px] px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border border-slate-200/60 dark:border-slate-700/60">
+                      ${escapeHtml(p.payment_mode || 'Cash')}
+                    </span>
+                  `}
+                </div>
+                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span>${escapeHtml(p.group_name)}</span>
+                  ${(p.receipt_no && p.receipt_no !== '—') ? `<span>· Rec #${escapeHtml(p.receipt_no)}</span>` : ''}
+                  ${p.notes ? `<span class="italic">· “${escapeHtml(p.notes)}”</span>` : ''}
+                </p>
+              </div>
+            </div>
+
+            <!-- Right: Amount & Actions -->
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-sm md:text-base font-extrabold text-emerald-600 dark:text-emerald-400 money-fig">
+                ${formatINR(p.amount)}
+              </span>
+
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="sharePaymentReceipt('${p.id}', '${p.amount}', '${escapeHtml(p.receipt_no || '')}', '${escapeHtml(p.group_name)}')" 
+                        title="Share Receipt" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer">
+                  <i data-lucide="share-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+                </button>
+
+                <button type="button" onclick="openEditPaymentModal('${p.id}')" 
+                        title="Edit Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer">
+                  <i data-lucide="pencil" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+                </button>
+
+                <button type="button" onclick="handleDeletePayment('${p.id}', ${p.amount})" 
+                        title="Delete Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer">
+                  <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        `;
+      });
 
-        <!-- Right: Amount & Actions -->
-        <div class="flex items-center gap-3 shrink-0">
-          <span class="text-sm md:text-base font-extrabold text-emerald-600 money-fig">
-            ${formatINR(p.amount)}
-          </span>
-
-          <div class="flex items-center gap-1.5">
-            <button type="button" onclick="sharePaymentReceipt('${p.id}', '${p.amount}', '${p.receipt_no}', '${p.group_name}')" 
-                    title="Share Receipt" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 text-slate-600 dark:text-slate-400 flex items-center justify-center transition-colors">
-              <i data-lucide="share-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
-            </button>
-
-            <button type="button" onclick="openEditPaymentModal('${p.id}')" 
-                    title="Edit Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-slate-200 dark:bg-slate-800 dark:bg-slate-200 text-slate-600 dark:text-slate-400 flex items-center justify-center transition-colors">
-              <i data-lucide="pencil" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
-            </button>
-
-            <button type="button" onclick="handleDeletePayment('${p.id}', ${p.amount})" 
-                    title="Delete Payment" class="h-7 w-7 rounded-full bg-slate-100 dark:bg-chitDark-elevated hover:bg-rose-50 text-slate-400 dark:text-slate-500 hover:text-rose-600 flex items-center justify-center transition-colors">
-              <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8] text-[11px]"></i>
-            </button>
+      html += `
           </div>
         </div>
       `;
-      container.appendChild(row);
     });
+
+    container.innerHTML = html;
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  async function promptFolioSettleCredit(installmentId, membershipId, pendingAmount, availableCredit) {
+    const settleAmt = Math.min(pendingAmount, availableCredit);
+    const remCredit = availableCredit - settleAmt;
+    const mName = folioData?.member?.full_name || 'Subscriber';
+    const confirmMsg = `Settle due for ${mName} using available advance credit?\n\n` +
+      `• Due Amount: ${formatINR(pendingAmount)}\n` +
+      `• Available Credit: ${formatINR(availableCredit)}\n` +
+      `• Amount to Settle: ${formatINR(settleAmt)}\n` +
+      `• Remaining Credit after Settlement: ${formatINR(remCredit)}\n\n` +
+      `Click OK to confirm and settle.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch('/chit/api/payments/settle-credit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          installment_id: installmentId,
+          membership_id: membershipId,
+          amount: settleAmt
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Failed to settle credit');
+        return;
+      }
+      showToast('Credit settled successfully');
+      await loadMemberFolio();
+    } catch (err) {
+      showToast('Error: ' + err.message);
+    }
   }
 
   function filterMemberPayments() {
     if (!folioData || !folioData.payments) return;
-    const q = document.getElementById('paymentsSearchInput').value.toLowerCase().trim();
-    const chitFilter = document.getElementById('filterChitSelect').value;
-    const typeFilter = document.getElementById('filterTypeSelect').value;
+    const q = (document.getElementById('paymentsSearchInput')?.value || '').toLowerCase().trim();
+    const chitFilter = document.getElementById('filterChitSelect')?.value || 'all';
+    const typeFilter = document.getElementById('filterTypeSelect')?.value || 'all';
 
     const filtered = folioData.payments.filter(p => {
       const matchQ = !q || p.amount.toString().includes(q) || 
                             p.group_name.toLowerCase().includes(q) || 
                             p.payment_mode.toLowerCase().includes(q) || 
-                            (p.notes && p.notes.toLowerCase().includes(q));
+                            (p.notes && p.notes.toLowerCase().includes(q)) ||
+                            (p.receipt_no && p.receipt_no.toLowerCase().includes(q));
       const matchChit = chitFilter === 'all' || p.group_id === chitFilter;
       const matchType = typeFilter === 'all' || p.payment_mode.toLowerCase() === typeFilter.toLowerCase();
       return matchQ && matchChit && matchType;
     });
 
-    renderPaymentsList(filtered);
+    renderMonthlyCollectionGraph(folioData, chitFilter);
+    renderPaymentsList(filtered, chitFilter);
   }
 
   // 7. Render Payouts View (Tab 3)
@@ -2011,12 +2349,13 @@
     // Update banner
     const banner = document.getElementById('modalDuesBanner');
     const bannerText = document.getElementById('modalBannerText');
+    const availCr = chit.available_credit || folioData?.analytics?.available_credit || 0;
     if (chit.current_month_card.is_paid) {
       banner.className = 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-200';
-      bannerText.textContent = `All dues collected for ${chit.current_month_card.month_year}. Record only an extra or advance payment here.`;
+      bannerText.textContent = `All dues collected for ${chit.current_month_card.month_year}. Record only an extra or advance payment here.` + (availCr > 0 ? ` (Available Credit: ${formatINR(availCr)} rolling over)` : '');
     } else {
       banner.className = 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200';
-      bannerText.textContent = `Pending due for ${chit.current_month_card.month_year}: ${formatINR(chit.current_month_card.pending_amount)}`;
+      bannerText.textContent = `Pending due for ${chit.current_month_card.month_year}: ${formatINR(chit.current_month_card.pending_amount)}` + (availCr > 0 ? ` · Member has ${formatINR(availCr)} advance credit sitting on account` : '');
     }
 
     // Refresh pill buttons styling

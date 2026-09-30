@@ -21,11 +21,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dateutil.relativedelta import relativedelta
 import secrets
 import threading
+import queue
 import io
 import socket
 from flask import (
     Flask, render_template, request, redirect,
-    session, jsonify, flash, url_for, send_file
+    session, jsonify, flash, url_for, send_file, Response
 )
 from db import get_pg_connection
 from flask_limiter import Limiter
@@ -211,6 +212,22 @@ def ensure_feed_tables_exist(cur):
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS feed_rejections (
+            rejection_id SERIAL PRIMARY KEY,
+            feed_type TEXT NOT NULL,
+            local_uuid TEXT,
+            ano INTEGER,
+            vid INTEGER,
+            eid INTEGER,
+            action_type TEXT DEFAULT 'rejected_deleted',
+            deleted_by TEXT,
+            reason TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_feed_rejections_vid ON feed_rejections (vid);
+        CREATE INDEX IF NOT EXISTS idx_feed_rejections_uuid ON feed_rejections (local_uuid);
+    """)
     # Ensure payment.payment_type check constraint includes 'partial'
     try:
         cur.execute("""
@@ -227,6 +244,46 @@ def ensure_feed_tables_exist(cur):
             """)
     except Exception:
         pass
+
+
+# ----------------------------------------------------
+# REAL-TIME SUBMISSION SSE PUB-SUB SYSTEM
+# ----------------------------------------------------
+_sse_subscribers = {}  # vid -> list of queue.Queue
+_sse_lock = threading.Lock()
+
+def add_sse_subscriber(vid, q):
+    with _sse_lock:
+        if vid not in _sse_subscribers:
+            _sse_subscribers[vid] = []
+        _sse_subscribers[vid].append(q)
+
+def remove_sse_subscriber(vid, q):
+    with _sse_lock:
+        if vid in _sse_subscribers:
+            if q in _sse_subscribers[vid]:
+                _sse_subscribers[vid].remove(q)
+            if not _sse_subscribers[vid]:
+                del _sse_subscribers[vid]
+
+def broadcast_submission_event(vid, event_data):
+    """Broadcast submission status event to all listening clients for a village in milliseconds."""
+    with _sse_lock:
+        targets = []
+        if vid is not None and vid in _sse_subscribers:
+            targets.extend(_sse_subscribers[vid])
+        # Also broadcast to global listeners (vid 0 or None) if any
+        if None in _sse_subscribers:
+            targets.extend(_sse_subscribers[None])
+        if 0 in _sse_subscribers and vid != 0:
+            targets.extend(_sse_subscribers[0])
+
+        for q in targets:
+            try:
+                q.put_nowait(event_data)
+            except (queue.Full, Exception):
+                pass
+
 
 
 def ensure_user_devices_table(cur):
@@ -2819,12 +2876,21 @@ def recalc_customer_balance(cur, cid):
     paid_amt = cur.fetchone()[0]
     balance_amt = total_amt - paid_amt - interest_discount
 
-    cur.execute(f"""
-        UPDATE {table_customer}
-        SET paid_amount = %s,
-            balance_amount = %s
-        WHERE cid = %s
-    """, (paid_amt, balance_amt, cid))
+    if table_customer == "customer":
+        cur.execute(f"""
+            UPDATE {table_customer}
+            SET paid_amount = %s,
+                balance_amount = %s,
+                updated_at = NOW()
+            WHERE cid = %s
+        """, (paid_amt, balance_amt, cid))
+    else:
+        cur.execute(f"""
+            UPDATE {table_customer}
+            SET paid_amount = %s,
+                balance_amount = %s
+            WHERE cid = %s
+        """, (paid_amt, balance_amt, cid))
 
     recalc_customer_repayment_score(cur, cid, force_recalc=True)
 # ----------------------------------------------------
@@ -4243,6 +4309,137 @@ def close_account_feed():
         if conn:
             conn.close()
 
+# ----------------------------------------------------
+# REAL-TIME SUBMISSION STATUS & STREAMING API
+# ----------------------------------------------------
+@csrf.exempt
+@limiter.limit("300 per minute")
+@app.route("/api/mobile/submissions/status", methods=["GET"])
+def get_submission_statuses():
+    token = request.headers.get("X-Mobile-Token")
+    if not token or not verify_mobile_token(token):
+        return jsonify({"error": "unauthorized"}), 401
+
+    vid = request.args.get("vid", type=int)
+    if not vid:
+        return jsonify({"error": "vid required"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        ensure_feed_tables_exist(cur)
+        statuses = []
+
+        # 1. Customer feed items for vid
+        cur.execute("""
+            SELECT cf.local_uuid, cf.status, cf.payload, cfe.edit_status, cfe.edited_payload
+            FROM customer_feed cf
+            LEFT JOIN customer_feed_edits cfe ON cfe.local_uuid = cf.local_uuid
+            WHERE cf.vid = %s AND cf.local_uuid IS NOT NULL
+        """, (vid,))
+        for lu, st, pl, est, epl in cur.fetchall():
+            effective_status = st
+            if st == 'pending' and est == 'pending':
+                effective_status = 'rejected_edit'
+            statuses.append({
+                "local_uuid": lu,
+                "feed_type": "customer",
+                "status": effective_status,
+                "edited_payload": epl if effective_status == 'rejected_edit' else None
+            })
+
+        # 2. Payment feed items for vid
+        cur.execute("""
+            SELECT pfi.local_uuid, pfi.status, pfi.payload, pfe.edit_status, pfe.edited_payload
+            FROM payment_feed_items pfi
+            LEFT JOIN payment_feed_edits pfe ON pfe.local_uuid = pfi.local_uuid
+            WHERE (pfi.payload->>'vid')::int = %s AND pfi.local_uuid IS NOT NULL
+        """, (vid,))
+        for lu, st, pl, est, epl in cur.fetchall():
+            effective_status = st
+            if st == 'pending' and est == 'pending':
+                effective_status = 'rejected_edit'
+            statuses.append({
+                "local_uuid": lu,
+                "feed_type": "payment",
+                "status": effective_status,
+                "edited_payload": epl if effective_status == 'rejected_edit' else None
+            })
+
+        # 3. Account closure feed items for vid
+        cur.execute("""
+            SELECT local_uuid, status
+            FROM account_closure_feed
+            WHERE vid = %s AND local_uuid IS NOT NULL
+        """, (vid,))
+        for lu, st in cur.fetchall():
+            statuses.append({
+                "local_uuid": lu,
+                "feed_type": "closure",
+                "status": st
+            })
+
+        # 4. Feed rejections for vid
+        cur.execute("""
+            SELECT local_uuid, feed_type, action_type, reason
+            FROM feed_rejections
+            WHERE vid = %s AND local_uuid IS NOT NULL
+        """, (vid,))
+        for lu, ft, at, rsn in cur.fetchall():
+            statuses.append({
+                "local_uuid": lu,
+                "feed_type": ft,
+                "status": at or "rejected_deleted",
+                "reason": rsn
+            })
+
+        return jsonify({"success": True, "statuses": statuses}), 200
+    except Exception as e:
+        logger.error(f"Error fetching submission statuses: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@csrf.exempt
+@app.route("/api/mobile/submissions/stream", methods=["GET"])
+def submission_events_stream():
+    token = request.headers.get("X-Mobile-Token") or request.args.get("token")
+    if not token or not verify_mobile_token(token):
+        return jsonify({"error": "unauthorized"}), 401
+
+    vid = request.args.get("vid", type=int)
+    if not vid:
+        return jsonify({"error": "vid required"}), 400
+
+    q = queue.Queue(maxsize=100)
+    add_sse_subscriber(vid, q)
+
+    def stream():
+        yield ": connected\n\n"
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=20)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except queue.Empty:
+                    yield ": ping\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            remove_sse_subscriber(vid, q)
+
+    return Response(
+        stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 
 # ----------------------------------------------------
 # /api/mobile/customer_docs_update
@@ -4509,9 +4706,37 @@ def payment_feed_batch():
 
         # insert each payment as JSON payload
         for p in normalized_payments:
-
+            p_ano = p.get("ano")
+            p_vid = p.get("vid")
+            p_date = p.get("payment_date")
             local_uuid = p.get("local_uuid")
             payload = json.dumps(p)
+
+            # Prevent duplicate payment for the same ANO, VID, and payment_date
+            if p_ano is not None and p_vid is not None and p_date:
+                # 1. Check if already in accepted payment table
+                cur.execute("""
+                    SELECT 1 FROM payment 
+                    WHERE vid = %s AND ano = %s AND payment_date = %s
+                    LIMIT 1
+                """, (p_vid, p_ano, p_date))
+                if cur.fetchone():
+                    logger.warning("Skipping duplicate payment feed item (already in payment table): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
+                    continue
+
+                # 2. Check if already pending in payment_feed_items
+                cur.execute("""
+                    SELECT 1 FROM payment_feed_items
+                    WHERE (payload->>'vid')::int = %s 
+                      AND (payload->>'ano')::int = %s 
+                      AND (payload->>'payment_date') = %s
+                      AND status IN ('pending', 'approved', 'synced')
+                      AND (local_uuid != %s OR local_uuid IS NULL)
+                    LIMIT 1
+                """, (p_vid, p_ano, str(p_date), local_uuid or ''))
+                if cur.fetchone():
+                    logger.warning("Skipping duplicate payment feed item (already pending in feed): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
+                    continue
 
             cur.execute("""
                 INSERT INTO payment_feed_items (
@@ -8860,7 +9085,9 @@ def accept_closure_request(feed_id):
             UPDATE account_closure_feed
             SET status = 'accepted'
             WHERE ano = %s AND vid = %s AND status = 'pending'
+            RETURNING local_uuid
         """, (ano, vid))
+        closed_uuids = [r[0] for r in cur.fetchall() if r[0]]
 
         # Invalidate village health cache (matching customer dashboard pipeline)
         KOLKATA = pytz.timezone('Asia/Kolkata')
@@ -8883,6 +9110,17 @@ def accept_closure_request(feed_id):
         )
 
         conn.commit()
+
+        for lu in closed_uuids:
+            broadcast_submission_event(vid, {
+                "type": "status_update",
+                "feed_type": "closure",
+                "local_uuid": lu,
+                "ano": ano,
+                "vid": vid,
+                "status": "accepted"
+            })
+
         return jsonify({"success": True})
 
     except Exception as e:
@@ -8918,7 +9156,7 @@ def edit_closure_request(feed_id):
             UPDATE account_closure_feed
             SET ano = %s, vid = %s
             WHERE feed_id = %s AND status = 'pending'
-            RETURNING feed_id
+            RETURNING feed_id, local_uuid
         """, (ano, vid, feed_id))
 
         row = cur.fetchone()
@@ -8926,6 +9164,18 @@ def edit_closure_request(feed_id):
             return jsonify({"success": False, "error": "Pending closure request not found"}), 404
 
         conn.commit()
+
+        c_lu = row[1]
+        if c_lu:
+            broadcast_submission_event(vid, {
+                "type": "status_update",
+                "feed_type": "closure",
+                "local_uuid": c_lu,
+                "ano": ano,
+                "vid": vid,
+                "status": "rejected_edit"
+            })
+
         return jsonify({"success": True})
 
     except Exception as e:
@@ -9028,6 +9278,20 @@ def edit_customer_feed(feed_id):
                 """, (local_uuid, json.dumps(edited_payload), payload.get("eid"), payload.get("vid")))
 
         conn.commit()
+
+        if local_uuid:
+            c_vid = payload.get("vid")
+            c_ano = payload.get("ano")
+            broadcast_submission_event(c_vid, {
+                "type": "status_update",
+                "feed_type": "customer",
+                "local_uuid": local_uuid,
+                "ano": c_ano,
+                "vid": c_vid,
+                "status": "rejected_edit",
+                "edited_payload": edited_payload
+            })
+
         return jsonify({"success": True})
 
     except Exception as e:
@@ -9051,17 +9315,39 @@ def delete_closure_request(feed_id):
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        cur.execute("DELETE FROM account_closure_feed WHERE feed_id = %s RETURNING feed_id", (feed_id,))
+        cur.execute("SELECT local_uuid, ano, vid, eid FROM account_closure_feed WHERE feed_id = %s", (feed_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Closure request not found"}), 404
 
+        local_uuid, c_ano, c_vid, c_eid = row
+        logged_user = str(session.get("employee_id") or session.get("eid") or "")
+
+        if local_uuid:
+            ensure_feed_tables_exist(cur)
+            cur.execute("""
+                INSERT INTO feed_rejections (feed_type, local_uuid, ano, vid, eid, action_type, deleted_by)
+                VALUES ('closure', %s, %s, %s, %s, 'rejected_deleted', %s)
+            """, (local_uuid, c_ano, c_vid, c_eid, logged_user))
+
+        cur.execute("DELETE FROM account_closure_feed WHERE feed_id = %s", (feed_id,))
         conn.commit()
+
+        if local_uuid:
+            broadcast_submission_event(c_vid, {
+                "type": "status_update",
+                "feed_type": "closure",
+                "local_uuid": local_uuid,
+                "ano": c_ano,
+                "vid": c_vid,
+                "status": "rejected_deleted"
+            })
+
         audit_log(
             action="delete_closure_feed",
             entity_type="account_closure_feed",
             entity_id=feed_id,
-            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+            details={"deleted_by": logged_user}
         )
         return jsonify({"success": True})
 
@@ -9086,12 +9372,32 @@ def delete_customer_feed(feed_id):
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT local_uuid FROM customer_feed WHERE feed_id = %s", (feed_id,))
+        cur.execute("SELECT local_uuid, payload FROM customer_feed WHERE feed_id = %s", (feed_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Customer feed item not found"}), 404
 
-        local_uuid = row[0]
+        local_uuid, payload_raw = row
+        payload = payload_raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        c_ano = payload.get("ano")
+        c_vid = payload.get("vid")
+        c_eid = payload.get("eid")
+        logged_user = str(session.get("employee_id") or session.get("eid") or "")
+
+        if local_uuid:
+            ensure_feed_tables_exist(cur)
+            cur.execute("""
+                INSERT INTO feed_rejections (feed_type, local_uuid, ano, vid, eid, action_type, deleted_by)
+                VALUES ('customer', %s, %s, %s, %s, 'rejected_deleted', %s)
+            """, (local_uuid, c_ano, c_vid, c_eid, logged_user))
 
         cur.execute("DELETE FROM customer_feed WHERE feed_id = %s", (feed_id,))
         if local_uuid:
@@ -9101,11 +9407,22 @@ def delete_customer_feed(feed_id):
                 pass
 
         conn.commit()
+
+        if local_uuid:
+            broadcast_submission_event(c_vid, {
+                "type": "status_update",
+                "feed_type": "customer",
+                "local_uuid": local_uuid,
+                "ano": c_ano,
+                "vid": c_vid,
+                "status": "rejected_deleted"
+            })
+
         audit_log(
             action="delete_customer_feed",
             entity_type="customer_feed",
             entity_id=feed_id,
-            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+            details={"deleted_by": logged_user}
         )
         return jsonify({"success": True})
 
@@ -9345,6 +9662,15 @@ def accept_customer(feed_id):
     cur.execute("SET TIME ZONE 'UTC'")
 
     conn.commit()
+    if local_uuid:
+        broadcast_submission_event(data.get("vid"), {
+            "type": "status_update",
+            "feed_type": "customer",
+            "local_uuid": local_uuid,
+            "ano": data.get("ano"),
+            "vid": data.get("vid"),
+            "status": "accepted"
+        })
     audit_log(
         action="accept_customer_feed",
         entity_type="customer_feed",
@@ -9679,6 +10005,20 @@ def edit_payment_feed(feed_payment_id):
                 pass
 
         conn.commit()
+
+        if local_uuid:
+            p_vid = payload.get("vid") or session.get("vid")
+            p_ano = payload.get("ano")
+            broadcast_submission_event(p_vid, {
+                "type": "status_update",
+                "feed_type": "payment",
+                "local_uuid": local_uuid,
+                "ano": p_ano,
+                "vid": p_vid,
+                "status": "rejected_edit",
+                "edited_payload": payload
+            })
+
         return jsonify({
             "success": True,
             "mapped": customer_mapped,
@@ -9742,12 +10082,32 @@ def delete_payment_feed(feed_payment_id):
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT local_uuid FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
+        cur.execute("SELECT local_uuid, payload FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Payment feed item not found"}), 404
 
-        local_uuid = row[0]
+        local_uuid, payload_raw = row
+        payload = payload_raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        p_ano = payload.get("ano")
+        p_vid = payload.get("vid") or session.get("vid")
+        p_eid = payload.get("eid")
+        logged_user = str(session.get("employee_id") or session.get("eid") or "")
+
+        if local_uuid:
+            ensure_feed_tables_exist(cur)
+            cur.execute("""
+                INSERT INTO feed_rejections (feed_type, local_uuid, ano, vid, eid, action_type, deleted_by)
+                VALUES ('payment', %s, %s, %s, %s, 'rejected_deleted', %s)
+            """, (local_uuid, p_ano, p_vid, p_eid, logged_user))
 
         cur.execute("DELETE FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
         if local_uuid:
@@ -9757,11 +10117,22 @@ def delete_payment_feed(feed_payment_id):
                 pass
 
         conn.commit()
+
+        if local_uuid:
+            broadcast_submission_event(p_vid, {
+                "type": "status_update",
+                "feed_type": "payment",
+                "local_uuid": local_uuid,
+                "ano": p_ano,
+                "vid": p_vid,
+                "status": "rejected_deleted"
+            })
+
         audit_log(
             action="delete_payment_feed",
             entity_type="payment_feed",
             entity_id=feed_payment_id,
-            details={"deleted_by": session.get("employee_id") or session.get("eid")}
+            details={"deleted_by": logged_user}
         )
         return jsonify({"success": True})
 
@@ -9796,10 +10167,41 @@ def delete_payment_batch():
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        # Find local_uuids to clean up associated pending edits
-        cur.execute("SELECT local_uuid FROM payment_feed_items WHERE feed_payment_id = ANY(%s::bigint[]) AND local_uuid IS NOT NULL", (ids,))
-        local_uuids = [r[0] for r in cur.fetchall() if r[0]]
+        # Find items and local_uuids
+        cur.execute("SELECT feed_payment_id, local_uuid, payload FROM payment_feed_items WHERE feed_payment_id = ANY(%s::bigint[])", (ids,))
+        rows = cur.fetchall()
+        logged_user = str(session.get("employee_id") or session.get("eid") or "")
 
+        batch_events = []
+        if rows:
+            ensure_feed_tables_exist(cur)
+        for f_id, lu, pl_raw in rows:
+            pl = pl_raw
+            if isinstance(pl, str):
+                try:
+                    pl = json.loads(pl)
+                except Exception:
+                    pl = {}
+            if not isinstance(pl, dict):
+                pl = {}
+            b_ano = pl.get("ano")
+            b_vid = pl.get("vid") or session.get("vid")
+            b_eid = pl.get("eid")
+            if lu:
+                cur.execute("""
+                    INSERT INTO feed_rejections (feed_type, local_uuid, ano, vid, eid, action_type, deleted_by)
+                    VALUES ('payment', %s, %s, %s, %s, 'rejected_deleted', %s)
+                """, (lu, b_ano, b_vid, b_eid, logged_user))
+                batch_events.append((b_vid, {
+                    "type": "status_update",
+                    "feed_type": "payment",
+                    "local_uuid": lu,
+                    "ano": b_ano,
+                    "vid": b_vid,
+                    "status": "rejected_deleted"
+                }))
+
+        local_uuids = [r[1] for r in rows if r[1]]
         cur.execute("DELETE FROM payment_feed_items WHERE feed_payment_id = ANY(%s::bigint[])", (ids,))
         if local_uuids:
             try:
@@ -9808,12 +10210,16 @@ def delete_payment_batch():
                 pass
 
         conn.commit()
+
+        for b_vid, evt in batch_events:
+            broadcast_submission_event(b_vid, evt)
+
         audit_log(
             action="delete_payment_batch",
             entity_type="payment_feed",
             entity_id=None,
             details={
-                "deleted_by": session.get("employee_id") or session.get("eid"),
+                "deleted_by": logged_user,
                 "count": len(ids),
                 "ids": ids
             }
@@ -10002,6 +10408,15 @@ def accept_payment(feed_payment_id):
     invalidate_village_health_cache(cur, vid, payment_date)
 
     conn.commit()
+    if local_uuid:
+        broadcast_submission_event(vid, {
+            "type": "status_update",
+            "feed_type": "payment",
+            "local_uuid": local_uuid,
+            "ano": ano,
+            "vid": vid,
+            "status": "accepted"
+        })
     audit_log(
         action="accept_payment_feed",
         entity_type="payment_feed",
@@ -10310,6 +10725,17 @@ def accept_payment_batch():
             invalidate_village_health_cache(cur, batch_vid, min_pdt)
 
             conn.commit()
+
+            if successful_local_uuids:
+                for lu in successful_local_uuids:
+                    broadcast_submission_event(batch_vid, {
+                        "type": "status_update",
+                        "feed_type": "payment",
+                        "local_uuid": lu,
+                        "vid": batch_vid,
+                        "status": "accepted"
+                    })
+
             audit_log(
                 action="accept_payment_batch",
                 entity_type="payment_feed",
