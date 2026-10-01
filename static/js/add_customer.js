@@ -408,7 +408,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const cuttingVal = Math.round(parseFloat(cuttingInput?.value) || 0.0);
             if (baseInput) {
                 baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
-                baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
             }
         } else {
             if (splitFieldsContainer) splitFieldsContainer.style.display = 'none';
@@ -430,6 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (type === 'D') {
             periodInput.placeholder = "Number of Days";
         }
+    }
     typeInput.addEventListener('change', updatePeriodPlaceholder);
     
     // Auto-detect monthly village from name/context and preset Type to Monthly ('M')
@@ -449,7 +449,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const cuttingVal = Math.round(parseFloat(cuttingInput?.value) || 0.0);
         const baseInput = document.getElementById('base_amount');
         if (baseInput && !isNaN(amount)) {
-            baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
             baseInput.value = (amount - interestVal - cuttingVal).toFixed(0);
         }
     }
