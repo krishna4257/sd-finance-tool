@@ -219,6 +219,16 @@
           ₹0
         </div>
         <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 mt-1">COLLECTED</p>
+        <div id="collectedCreditSubBadge" class="hidden mt-1 flex flex-wrap gap-1.5 items-center">
+          <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/60">
+            <i data-lucide="wallet" class="w-3 h-3 stroke-[2]"></i>
+            <span id="collectedCreditText">+ ₹0 credit settled</span>
+          </span>
+          <span id="collectedExcessBadge" class="hidden inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300/80 dark:border-indigo-800/60">
+            <i data-lucide="arrow-up-right" class="w-3 h-3 stroke-[2]"></i>
+            <span id="collectedExcessText">+ ₹0 to advance wallet</span>
+          </span>
+        </div>
       </div>
 
       <div class="text-right">
@@ -1441,19 +1451,51 @@
     document.getElementById('targetAmountDisplay').textContent = formatINR(data.total_target);
     document.getElementById('pendingAmountDisplay').textContent = formatINR(data.total_pending);
 
-    // Multi-segment progress calculation
+    // Multi-segment progress calculation: gauge reflects dues cleared towards total target
     const totalTarget = data.total_target > 0 ? data.total_target : 1;
     const fullPaidAmt = dues.filter(d => d.pending_amount <= 0).reduce((acc, d) => acc + d.net_due_amount, 0);
     const partialAmt = dues.filter(d => d.paid_amount > 0 && d.pending_amount > 0).reduce((acc, d) => acc + d.paid_amount, 0);
 
     const paidPct = Math.min(100, Math.round((fullPaidAmt / totalTarget) * 100));
     const partialPct = Math.min(100 - paidPct, Math.round((partialAmt / totalTarget) * 100));
-    const totalCollectedPct = Math.min(100, Math.round((data.total_collected / totalTarget) * 100));
+    const totalDuesCleared = (data.total_dues_cleared || (data.total_collected + (data.total_credit_settled || 0)));
+    const totalCollectedPct = Math.min(100, Math.round((totalDuesCleared / totalTarget) * 100));
 
     const gaugePaid = document.getElementById('gaugePaidBar');
     gaugePaid.style.width = `${paidPct}%`;
     document.getElementById('gaugePartialBar').style.width = `${partialPct}%`;
     document.getElementById('pctDisplay').textContent = `${totalCollectedPct}%`;
+
+    // Update non-cash credit settled and advance wallet excess sub-badges
+    const creditSettled = parseFloat(data.total_credit_settled || 0);
+    const excessCredit = parseFloat(data.total_excess_credit || 0);
+    const subBadge = document.getElementById('collectedCreditSubBadge');
+    if (subBadge) {
+      if (creditSettled > 0 || excessCredit > 0) {
+        subBadge.classList.remove('hidden');
+        const cText = document.getElementById('collectedCreditText');
+        if (cText) {
+          if (creditSettled > 0) {
+            cText.parentElement.classList.remove('hidden');
+            cText.textContent = `+ ${formatINR(creditSettled)} credit settled`;
+          } else {
+            cText.parentElement.classList.add('hidden');
+          }
+        }
+        const eBadge = document.getElementById('collectedExcessBadge');
+        const eText = document.getElementById('collectedExcessText');
+        if (eBadge && eText) {
+          if (excessCredit > 0) {
+            eBadge.classList.remove('hidden');
+            eText.textContent = `+ ${formatINR(excessCredit)} to advance`;
+          } else {
+            eBadge.classList.add('hidden');
+          }
+        }
+      } else {
+        subBadge.classList.add('hidden');
+      }
+    }
 
     // Celebration Card & Glare Animation Check
     const yetToPayCard = document.getElementById('yetToPayCard');
@@ -1474,7 +1516,11 @@
       if (celebrationCard) {
         celebrationCard.classList.remove('hidden');
         document.getElementById('celebrationTitle').textContent = `All ${totalMembers} members paid`;
-        document.getElementById('celebrationAmount').textContent = `${formatINR(data.total_collected)} collected`;
+        let celebrationAmtText = `${formatINR(data.total_collected)} collected`;
+        if (creditSettled > 0) {
+          celebrationAmtText += ` (+ ${formatINR(creditSettled)} credit settled)`;
+        }
+        document.getElementById('celebrationAmount').textContent = celebrationAmtText;
         document.getElementById('togglePaidText').textContent = `Show paid (${dues.length}) ∨`;
         renderCelebrationPaidMembers(dues);
       }
@@ -1489,10 +1535,27 @@
     const container = document.getElementById('celebrationPaidMembersList');
     if (!container) return;
     container.innerHTML = '';
-        if (window.lucide) { lucide.createIcons(); }
     dues.forEach((m, idx) => {
       const acBadge = formatAcBadge(m.account_number, m.ticket_number, idx + 1);
       const avatarColor = getAvatarColor(acBadge || idx);
+      const cashPaid = parseFloat(m.cash_paid || 0);
+      const creditSettled = parseFloat(m.credit_settled || 0);
+      const excess = parseFloat(m.excess_to_credit || 0);
+      const hasSplit = cashPaid > 0 && creditSettled > 0;
+      const isFullCredit = creditSettled > 0 && cashPaid <= 0.01;
+
+      let splitHtml = '';
+      if (hasSplit) {
+        splitHtml = `<span class="text-[10px] text-slate-500 font-semibold">(Cash: ${formatINR(cashPaid)} · Credit: ${formatINR(creditSettled)})</span>`;
+      } else if (isFullCredit) {
+        splitHtml = `<span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300/60">Settled via Credit</span>`;
+      }
+
+      let excessHtml = '';
+      if (excess > 0) {
+        excessHtml = `<span class="text-[10px] font-bold text-teal-700 dark:text-teal-300 px-1.5 py-0.2 rounded bg-teal-100 dark:bg-teal-950/60 border border-teal-300/60">+ ${formatINR(excess)} to advance</span>`;
+      }
+
       const div = document.createElement('div');
       div.className = 'py-2 flex items-center justify-between gap-3 text-xs';
       div.innerHTML = `
@@ -1505,16 +1568,22 @@
             <span class="text-[10px] text-slate-400 dark:text-slate-400 font-medium">${m.chit_name ? m.chit_name + ' · ' : ''}Account #${m.account_number || m.ticket_number} · ${m.share_units}x · ${m.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
           </div>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <span class="font-extrabold text-emerald-700 money-fig">${formatINR(m.paid_amount || m.net_due_amount)}</span>
-          <span class="h-5 w-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">
+        <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <div class="text-right">
+            <span class="font-extrabold text-emerald-700 dark:text-emerald-400 money-fig block">${formatINR(m.paid_amount || m.net_due_amount)}</span>
+            <div class="flex items-center gap-1 justify-end flex-wrap mt-0.5">
+              ${splitHtml}
+              ${excessHtml}
+            </div>
+          </div>
+          <span class="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-[10px] font-bold">
             <i data-lucide="check" class="w-4 h-4 stroke-[1.8]"></i>
           </span>
         </div>
       `;
-        if (window.lucide) { lucide.createIcons(); }
       container.appendChild(div);
     });
+    if (window.lucide) { lucide.createIcons(); }
   }
 
   let celebrationPaidVisible = false;
@@ -1673,6 +1742,7 @@
               ${isPartial ? `
                 <div class="text-[11px] font-bold text-emerald-600 money-fig">
                   ${formatINR(m.paid_amount)} paid
+                  ${(m.credit_settled > 0 && m.cash_paid > 0) ? `<span class="text-[9px] text-slate-400 block font-normal">(Cash: ${formatINR(m.cash_paid)} · Credit: ${formatINR(m.credit_settled)})</span>` : (m.credit_settled > 0 ? `<span class="text-[9px] text-emerald-600 block font-normal">(via Credit)</span>` : '')}
                 </div>
               ` : ''}
             </div>
@@ -1947,9 +2017,27 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <span class="text-sm md:text-base font-black text-emerald-600 dark:text-emerald-400 money-fig">
-              ${formatINR(totalAmtDisplay)}
-            </span>
+            <div class="text-right">
+              <span class="text-sm md:text-base font-black text-emerald-600 dark:text-emerald-400 money-fig block">
+                ${formatINR(totalAmtDisplay)}
+              </span>
+              <div class="flex items-center gap-1 justify-end flex-wrap mt-0.5">
+                ${(mp.credit_settled > 0 && mp.cash_paid > 0) ? `
+                  <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                    (Cash: ${formatINR(mp.cash_paid)} · Credit: ${formatINR(mp.credit_settled)})
+                  </span>
+                ` : (mp.credit_settled > 0 ? `
+                  <span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    (via Credit)
+                  </span>
+                ` : '')}
+                ${mp.excess_to_credit > 0 ? `
+                  <span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-300/60">
+                    + ${formatINR(mp.excess_to_credit)} to Advance
+                  </span>
+                ` : ''}
+              </div>
+            </div>
             <i data-lucide="chevron-right" class="w-3.5 h-3.5 stroke-[1.8] text-slate-300 dark:text-slate-500 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90 text-slate-500' : ''}"></i>
           </div>
         </div>
@@ -1991,9 +2079,15 @@
                 <div class="flex items-center gap-2.5 flex-wrap min-w-0">
                   <span class="text-sm font-black text-slate-900 dark:text-slate-100 money-fig">${formatINR(p.amount)}</span>
                   <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${p.installment_type === 'fixed' ? 'bg-indigo-100/90 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">${p.installment_type === 'fixed' ? 'Fixed' : 'Incremental'}</span>
-                  <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${p.payment_mode === 'Advance Credit' ? 'bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">
-                    ${p.payment_mode === 'Advance Credit' ? '<i data-lucide="check-check" class="w-3.5 h-3.5 stroke-[2]"></i> Advance Credit' : p.payment_mode}
+                  <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${(p.is_credit_settlement || p.payment_mode === 'Advance Credit') ? 'bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'}">
+                    ${(p.is_credit_settlement || p.payment_mode === 'Advance Credit') ? '<i data-lucide="wallet" class="w-3.5 h-3.5 stroke-[2]"></i> Advance Credit (Non-cash)' : p.payment_mode}
                   </span>
+                  ${p.excess_to_credit > 0 ? `
+                    <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950/70 dark:text-teal-300 border border-teal-300/70 flex items-center gap-1">
+                      <i data-lucide="sparkles" class="w-3 h-3 stroke-[2]"></i>
+                      + ${formatINR(p.excess_to_credit)} to Advance
+                    </span>
+                  ` : ''}
                   <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${p.month_tag}</span>
                 </div>
 

@@ -260,9 +260,24 @@ def ensure_chit_schema(cur):
                 notes TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
+            CREATE TABLE IF NOT EXISTS chit_credit_transfers (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                member_id UUID NOT NULL REFERENCES chit_members(id) ON DELETE CASCADE,
+                from_group_id UUID NOT NULL REFERENCES chit_groups(id) ON DELETE CASCADE,
+                from_membership_id UUID REFERENCES chit_memberships(id) ON DELETE SET NULL,
+                to_group_id UUID NOT NULL REFERENCES chit_groups(id) ON DELETE CASCADE,
+                to_membership_id UUID REFERENCES chit_memberships(id) ON DELETE SET NULL,
+                amount NUMERIC(14, 2) NOT NULL,
+                notes TEXT,
+                transferred_by VARCHAR(100),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
             CREATE INDEX IF NOT EXISTS idx_chit_loans_member ON chit_loans(member_id);
             CREATE INDEX IF NOT EXISTS idx_chit_loans_status ON chit_loans(status);
             CREATE INDEX IF NOT EXISTS idx_chit_loan_repayments_loan ON chit_loan_repayments(loan_id);
+            CREATE INDEX IF NOT EXISTS idx_chit_credit_transfers_member ON chit_credit_transfers(member_id);
+            CREATE INDEX IF NOT EXISTS idx_chit_credit_transfers_from_grp ON chit_credit_transfers(from_group_id);
+            CREATE INDEX IF NOT EXISTS idx_chit_credit_transfers_to_grp ON chit_credit_transfers(to_group_id);
         """)
     except Exception as e:
         print(f"[WARN] ensure_chit_schema: {e}")
@@ -932,13 +947,14 @@ def get_accounting_overview():
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
-        # 1. Total Inflows (Chit Collections + Loan Repayments)
+        # 1. Total Inflows (Chit Collections + Loan Repayments) - Exclude non-cash advance credit settlements
         cur.execute("""
             SELECT 
-                COALESCE(SUM(amount), 0) as total_inflow,
+                COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment') THEN amount ELSE 0 END), 0) as total_inflow,
                 COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_mode, 'cash')) = 'cash' THEN amount ELSE 0 END), 0) as cash_inflow,
                 COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'upi' THEN amount ELSE 0 END), 0) as upi_inflow,
-                COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_mode, 'cash')) NOT IN ('cash', 'upi') THEN amount ELSE 0 END), 0) as bank_inflow
+                COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_mode, 'cash')) NOT IN ('cash', 'upi', 'advance credit', 'credit settlement', 'credit adjustment') THEN amount ELSE 0 END), 0) as bank_inflow,
+                COALESCE(SUM(CASE WHEN LOWER(payment_mode) IN ('advance credit', 'credit settlement', 'credit adjustment') THEN amount ELSE 0 END), 0) as credit_settled
             FROM chit_payments;
         """)
         inf_row = cur.fetchone()
@@ -946,6 +962,7 @@ def get_accounting_overview():
         chit_cash_inflow = float(inf_row[1] or 0)
         chit_upi_inflow = float(inf_row[2] or 0)
         chit_bank_inflow = float(inf_row[3] or 0)
+        chit_credit_settled = float(inf_row[4] or 0)
 
         # Loan Inflows (Principal repaid + Interest earned)
         cur.execute("""
@@ -1251,6 +1268,7 @@ def get_accounting_overview():
             LEFT JOIN chit_installments i ON p.installment_id = i.id
             LEFT JOIN chit_groups g ON i.chit_group_id = g.id
             WHERE 1=1 {date_cond_pay} {mode_cond}
+              AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')
 
             UNION ALL
 
@@ -1346,7 +1364,8 @@ def get_accounting_overview():
                 'active_loans_principal': active_loans_principal,
                 'total_loan_recovered': total_loan_recovered,
                 'loan_interest_earned': loan_interest_earned,
-                'loan_disbursed_outflow': loan_outflow
+                'loan_disbursed_outflow': loan_outflow,
+                'credit_settled': chit_credit_settled
             },
             'forecast': forecast,
             'ledger': ledger,
@@ -1666,12 +1685,13 @@ def get_chit_groups():
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
-        # 1. Compute aggregate header metrics across all active groups
+        # 1. Compute aggregate header metrics across all active groups (Fresh cash only)
         cur.execute("""
             SELECT 
                 COALESCE(SUM(p.amount), 0) as total_collected_this_month
             FROM chit_payments p
-            WHERE date_trunc('month', p.payment_date) = date_trunc('month', CURRENT_DATE);
+            WHERE date_trunc('month', p.payment_date) = date_trunc('month', CURRENT_DATE)
+              AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment');
         """)
         collected_this_month = float(cur.fetchone()[0])
 
@@ -1712,8 +1732,9 @@ def get_chit_groups():
                 g.status, g.schedule_type, g.is_month1_company_month, g.created_at,
                 (SELECT COUNT(*) FROM chit_memberships m WHERE m.chit_group_id = g.id) as assigned_members_count,
                 (SELECT COALESCE(SUM(share_units), 0) FROM chit_memberships m WHERE m.chit_group_id = g.id) as total_shares_assigned,
-                (SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = g.id) as total_collected,
-                (SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index) as current_month_collected,
+                (SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = g.id AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')) as total_collected,
+                (SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')) as current_month_collected,
+                (SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index AND LOWER(p.payment_mode) IN ('advance credit', 'credit settlement', 'credit adjustment')) as current_month_credit_settled,
                 (SELECT COUNT(*) FROM chit_installments i WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index AND i.pending_amount <= 0.01) as current_month_paid_members,
                 (SELECT installment_kattubadi FROM chit_schedules s WHERE s.chit_group_id = g.id AND s.month_index = g.current_month_index LIMIT 1) as current_month_target_kattubadi,
                 (SELECT COALESCE(SUM(net_due_amount), 0) FROM chit_installments i WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index) as current_month_total_due,
@@ -1751,8 +1772,8 @@ def get_chit_groups():
                 # Lowercase am/pm and match 'Sept'
                 created_at_fmt = created_at_fmt.replace("September", "Sept").replace("AM", "am").replace("PM", "pm")
 
-            kattubadi_single = float(r[19] or (val / dur))
-            scheduled_dues = float(r[20])
+            kattubadi_single = float(r[20] or (val / dur))
+            scheduled_dues = float(r[21])
             # If installments exist for current month, use their sum; otherwise calculate from assigned shares or total members
             cur_month_target = scheduled_dues if scheduled_dues > 0 else (kattubadi_single * (tot_shares if tot_shares > 0 else tot_members))
             groups.append({
@@ -1776,10 +1797,11 @@ def get_chit_groups():
                 'open_shares_count': max(0.0, float(tot_members) - tot_shares),
                 'total_collected': float(r[16]),
                 'current_month_collected': float(r[17]),
-                'current_month_paid_members': int(r[18]),
+                'current_month_credit_settled': float(r[18]),
+                'current_month_paid_members': int(r[19]),
                 'current_month_target': cur_month_target,
-                'current_month_payout': float(r[21] or 0.0),
-                'total_payout': float(r[22] or 0.0)
+                'current_month_payout': float(r[22] or 0.0),
+                'total_payout': float(r[23] or 0.0)
             })
 
         return jsonify({
@@ -2060,7 +2082,7 @@ def get_chit_group_edit_details(group_id):
         month_records_count = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = %s;", (group_id,))
         payments_count = cur.fetchone()[0]
-        cur.execute("SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = %s;", (group_id,))
+        cur.execute("SELECT COALESCE(SUM(p.amount), 0) FROM chit_payments p JOIN chit_installments i ON p.installment_id = i.id WHERE i.chit_group_id = %s AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment');", (group_id,))
         collected_amount = float(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM chit_schedules WHERE chit_group_id = %s AND payout_status = 'paid';", (group_id,))
         lifts_count = cur.fetchone()[0]
@@ -3115,6 +3137,7 @@ def rescale_and_rebalance_member_installments(cur, member_id, group_id=None):
                         JOIN chit_installments pci ON p.installment_id = pci.id
                         WHERE pci.membership_id::text = ANY(%s)
                           AND pci.month_index < %s
+                          AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')
                     ), 0) as prior_paid
                 FROM chit_installments ci
                 WHERE ci.membership_id::text = ANY(%s)
@@ -3208,6 +3231,195 @@ def rescale_membership_installments(cur, membership_id):
     r = cur.fetchone()
     if r:
         rescale_and_rebalance_member_installments(cur, r[0], r[1])
+
+def get_member_group_available_credit(cur, member_id, group_id):
+    """
+    Computes exact available advance credit for a member in a specific chit group:
+    (Total fresh cash overpayments generated across all installments in this group)
+    - (Total credit used via Advance Credit payments in this group)
+    + (Transfers IN to this group from other chits)
+    - (Transfers OUT of this group to other chits)
+    """
+    cur.execute("""
+        SELECT i.id, i.month_index, i.net_due_amount,
+               COALESCE(SUM(CASE WHEN LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment') THEN p.amount ELSE 0 END), 0) as cash_paid,
+               COALESCE(SUM(CASE WHEN LOWER(p.payment_mode) IN ('advance credit', 'credit settlement', 'credit adjustment') THEN p.amount ELSE 0 END), 0) as credit_paid
+        FROM chit_installments i
+        JOIN chit_memberships ms ON i.membership_id = ms.id
+        LEFT JOIN chit_payments p ON p.installment_id = i.id
+        WHERE ms.member_id = %s AND ms.chit_group_id = %s
+        GROUP BY i.id, i.month_index, i.net_due_amount
+        ORDER BY i.month_index;
+    """, (member_id, group_id))
+    rows = cur.fetchall()
+
+    tot_excess = 0.0
+    tot_credit_used = 0.0
+    for r in rows:
+        net_due = float(r[2] or 0.0)
+        cash_paid = float(r[3] or 0.0)
+        credit_paid = float(r[4] or 0.0)
+
+        cash_towards_due = min(cash_paid, max(0.0, net_due - credit_paid))
+        excess = max(0.0, cash_paid - cash_towards_due)
+        tot_excess += excess
+        tot_credit_used += credit_paid
+
+    # Transfers IN
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM chit_credit_transfers
+        WHERE member_id = %s AND to_group_id = %s;
+    """, (member_id, group_id))
+    transfers_in = float(cur.fetchone()[0] or 0.0)
+
+    # Transfers OUT
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM chit_credit_transfers
+        WHERE member_id = %s AND from_group_id = %s;
+    """, (member_id, group_id))
+    transfers_out = float(cur.fetchone()[0] or 0.0)
+
+    net_avail = max(0.0, round_curr(tot_excess - tot_credit_used + transfers_in - transfers_out))
+    return net_avail
+
+def get_member_credit_wallet(cur, member_id):
+    """
+    Returns complete credit wallet information for a subscriber:
+    - total_available_credit: float
+    - per_group: list of dicts with group details, available_credit, and pending_due
+    - transfers: list of transfer history logs
+    - credit_history: list of credit events (overpayments, settlements, transfers)
+    """
+    cur.execute("""
+        SELECT DISTINCT g.id, g.name, g.chit_total_value, g.duration_months, g.current_month_index
+        FROM chit_groups g
+        JOIN chit_memberships ms ON ms.chit_group_id = g.id
+        WHERE ms.member_id = %s AND g.deleted_at IS NULL
+        ORDER BY g.name ASC;
+    """, (member_id,))
+    groups = cur.fetchall()
+
+    per_group = []
+    total_credit = 0.0
+    for g in groups:
+        g_id, g_name, g_val, g_dur, g_cur_m = g
+        avail_c = get_member_group_available_credit(cur, member_id, g_id)
+        total_credit += avail_c
+
+        cur.execute("""
+            SELECT COALESCE(SUM(i.pending_amount), 0)
+            FROM chit_installments i
+            JOIN chit_memberships ms ON i.membership_id = ms.id
+            WHERE ms.member_id = %s AND ms.chit_group_id = %s;
+        """, (member_id, g_id))
+        pend_due = float(cur.fetchone()[0] or 0.0)
+
+        per_group.append({
+            'group_id': str(g_id),
+            'group_name': g_name,
+            'chit_total_value': float(g_val or 0.0),
+            'duration_months': int(g_dur or 20),
+            'current_month_index': int(g_cur_m or 1),
+            'available_credit': avail_c,
+            'pending_due': pend_due
+        })
+
+    cur.execute("""
+        SELECT t.id, t.from_group_id, fg.name as from_group_name,
+               t.to_group_id, tg.name as to_group_name,
+               t.amount, t.notes, t.transferred_by, t.created_at
+        FROM chit_credit_transfers t
+        JOIN chit_groups fg ON t.from_group_id = fg.id
+        JOIN chit_groups tg ON t.to_group_id = tg.id
+        WHERE t.member_id = %s
+        ORDER BY t.created_at DESC;
+    """, (member_id,))
+    t_rows = cur.fetchall()
+    transfers = []
+    for tr in t_rows:
+        transfers.append({
+            'id': str(tr[0]),
+            'from_group_id': str(tr[1]),
+            'from_group_name': tr[2],
+            'to_group_id': str(tr[3]),
+            'to_group_name': tr[4],
+            'amount': float(tr[5]),
+            'notes': tr[6] or '',
+            'transferred_by': tr[7] or 'Admin',
+            'created_at': tr[8].isoformat() if tr[8] else None,
+            'date_formatted': tr[8].strftime("%d %b %Y, %I:%M %p") if tr[8] else ''
+        })
+
+    credit_events = []
+    cur.execute("""
+        SELECT p.id, p.amount, i.net_due_amount, p.payment_date, g.name, i.month_index, p.receipt_no
+        FROM chit_payments p
+        JOIN chit_installments i ON p.installment_id = i.id
+        JOIN chit_memberships ms ON p.membership_id = ms.id
+        JOIN chit_groups g ON i.chit_group_id = g.id
+        WHERE ms.member_id = %s
+          AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')
+          AND p.amount > i.net_due_amount
+        ORDER BY p.payment_date DESC, p.created_at DESC;
+    """, (member_id,))
+    for er in cur.fetchall():
+        p_amt = float(er[1])
+        n_due = float(er[2] or 0.0)
+        excess = max(0.0, round_curr(p_amt - n_due))
+        if excess > 0:
+            credit_events.append({
+                'type': 'credit_added',
+                'title': f'Advance Credit Generated (M{er[5]})',
+                'amount': excess,
+                'chit_name': er[4],
+                'date': er[3].isoformat() if er[3] else None,
+                'date_str': er[3].strftime("%d %b %Y") if er[3] else '',
+                'notes': f"Overpayment on Month {er[5]} (Paid ₹{int(p_amt):,} vs Due ₹{int(n_due):,})",
+                'receipt_no': er[6] or ''
+            })
+
+    cur.execute("""
+        SELECT p.id, p.amount, p.payment_date, g.name, i.month_index, p.receipt_no
+        FROM chit_payments p
+        JOIN chit_installments i ON p.installment_id = i.id
+        JOIN chit_memberships ms ON p.membership_id = ms.id
+        JOIN chit_groups g ON i.chit_group_id = g.id
+        WHERE ms.member_id = %s
+          AND LOWER(p.payment_mode) IN ('advance credit', 'credit settlement', 'credit adjustment')
+        ORDER BY p.payment_date DESC, p.created_at DESC;
+    """, (member_id,))
+    for sr in cur.fetchall():
+        credit_events.append({
+            'type': 'credit_settled',
+            'title': f'Credit Settled (M{sr[4]})',
+            'amount': float(sr[1]),
+            'chit_name': sr[3],
+            'date': sr[2].isoformat() if sr[2] else None,
+            'date_str': sr[2].strftime("%d %b %Y") if sr[2] else '',
+            'notes': f"Settled Month {sr[4]} due using advance credit",
+            'receipt_no': sr[5] or ''
+        })
+
+    for tr in transfers:
+        credit_events.append({
+            'type': 'credit_transfer',
+            'title': f"Shifted Credit: {tr['from_group_name']} → {tr['to_group_name']}",
+            'amount': tr['amount'],
+            'chit_name': f"{tr['from_group_name']} → {tr['to_group_name']}",
+            'date': tr['created_at'][:10] if tr['created_at'] else None,
+            'date_str': tr['date_formatted'],
+            'notes': tr['notes'] or "Transferred credit across chit groups",
+            'receipt_no': tr['id'][:8]
+        })
+
+    return {
+        'total_available_credit': round_curr(total_credit),
+        'per_group': per_group,
+        'transfers': transfers,
+        'credit_history': credit_events
+    }
 
 def ensure_group_month_installments(cur, group_id, month_index):
     cur.execute("""
@@ -3402,50 +3614,38 @@ def get_month_dues(chit_id, month_index):
             for ar in cur.fetchall():
                 arrears_by_ms[str(ar[0])].append(ar[1:])
 
-        # Batch 2: Query cumulative credit surplus across all prior months for all memberships
-        credits_by_ms = {}
-        if all_ms_ids:
-            cur.execute("""
-                WITH prior_dues AS (
-                    SELECT i.membership_id::text as ms_id, COALESCE(SUM(i.net_due_amount), 0) as total_due
-                    FROM chit_installments i
-                    WHERE i.membership_id::text = ANY(%s)
-                      AND i.month_index < %s
-                    GROUP BY i.membership_id
-                ),
-                prior_payments AS (
-                    SELECT ci.membership_id::text as ms_id, COALESCE(SUM(p.amount), 0) as total_paid
-                    FROM chit_payments p
-                    JOIN chit_installments ci ON p.installment_id = ci.id
-                    WHERE ci.membership_id::text = ANY(%s)
-                      AND ci.month_index < %s
-                      AND p.payment_mode NOT IN ('Advance Credit', 'Credit Settlement', 'Credit Adjustment')
-                    GROUP BY ci.membership_id
-                )
-                SELECT 
-                    COALESCE(d.ms_id, p.ms_id) as ms_id,
-                    COALESCE(d.total_due, 0) as total_due,
-                    COALESCE(p.total_paid, 0) as total_paid
-                FROM prior_dues d
-                FULL OUTER JOIN prior_payments p ON d.ms_id = p.ms_id;
-            """, (all_ms_ids, month_index, all_ms_ids, month_index))
-            for cr in cur.fetchall():
-                tot_c_due = float(cr[1] or 0.0)
-                tot_c_paid = float(cr[2] or 0.0)
-                credits_by_ms[str(cr[0])] = max(0.0, tot_c_paid - tot_c_due)
+        # Batch 2: Calculate available advance credit for all memberships/members in their chit group
+        credits_by_ms = defaultdict(float)
+        if all_member_ids:
+            mem_group_credit = {}
+            for r in rows:
+                m_id_key = str(r[4])
+                g_id_key = str(r[17])
+                pair_key = (m_id_key, g_id_key)
+                if pair_key not in mem_group_credit:
+                    mem_group_credit[pair_key] = get_member_group_available_credit(cur, m_id_key, g_id_key)
+                credits_by_ms[str(r[1])] = mem_group_credit[pair_key]
 
-        # Batch 2b: Query direct payments recorded in chit_payments for current installments
+        # Batch 2b: Query payments broken down into fresh cash vs advance credit settlements
         inst_ids = [str(r[0]) for r in rows]
-        actual_paid_by_inst = {}
+        actual_cash_by_inst = defaultdict(float)
+        actual_credit_by_inst = defaultdict(float)
+        actual_paid_by_inst = defaultdict(float)
         if inst_ids:
             cur.execute("""
-                SELECT installment_id::text, COALESCE(SUM(amount), 0)
+                SELECT installment_id::text,
+                       COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment') THEN amount ELSE 0 END), 0) as cash_amt,
+                       COALESCE(SUM(CASE WHEN LOWER(payment_mode) IN ('advance credit', 'credit settlement', 'credit adjustment') THEN amount ELSE 0 END), 0) as credit_amt,
+                       COALESCE(SUM(amount), 0) as total_amt
                 FROM chit_payments
                 WHERE installment_id::text = ANY(%s)
                 GROUP BY installment_id;
             """, (inst_ids,))
             for pr in cur.fetchall():
-                actual_paid_by_inst[str(pr[0])] = float(pr[1] or 0.0)
+                i_id_key = str(pr[0])
+                actual_cash_by_inst[i_id_key] = float(pr[1] or 0.0)
+                actual_credit_by_inst[i_id_key] = float(pr[2] or 0.0)
+                actual_paid_by_inst[i_id_key] = float(pr[3] or 0.0)
 
         # Batch 3: Query defaulted status for all members
         default_status_by_member = {}
@@ -3471,20 +3671,31 @@ def get_month_dues(chit_id, month_index):
 
         dues = []
         total_target = 0
-        total_collected = 0
+        total_collected = 0       # Fresh cash collections only!
+        total_credit_settled = 0  # Advance credit settlements
+        total_dues_cleared = 0    # Net dues satisfied (by cash or credit)
         total_pending = 0
         total_arrears = 0
+        total_excess_credit = 0
         paid_count = 0
 
         for r in rows:
             gross = float(r[7])
             net = float(r[9])
             inst_id_val = str(r[0])
+            act_cash = actual_cash_by_inst.get(inst_id_val, 0.0)
+            act_credit = actual_credit_by_inst.get(inst_id_val, 0.0)
             act_paid = actual_paid_by_inst.get(inst_id_val, 0.0)
             paid = max(float(r[10]), act_paid)
             pending = float(r[11])
             ms_id_val = str(r[1])
             member_id_val = str(r[4])
+
+            # Excess cash generated that went into advance credit wallet
+            excess_to_credit = max(0.0, round_curr(act_cash - net)) if act_cash > net else 0.0
+
+            # Net dues satisfied on this installment (cannot exceed net due amount)
+            cleared_on_inst = min(net, paid)
 
             # Sync legacy auto-credit zeroed installments back to unpaid state
             if float(r[10]) <= 0.01 and act_paid <= 0.01 and r[12] == 'paid' and net > 0:
@@ -3569,9 +3780,12 @@ def get_month_dues(chit_id, month_index):
                 total_member_pending = 0.0
 
             total_target += max(0.0, (net + prev_dues_amt))
-            total_collected += paid
+            total_collected += act_cash          # FRESH CASH ONLY!
+            total_credit_settled += act_credit  # ADVANCE CREDIT SETTLED!
+            total_dues_cleared += cleared_on_inst
             total_pending += total_member_pending
             total_arrears += prev_dues_amt
+            total_excess_credit += excess_to_credit
 
             if total_member_pending <= 0.01 and (net + prev_dues_amt) > 0:
                 paid_count += 1
@@ -3591,6 +3805,9 @@ def get_month_dues(chit_id, month_index):
                 'dividend_discount': float(r[8]),
                 'net_due_amount': net,
                 'paid_amount': paid,
+                'cash_paid': act_cash,
+                'credit_settled': act_credit,
+                'excess_to_credit': excess_to_credit,
                 'pending_amount': total_member_pending,
                 'current_month_pending': cur_pending,
                 'credit_deduction': 0.0,
@@ -3629,6 +3846,9 @@ def get_month_dues(chit_id, month_index):
                     'dividend_discount': d['dividend_discount'],
                     'net_due_amount': d['net_due_amount'],
                     'paid_amount': d['paid_amount'],
+                    'cash_paid': d['cash_paid'],
+                    'credit_settled': d['credit_settled'],
+                    'excess_to_credit': d['excess_to_credit'],
                     'pending_amount': d['pending_amount'],
                     'current_month_pending': d['current_month_pending'],
                     'credit_deduction': d['credit_deduction'],
@@ -3653,6 +3873,9 @@ def get_month_dues(chit_id, month_index):
                         'lifted_month_index': d['lifted_month_index'],
                         'net_due_amount': d['net_due_amount'],
                         'paid_amount': d['paid_amount'],
+                        'cash_paid': d['cash_paid'],
+                        'credit_settled': d['credit_settled'],
+                        'excess_to_credit': d['excess_to_credit'],
                         'pending_amount': d['pending_amount'],
                         'credit_deduction': d['credit_deduction'],
                         'available_credit': d.get('available_credit', 0.0)
@@ -3665,6 +3888,9 @@ def get_month_dues(chit_id, month_index):
                 existing['dividend_discount'] = round_curr(existing['dividend_discount'] + d['dividend_discount'])
                 existing['net_due_amount'] = round_curr(existing['net_due_amount'] + d['net_due_amount'])
                 existing['paid_amount'] = round_curr(existing['paid_amount'] + d['paid_amount'])
+                existing['cash_paid'] = round_curr(existing.get('cash_paid', 0.0) + d['cash_paid'])
+                existing['credit_settled'] = round_curr(existing.get('credit_settled', 0.0) + d['credit_settled'])
+                existing['excess_to_credit'] = round_curr(existing.get('excess_to_credit', 0.0) + d['excess_to_credit'])
                 existing['pending_amount'] = round_curr(existing['pending_amount'] + d['pending_amount'])
                 existing['current_month_pending'] = round_curr(existing['current_month_pending'] + d['current_month_pending'])
                 existing['credit_deduction'] = round_curr(existing.get('credit_deduction', 0.0) + d['credit_deduction'])
@@ -3682,6 +3908,9 @@ def get_month_dues(chit_id, month_index):
                     'lifted_month_index': d['lifted_month_index'],
                     'net_due_amount': d['net_due_amount'],
                     'paid_amount': d['paid_amount'],
+                    'cash_paid': d['cash_paid'],
+                    'credit_settled': d['credit_settled'],
+                    'excess_to_credit': d['excess_to_credit'],
                     'pending_amount': d['pending_amount'],
                     'credit_deduction': d['credit_deduction'],
                     'available_credit': d.get('available_credit', 0.0)
@@ -3724,6 +3953,9 @@ def get_month_dues(chit_id, month_index):
             'is_company_month': is_co,
             'total_target': total_target,
             'total_collected': total_collected,
+            'total_credit_settled': total_credit_settled,
+            'total_dues_cleared': total_dues_cleared,
+            'total_excess_credit': total_excess_credit,
             'total_pending': total_pending,
             'total_arrears': total_arrears,
             'defaulted_members_count': defaulted_group_count,
@@ -4321,7 +4553,8 @@ def get_payments_list():
                 g.name as chit_name, g.id as chit_id,
                 COALESCE(ms.account_number, ms.ticket_number::text) as account_number,
                 m.customer_id,
-                COALESCE(ms.installment_type, 'incremental') as installment_type
+                COALESCE(ms.installment_type, 'incremental') as installment_type,
+                COALESCE(i.net_due_amount, 0) as net_due_amount
             FROM chit_payments p
             JOIN chit_installments i ON p.installment_id = i.id
             JOIN chit_memberships ms ON p.membership_id = ms.id
@@ -4351,12 +4584,21 @@ def get_payments_list():
                 diff_sec = (datetime.now(created_dt.tzinfo) - created_dt).total_seconds()
                 is_recent = diff_sec < 60
 
+            p_amt = float(r[3])
+            pay_mode = r[4] or 'Cash'
+            is_credit = pay_mode.lower() in ['advance credit', 'credit settlement', 'credit adjustment']
+            net_due_val = float(r[24] or 0.0) if len(r) > 24 else 0.0
+            excess_c = max(0.0, round_curr(p_amt - net_due_val)) if (not is_credit and net_due_val > 0 and p_amt > net_due_val) else 0.0
+
             p_item = {
                 'id': str(r[0]),
                 'installment_id': str(r[1]),
                 'membership_id': str(r[2]),
-                'amount': float(r[3]),
-                'payment_mode': r[4] or 'Cash',
+                'amount': p_amt,
+                'payment_mode': pay_mode,
+                'is_credit_settlement': is_credit,
+                'excess_to_credit': excess_c,
+                'net_due_amount': net_due_val,
                 'payment_date': r[5].isoformat() if r[5] else str(date.today()),
                 'reference_no': r[6] or '',
                 'receipt_no': r[7] or '',
@@ -4387,12 +4629,20 @@ def get_payments_list():
                     'share_units': float(r[16]),
                     'installment_type': r[23] or 'incremental',
                     'total_paid': 0.0,
+                    'cash_paid': 0.0,
+                    'credit_settled': 0.0,
+                    'excess_to_credit': 0.0,
                     'payments_count': 0,
                     'chit_name': r[19],
                     'payments': []
                 }
 
-            members_map[m_id]['total_paid'] += float(r[3])
+            members_map[m_id]['total_paid'] += p_amt
+            if is_credit:
+                members_map[m_id]['credit_settled'] += p_amt
+            else:
+                members_map[m_id]['cash_paid'] += p_amt
+                members_map[m_id]['excess_to_credit'] += excess_c
             members_map[m_id]['payments_count'] += 1
             members_map[m_id]['payments'].append(p_item)
 
@@ -5123,6 +5373,7 @@ def get_dashboard_trend():
                        FROM chit_payments p
                        JOIN chit_installments i ON p.installment_id = i.id
                        WHERE i.chit_group_id = g.id AND i.month_index = g.current_month_index
+                         AND LOWER(COALESCE(p.payment_mode, 'cash')) NOT IN ('advance credit', 'credit settlement', 'credit adjustment')
                    ), 0) as collected_month,
                    COALESCE((
                        SELECT SUM(i.pending_amount)
@@ -5213,32 +5464,11 @@ def settle_payment_with_credit():
         if effective_pending <= 0.01:
             return jsonify({'error': 'This installment is already fully paid.'}), 400
 
-        # Calculate available credit for this member in this group prior to this month
-        cur.execute("""
-            WITH prior_dues AS (
-                SELECT COALESCE(SUM(i.net_due_amount), 0) as total_due
-                FROM chit_installments i
-                JOIN chit_memberships ms ON i.membership_id = ms.id
-                WHERE ms.member_id = %s AND ms.chit_group_id = %s
-                  AND i.month_index < %s
-            ),
-            prior_payments AS (
-                SELECT COALESCE(SUM(p.amount), 0) as total_paid
-                FROM chit_payments p
-                JOIN chit_installments ci ON p.installment_id = ci.id
-                JOIN chit_memberships ms ON p.membership_id = ms.id
-                WHERE ms.member_id = %s AND ms.chit_group_id = %s
-                  AND ci.month_index < %s
-                  AND p.payment_mode NOT IN ('Advance Credit', 'Credit Settlement', 'Credit Adjustment')
-            )
-            SELECT GREATEST(0.0, p.total_paid - d.total_due)
-            FROM prior_dues d CROSS JOIN prior_payments p;
-        """, (member_id, group_id, m_idx, member_id, group_id, m_idx))
-        c_row = cur.fetchone()
-        avail_credit = float(c_row[0] or 0.0) if c_row else 0.0
+        # Calculate available advance credit for this member in this group
+        avail_credit = get_member_group_available_credit(cur, member_id, group_id)
 
         if avail_credit <= 0.01:
-            return jsonify({'error': 'No available advance credit found for this member.'}), 400
+            return jsonify({'error': 'No available advance credit found for this member in this chit group.'}), 400
 
         settle_amt = min(effective_pending, avail_credit)
         if custom_amount is not None:
@@ -5297,6 +5527,8 @@ def settle_payment_with_credit():
 
         conn.commit()
 
+        new_avail = get_member_group_available_credit(cur, member_id, group_id)
+
         return jsonify({
             'success': True,
             'payment_id': str(p_id),
@@ -5305,7 +5537,93 @@ def settle_payment_with_credit():
             'paid_amount': new_paid,
             'pending_amount': new_pending,
             'status': new_status,
-            'remaining_credit': max(0.0, round_curr(avail_credit - settle_amt))
+            'remaining_credit': new_avail
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@chit_bp.route('/api/members/<member_id>/transfer-credit', methods=['POST'])
+def transfer_member_credit(member_id):
+    data = request.get_json(silent=True) or {}
+    from_group_id = data.get('from_group_id')
+    to_group_id = data.get('to_group_id')
+    amount = float(data.get('amount') or 0.0)
+    notes = data.get('notes', '')
+
+    if not from_group_id or not to_group_id:
+        return jsonify({'error': 'Source and destination chit groups are required'}), 400
+    if from_group_id == to_group_id:
+        return jsonify({'error': 'Source and destination chit groups must be different'}), 400
+    if amount <= 0.01:
+        return jsonify({'error': 'Transfer amount must be greater than 0'}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM chit_memberships WHERE member_id = %s AND chit_group_id = %s;", (member_id, from_group_id))
+        from_ms = cur.fetchone()
+        if not from_ms:
+            return jsonify({'error': 'Member is not enrolled in the source chit group'}), 400
+        from_ms_id = str(from_ms[0])
+
+        cur.execute("SELECT id FROM chit_memberships WHERE member_id = %s AND chit_group_id = %s;", (member_id, to_group_id))
+        to_ms = cur.fetchone()
+        if not to_ms:
+            return jsonify({'error': 'Member is not enrolled in the destination chit group'}), 400
+        to_ms_id = str(to_ms[0])
+
+        avail = get_member_group_available_credit(cur, member_id, from_group_id)
+        if amount > avail + 0.01:
+            return jsonify({'error': f"Insufficient advance credit in source chit group (Available: ₹{int(avail):,})"}), 400
+
+        cur.execute("""
+            INSERT INTO chit_credit_transfers (
+                member_id, from_group_id, from_membership_id,
+                to_group_id, to_membership_id, amount, notes, transferred_by
+            ) VALUES (
+                %s, %s, %s,
+                %s, %s, %s, %s, %s
+            ) RETURNING id;
+        """, (
+            member_id, from_group_id, from_ms_id,
+            to_group_id, to_ms_id, amount, notes, get_current_actor()
+        ))
+        transfer_id = str(cur.fetchone()[0])
+
+        cur.execute("""
+            INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
+            VALUES (%s, %s, 'Transferred advance credit across chits', 'chit_credit_transfers', %s, %s);
+        """, (
+            get_current_actor(),
+            get_current_actor_role(),
+            transfer_id,
+            json.dumps({
+                'member_id': str(member_id),
+                'from_group_id': str(from_group_id),
+                'to_group_id': str(to_group_id),
+                'amount': amount,
+                'notes': notes
+            })
+        ))
+
+        conn.commit()
+
+        new_from_avail = get_member_group_available_credit(cur, member_id, from_group_id)
+        new_to_avail = get_member_group_available_credit(cur, member_id, to_group_id)
+        wallet = get_member_credit_wallet(cur, member_id)
+
+        return jsonify({
+            'success': True,
+            'transfer_id': transfer_id,
+            'transferred_amount': amount,
+            'source_remaining_credit': new_from_avail,
+            'destination_credit': new_to_avail,
+            'credit_wallet': wallet
         })
     except Exception as e:
         conn.rollback()
@@ -5733,10 +6051,12 @@ def get_member_folio(member_id):
         # Batch-fetch payments for member
         payments = []
         actual_paid_by_inst = defaultdict(float)
+        actual_cash_by_inst = defaultdict(float)
+        actual_credit_by_inst = defaultdict(float)
         cur.execute("""
             SELECT p.id, p.installment_id, p.membership_id, p.amount, p.payment_mode, p.payment_date,
                    p.receipt_no, p.notes, p.created_at, g.name as group_name, g.id as group_id,
-                   i.month_index, i.month_year
+                   i.month_index, i.month_year, COALESCE(i.net_due_amount, 0)
             FROM chit_payments p
             JOIN chit_memberships ms ON p.membership_id = ms.id
             JOIN chit_groups g ON ms.chit_group_id = g.id
@@ -5745,19 +6065,32 @@ def get_member_folio(member_id):
             ORDER BY p.payment_date DESC, p.created_at DESC;
         """, (member_id,))
         for pr in cur.fetchall():
-            p_id, ins_id, ms_id_val, amt, mode, p_date, rec_no, notes, c_at, grp_name, grp_id, m_idx, m_yr = pr
+            p_id, ins_id, ms_id_val, amt, mode, p_date, rec_no, notes, c_at, grp_name, grp_id, m_idx, m_yr, n_due = pr
             d_obj = p_date if isinstance(p_date, (datetime, date)) else None
             d_target = d_obj or c_at
             d_month = d_target.strftime("%b").upper() if d_target else "NOV"
             d_day = d_target.strftime("%d") if d_target else "16"
+            is_credit = (mode or '').strip().lower() in ('advance credit', 'credit settlement', 'credit adjustment')
+            amt_val = float(amt or 0.0)
+            n_due_val = float(n_due or 0.0)
+            excess_c = max(0.0, round_curr(amt_val - n_due_val)) if (not is_credit and n_due_val > 0 and amt_val > n_due_val) else 0.0
+
             if ins_id:
-                actual_paid_by_inst[str(ins_id)] += float(amt or 0.0)
+                actual_paid_by_inst[str(ins_id)] += amt_val
+                if is_credit:
+                    actual_credit_by_inst[str(ins_id)] += amt_val
+                else:
+                    actual_cash_by_inst[str(ins_id)] += amt_val
+
             payments.append({
                 'id': str(p_id),
                 'installment_id': str(ins_id) if ins_id else None,
                 'membership_id': str(ms_id_val),
-                'amount': float(amt),
+                'amount': amt_val,
                 'payment_mode': mode or 'Cash',
+                'is_credit_settlement': is_credit,
+                'excess_to_credit': excess_c,
+                'net_due_amount': n_due_val,
                 'payment_date': p_date.isoformat() if p_date else None,
                 'receipt_no': rec_no or '—',
                 'notes': notes or '',
@@ -5772,39 +6105,12 @@ def get_member_folio(member_id):
                 'created_at': c_at.isoformat() if c_at else None
             })
 
-        # Calculate cumulative available credit for each membership prior to current month
+        # Calculate exact credit wallet using unified credit engine
+        credit_wallet = get_member_credit_wallet(cur, member_id)
+        credits_by_grp = {pg['group_id']: pg['available_credit'] for pg in credit_wallet.get('per_group', [])}
         credits_by_ms = defaultdict(float)
-        if ms_ids:
-            cur.execute("""
-                WITH prior_dues AS (
-                    SELECT ci.membership_id, SUM(ci.net_due_amount) as total_due
-                    FROM chit_installments ci
-                    JOIN chit_groups g ON ci.chit_group_id = g.id
-                    WHERE ci.membership_id::text = ANY(%s)
-                      AND ci.month_index < g.current_month_index
-                    GROUP BY ci.membership_id
-                ),
-                prior_payments AS (
-                    SELECT ci.membership_id, SUM(p.amount) as total_paid
-                    FROM chit_payments p
-                    JOIN chit_installments ci ON p.installment_id = ci.id
-                    JOIN chit_groups g ON ci.chit_group_id = g.id
-                    WHERE ci.membership_id::text = ANY(%s)
-                      AND ci.month_index < g.current_month_index
-                      AND p.payment_mode NOT IN ('Advance Credit', 'Credit Settlement', 'Credit Adjustment')
-                    GROUP BY ci.membership_id
-                )
-                SELECT 
-                    COALESCE(d.membership_id::text, p.membership_id::text) as ms_id,
-                    COALESCE(d.total_due, 0) as total_due,
-                    COALESCE(p.total_paid, 0) as total_paid
-                FROM prior_dues d
-                FULL OUTER JOIN prior_payments p ON d.membership_id = p.membership_id;
-            """, (ms_ids, ms_ids))
-            for cr in cur.fetchall():
-                tot_c_due = float(cr[1] or 0.0)
-                tot_c_paid = float(cr[2] or 0.0)
-                credits_by_ms[str(cr[0])] = max(0.0, tot_c_paid - tot_c_due)
+        for mr in m_rows:
+            credits_by_ms[str(mr[0])] = credits_by_grp.get(str(mr[1]), 0.0)
 
         # Batch-fetch installments for all memberships (eliminates N+1 query)
         inst_map_by_ms = defaultdict(dict)
@@ -5837,6 +6143,7 @@ def get_member_folio(member_id):
         chits = []
         payouts_list = []
         total_paid_in = 0.0
+        total_credit_settled = 0.0
         total_paid_out = 0.0
         total_pending_dues = 0.0
         total_months_count = 0
@@ -5856,7 +6163,6 @@ def get_member_folio(member_id):
             inst_map = inst_map_by_ms.get(str(ms_id), {})
 
             group_paid_months = 0
-            group_collected = 0.0
             dots = []
 
             for mi in range(1, duration + 1):
@@ -5875,7 +6181,6 @@ def get_member_folio(member_id):
 
                     if is_p:
                         group_paid_months += 1
-                        group_collected += paid
                     total_pending_dues += pending
                     dots.append({
                         'month_index': mi,
@@ -5893,8 +6198,13 @@ def get_member_folio(member_id):
                         'pending': 0.0
                     })
 
+            # Calculate fresh cash collected vs non-cash credit settled for this chit group
+            group_cash_collected = sum(p['amount'] for p in payments if p['group_id'] == str(g_id) and not p['is_credit_settlement'])
+            group_credit_settled = sum(p['amount'] for p in payments if p['group_id'] == str(g_id) and p['is_credit_settlement'])
+
             months_paid_count += group_paid_months
-            total_paid_in += group_collected
+            total_paid_in += group_cash_collected
+            total_credit_settled += group_credit_settled
 
             # Prior unpaid months / arrears for this membership (mi < cur_m)
             for mi in range(1, cur_m):
@@ -6028,9 +6338,11 @@ def get_member_folio(member_id):
                 'progress_percent': round((group_paid_months / max(1, duration)) * 100),
                 'dots': dots,
                 'current_month_card': cur_month_card,
-                'collected': group_collected,
+                'collected': group_cash_collected,
+                'credit_settled': group_credit_settled,
+                'total_cleared': group_cash_collected + group_credit_settled,
                 'monthly': monthly_disp,
-                'available_credit': round_curr(credits_by_ms.get(str(ms_id), 0.0)),
+                'available_credit': round_curr(credits_by_grp.get(str(g_id), 0.0)),
                 'payout': payout_info
             })
 
@@ -6122,7 +6434,7 @@ def get_member_folio(member_id):
                 'date': po_pdate.isoformat() if po_pdate else None
             })
 
-        to_go_amount = max(0.0, (sum(c['chit_total_value'] * c['share_units'] for c in chits)) - total_paid_in)
+        to_go_amount = max(0.0, (sum(c['chit_total_value'] * c['share_units'] for c in chits)) - (total_paid_in + total_credit_settled))
         to_go_months = max(0, total_months_count - months_paid_count)
 
         # Member Loans
@@ -6267,7 +6579,9 @@ def get_member_folio(member_id):
                 'active_chits_count': len(chits),
                 'total_dues': total_pending_dues,
                 'accumulated_due_now': total_due_now_payable,
-                'available_credit': round_curr(sum(credits_by_ms.values())),
+                'available_credit': credit_wallet.get('total_available_credit', 0.0),
+                'credit_settled': total_credit_settled,
+                'total_cleared': total_paid_in + total_credit_settled,
                 'is_defaulted': is_defaulted,
                 'defaulted_reason': defaulted_reason,
                 'due_breakdown': all_unpaid_items,
@@ -6290,10 +6604,13 @@ def get_member_folio(member_id):
             'payments': payments,
             'payments_summary': {
                 'total_collected': total_paid_in,
+                'total_credit_settled': total_credit_settled,
+                'total_cleared': total_paid_in + total_credit_settled,
                 'total_payouts': total_paid_out,
                 'total_penalties': 0.0,
                 'count': len(payments)
             },
+            'credit_wallet': credit_wallet,
             'payouts': payouts_list,
             'loans': member_loans,
             'activity': activity
