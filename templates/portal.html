@@ -350,7 +350,7 @@
             {% endif %}
         </div>
 
-        <a href="{{ url_for("app_download_action", v=version) }}" class="download-btn">
+        <a href="{{ url_for('app_download_action', v=version, token=token) if token else url_for('app_download_action', v=version) }}" class="download-btn">
             <i class="fas fa-download me-2"></i> Download Installation Package (APK v{{ version }})
         </a>
 

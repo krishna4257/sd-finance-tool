@@ -14534,23 +14534,26 @@ def login():
         # to 'PENDING' and is_active = TRUE when they log in to download the app. This ensures
         # deactivated or old physical bindings are reset correctly.
         if level and level.strip().lower() in ("j", "m", "s"):
-            cur.execute("SELECT id FROM user_devices WHERE user_id = %s", (user_id,))
-            dev_row = cur.fetchone()
-            if not dev_row:
+            ensure_user_devices_table(cur)
+            cur.execute("SELECT id FROM user_devices WHERE user_id = %s AND device_id = 'PENDING'", (user_id,))
+            pending_row = cur.fetchone()
+            if not pending_row:
                 cur.execute("""
                     INSERT INTO user_devices (user_id, device_id, is_active, last_active)
                     VALUES (%s, 'PENDING', TRUE, NULL)
+                    ON CONFLICT (user_id, device_id)
+                    DO UPDATE SET is_active = TRUE, last_active = NULL
                 """, (user_id,))
             else:
                 cur.execute("""
                     UPDATE user_devices
-                    SET device_id = 'PENDING', is_active = TRUE, last_active = NULL
-                    WHERE user_id = %s
-                """, (user_id,))
+                    SET is_active = TRUE, last_active = NULL
+                    WHERE id = %s
+                """, (pending_row[0],))
             conn.commit()
 
         # ---------------------------
-        # 4ï¸âƒ£ Load village access
+        # 4ï¸ âƒ£ Load village access
         # ---------------------------
         cur.execute("""
             SELECT vid
@@ -14560,8 +14563,13 @@ def login():
 
         villages = [row[0] for row in cur.fetchall()]
 
+        # Preserve download token keys before clearing session if any
+        prev_download_eid = session.get("download_token_eid")
+        prev_download_exp = session.get("download_token_expiry")
+        prev_download_str = session.get("download_token_str")
+
         # ---------------------------
-        # 5ï¸âƒ£ Save session
+        # 5ï¸ âƒ£ Save session
         # ---------------------------
         session.clear()
         session["user_id"] = user_id
@@ -14587,7 +14595,7 @@ def login():
         if user_level in ("j", "m", "s"):
             # Check if this user has a valid active temporary download token session
             allowed = False
-            token = request.form.get("token") or request.args.get("token")
+            token = request.form.get("token") or request.args.get("token") or prev_download_str
             token_eid = None
             token_exp = None
 
@@ -14598,10 +14606,10 @@ def login():
                     token_exp = payload.get("exp")
                 except Exception as e:
                     logger.warning("login token signature load failed: %s", e)
-            
+
             if not token_eid or not token_exp:
-                token_eid = session.get("download_token_eid")
-                token_exp = session.get("download_token_expiry")
+                token_eid = prev_download_eid
+                token_exp = prev_download_exp
 
             if token_eid and token_exp:
                 try:
@@ -14613,15 +14621,11 @@ def login():
 
             if allowed:
                 session["download_authorized"] = True
-                # If we parsed a token from inputs, store it in the session to authorize the subsequent landing page view
+                session["download_token_eid"] = int(token_eid)
+                session["download_token_expiry"] = token_exp
                 if token:
-                    try:
-                        payload = serializer.loads(token)
-                        session["download_token_eid"] = int(payload.get("eid"))
-                        session["download_token_uid"] = int(payload.get("uid"))
-                        session["download_token_expiry"] = payload.get("exp")
-                    except Exception:
-                        pass
+                    session["download_token_str"] = token
+                    return redirect(url_for("app_portal", token=token))
                 return redirect("/app/portal")
             else:
                 session.clear()
@@ -14629,6 +14633,13 @@ def login():
                 return redirect("/login")
 
         return redirect("/village")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.exception("Login error for user %s: %s", username, e)
+        flash("An error occurred during login. Please try again or contact your administrator.", "danger")
+        return redirect("/login")
 
     finally:
         cur.close()
@@ -14944,13 +14955,16 @@ def reset_user_device():
 
     conn = get_pg_connection()
     cur = conn.cursor()
-
     try:
-        # Disable existing device so next login re-registers
+        ensure_user_devices_table(cur)
+        # Deactivate existing physical devices so they cannot be reused without re-binding
+        cur.execute("UPDATE user_devices SET is_active = FALSE WHERE user_id = %s AND device_id != 'PENDING'", (user_id,))
+        # Ensure a PENDING device record exists and is active
         cur.execute("""
-            UPDATE user_devices
-            SET device_id = 'PENDING', last_active = NULL, is_active = TRUE
-            WHERE user_id = %s
+            INSERT INTO user_devices (user_id, device_id, is_active, last_active)
+            VALUES (%s, 'PENDING', TRUE, NULL)
+            ON CONFLICT (user_id, device_id)
+            DO UPDATE SET is_active = TRUE, last_active = NULL
         """, (user_id,))
 
         conn.commit()
@@ -16497,6 +16511,7 @@ def app_portal():
             registration_mode=False,
             employee=emp_data,
             user_account=user_row[1],
+            token=token or "",
             version=version_data.get("latest_version", "N/A"),
             size=apk_size,
             notes=version_data.get("release_notes", "No release notes available."),
@@ -16625,18 +16640,38 @@ def app_portal_register():
 # ── Secure download stream endpoint ──────────────────────────────────────────
 
 @app.route("/app/download-action", methods=["GET"])
-@login_required
 def app_download_action():
     """
     GET /app/download-action
-    Requires login session.
-    Verifies that the session is either an admin/mgmt or explicitly download_authorized.
+    Verifies that the request has an active authorized session (admin/mgmt or download_authorized)
+    OR a valid, non-expired temporary installation link token.
     """
     user_level = session.get("level")
     is_authorized = session.get("download_authorized") == True
 
+    # Validate token if present in query parameter or session
+    token = request.args.get("token") or session.get("download_token_str")
+    target_eid = session.get("employee_id") or session.get("download_token_eid")
+
+    if token and not is_authorized:
+        try:
+            payload = serializer.loads(token)
+            token_eid = int(payload.get("eid"))
+            exp_str = payload.get("exp")
+            exp_dt = datetime.fromisoformat(exp_str)
+            if datetime.now(timezone.utc) <= exp_dt:
+                is_authorized = True
+                target_eid = token_eid
+                session["download_authorized"] = True
+                session["download_token_eid"] = token_eid
+                session["download_token_expiry"] = exp_str
+                session["download_token_str"] = token
+        except Exception as e:
+            logger.warning("app_download_action invalid token: %s", e)
+
     if user_level not in ("admin", "mgmt", "superadmin") and not is_authorized:
-        return "Access denied", 403
+        flash("Access denied. A valid installation link is required.", "danger")
+        return redirect(url_for("login"))
 
     version_data = _read_version_json()
     if not version_data:
@@ -16655,7 +16690,7 @@ def app_download_action():
         entity_type="apk_release",
         entity_id=version,
         details={
-            "employee_id": session.get("employee_id"),
+            "employee_id": target_eid,
             "username": session.get("username"),
             "level": user_level,
             "ip": request.remote_addr,
