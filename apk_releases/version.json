@@ -1,11 +1,11 @@
 {
-  "latest_version": "1.1.4",
-  "latest_version_code": 17,
+  "latest_version": "1.1.5",
+  "latest_version_code": 18,
   "min_supported_version_code": 5,
   "force_update": true,
-  "sha256": "877dd0ccfa0c4a01f242d76250279bd41116a5cef2482af3bce0cf0f02130db6",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.4",
-  "release_notes": "Removed auto-submit: data is now only submitted when employee clicks the Submit button. Bug fixes and improvements.",
-  "released_at": "2026-09-22T19:40:11+05:30",
+  "sha256": "e15fdc4a147b93d08e43060ebac08a15a23009d13b12e149365cee63a9df7624",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.5",
+  "release_notes": "Resolved live sync & server performance issues, customer balance and payment reconciliation fixes, shift-safe update postponement, and memory leak optimizations.",
+  "released_at": "2026-10-03T14:41:00+05:30",
   "published_by": "admin"
 }
