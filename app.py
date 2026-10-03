@@ -247,42 +247,22 @@ def ensure_feed_tables_exist(cur):
 
 
 # ----------------------------------------------------
-# REAL-TIME SUBMISSION SSE PUB-SUB SYSTEM
+# REAL-TIME SUBMISSION STATUS SYSTEM (SAFE NO-OP STUBS)
 # ----------------------------------------------------
-_sse_subscribers = {}  # vid -> list of queue.Queue
-_sse_lock = threading.Lock()
+# Note: Persistent in-memory SSE pub-sub was deprecated because Gunicorn pre-forked
+# worker processes have isolated memory spaces, and long-lived streams starved Gunicorn
+# threads. Statuses are authoritatively recorded in PostgreSQL and retrieved via
+# lightweight status polling (/api/mobile/submissions/status).
 
 def add_sse_subscriber(vid, q):
-    with _sse_lock:
-        if vid not in _sse_subscribers:
-            _sse_subscribers[vid] = []
-        _sse_subscribers[vid].append(q)
+    pass
 
 def remove_sse_subscriber(vid, q):
-    with _sse_lock:
-        if vid in _sse_subscribers:
-            if q in _sse_subscribers[vid]:
-                _sse_subscribers[vid].remove(q)
-            if not _sse_subscribers[vid]:
-                del _sse_subscribers[vid]
+    pass
 
 def broadcast_submission_event(vid, event_data):
-    """Broadcast submission status event to all listening clients for a village in milliseconds."""
-    with _sse_lock:
-        targets = []
-        if vid is not None and vid in _sse_subscribers:
-            targets.extend(_sse_subscribers[vid])
-        # Also broadcast to global listeners (vid 0 or None) if any
-        if None in _sse_subscribers:
-            targets.extend(_sse_subscribers[None])
-        if 0 in _sse_subscribers and vid != 0:
-            targets.extend(_sse_subscribers[0])
-
-        for q in targets:
-            try:
-                q.put_nowait(event_data)
-            except (queue.Full, Exception):
-                pass
+    """Deprecated: Status updates are written to PostgreSQL and fetched via polling."""
+    pass
 
 
 
@@ -4413,29 +4393,18 @@ def submission_events_stream():
     if not vid:
         return jsonify({"error": "vid required"}), 400
 
-    q = queue.Queue(maxsize=100)
-    add_sse_subscriber(vid, q)
-
+    # Deprecated endpoint: Return immediately so legacy clients do not pin Gunicorn threads.
+    # Real-time status updates are authoritatively served via /api/mobile/submissions/status.
     def stream():
-        yield ": connected\n\n"
-        try:
-            while True:
-                try:
-                    event = q.get(timeout=20)
-                    yield f"data: {json.dumps(event)}\n\n"
-                except queue.Empty:
-                    yield ": ping\n\n"
-        except GeneratorExit:
-            pass
-        finally:
-            remove_sse_subscriber(vid, q)
+        yield ": stream_deprecated\n\n"
+        yield f"data: {json.dumps({'type': 'stream_deprecated', 'message': 'Please poll /api/mobile/submissions/status'})}\n\n"
 
     return Response(
         stream(),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
+            "Connection": "close",
             "X-Accel-Buffering": "no"
         }
     )
