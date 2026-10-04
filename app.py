@@ -8663,9 +8663,14 @@ def feed():
             c.name AS customer_name,
             c.start_date AS customer_start_date
         FROM payment_feed_items pfi
-        LEFT JOIN customer c
-          ON c.vid = (pfi.payload->>'vid')::INT
-         AND c.ano = (pfi.payload->>'ano')::INT
+        LEFT JOIN LATERAL (
+            SELECT cid, name, start_date
+            FROM customer c
+            WHERE c.vid = (pfi.payload->>'vid')::INT
+              AND c.ano = (pfi.payload->>'ano')::INT
+            ORDER BY c.cid DESC
+            LIMIT 1
+        ) c ON TRUE
         WHERE pfi.status='pending'
           AND (pfi.payload->>'vid')::INT = %s
         ORDER BY pfi.feed_payment_id DESC
@@ -8700,9 +8705,14 @@ def feed():
                     'Customer ' || cdf.ano::text
                 ) AS name
             FROM customer_docs_feed cdf
-            LEFT JOIN customer c
-              ON c.vid = cdf.vid
-             AND c.ano = cdf.ano
+            LEFT JOIN LATERAL (
+                SELECT cid, name
+                FROM customer c
+                WHERE c.vid = cdf.vid
+                  AND c.ano = cdf.ano
+                ORDER BY c.cid DESC
+                LIMIT 1
+            ) c ON TRUE
             LEFT JOIN LATERAL (
                 SELECT payload
                 FROM customer_feed cf_inner
@@ -8909,12 +8919,22 @@ def feed():
                 docs.aadhaar_back_pic,
                 docs.house_photo
             FROM account_closure_feed acf
-            LEFT JOIN customer c
-              ON c.vid = acf.vid
-             AND c.ano = acf.ano
-            LEFT JOIN closed_cust_account ca
-              ON ca.vid = acf.vid
-             AND ca.ano = acf.ano
+            LEFT JOIN LATERAL (
+                SELECT cid, name, total_amount, paid_amount, balance_amount, interest_amount, type, period, installment_amount, start_date, end_date, phone_number, aadhaar_number, notes, latitude, longitude, status
+                FROM customer c
+                WHERE c.vid = acf.vid
+                  AND c.ano = acf.ano
+                ORDER BY c.cid DESC
+                LIMIT 1
+            ) c ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT cid, name, total_amount, paid_amount, balance_amount, interest_amount, type, period, installment_amount, start_date, end_date, phone_number, aadhaar_number, notes, latitude, longitude, status
+                FROM closed_cust_account ca
+                WHERE ca.vid = acf.vid
+                  AND ca.ano = acf.ano
+                ORDER BY ca.cid DESC
+                LIMIT 1
+            ) ca ON TRUE
             LEFT JOIN village v
               ON v.vid = acf.vid
             LEFT JOIN LATERAL (
@@ -10598,16 +10618,18 @@ def accept_payment_batch():
 
         # 1. Fetch selected items with their specific feed_payment_id
         cur.execute("""
-            SELECT feed_payment_id, local_uuid, payload
+            SELECT feed_payment_id, local_uuid, payload, status
             FROM payment_feed_items
             WHERE feed_payment_id = ANY(%s::bigint[])
+            FOR UPDATE
         """, (ids,))
-        rows = cur.fetchall()
+        all_rows = cur.fetchall()
+        rows = [r for r in all_rows if r[3] == 'pending']
 
         if not rows:
             cur.close()
             conn.close()
-            return {"success": False, "error": "No matching payments found in queue"}
+            return {"success": False, "error": "No pending payments found in queue"}
 
         # Fetch pending edits if any for these local_uuids
         local_uuids = [r[1] for r in rows if r[1]]
