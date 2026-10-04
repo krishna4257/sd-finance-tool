@@ -32,6 +32,9 @@
        extensions. -->
   <script src="{{ url_for('static', filename='js/utils.js') }}?v={{ range(1, 10000) | random }}"></script>
 
+  <!-- Global Button Guard & Concurrency Protection -->
+  <script src="{{ url_for('static', filename='js/global_button_guard.js') }}?v={{ range(1, 10000) | random }}"></script>
+
   <!-- Main site-wide script -->
   <script src="{{ url_for('static', filename='js/main.js') }}?v={{ range(1, 10000) | random }}"></script>
   <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>

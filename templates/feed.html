@@ -3655,7 +3655,7 @@
                                 </button>
                                 {% endif %}
 
-                                <button class="neumorphic-btn danger-btn small" onclick="deleteClosure('{{ row.feed_id }}')" style="padding: 6px 12px; font-size: 0.8rem;">
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteClosure('{{ row.feed_id }}', this)" style="padding: 6px 12px; font-size: 0.8rem;">
                                     <i class="fas fa-trash-alt me-1"></i> Delete Request
                                 </button>
                             </div>
@@ -4245,10 +4245,10 @@
                                 <span class="feed-status-pill status-pending" style="font-size: 11px; padding: 4px 10px;">
                                     <i class="fas fa-clock me-1"></i> {{ row.status|capitalize if row.status else 'Pending' }}
                                 </span>
-                                <button class="neumorphic-btn primary-btn small" onclick="accept('{{ row.feed_id }}')" style="padding: 6px 14px; font-size: 0.8rem;">
+                                <button class="neumorphic-btn primary-btn small" onclick="accept('{{ row.feed_id }}', this)" style="padding: 6px 14px; font-size: 0.8rem;">
                                     <i class="fas fa-user-check me-1"></i> Accept Customer
                                 </button>
-                                <button class="neumorphic-btn danger-btn small" onclick="deleteCustomer('{{ row.feed_id }}')" style="padding: 6px 12px; font-size: 0.8rem;">
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteCustomer('{{ row.feed_id }}', this)" style="padding: 6px 12px; font-size: 0.8rem;">
                                     <i class="fas fa-trash-alt me-1"></i> Delete
                                 </button>
                             </div>
@@ -4526,13 +4526,13 @@
                                 {% endif %}
                             </div>
                             <div class="feed-actions">
-                                <button class="neumorphic-btn primary-btn small" onclick="acceptExistingDocs('{{ row.docs_feed_id }}')">
+                                <button class="neumorphic-btn primary-btn small" onclick="acceptExistingDocs('{{ row.docs_feed_id }}', this)">
                                     <i class="fas fa-check"></i> Accept Uploads
                                 </button>
                                 <button class="neumorphic-btn btn-outline small" onclick="editExistingDocs('{{ row.docs_feed_id }}', '{{ row.ano }}', '{{ row.vid }}')">
                                     <i class="fas fa-pencil-alt"></i> Edit
                                 </button>
-                                <button class="neumorphic-btn danger-btn small" onclick="deleteExistingDocs('{{ row.docs_feed_id }}')">
+                                <button class="neumorphic-btn danger-btn small" onclick="deleteExistingDocs('{{ row.docs_feed_id }}', this)">
                                     <i class="fas fa-trash-alt"></i> Delete
                                 </button>
                             </div>

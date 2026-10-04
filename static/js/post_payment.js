@@ -638,10 +638,15 @@ function submitAllPayments() {
       successMsg.style.display = "block";
       successMsg.innerText = data.message;
 
-      tempTable = data.skipped_rows;
+      tempTable = data.skipped_rows || [];
       saveAndUpdate(); 
       // Refresh analytics graph as well
       loadAnalytics();
+
+      if (data.skipped_rows && data.skipped_rows.length > 0) {
+        const errorDetails = data.skipped_rows.map(r => `• A.no ${r.ano}: ${r.reason || 'Skipped'}`).join("\n");
+        showError(`⚠️ ${data.skipped_rows.length} payment(s) could not be posted:\n${errorDetails}`);
+      }
     })
     .catch(err => {
       showError(`An error occurred: ${err.message}`);

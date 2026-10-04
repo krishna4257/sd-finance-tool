@@ -344,51 +344,57 @@
     }
   }
 
-  /* ── Paper Sheet Style ── */
+  /* ── Weekly Ledger Sheet Base & Theme Styles ── */
   .ledger-sheet {
-    background: #fbf9f1; /* warm accounting cream */
-    border-radius: 4px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-    padding: 30px 40px;
+    background: var(--surface, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-left: 4px solid var(--primary, #1a4d2e);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    padding: 26px 32px;
     width: 100%;
-    max-width: 650px;
-    color: #1c1917; /* rich charcoal */
+    max-width: 680px;
+    color: var(--text, #1a1a2e);
     font-family: 'Courier New', Courier, monospace;
-    font-size: 0.85rem;
-    line-height: 1.4;
+    font-size: 0.84rem;
+    line-height: 1.45;
     position: relative;
-    border-left: 3px double #b45309;
     margin-bottom: 24px;
     box-sizing: border-box;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
+  /* Ensure NO red margin line */
   .ledger-sheet::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 45px;
-    width: 1px;
-    background: rgba(220, 38, 38, 0.25); /* red margin line */
+    display: none !important;
   }
   .ledger-sheet-header {
-    border-bottom: 2px solid #1c1917;
+    border-bottom: 2px solid var(--border, #e5e7eb);
     padding-bottom: 8px;
     margin-bottom: 16px;
     font-weight: bold;
     font-size: 0.95rem;
     display: flex;
     justify-content: space-between;
+    color: var(--text, #1a1a2e);
+  }
+  .ledger-header-sub {
+    font-size: 0.76rem;
+    color: var(--text-secondary, #6b7280);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .ledger-section-title {
     font-weight: bold;
     text-transform: uppercase;
     margin-top: 14px;
     margin-bottom: 6px;
-    border-bottom: 1px dashed rgba(28, 25, 23, 0.2);
-    padding-bottom: 2px;
+    border-bottom: 1px dashed var(--border, rgba(0, 0, 0, 0.15));
+    padding-bottom: 3px;
     display: flex;
     justify-content: space-between;
-    color: #1c1917;
+    color: var(--text, #1a1a2e);
   }
   .ledger-table {
     width: 100%;
@@ -397,49 +403,438 @@
   }
   .ledger-table th {
     text-align: left;
-    border-bottom: 1px solid #1c1917;
+    border-bottom: 1.5px solid var(--border, #e5e7eb);
     font-weight: bold;
-    padding: 4px 6px;
+    padding: 5px 6px;
     font-size: 0.8rem;
-    color: #1c1917;
+    color: var(--text-secondary, #4b5563);
   }
   .ledger-table td {
-    padding: 4px 6px;
-    border-bottom: 1px solid rgba(28, 25, 23, 0.05);
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--border-light, rgba(0, 0, 0, 0.04));
     font-size: 0.8rem;
-    color: #1c1917;
+    color: var(--text, #1a1a2e);
   }
   .ledger-total-row {
     font-weight: bold;
-    border-top: 1px solid #1c1917;
-    border-bottom: 2px double #1c1917;
+    border-top: 1.5px solid var(--border, #e5e7eb);
+    border-bottom: 2px double var(--border, #e5e7eb);
   }
   .ledger-total-row td {
     padding: 6px 6px;
     font-size: 0.8rem;
-    color: #1c1917;
+    color: var(--text, #1a1a2e);
   }
   .ledger-single-value {
     display: flex;
     justify-content: space-between;
-    padding: 4px 6px;
-    font-size: 0.8rem;
-    color: #1c1917;
+    padding: 6px 4px;
+    font-size: 0.82rem;
+    color: var(--text, #1a1a2e);
+    border-bottom: 1px dashed var(--border, rgba(0, 0, 0, 0.15));
   }
   .ledger-summary-box {
-    margin-top: 20px;
-    border-top: 1.5px solid #1c1917;
-    padding-top: 10px;
+    margin-top: 18px;
+    border-top: 1.5px solid var(--border, #e5e7eb);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--text, #1a1a2e);
+  }
+  .ledger-summary-title {
+    font-size: 0.7rem;
     font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--text-secondary, #6b7280);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .ledger-amount-pos {
+    color: #16a34a;
+  }
+  .ledger-amount-neg {
+    color: #dc2626;
+  }
+  .ledger-closing-row {
     display: flex;
     justify-content: space-between;
-    font-size: 0.9rem;
-    color: #1c1917;
+    border-top: 2px double var(--border, #e5e7eb);
+    padding-top: 8px;
+    font-weight: bold;
+    font-size: 0.92rem;
+    color: var(--text, #1a1a2e);
+    margin-top: 4px;
   }
-  .ledger-range-btn.active {
-    background: #b45309 !important;
-    border-color: #b45309 !important;
+  .ledger-empty-note {
+    font-style: italic;
+    padding: 6px 4px;
+    color: var(--text-muted, #9ca3af);
+    margin-bottom: 10px;
+  }
+  .ledger-date-sub {
+    color: var(--text-secondary, #6b7280);
+  }
+
+  /* ── Dark Mode Overrides for Ledger Sheet ── */
+  [data-theme="dark"] .ledger-sheet {
+    background: #181b26 !important;
+    border-color: #2a2e3a !important;
+    border-left: 4px solid #10b981 !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+    color: #e8eaed !important;
+  }
+  [data-theme="dark"] .ledger-sheet-header {
+    border-bottom-color: #2a2e3a !important;
+    color: #f1f5f9 !important;
+  }
+  [data-theme="dark"] .ledger-header-sub {
+    color: #94a3b8 !important;
+  }
+  [data-theme="dark"] .ledger-section-title {
+    border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f1f5f9 !important;
+  }
+  [data-theme="dark"] .ledger-table th {
+    border-bottom-color: #2a2e3a !important;
+    color: #94a3b8 !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+  }
+  [data-theme="dark"] .ledger-table td {
+    border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+    color: #e8eaed !important;
+  }
+  [data-theme="dark"] .ledger-total-row {
+    border-top-color: #2a2e3a !important;
+    border-bottom-color: #3b4256 !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+  }
+  [data-theme="dark"] .ledger-total-row td {
+    color: #f8fafc !important;
+  }
+  [data-theme="dark"] .ledger-single-value {
+    border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f1f5f9 !important;
+  }
+  [data-theme="dark"] .ledger-summary-box {
+    border-top-color: #2a2e3a !important;
+    color: #e8eaed !important;
+  }
+  [data-theme="dark"] .ledger-summary-title {
+    color: #94a3b8 !important;
+  }
+  [data-theme="dark"] .ledger-amount-pos {
+    color: #34d399 !important;
+  }
+  [data-theme="dark"] .ledger-amount-neg {
+    color: #f87171 !important;
+  }
+  [data-theme="dark"] .ledger-closing-row {
+    border-top-color: #3b4256 !important;
+    color: #f8fafc !important;
+  }
+  [data-theme="dark"] .ledger-empty-note {
+    color: #94a3b8 !important;
+  }
+  [data-theme="dark"] .ledger-date-sub {
+    color: #94a3b8 !important;
+  }
+  [data-theme="dark"] #ledgerPaperContainer {
+    background: rgba(15, 17, 23, 0.5) !important;
+  }
+
+  /* ── Weekly Group Ledger Tree & Cards ── */
+  .ledger-cycle-card {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    flex-shrink: 0;
+  }
+  .ledger-cycle-card label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary, #6b7280);
+    margin-bottom: 6px;
+  }
+  .ledger-cycle-badge {
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary, #1a4d2e);
+    background: rgba(26, 77, 46, 0.08);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(26, 77, 46, 0.15);
+  }
+  .ledger-tree-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border, #cbd5e1) transparent;
+  }
+  .ledger-tree-container::-webkit-scrollbar {
+    width: 6px;
+  }
+  .ledger-tree-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .ledger-tree-container::-webkit-scrollbar-thumb {
+    background: var(--border, #cbd5e1);
+    border-radius: 4px;
+  }
+  .ledger-tree-container::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted, #94a3b8);
+  }
+  .ledger-tree-year {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    background: var(--surface, #fff);
+    flex-shrink: 0;
+  }
+  .ledger-year-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 11px;
+    cursor: pointer;
+    background: var(--input-bg, #f9fafb);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text, #111827);
+    user-select: none;
+    border-radius: 7px;
+    transition: background 0.15s ease;
+  }
+  .ledger-year-header:hover {
+    background: rgba(0,0,0,0.04);
+  }
+  .ledger-year-header .chevron {
+    transition: transform 0.2s ease;
+    font-size: 0.72rem;
+    color: var(--text-muted, #9ca3af);
+    margin-right: 6px;
+  }
+  .ledger-tree-year.expanded .ledger-year-header .chevron {
+    transform: rotate(90deg);
+  }
+  .ledger-year-body {
+    display: none;
+    padding: 6px;
+    background: var(--surface, #fff);
+  }
+  .ledger-tree-year.expanded .ledger-year-body {
+    display: block;
+  }
+  .ledger-tree-month {
+    margin-bottom: 5px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #e5e7eb);
+    background: var(--input-bg, #fcfcfd);
+  }
+  .ledger-month-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 0.77rem;
+    font-weight: 700;
+    color: var(--text-secondary, #4b5563);
+    user-select: none;
+    transition: background 0.15s ease;
+    border-radius: 5px;
+  }
+  .ledger-month-header:hover {
+    background: rgba(0,0,0,0.03);
+  }
+  .ledger-month-header .chevron {
+    transition: transform 0.2s ease;
+    font-size: 0.68rem;
+    color: var(--text-muted, #9ca3af);
+    margin-right: 6px;
+  }
+  .ledger-tree-month.expanded .ledger-month-header .chevron {
+    transform: rotate(90deg);
+  }
+  .ledger-month-body {
+    display: none;
+    padding: 4px 6px 6px 6px;
+    gap: 4px;
+    flex-direction: column;
+  }
+  .ledger-tree-month.expanded .ledger-month-body {
+    display: flex;
+  }
+  .ledger-week-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #e5e7eb);
+    background: var(--surface, #fff);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .ledger-week-btn:hover {
+    background: rgba(0,0,0,0.025);
+    border-color: rgba(0,0,0,0.18);
+  }
+  .ledger-week-btn.active {
+    background: var(--primary, #1a4d2e) !important;
+    border-color: var(--primary, #1a4d2e) !important;
+    box-shadow: 0 2px 8px rgba(26, 77, 46, 0.25);
+  }
+  .ledger-week-btn.active .week-label {
     color: #fff !important;
+    font-weight: 800;
+  }
+  .ledger-week-btn.active .week-dates {
+    color: rgba(255, 255, 255, 0.88) !important;
+  }
+  .ledger-week-btn.active .week-badge-current {
+    background: #fff !important;
+    color: var(--primary, #1a4d2e) !important;
+    font-weight: 800;
+  }
+  .week-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text, #1f2937);
+  }
+  .week-dates {
+    font-size: 0.68rem;
+    color: var(--text-muted, #6b7280);
+    margin-top: 1px;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  .week-badge-current {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(26, 77, 46, 0.12);
+    color: var(--primary, #1a4d2e);
+  }
+  .ledger-count-pill {
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.06);
+    color: var(--text-secondary, #6b7280);
+  }
+
+  /* ── Dark Mode Overrides for Left Navigation Panel ── */
+  [data-theme="dark"] .ledger-cycle-card {
+    background: #1a1d27 !important;
+    border-color: #2a2e3a !important;
+  }
+  [data-theme="dark"] .ledger-cycle-card label {
+    color: #9ca3af !important;
+  }
+  [data-theme="dark"] .ledger-cycle-badge {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.25) !important;
+  }
+  [data-theme="dark"] .ledger-tree-container {
+    scrollbar-color: #2a2e3a transparent;
+  }
+  [data-theme="dark"] .ledger-tree-container::-webkit-scrollbar-thumb {
+    background: #2a2e3a;
+  }
+  [data-theme="dark"] .ledger-tree-container::-webkit-scrollbar-thumb:hover {
+    background: #3b4256;
+  }
+  [data-theme="dark"] .ledger-tree-year {
+    background: #1a1d27 !important;
+    border-color: #2a2e3a !important;
+  }
+  [data-theme="dark"] .ledger-year-header {
+    background: #1e2230 !important;
+    color: #e8eaed !important;
+  }
+  [data-theme="dark"] .ledger-year-header:hover {
+    background: #252a3b !important;
+  }
+  [data-theme="dark"] .ledger-year-body {
+    background: #1a1d27 !important;
+  }
+  [data-theme="dark"] .ledger-tree-month {
+    background: #151821 !important;
+    border-color: #242836 !important;
+  }
+  [data-theme="dark"] .ledger-month-header {
+    color: #cbd5e1 !important;
+  }
+  [data-theme="dark"] .ledger-month-header:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+  }
+  [data-theme="dark"] .ledger-month-body {
+    background: #151821 !important;
+  }
+  [data-theme="dark"] .ledger-week-btn {
+    background: #1e2230 !important;
+    border-color: #2a2e3a !important;
+  }
+  [data-theme="dark"] .ledger-week-btn:hover {
+    background: #252b3d !important;
+    border-color: #3b4256 !important;
+  }
+  [data-theme="dark"] .ledger-week-btn .week-label {
+    color: #e8eaed !important;
+  }
+  [data-theme="dark"] .ledger-week-btn .week-dates {
+    color: #94a3b8 !important;
+  }
+  [data-theme="dark"] .ledger-week-btn.active {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+  }
+  [data-theme="dark"] .ledger-week-btn.active .week-label {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+  }
+  [data-theme="dark"] .ledger-week-btn.active .week-dates {
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  [data-theme="dark"] .ledger-week-btn.active .week-badge-current {
+    background: #ffffff !important;
+    color: #064e3b !important;
+    font-weight: 800 !important;
+  }
+  [data-theme="dark"] .week-badge-current {
+    background: rgba(16, 185, 129, 0.18) !important;
+    color: #34d399 !important;
+  }
+  [data-theme="dark"] .ledger-count-pill {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #9ca3af !important;
   }
 
   /* ── Print Styles for Ledger ── */
@@ -1247,53 +1642,72 @@
 
 <!-- Ledger Modal -->
 <div id="ledgerOverlay" class="dashboard-modal-overlay" onclick="closeLedgerModalOnOverlay(event)">
-  <div class="dashboard-modal-content" style="max-width: 950px; width: 95%; height: 85vh; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
-    <div class="dashboard-modal-header">
-      <h3 id="ledgerModalTitle" style="color: var(--text);"><i class="fas fa-book" style="color: var(--primary); margin-right: 8px;"></i>Group Ledger</h3>
+  <div class="dashboard-modal-content" style="max-width: 1080px; width: 95%; height: 88vh; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="dashboard-modal-header" style="padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(26, 77, 46, 0.12); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+          <i class="fas fa-book" style="font-size: 1.05rem;"></i>
+        </div>
+        <div>
+          <h3 id="ledgerModalTitle" style="color: var(--text); margin: 0; font-size: 1.1rem; font-weight: 700;">Group Ledger</h3>
+          <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 1px;">Weekly Accounting Ledger Sheet</div>
+        </div>
+      </div>
       <button class="modal-close-btn" onclick="closeLedgerModal()">&times;</button>
     </div>
-    <div class="dashboard-modal-body" style="flex: 1; overflow: hidden; display: flex; padding-top: 8px; min-height: 0; max-height: 100%;">
+    <div class="dashboard-modal-body" style="flex: 1; overflow: hidden; display: flex; padding: 14px 18px; min-height: 0; max-height: 100%;">
       <!-- Split Layout -->
-      <div class="ledger-modal-split" style="display: flex; flex: 1; width: 100%; height: 100%; overflow: hidden; gap: 20px; min-height: 0; max-height: 100%;">
-        <!-- Left Side: Controls -->
-        <div class="custom-scroll" style="width: 260px; min-width: 260px; border-right: 1px solid var(--border); padding-right: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; box-sizing: border-box; min-height: 0; max-height: 100%;">
+      <div class="ledger-modal-split" style="display: flex; flex: 1; width: 100%; height: 100%; overflow: hidden; gap: 18px; min-height: 0; max-height: 100%;">
+        <!-- Left Side: Controls & Week Tree -->
+        <div style="width: 310px; min-width: 310px; border-right: 1px solid var(--border); padding-right: 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; box-sizing: border-box; height: 100%; min-height: 0;">
           <input type="hidden" id="ledgerEmp1">
           <input type="hidden" id="ledgerEmp2">
           
-          <div>
-            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Start Date</label>
-            <input type="date" id="ledgerStartDate" class="glass-input" style="width: 100%; box-sizing: border-box; font-family: inherit;">
-          </div>
-          
-          <div>
-            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">End Date</label>
-            <input type="date" id="ledgerEndDate" class="glass-input" style="width: 100%; box-sizing: border-box; font-family: inherit;">
-          </div>
-          
-          <div>
-            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Quick Date Ranges</label>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <button class="neumorphic-btn small ledger-range-btn" id="ledgerBtnToday" onclick="setLedgerQuickRange(0)">Today</button>
-              <button class="neumorphic-btn small ledger-range-btn" id="ledgerBtnYesterday" onclick="setLedgerQuickRange(1)">Yesterday</button>
-              <button class="neumorphic-btn small ledger-range-btn" id="ledgerBtnLast3" onclick="setLedgerQuickRange(3)">Last 3 Days</button>
-              <button class="neumorphic-btn small ledger-range-btn active" id="ledgerBtnLast5" onclick="setLedgerQuickRange(5)">Last 5 Days (Default)</button>
-              <button class="neumorphic-btn small ledger-range-btn" id="ledgerBtnLast10" onclick="setLedgerQuickRange(10)">Last 10 Days</button>
+          <!-- Week End Day Selector Card (Fixed Header) -->
+          <div class="ledger-cycle-card" style="flex-shrink: 0;">
+            <label for="ledgerWeekEndDaySelect">
+              <i class="fas fa-calendar-day" style="color: var(--primary);"></i> Week Ending Day
+            </label>
+            <select id="ledgerWeekEndDaySelect" class="glass-input" style="width: 100%; box-sizing: border-box; font-family: inherit; font-size: 0.82rem; font-weight: 600;" onchange="handleWeekEndDayChange(parseInt(this.value, 10))">
+              <option value="3" selected>Wednesday (Thu – Wed)</option>
+              <option value="0">Sunday (Mon – Sun)</option>
+              <option value="1">Monday (Tue – Mon)</option>
+              <option value="2">Tuesday (Wed – Tue)</option>
+              <option value="4">Thursday (Fri – Thu)</option>
+              <option value="5">Friday (Sat – Fri)</option>
+              <option value="6">Saturday (Sun – Sat)</option>
+            </select>
+            <div id="ledgerCycleNotice" class="ledger-cycle-badge">
+              <i class="fas fa-sync-alt fa-xs"></i> Cycle: <strong>Thursday &rarr; Wednesday</strong>
             </div>
           </div>
 
-          <div style="margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 10px;">
-            <button class="neumorphic-btn" style="width: 100%; background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="generateLedgerData()">
-              <i class="fas fa-sync-alt"></i> Generate Ledger
+          <!-- Section Label + Jump to Current (Fixed) -->
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 2px; flex-shrink: 0;">
+            <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+              <i class="fas fa-layer-group" style="margin-right: 4px;"></i> Weekly Cycles
+            </span>
+            <button type="button" class="neumorphic-btn small" style="padding: 3px 8px; font-size: 0.68rem; font-weight: 700; border-radius: 6px;" onclick="jumpToCurrentWeek()">
+              <i class="fas fa-crosshairs"></i> Current Week
             </button>
-            <button class="neumorphic-btn" style="width: 100%; border-color: rgba(180, 83, 9, 0.4); color: #b45309; font-weight: 700; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="window.print()">
-              <i class="fas fa-print"></i> Print Ledger
+          </div>
+
+          <!-- Tree of Weeks (Scrollable Area) -->
+          <div id="ledgerWeeksTree" class="ledger-tree-container custom-scroll" style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Injected by JavaScript -->
+          </div>
+
+          <!-- Print / Action Footer (Fixed Footer) -->
+          <div style="flex-shrink: 0; padding-top: 10px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 8px;">
+            <button class="neumorphic-btn" style="width: 100%; border-color: rgba(180, 83, 9, 0.4); color: #b45309; font-weight: 700; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="printWeeklyLedger()">
+              <i class="fas fa-print"></i> Print Weekly Ledger
             </button>
           </div>
         </div>
         
         <!-- Right Side: Paper Scroll -->
-        <div id="ledgerPaperContainer" class="custom-scroll" style="flex: 1; padding-left: 10px; padding-right: 10px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.015); border-radius: 8px; padding-top: 16px; padding-bottom: 16px; box-sizing: border-box; min-height: 0; max-height: 100%; width: 100%;">
-          <!-- Injected ledger-sheet components -->
+        <div id="ledgerPaperContainer" class="custom-scroll" style="flex: 1; padding-left: 10px; padding-right: 10px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.015); border-radius: 8px; padding-top: 14px; padding-bottom: 14px; box-sizing: border-box; min-height: 0; max-height: 100%; width: 100%;">
+          <!-- Injected weekly ledger-sheet components -->
         </div>
       </div>
     </div>
@@ -1861,449 +2275,787 @@
     }
   });
 
-  // --- Ledger Modal ---
+  // --- Weekly Group Ledger State & Navigation ---
+  let ledgerEndDay = 3; // Default 3 = Wednesday
+  let ledgerActiveWeekId = null;
+  let ledgerGeneratedWeeks = [];
+
+  const LEDGER_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const LEDGER_MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const LEDGER_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function padZero(num) {
+    return String(num).padStart(2, '0');
+  }
+
+  function formatISO(d) {
+    return `${d.getFullYear()}-${padZero(d.getMonth() + 1)}-${padZero(d.getDate())}`;
+  }
+
+  function formatDisplayDate(d) {
+    return `${padZero(d.getDate())}-${padZero(d.getMonth() + 1)}-${d.getFullYear()}`;
+  }
+
+  function formatShortDate(d) {
+    return `${padZero(d.getDate())} ${LEDGER_MONTHS_SHORT[d.getMonth()]}`;
+  }
+
+  function calculateWeekData(endDay) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const currentYear = today.getFullYear();
+    const startYear = Math.min(2024, currentYear - 2);
+    const endYear = currentYear;
+
+    const weeks = [];
+
+    // Start from Jan 1 of startYear
+    let d = new Date(startYear, 0, 1);
+    d.setHours(0, 0, 0, 0);
+
+    // Advance to the first endDay
+    while (d.getDay() !== endDay) {
+      d.setDate(d.getDate() + 1);
+    }
+
+    const endLimit = new Date(endYear, 11, 31);
+    endLimit.setHours(23, 59, 59, 999);
+
+    while (d <= endLimit) {
+      const weekEnd = new Date(d);
+      const weekStart = new Date(d);
+      weekStart.setDate(weekStart.getDate() - 6);
+
+      const isCurrent = (today >= weekStart && today <= weekEnd);
+
+      weeks.push({
+        id: `${formatISO(weekStart)}_${formatISO(weekEnd)}`,
+        year: weekEnd.getFullYear(),
+        month: weekEnd.getMonth(),
+        startDate: formatISO(weekStart),
+        endDate: formatISO(weekEnd),
+        startDateObj: weekStart,
+        endDateObj: weekEnd,
+        isCurrent: isCurrent
+      });
+
+      d.setDate(d.getDate() + 7);
+    }
+
+    // Group by year and month
+    const tree = {};
+    weeks.forEach(w => {
+      const y = w.year;
+      const m = w.month;
+      if (!tree[y]) tree[y] = {};
+      if (!tree[y][m]) tree[y][m] = [];
+      tree[y][m].push(w);
+    });
+
+    // Assign W1, W2, W3... per month in chronological order
+    Object.keys(tree).forEach(y => {
+      Object.keys(tree[y]).forEach(m => {
+        const list = tree[y][m];
+        list.forEach((w, idx) => {
+          const wNum = idx + 1;
+          w.weekNum = wNum;
+          w.label = `W${wNum} - ${formatShortDate(w.endDateObj)}`;
+          w.fullLabel = `W${wNum} - ${formatShortDate(w.endDateObj)} ${w.year}`;
+          w.rangeLabel = `${formatShortDate(w.startDateObj)} – ${formatShortDate(w.endDateObj)}`;
+        });
+      });
+    });
+
+    return { weeks, tree };
+  }
+
+  function renderWeeksTree(targetWeekId) {
+    const treeContainer = document.getElementById("ledgerWeeksTree");
+    if (!treeContainer) return;
+
+    const { weeks, tree } = calculateWeekData(ledgerEndDay);
+    ledgerGeneratedWeeks = weeks;
+
+    // Determine which week should be active
+    let activeWeek = null;
+    if (targetWeekId) {
+      activeWeek = weeks.find(w => w.id === targetWeekId);
+    }
+    if (!activeWeek) {
+      activeWeek = weeks.find(w => w.isCurrent);
+    }
+    if (!activeWeek) {
+      const today = new Date();
+      activeWeek = weeks.filter(w => w.startDateObj <= today).pop() || weeks[weeks.length - 1];
+    }
+
+    if (activeWeek) {
+      ledgerActiveWeekId = activeWeek.id;
+    }
+
+    const todayYear = new Date().getFullYear();
+
+    // Render years descending
+    const sortedYears = Object.keys(tree).map(Number).sort((a, b) => b - a);
+    let html = '';
+
+    sortedYears.forEach(year => {
+      const isYearActive = activeWeek && activeWeek.year === year;
+      const monthsMap = tree[year];
+      // Render months descending
+      const sortedMonths = Object.keys(monthsMap).map(Number).sort((a, b) => b - a);
+
+      let monthsHtml = '';
+      sortedMonths.forEach(month => {
+        const isMonthActive = isYearActive && activeWeek.month === month;
+        const weekList = monthsMap[month];
+
+        let weeksHtml = '';
+        weekList.forEach(w => {
+          const isSelected = activeWeek && activeWeek.id === w.id;
+          weeksHtml += `
+            <button type="button" 
+                    id="btn_week_${w.id}" 
+                    class="ledger-week-btn ${isSelected ? 'active' : ''}" 
+                    onclick="selectLedgerWeek('${w.startDate}', '${w.endDate}', '${w.fullLabel}', this)">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="week-label">${w.label}</span>
+                ${w.isCurrent ? '<span class="week-badge-current">Current</span>' : ''}
+              </div>
+              <div class="week-dates">${w.rangeLabel}</div>
+            </button>
+          `;
+        });
+
+        monthsHtml += `
+          <div id="month_node_${year}_${month}" class="ledger-tree-month ${isMonthActive ? 'expanded' : ''}">
+            <div class="ledger-month-header" onclick="toggleMonthNode(this)">
+              <div style="display: flex; align-items: center;">
+                <i class="fas fa-chevron-right chevron"></i>
+                <span>${LEDGER_MONTHS[month]}</span>
+              </div>
+              <span class="ledger-count-pill">${weekList.length} wks</span>
+            </div>
+            <div class="ledger-month-body">
+              ${weeksHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+        <div id="year_node_${year}" class="ledger-tree-year ${isYearActive ? 'expanded' : ''}">
+          <div class="ledger-year-header" onclick="toggleYearNode(this)">
+            <div style="display: flex; align-items: center;">
+              <i class="fas fa-chevron-right chevron"></i>
+              <span>${year}</span>
+            </div>
+            ${year === todayYear ? '<span class="ledger-count-pill" style="background: rgba(26,77,46,0.12); color: var(--primary); font-weight: 700;">Current Year</span>' : ''}
+          </div>
+          <div class="ledger-year-body">
+            ${monthsHtml}
+          </div>
+        </div>
+      `;
+    });
+
+    treeContainer.innerHTML = html;
+
+    // Load ledger for the active week
+    if (activeWeek) {
+      loadWeeklyLedger(activeWeek.startDate, activeWeek.endDate, activeWeek.fullLabel);
+    }
+  }
+
+  function handleWeekEndDayChange(endDay) {
+    ledgerEndDay = endDay;
+    const startDay = (endDay + 1) % 7;
+    const startName = LEDGER_DAYS[startDay];
+    const endName = LEDGER_DAYS[endDay];
+
+    const notice = document.getElementById("ledgerCycleNotice");
+    if (notice) {
+      notice.innerHTML = `<i class="fas fa-sync-alt fa-xs"></i> Cycle: <strong>${startName} &rarr; ${endName}</strong>`;
+    }
+
+    renderWeeksTree();
+  }
+
+  function toggleYearNode(headerEl) {
+    const node = headerEl.closest('.ledger-tree-year');
+    if (node) node.classList.toggle('expanded');
+  }
+
+  function toggleMonthNode(headerEl) {
+    const node = headerEl.closest('.ledger-tree-month');
+    if (node) node.classList.toggle('expanded');
+  }
+
+  function jumpToCurrentWeek() {
+    const currentWk = ledgerGeneratedWeeks.find(w => w.isCurrent);
+    if (!currentWk) return;
+
+    const yearNode = document.getElementById(`year_node_${currentWk.year}`);
+    if (yearNode) yearNode.classList.add('expanded');
+    const monthNode = document.getElementById(`month_node_${currentWk.year}_${currentWk.month}`);
+    if (monthNode) monthNode.classList.add('expanded');
+
+    const btn = document.getElementById(`btn_week_${currentWk.id}`);
+    if (btn) {
+      selectLedgerWeek(currentWk.startDate, currentWk.endDate, currentWk.fullLabel, btn);
+      btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function selectLedgerWeek(startDate, endDate, label, btnEl) {
+    document.querySelectorAll('.ledger-week-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    ledgerActiveWeekId = `${startDate}_${endDate}`;
+    loadWeeklyLedger(startDate, endDate, label);
+  }
+
+  // --- Modal Open / Close ---
   function openLedgerModal(emp1, emp2) {
     const modal = document.getElementById("ledgerOverlay");
     if (!modal) return;
-    
+
     document.getElementById("ledgerEmp1").value = emp1;
     document.getElementById("ledgerEmp2").value = emp2 || "";
-    
-    // Set default range to last 5 days
-    setLedgerQuickRange(5);
-    
+
+    const select = document.getElementById("ledgerWeekEndDaySelect");
+    if (select) select.value = String(ledgerEndDay);
+
+    const startDay = (ledgerEndDay + 1) % 7;
+    const notice = document.getElementById("ledgerCycleNotice");
+    if (notice) {
+      notice.innerHTML = `<i class="fas fa-sync-alt fa-xs"></i> Cycle: <strong>${LEDGER_DAYS[startDay]} &rarr; ${LEDGER_DAYS[ledgerEndDay]}</strong>`;
+    }
+
+    renderWeeksTree();
+
     modal.classList.add("show");
     document.body.style.overflow = "hidden";
   }
+
   function closeLedgerModal() {
     const modal = document.getElementById("ledgerOverlay");
     if (modal) modal.classList.remove("show");
     document.body.style.overflow = "";
   }
+
   function closeLedgerModalOnOverlay(event) {
     if (event.target.id === "ledgerOverlay") {
       closeLedgerModal();
     }
   }
-  function setLedgerQuickRange(days) {
-    document.querySelectorAll(".ledger-range-btn").forEach(btn => btn.classList.remove("active"));
-    
-    const end = new Date();
-    const start = new Date();
-    
-    if (days === 0) {
-      const btn = document.getElementById("ledgerBtnToday");
-      if (btn) btn.classList.add("active");
-    } else if (days === 1) {
-      const btn = document.getElementById("ledgerBtnYesterday");
-      if (btn) btn.classList.add("active");
-      start.setDate(end.getDate() - 1);
-      end.setDate(end.getDate() - 1);
-    } else if (days === 3) {
-      const btn = document.getElementById("ledgerBtnLast3");
-      if (btn) btn.classList.add("active");
-      start.setDate(end.getDate() - 2);
-    } else if (days === 5) {
-      const btn = document.getElementById("ledgerBtnLast5");
-      if (btn) btn.classList.add("active");
-      start.setDate(end.getDate() - 4);
-    } else if (days === 10) {
-      const btn = document.getElementById("ledgerBtnLast10");
-      if (btn) btn.classList.add("active");
-      start.setDate(end.getDate() - 9);
-    }
-    
-    const formatDateISO = (d) => {
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    };
-    
-    document.getElementById("ledgerStartDate").value = formatDateISO(start);
-    document.getElementById("ledgerEndDate").value = formatDateISO(end);
-    
-    generateLedgerData();
+
+  function printWeeklyLedger() {
+    window.print();
   }
-  async function generateLedgerData() {
+
+  // --- Weekly Ledger Data Generation ---
+  async function loadWeeklyLedger(startDate, endDate, weekLabel) {
     const emp1 = document.getElementById("ledgerEmp1").value;
     const emp2 = document.getElementById("ledgerEmp2").value;
-    const startDate = document.getElementById("ledgerStartDate").value;
-    const endDate = document.getElementById("ledgerEndDate").value;
     const container = document.getElementById("ledgerPaperContainer");
-    
+
     if (!emp1 || !startDate || !endDate) {
       if (container) container.innerHTML = `<div style="color: red; padding: 20px; font-family: monospace;">Error: Missing required parameters.</div>`;
       return;
     }
-    
+
     if (container) {
       container.innerHTML = `
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--text-secondary);">
-          <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 12px;"></i>
-          <div>Generating Ledger...</div>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; color: var(--text-secondary);">
+          <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 12px; color: var(--primary);"></i>
+          <div style="font-weight: 700; font-size: 0.95rem;">Generating Weekly Ledger...</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; font-family: 'Courier New', monospace;">${weekLabel} (${startDate} to ${endDate})</div>
         </div>
       `;
     }
-    
+
     try {
       let url = `/api/ledger?emp1=${emp1}&start_date=${startDate}&end_date=${endDate}`;
       if (emp2) {
         url += `&emp2=${emp2}`;
       }
-      
+
       const res = await fetch(url);
       const data = await res.json();
-      
+
       if (!data.success) {
         if (container) container.innerHTML = `<div style="color: red; padding: 20px; font-family: monospace;">Error: ${data.error || 'Failed to fetch ledger data'}</div>`;
         return;
       }
-      
-      if (!data.dates_list || data.dates_list.length === 0) {
-        if (container) {
-          container.innerHTML = `
-            <div style="text-align: center; color: var(--text-secondary); padding: 40px; font-family: monospace; background: #fffef8; border: 1px dashed var(--border); border-radius: 4px; width: 100%; max-width: 600px; box-sizing: border-box;">
-              <i class="fas fa-book-open" style="font-size: 2.5rem; margin-bottom: 12px; color: rgba(180, 83, 9, 0.4);"></i>
-              <div>No transactions or villages found for this period.</div>
-            </div>
-          `;
-        }
-        return;
-      }
-      
+
       const formatNumber = (num) => {
         const parsed = parseFloat(num);
         if (isNaN(parsed)) return '0';
         return parsed.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
       };
-      
+
       const formatCurrency = (num) => {
         if (typeof window.formatWithRupeeAndCommas === 'function') {
           return window.formatWithRupeeAndCommas(num);
         }
         return '₹' + formatNumber(num);
       };
-      
-      let html = '';
-      let runningBalance = parseFloat(data.opening_balance || 0);
-      
-      data.dates_list.forEach(dateStr => {
-        const dayData = data.dates[dateStr];
-        const opening = runningBalance;
-        
-        const collections = parseFloat(dayData.payments_total || 0);
-        const collections_cash = parseFloat(dayData.payments_cash_total || 0);
-        const collections_upi = parseFloat(dayData.payments_upi_total || 0);
-        
-        const commissions = parseFloat(dayData.loans_total.commission || 0);
-        const commissions_cash = parseFloat(dayData.commissions_cash_total || 0);
-        const commissions_upi = parseFloat(dayData.commissions_upi_total || 0);
-        
-        const office_cash = parseFloat(dayData.office_cash_total || 0);
-        const office_cash_cash = parseFloat(dayData.office_cash_cash_total || 0);
-        const office_cash_upi = parseFloat(dayData.office_cash_upi_total || 0);
-        
-        const adjustments_add = parseFloat(dayData.adjustments_total_add || 0);
-        const adjustments_add_cash = parseFloat(dayData.adjustments_add_cash_total || 0);
-        const adjustments_add_upi = parseFloat(dayData.adjustments_add_upi_total || 0);
-        
-        const base_loans = parseFloat(dayData.loans_total.amount || 0);
-        const loans_cash = parseFloat(dayData.loans_cash_total || 0);
-        const loans_upi = parseFloat(dayData.loans_upi_total || 0);
-        
-        const expenses = parseFloat(dayData.expenses_total || 0);
-        const expenses_cash = parseFloat(dayData.expenses_cash_total || 0);
-        const expenses_upi = parseFloat(dayData.expenses_upi_total || 0);
-        
-        const adjustments_minus = parseFloat(dayData.adjustments_total_minus || 0);
-        const adjustments_minus_cash = parseFloat(dayData.adjustments_minus_cash_total || 0);
-        const adjustments_minus_upi = parseFloat(dayData.adjustments_minus_upi_total || 0);
-        
-        const adjustments_net_cash = adjustments_add_cash - adjustments_minus_cash;
-        const adjustments_net_upi = adjustments_add_upi - adjustments_minus_upi;
 
-        const profits_cash = parseFloat(dayData.profits_cash_total || 0);
-        const profits_upi = parseFloat(dayData.profits_upi_total || 0);
-        const losses_cash = parseFloat(dayData.losses_cash_total || 0);
-        const losses_upi = parseFloat(dayData.losses_upi_total || 0);
-        
-        const category_total_cash = collections_cash + commissions_cash + office_cash_cash + adjustments_add_cash + profits_cash - loans_cash - expenses_cash - adjustments_minus_cash - losses_cash;
-        const category_total_upi = collections_upi + commissions_upi + office_cash_upi + adjustments_add_upi + profits_upi - loans_upi - expenses_upi - adjustments_minus_upi - losses_upi;
-        
-        const net_total_change = category_total_cash + category_total_upi;
-        
-        const closing = opening + collections + commissions + office_cash + adjustments_add + (parseFloat(dayData.profits_total || 0)) - base_loans - expenses - adjustments_minus - (parseFloat(dayData.losses_total || 0));
-        runningBalance = closing;
-        
-        // Loans rows
-        let loansHtml = '';
-        if (dayData.loans.length > 0) {
-          let rows = '';
-          dayData.loans.forEach(loan => {
-            rows += `
-              <tr>
-                <td>${formatNumber(loan.interest)}</td>
-                <td>${loan.ano}</td>
-                <td>${loan.name} [${loan.village_code}]</td>
-                <td style="text-align: right;">${formatNumber(loan.amount)}</td>
-                <td style="text-align: right;">${formatNumber(loan.commission)}</td>
-              </tr>
-            `;
-          });
-          loansHtml = `
-            <table class="ledger-table">
-              <thead>
-                <tr>
-                  <th style="width: 15%;">Comm</th>
-                  <th style="width: 15%;">Ano</th>
-                  <th>Name</th>
-                  <th style="width: 25%; text-align: right;">Amount</th>
-                  <th style="width: 25%; text-align: right;">Rus</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-                <tr class="ledger-total-row">
-                  <td>${formatNumber(dayData.loans_total.interest)}</td>
-                  <td></td>
-                  <td>TOTAL</td>
-                  <td style="text-align: right;">${formatNumber(base_loans)}</td>
-                  <td style="text-align: right;">${formatNumber(dayData.loans_total.commission)}</td>
-                </tr>
-              </tbody>
-            </table>
+      // Aggregations across the entire week
+      const opening = parseFloat(data.opening_balance || 0);
+
+      const allVillages = new Set();
+      const allLoans = [];
+      const allExpenses = [];
+      const allOfficeCash = [];
+      const allAdjustmentsAdd = [];
+      const allAdjustmentsMinus = [];
+
+      let loans_amount_total = 0;
+      let loans_interest_total = 0;
+      let loans_commission_total = 0;
+      let loans_cash_total = 0;
+      let loans_upi_total = 0;
+      let commissions_cash_total = 0;
+      let commissions_upi_total = 0;
+
+      let payments_total = 0;
+      let payments_cash_total = 0;
+      let payments_upi_total = 0;
+      let payments_count = 0;
+
+      let expenses_total = 0;
+      let expenses_cash_total = 0;
+      let expenses_upi_total = 0;
+
+      let office_cash_total = 0;
+      let office_cash_cash_total = 0;
+      let office_cash_upi_total = 0;
+
+      let adjustments_total_add = 0;
+      let adjustments_add_cash_total = 0;
+      let adjustments_add_upi_total = 0;
+
+      let adjustments_total_minus = 0;
+      let adjustments_minus_cash_total = 0;
+      let adjustments_minus_upi_total = 0;
+
+      let profits_total = 0;
+      let profits_cash_total = 0;
+      let profits_upi_total = 0;
+      let losses_total = 0;
+      let losses_cash_total = 0;
+      let losses_upi_total = 0;
+
+      if (data.dates_list && data.dates_list.length > 0) {
+        data.dates_list.forEach(dateStr => {
+          const dayData = data.dates[dateStr];
+          if (!dayData) return;
+
+          // Villages
+          if (dayData.villages && Array.isArray(dayData.villages)) {
+            dayData.villages.forEach(v => allVillages.add(v));
+          }
+
+          // Loans
+          if (dayData.loans && dayData.loans.length > 0) {
+            dayData.loans.forEach(loan => {
+              allLoans.push({
+                ...loan,
+                date_label: dayData.date_label || dateStr
+              });
+            });
+          }
+          if (dayData.loans_total) {
+            loans_amount_total += parseFloat(dayData.loans_total.amount || 0);
+            loans_interest_total += parseFloat(dayData.loans_total.interest || 0);
+            loans_commission_total += parseFloat(dayData.loans_total.commission || 0);
+          }
+          loans_cash_total += parseFloat(dayData.loans_cash_total || 0);
+          loans_upi_total += parseFloat(dayData.loans_upi_total || 0);
+          commissions_cash_total += parseFloat(dayData.commissions_cash_total || 0);
+          commissions_upi_total += parseFloat(dayData.commissions_upi_total || 0);
+
+          // Payments
+          if (dayData.payments && dayData.payments.length > 0) {
+            payments_count += dayData.payments.length;
+          }
+          payments_total += parseFloat(dayData.payments_total || 0);
+          payments_cash_total += parseFloat(dayData.payments_cash_total || 0);
+          payments_upi_total += parseFloat(dayData.payments_upi_total || 0);
+
+          // Expenses
+          if (dayData.expenses && dayData.expenses.length > 0) {
+            dayData.expenses.forEach(exp => {
+              allExpenses.push({
+                ...exp,
+                date_label: dayData.date_label || dateStr
+              });
+            });
+          }
+          expenses_total += parseFloat(dayData.expenses_total || 0);
+          expenses_cash_total += parseFloat(dayData.expenses_cash_total || 0);
+          expenses_upi_total += parseFloat(dayData.expenses_upi_total || 0);
+
+          // Office Cash
+          if (dayData.office_cash && dayData.office_cash.length > 0) {
+            dayData.office_cash.forEach(oc => {
+              allOfficeCash.push({
+                ...oc,
+                date_label: dayData.date_label || dateStr
+              });
+            });
+          }
+          office_cash_total += parseFloat(dayData.office_cash_total || 0);
+          office_cash_cash_total += parseFloat(dayData.office_cash_cash_total || 0);
+          office_cash_upi_total += parseFloat(dayData.office_cash_upi_total || 0);
+
+          // Adjustments Add
+          if (dayData.adjustments_add && dayData.adjustments_add.length > 0) {
+            dayData.adjustments_add.forEach(adj => {
+              allAdjustmentsAdd.push({
+                ...adj,
+                date_label: dayData.date_label || dateStr
+              });
+            });
+          }
+          adjustments_total_add += parseFloat(dayData.adjustments_total_add || 0);
+          adjustments_add_cash_total += parseFloat(dayData.adjustments_add_cash_total || 0);
+          adjustments_add_upi_total += parseFloat(dayData.adjustments_add_upi_total || 0);
+
+          // Adjustments Minus
+          if (dayData.adjustments_minus && dayData.adjustments_minus.length > 0) {
+            dayData.adjustments_minus.forEach(adj => {
+              allAdjustmentsMinus.push({
+                ...adj,
+                date_label: dayData.date_label || dateStr
+              });
+            });
+          }
+          adjustments_total_minus += parseFloat(dayData.adjustments_total_minus || 0);
+          adjustments_minus_cash_total += parseFloat(dayData.adjustments_minus_cash_total || 0);
+          adjustments_minus_upi_total += parseFloat(dayData.adjustments_minus_upi_total || 0);
+
+          // Profits / Losses
+          profits_total += parseFloat(dayData.profits_total || 0);
+          profits_cash_total += parseFloat(dayData.profits_cash_total || 0);
+          profits_upi_total += parseFloat(dayData.profits_upi_total || 0);
+          losses_total += parseFloat(dayData.losses_total || 0);
+          losses_cash_total += parseFloat(dayData.losses_cash_total || 0);
+          losses_upi_total += parseFloat(dayData.losses_upi_total || 0);
+        });
+      }
+
+      const adjustments_net_cash = adjustments_add_cash_total - adjustments_minus_cash_total;
+      const adjustments_net_upi = adjustments_add_upi_total - adjustments_minus_upi_total;
+
+      const category_total_cash = payments_cash_total + commissions_cash_total + office_cash_cash_total + adjustments_add_cash_total + profits_cash_total - loans_cash_total - expenses_cash_total - adjustments_minus_cash_total - losses_cash_total;
+      const category_total_upi = payments_upi_total + commissions_upi_total + office_cash_upi_total + adjustments_add_upi_total + profits_upi_total - loans_upi_total - expenses_upi_total - adjustments_minus_upi_total - losses_upi_total;
+
+      const net_total_change = category_total_cash + category_total_upi;
+      const closing = opening + net_total_change;
+
+      // Loans Table HTML
+      let loansHtml = '';
+      if (allLoans.length > 0) {
+        let rows = '';
+        allLoans.forEach(loan => {
+          const shortDt = loan.date_label ? loan.date_label.substring(0, 5) : '';
+          rows += `
+            <tr>
+              <td class="ledger-date-sub">${shortDt}</td>
+              <td>${formatNumber(loan.interest)}</td>
+              <td>${loan.ano}</td>
+              <td>${loan.name} [${loan.village_code}]</td>
+              <td style="text-align: right;">${formatNumber(loan.amount)}</td>
+              <td style="text-align: right;">${formatNumber(loan.commission)}</td>
+            </tr>
           `;
-        } else {
-          loansHtml = '<div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No loans dispensed today</div>';
-        }
-
-        // Collections summary
-        let collectionsHtml = '';
-        if (dayData.payments.length > 0) {
-          const customerCount = dayData.payments.length;
-          collectionsHtml = `
-            <div class="ledger-section-title" style="margin-bottom: 12px;">
-              <span>Collection Today - ${customerCount} customers</span>
-              <span>Total: ${formatCurrency(collections)}</span>
-            </div>
-          `;
-        } else {
-          collectionsHtml = `
-            <div class="ledger-section-title" style="margin-bottom: 6px;">
-              <span>Collections Today</span>
-              <span>Total: ${formatCurrency(0)}</span>
-            </div>
-            <div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No collections today</div>
-          `;
-        }
-
-        // Expenses rows
-        let expensesHtml = '';
-        if (dayData.expenses.length > 0) {
-          let rows = '';
-          dayData.expenses.forEach(exp => {
-            rows += `
+        });
+        loansHtml = `
+          <table class="ledger-table">
+            <thead>
               <tr>
-                <td>${exp.notes}</td>
-                <td style="text-align: right;">${formatNumber(exp.amount)}</td>
+                <th style="width: 12%;">Date</th>
+                <th style="width: 12%;">Comm</th>
+                <th style="width: 12%;">Ano</th>
+                <th>Name</th>
+                <th style="width: 20%; text-align: right;">Amount</th>
+                <th style="width: 20%; text-align: right;">Rus</th>
               </tr>
-            `;
-          });
-          expensesHtml = `
-            <table class="ledger-table">
-              <thead>
-                <tr>
-                  <th>Notes / Item</th>
-                  <th style="width: 35%; text-align: right;">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-                <tr class="ledger-total-row">
-                  <td>TOTAL EXPENSES</td>
-                  <td style="text-align: right;">${formatNumber(expenses)}</td>
-                </tr>
-              </tbody>
-            </table>
-          `;
-        } else {
-          expensesHtml = '<div style="font-style: italic; padding: 4px 6px; color: rgba(28,25,23,0.5); margin-bottom: 12px;">No expenses today</div>';
-        }
-
-        // Office Cash & Adjustments rows
-        let adjustmentsHtml = '';
-        if (dayData.office_cash.length > 0 || dayData.adjustments_add.length > 0 || dayData.adjustments_minus.length > 0) {
-          let rows = '';
-          dayData.office_cash.forEach(oc => {
-            rows += `
-              <tr>
-                <td>[Office Cash] ${oc.notes}</td>
-                <td style="text-align: right; color: #16a34a;">+${formatNumber(oc.amount)}</td>
+            </thead>
+            <tbody>
+              ${rows}
+              <tr class="ledger-total-row">
+                <td></td>
+                <td>${formatNumber(loans_interest_total)}</td>
+                <td></td>
+                <td>TOTAL</td>
+                <td style="text-align: right;">${formatNumber(loans_amount_total)}</td>
+                <td style="text-align: right;">${formatNumber(loans_commission_total)}</td>
               </tr>
-            `;
-          });
-          dayData.adjustments_add.forEach(adj => {
-            rows += `
-              <tr>
-                <td>[Adjustment Add] ${adj.notes}</td>
-                <td style="text-align: right; color: #16a34a;">+${formatNumber(adj.amount)}</td>
-              </tr>
-            `;
-          });
-          dayData.adjustments_minus.forEach(adj => {
-            rows += `
-              <tr>
-                <td>[Adjustment Minus] ${adj.notes}</td>
-                <td style="text-align: right; color: #dc2626;">-${formatNumber(adj.amount)}</td>
-              </tr>
-            `;
-          });
-          adjustmentsHtml = `
-            <div class="ledger-section-title">
-              <span>Office Cash & Adjustments</span>
-            </div>
-            <table class="ledger-table" style="margin-bottom: 12px;">
-              <thead>
-                <tr>
-                  <th>Transaction Details</th>
-                  <th style="width: 35%; text-align: right;">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-              </tbody>
-            </table>
-          `;
-        }
+            </tbody>
+          </table>
+        `;
+      } else {
+        loansHtml = '<div class="ledger-empty-note">No loans dispensed this week</div>';
+      }
 
-        html += `
-          <div class="ledger-sheet">
-            <div class="ledger-sheet-header">
-              <span>DATE: ${dayData.date_label}</span>
-              <span>VILLAGES: ${dayData.villages.join(', ') || 'N/A'}</span>
-            </div>
-            
-            <div class="ledger-single-value" style="margin-bottom: 12px; border-bottom: 1px dashed rgba(28,25,23,0.15); padding-bottom: 6px;">
-              <strong>OPENING BALANCE:</strong>
-              <strong>${formatCurrency(opening)}</strong>
-            </div>
-            
-            <!-- Loans Section -->
-            <div class="ledger-section-title">
-              <span>Loans Dispensed</span>
-              <span>Total: ${formatCurrency(base_loans)}</span>
-            </div>
-            ${loansHtml}
-            
-            <!-- Collections Section -->
-            ${collectionsHtml}
-
-            <!-- Expenses Section -->
-            <div class="ledger-section-title">
-              <span>Expenses</span>
-              <span>Total: ${formatCurrency(expenses)}</span>
-            </div>
-            ${expensesHtml}
-
-            <!-- Office Cash & Adjustments Sections -->
-            ${adjustmentsHtml}
-
-            <!-- Summary calculation breakdown -->
-            <div class="ledger-summary-box" style="display: flex; flex-direction: column; width: 100%; border-top: 1.5px solid #1c1917; padding-top: 12px; margin-top: 20px; font-family: 'Courier New', Courier, monospace; font-size: 0.82rem; line-height: 1.4; color: #1c1917;">
-              
-              <div style="font-size: 0.7rem; font-weight: bold; margin-bottom: 8px; color: rgba(28,25,23,0.6); letter-spacing: 0.5px; text-transform: uppercase;">
-                CALCULATION BREAKDOWN:
-              </div>
-
-              <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 0.8rem;">
-                <thead>
-                  <tr style="border-bottom: 1px solid #1c1917; font-weight: bold;">
-                    <th style="text-align: left; padding: 4px 6px; width: 40%;">Category</th>
-                    <th style="text-align: right; padding: 4px 6px; width: 30%;">CASH</th>
-                    <th style="text-align: right; padding: 4px 6px; width: 30%;">UPI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Collection</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(collections_cash)}</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(collections_upi)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Rusum</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(commissions_cash)}</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(commissions_upi)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Loans Dispensed</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(loans_cash)}</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(loans_upi)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Expenses</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(expenses_cash)}</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #dc2626;">-${formatNumber(expenses_upi)}</td>
-                  </tr>
-                  ${office_cash > 0 ? `
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Office Cash</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(office_cash_cash)}</td>
-                    <td style="padding: 4px 6px; text-align: right; color: #16a34a;">+${formatNumber(office_cash_upi)}</td>
-                  </tr>
-                  ` : ''}
-                  ${(adjustments_add > 0 || adjustments_minus > 0) ? `
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Adjustments (Net)</td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${adjustments_net_cash >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${adjustments_net_cash >= 0 ? '+' : ''}${formatNumber(adjustments_net_cash)}
-                    </td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${adjustments_net_upi >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${adjustments_net_upi >= 0 ? '+' : ''}${formatNumber(adjustments_net_upi)}
-                    </td>
-                  </tr>
-                  ` : ''}
-                  ${(dayData.profits_total > 0 || dayData.losses_total > 0) ? `
-                  <tr>
-                    <td style="padding: 4px 6px; text-align: left;">Profit / Loss (Net)</td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${profits_cash - losses_cash >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${profits_cash - losses_cash >= 0 ? '+' : ''}${formatNumber(profits_cash - losses_cash)}
-                    </td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${profits_upi - losses_upi >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${profits_upi - losses_upi >= 0 ? '+' : ''}${formatNumber(profits_upi - losses_upi)}
-                    </td>
-                  </tr>
-                  ` : ''}
-                  <tr style="border-top: 1px solid #1c1917; font-weight: bold;">
-                    <td style="padding: 4px 6px; text-align: left;">Total (Cat)</td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${category_total_cash >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${category_total_cash >= 0 ? '+' : ''}${formatNumber(category_total_cash)}
-                    </td>
-                    <td style="padding: 4px 6px; text-align: right; color: ${category_total_upi >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${category_total_upi >= 0 ? '+' : ''}${formatNumber(category_total_upi)}
-                    </td>
-                  </tr>
-                  <tr style="border-top: 1px dashed rgba(28,25,23,0.3); font-weight: bold;">
-                    <td style="padding: 6px 6px; text-align: left;" colspan="2">Net Change (Total)</td>
-                    <td style="padding: 6px 6px; text-align: right; color: ${net_total_change >= 0 ? '#16a34a' : '#dc2626'};">
-                      ${net_total_change >= 0 ? '+' : ''}${formatNumber(net_total_change)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div style="display: flex; justify-content: space-between; border-top: 2px double #1c1917; padding-top: 8px; font-weight: bold; font-size: 0.9rem;">
-                <span>CLOSING BALANCE:</span>
-                <span>${formatCurrency(closing)}</span>
-              </div>
-
-            </div>
+      // Collections HTML
+      let collectionsHtml = '';
+      if (payments_count > 0) {
+        collectionsHtml = `
+          <div class="ledger-section-title" style="margin-bottom: 4px;">
+            <span>Collection This Week &bull; ${payments_count} collections</span>
+            <span>Total: ${formatCurrency(payments_total)}</span>
+          </div>
+          <div class="ledger-header-sub" style="display: flex; gap: 16px; margin-bottom: 12px; padding: 0 4px;">
+            <span>Cash: <strong>${formatCurrency(payments_cash_total)}</strong></span>
+            <span>UPI: <strong>${formatCurrency(payments_upi_total)}</strong></span>
           </div>
         `;
-      });
-      
-      if (container) container.innerHTML = html;
-      
+      } else {
+        collectionsHtml = `
+          <div class="ledger-section-title" style="margin-bottom: 4px;">
+            <span>Collection This Week</span>
+            <span>Total: ${formatCurrency(0)}</span>
+          </div>
+          <div class="ledger-empty-note">No collections this week</div>
+        `;
+      }
+
+      // Expenses Table HTML
+      let expensesHtml = '';
+      if (allExpenses.length > 0) {
+        let rows = '';
+        allExpenses.forEach(exp => {
+          const shortDt = exp.date_label ? exp.date_label.substring(0, 5) : '';
+          const modeBadge = exp.txn_type ? `[${exp.txn_type}] ` : '';
+          rows += `
+            <tr>
+              <td class="ledger-date-sub" style="width: 15%;">${shortDt}</td>
+              <td>${modeBadge}${exp.notes}</td>
+              <td style="text-align: right; width: 30%;">${formatNumber(exp.amount)}</td>
+            </tr>
+          `;
+        });
+        expensesHtml = `
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Notes / Item</th>
+                <th style="width: 30%; text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+              <tr class="ledger-total-row">
+                <td></td>
+                <td>TOTAL EXPENSES</td>
+                <td style="text-align: right;">${formatNumber(expenses_total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      } else {
+        expensesHtml = '<div class="ledger-empty-note">No expenses this week</div>';
+      }
+
+      // Office Cash & Adjustments Table HTML
+      let adjustmentsHtml = '';
+      if (allOfficeCash.length > 0 || allAdjustmentsAdd.length > 0 || allAdjustmentsMinus.length > 0) {
+        let rows = '';
+        allOfficeCash.forEach(oc => {
+          const shortDt = oc.date_label ? oc.date_label.substring(0, 5) : '';
+          rows += `
+            <tr>
+              <td class="ledger-date-sub" style="width: 15%;">${shortDt}</td>
+              <td>[Office Cash ${oc.txn_type || 'CASH'}] ${oc.notes}</td>
+              <td style="text-align: right; width: 30%;" class="ledger-amount-pos">+${formatNumber(oc.amount)}</td>
+            </tr>
+          `;
+        });
+        allAdjustmentsAdd.forEach(adj => {
+          const shortDt = adj.date_label ? adj.date_label.substring(0, 5) : '';
+          rows += `
+            <tr>
+              <td class="ledger-date-sub" style="width: 15%;">${shortDt}</td>
+              <td>[Adjustment Add ${adj.txn_type || 'CASH'}] ${adj.notes}</td>
+              <td style="text-align: right; width: 30%;" class="ledger-amount-pos">+${formatNumber(adj.amount)}</td>
+            </tr>
+          `;
+        });
+        allAdjustmentsMinus.forEach(adj => {
+          const shortDt = adj.date_label ? adj.date_label.substring(0, 5) : '';
+          rows += `
+            <tr>
+              <td class="ledger-date-sub" style="width: 15%;">${shortDt}</td>
+              <td>[Adjustment Minus ${adj.txn_type || 'CASH'}] ${adj.notes}</td>
+              <td style="text-align: right; width: 30%;" class="ledger-amount-neg">-${formatNumber(adj.amount)}</td>
+            </tr>
+          `;
+        });
+        adjustmentsHtml = `
+          <div class="ledger-section-title">
+            <span>Office Cash & Adjustments</span>
+          </div>
+          <table class="ledger-table" style="margin-bottom: 12px;">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Transaction Details</th>
+                <th style="width: 30%; text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        `;
+      }
+
+      const villagesStr = Array.from(allVillages).join(', ') || 'N/A';
+
+      // Assemble 1 Weekly Ledger Sheet
+      const sheetHtml = `
+        <div class="ledger-sheet">
+          <div class="ledger-sheet-header">
+            <div>
+              <div style="font-size: 1.05rem; font-weight: 800; letter-spacing: 0.5px;">WEEKLY GROUP LEDGER &bull; ${weekLabel}</div>
+              <div class="ledger-header-sub">
+                <i class="far fa-calendar-alt"></i> PERIOD: ${startDate} to ${endDate}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div class="ledger-header-sub" style="text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; justify-content: flex-end;">VILLAGES</div>
+              <div style="font-size: 0.85rem; font-weight: 700; margin-top: 2px;">${villagesStr}</div>
+            </div>
+          </div>
+          
+          <div class="ledger-single-value">
+            <strong>OPENING BALANCE (${startDate}):</strong>
+            <strong>${formatCurrency(opening)}</strong>
+          </div>
+          
+          <!-- Loans Section -->
+          <div class="ledger-section-title">
+            <span>Loans Dispensed</span>
+            <span>Total: ${formatCurrency(loans_amount_total)}</span>
+          </div>
+          ${loansHtml}
+          
+          <!-- Collections Section -->
+          ${collectionsHtml}
+
+          <!-- Expenses Section -->
+          <div class="ledger-section-title">
+            <span>Expenses</span>
+            <span>Total: ${formatCurrency(expenses_total)}</span>
+          </div>
+          ${expensesHtml}
+
+          <!-- Office Cash & Adjustments Sections -->
+          ${adjustmentsHtml}
+
+          <!-- Summary calculation breakdown -->
+          <div class="ledger-summary-box">
+            
+            <div class="ledger-summary-title">
+              CALCULATION BREAKDOWN:
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 0.8rem;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border); font-weight: bold;">
+                  <th style="text-align: left; padding: 4px 6px; width: 40%;">Category</th>
+                  <th style="text-align: right; padding: 4px 6px; width: 30%;">CASH</th>
+                  <th style="text-align: right; padding: 4px 6px; width: 30%;">UPI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Collection</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(payments_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(payments_upi_total)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Rusum</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(commissions_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(commissions_upi_total)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Loans Dispensed</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(loans_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(loans_upi_total)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Expenses</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(expenses_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(expenses_upi_total)}</td>
+                </tr>
+                ${office_cash_total > 0 ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Office Cash</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(office_cash_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(office_cash_upi_total)}</td>
+                </tr>
+                ` : ''}
+                ${(adjustments_total_add > 0 || adjustments_total_minus > 0) ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Adjustments (Net)</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${adjustments_net_cash >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${adjustments_net_cash >= 0 ? '+' : ''}${formatNumber(adjustments_net_cash)}
+                  </td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${adjustments_net_upi >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${adjustments_net_upi >= 0 ? '+' : ''}${formatNumber(adjustments_net_upi)}
+                  </td>
+                </tr>
+                ` : ''}
+                ${(profits_total > 0 || losses_total > 0) ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Profit / Loss (Net)</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${profits_cash_total - losses_cash_total >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${profits_cash_total - losses_cash_total >= 0 ? '+' : ''}${formatNumber(profits_cash_total - losses_cash_total)}
+                  </td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${profits_upi_total - losses_upi_total >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${profits_upi_total - losses_upi_total >= 0 ? '+' : ''}${formatNumber(profits_upi_total - losses_upi_total)}
+                  </td>
+                </tr>
+                ` : ''}
+                <tr style="border-top: 1px solid var(--border); font-weight: bold;">
+                  <td style="padding: 4px 6px; text-align: left;">Total (Cat)</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${category_total_cash >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${category_total_cash >= 0 ? '+' : ''}${formatNumber(category_total_cash)}
+                  </td>
+                  <td style="padding: 4px 6px; text-align: right;" class="${category_total_upi >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${category_total_upi >= 0 ? '+' : ''}${formatNumber(category_total_upi)}
+                  </td>
+                </tr>
+                <tr style="border-top: 1px dashed var(--border); font-weight: bold;">
+                  <td style="padding: 6px 6px; text-align: left;" colspan="2">Net Change (Total)</td>
+                  <td style="padding: 6px 6px; text-align: right;" class="${net_total_change >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
+                    ${net_total_change >= 0 ? '+' : ''}${formatNumber(net_total_change)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="ledger-closing-row">
+              <span>CLOSING BALANCE (${endDate}):</span>
+              <span>${formatCurrency(closing)}</span>
+            </div>
+
+          </div>
+        </div>
+      `;
+
+      if (container) container.innerHTML = sheetHtml;
+
     } catch (err) {
       console.error(err);
       if (container) container.innerHTML = `<div style="color: red; padding: 20px; font-family: monospace;">Error executing request: ${err.message}</div>`;
@@ -2314,8 +3066,13 @@
   window.openLedgerModal = openLedgerModal;
   window.closeLedgerModal = closeLedgerModal;
   window.closeLedgerModalOnOverlay = closeLedgerModalOnOverlay;
-  window.setLedgerQuickRange = setLedgerQuickRange;
-  window.generateLedgerData = generateLedgerData;
+  window.handleWeekEndDayChange = handleWeekEndDayChange;
+  window.toggleYearNode = toggleYearNode;
+  window.toggleMonthNode = toggleMonthNode;
+  window.jumpToCurrentWeek = jumpToCurrentWeek;
+  window.selectLedgerWeek = selectLedgerWeek;
+  window.loadWeeklyLedger = loadWeeklyLedger;
+  window.printWeeklyLedger = printWeeklyLedger;
   window.openProfitLossModal = openProfitLossModal;
   window.closeProfitLossModal = closeProfitLossModal;
 

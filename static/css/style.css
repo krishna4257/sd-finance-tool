@@ -6406,3 +6406,9 @@ table.popup-mini-table tbody tr:hover td {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+.btn-loading {
+  opacity: 0.65 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}

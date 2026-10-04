@@ -181,10 +181,11 @@
           <span>Portal · Off</span>
         </span>
 
-        <span id="badgeAdvanceCredit" onclick="openTransferCreditModal()" class="hidden px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 font-bold inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none cursor-pointer hover:bg-emerald-100 transition-colors" title="Click to view & shift advance credit">
+        <button type="button" id="badgeAdvanceCredit" onclick="toggleAdvanceCreditWallet()" class="hidden px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 font-bold inline-flex items-center gap-1.5 shadow-2xs card-shine dark:shadow-none cursor-pointer hover:bg-emerald-100/90 dark:hover:bg-emerald-900/50 active:scale-95 transition-all text-xs" title="Click to open Advance Credit Wallet">
           <i data-lucide="wallet" class="w-3.5 h-3.5 stroke-[2]"></i>
           <span id="advanceCreditBadgeText">Credit: ₹0</span>
-        </span>
+          <i id="advanceCreditBadgeChevron" data-lucide="chevron-down" class="w-3 h-3 stroke-[2.5] text-emerald-600 dark:text-emerald-400 transition-transform duration-200"></i>
+        </button>
 
         <span id="badgeDefaulted" class="hidden px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800/80 text-rose-700 dark:text-rose-300 font-extrabold inline-flex items-center gap-1.5 shadow-2xs">
           <span class="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse"></span>
@@ -247,7 +248,7 @@
   </div>
 
   <!-- ==================== TILE: ADVANCE CREDIT WALLET CARD ==================== -->
-  <div id="advanceCreditWalletCard" class="hidden bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/60 dark:from-emerald-950/20 dark:via-chitDark-surface dark:to-teal-950/20 rounded-[28px] border border-emerald-200/90 dark:border-emerald-800/60 p-6 md:p-7 card-shadow card-shine dark:shadow-none space-y-4">
+  <div id="advanceCreditWalletCard" class="hidden bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/60 dark:from-emerald-950/20 dark:via-chitDark-surface dark:to-teal-950/20 rounded-[28px] border border-emerald-200/90 dark:border-emerald-800/60 p-6 md:p-7 card-shadow card-shine dark:shadow-none space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-3.5">
         <div class="h-11 w-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-2xs">
@@ -273,6 +274,9 @@
         <button type="button" onclick="openCreditLedgerModal()" class="h-9 px-3 rounded-xl border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer" title="View credit generation, settlement, and transfer audit history">
           <i data-lucide="history" class="w-3.5 h-3.5 stroke-[2]"></i>
           <span>Audit Ledger</span>
+        </button>
+        <button type="button" onclick="toggleAdvanceCreditWallet(false)" class="h-9 w-9 rounded-xl border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer" title="Hide Advance Credit Wallet">
+          <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
         </button>
       </div>
     </div>
@@ -1345,12 +1349,48 @@
     renderCreditWalletUI(folioData.credit_wallet || {});
   }
 
+  let isCreditWalletExpanded = false;
+
+  function toggleAdvanceCreditWallet(forceState = null) {
+    const card = document.getElementById('advanceCreditWalletCard');
+    const chevron = document.getElementById('advanceCreditBadgeChevron');
+    const badge = document.getElementById('badgeAdvanceCredit');
+    if (!card) return;
+
+    if (forceState !== null) {
+      isCreditWalletExpanded = forceState;
+    } else {
+      isCreditWalletExpanded = !isCreditWalletExpanded;
+    }
+
+    if (isCreditWalletExpanded) {
+      card.classList.remove('hidden');
+      if (chevron) chevron.classList.add('rotate-180');
+      if (badge) {
+        badge.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-100', 'dark:bg-emerald-900/70');
+        badge.title = 'Click to hide Advance Credit Wallet';
+      }
+      if (window.lucide) { lucide.createIcons(); }
+      setTimeout(() => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 50);
+    } else {
+      card.classList.add('hidden');
+      if (chevron) chevron.classList.remove('rotate-180');
+      if (badge) {
+        badge.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-100', 'dark:bg-emerald-900/70');
+        badge.title = 'Click to open Advance Credit Wallet';
+      }
+    }
+  }
+
   // 3b. Render Advance Credit Wallet Card & Balance Distribution
   function renderCreditWalletUI(wallet) {
     if (!wallet) wallet = {};
     const totalCredit = parseFloat(wallet.total_available_credit || 0);
     const card = document.getElementById('advanceCreditWalletCard');
     const badge = document.getElementById('badgeAdvanceCredit');
+    const chevron = document.getElementById('advanceCreditBadgeChevron');
     const totalEl = document.getElementById('walletTotalCreditDisplay');
     const container = document.getElementById('walletPerChitContainer');
 
@@ -1361,10 +1401,26 @@
         badge.classList.remove('hidden');
         document.getElementById('advanceCreditBadgeText').textContent = `Credit: ${formatINR(totalCredit)}`;
       }
-      if (card) card.classList.remove('hidden');
+      // Keep card hidden by default. Only reveal if user explicitly clicked the credit pill.
+      if (isCreditWalletExpanded && card) {
+        card.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+        if (badge) {
+          badge.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-100', 'dark:bg-emerald-900/70');
+          badge.title = 'Click to hide Advance Credit Wallet';
+        }
+      } else if (card) {
+        card.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        if (badge) {
+          badge.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-100', 'dark:bg-emerald-900/70');
+          badge.title = 'Click to open Advance Credit Wallet';
+        }
+      }
     } else {
       if (badge) badge.classList.add('hidden');
       if (card) card.classList.add('hidden');
+      isCreditWalletExpanded = false;
     }
 
     if (container) {

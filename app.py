@@ -3011,6 +3011,39 @@ def mobile_villages():
 
         villages = cur.fetchall()
 
+        if not villages:
+            # Fallback 1: Check if user is admin or management
+            cur.execute("SELECT level FROM users WHERE id = %s", (user_id,))
+            user_level_row = cur.fetchone()
+            user_level = (user_level_row[0] if user_level_row else "").lower()
+            if user_level in ["admin", "superadmin", "mgmt"]:
+                cur.execute("""
+                    SELECT vid, village_name, village_code, district, interest_rate, cutting_rate
+                    FROM village
+                    ORDER BY village_name
+                """)
+                villages = cur.fetchall()
+            elif eid:
+                # Fallback 2: Check employee village assignment (emp1 or emp2)
+                cur.execute("""
+                    SELECT vid, village_name, village_code, district, interest_rate, cutting_rate
+                    FROM village
+                    WHERE emp1 = %s OR emp2 = %s
+                    ORDER BY village_name
+                """, (eid, eid))
+                villages = cur.fetchall()
+                if villages:
+                    try:
+                        for v_row in villages:
+                            cur.execute("""
+                                INSERT INTO user_village_access (user_id, village_id)
+                                VALUES (%s, %s)
+                                ON CONFLICT DO NOTHING
+                            """, (user_id, v_row[0]))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+
         return {
             "villages": [
                 {
@@ -7122,37 +7155,90 @@ def submit_post_payment():
 
     submitted = 0
     skipped = []
+    seen_in_batch = set()
 
     try:
         for row in rows:
             ano = normalize_account_number(row.get("ano"))
-            amt = Decimal(str(row["amt"]))
-            payment_date = parse_date_input(row["pdt"])
+            if ano is None:
+                skipped.append({**row, "reason": "Invalid or missing account number"})
+                continue
 
-            # ðŸ”¹ Fetch customer
+            try:
+                amt = Decimal(str(row.get("amt", 0)))
+            except Exception:
+                amt = Decimal(0)
+            if amt <= 0:
+                skipped.append({**row, "reason": f"Account #{ano}: Payment amount must be greater than 0"})
+                continue
+
+            payment_date = parse_date_input(row.get("pdt"))
+            if not payment_date:
+                skipped.append({**row, "reason": f"Account #{ano}: Invalid payment date '{row.get('pdt')}'"})
+                continue
+
+            # 🔹 Fetch customer
             cur.execute("""
-                SELECT cid, total_amount, paid_amount
+                SELECT cid, total_amount, paid_amount, start_date
                 FROM customer
                 WHERE vid = %s AND ano = %s
             """, (vid, ano))
 
             cust = cur.fetchone()
             if not cust:
-                skipped.append(row)
+                skipped.append({**row, "reason": f"Account #{ano} not found in database for this village"})
                 continue
 
-            cid, total_amt, paid_amt = cust
+            cid, total_amt, paid_amt, cust_start_date = cust
+
+            # Validate payment_date >= start_date
+            if cust_start_date and payment_date < cust_start_date:
+                skipped.append({
+                    **row,
+                    "reason": f"Account #{ano}: Payment date ({format_date_display(str(payment_date))}) cannot be earlier than start date ({format_date_display(str(cust_start_date))})"
+                })
+                continue
+
+            # 🔹 Intra-batch duplicate check
+            batch_key = (ano, str(payment_date))
+            if batch_key in seen_in_batch:
+                skipped.append({
+                    **row,
+                    "reason": f"Account #{ano}: Multiple payments for date {format_date_display(str(payment_date))} in the same submission"
+                })
+                continue
+            seen_in_batch.add(batch_key)
+
+            # 🔹 Database duplicate check (prevent duplicate payment for same customer on same date)
+            cur.execute("""
+                SELECT pid, amt FROM payment
+                WHERE vid = %s AND ano = %s AND payment_date = %s
+                LIMIT 1
+            """, (vid, ano, payment_date))
+            existing = cur.fetchone()
+            if existing:
+                skipped.append({
+                    **row,
+                    "reason": f"Account #{ano}: Payment already recorded on {format_date_display(str(payment_date))} (Amount: ₹{existing[1]})"
+                })
+                continue
 
             total_amt = Decimal(total_amt)
             paid_amt = Decimal(paid_amt or 0)
 
-            # ðŸ”¹ Insert payment (pid auto-generated)
-            cur.execute("""
-                INSERT INTO payment (cid, vid, eid, ano, amt, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (cid, vid, eid, ano, amt, payment_date))
+            payment_type = str(row.get("payment_type") or "cash").lower()
+            if payment_type not in ("cash", "upi", "partial", "mixed"):
+                payment_type = "cash"
+            cash_amount = Decimal(str(row.get("cash_amount", amt if payment_type == "cash" else 0)))
+            upi_amount = Decimal(str(row.get("upi_amount", amt if payment_type == "upi" else 0)))
 
-            # ðŸ”¹ Recalculate balances (centralized logic)
+            # 🔹 Insert payment (pid auto-generated)
+            cur.execute("""
+                INSERT INTO payment (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount))
+
+            # 🔹 Recalculate balances (centralized logic)
             recalc_customer_balance(cur, cid)
 
             submitted += 1
@@ -7179,13 +7265,16 @@ def submit_post_payment():
                 "eid": eid,
                 "vid": vid,
                 "submitted_count": submitted,
-                "skipped_count": len(skipped)
+                "skipped_count": len(skipped),
+                "skipped_reasons": [s.get("reason") for s in skipped] if skipped else []
             }
         )
 
         return jsonify( 
             success=True,
-            message=f"{submitted} payments posted",
+            message=f"{submitted} payment(s) posted" + (f", {len(skipped)} skipped" if skipped else ""),
+            submitted_count=submitted,
+            skipped_count=len(skipped),
             skipped_rows=skipped
         )
 
@@ -7227,10 +7316,40 @@ def api_customer_save_payments():
         table_payment = "payment" if is_active else "closed_cust_payment"
         table_customer = "customer" if is_active else "closed_cust_account"
 
-        # Get old balance
-        cur.execute(f"SELECT balance_amount FROM {table_customer} WHERE cid = %s", (cid,))
+        # Get old balance and start_date
+        cur.execute(f"SELECT balance_amount, start_date FROM {table_customer} WHERE cid = %s", (cid,))
         row = cur.fetchone()
         old_balance = row[0] if row else Decimal("0")
+        cust_start_date = row[1] if row else None
+
+        # Validate duplicate dates and amounts in incoming payments
+        seen_dates = set()
+        for p in payments:
+            pdt_str = p.get("payment_date")
+            pdt = parse_date_input(pdt_str)
+            if not pdt:
+                return jsonify(success=False, error=f"Invalid payment date: '{pdt_str}'"), 400
+
+            iso_d = str(pdt)
+            if iso_d in seen_dates:
+                return jsonify(
+                    success=False,
+                    error=f"Multiple payments for date {format_date_display(pdt)} are not permitted. Only one payment per date is allowed."
+                ), 400
+            seen_dates.add(iso_d)
+
+            try:
+                amt_val = Decimal(str(p.get("amt", 0)))
+            except Exception:
+                amt_val = Decimal(0)
+            if amt_val <= 0:
+                return jsonify(success=False, error="Payment amount must be greater than 0"), 400
+
+            if cust_start_date and pdt < cust_start_date:
+                return jsonify(
+                    success=False,
+                    error=f"Payment date ({format_date_display(pdt)}) cannot be earlier than customer start date ({format_date_display(cust_start_date)})"
+                ), 400
 
         # Get existing pids for this customer (ignoring NULLs)
         cur.execute(f"SELECT pid FROM {table_payment} WHERE cid = %s AND pid IS NOT NULL", (cid,))
@@ -9341,12 +9460,15 @@ def delete_customer_feed(feed_id):
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT local_uuid, payload FROM customer_feed WHERE feed_id = %s", (feed_id,))
+        cur.execute("SELECT local_uuid, payload, status FROM customer_feed WHERE feed_id = %s FOR UPDATE", (feed_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Customer feed item not found"}), 404
 
-        local_uuid, payload_raw = row
+        local_uuid, payload_raw, feed_status = row
+        if feed_status != "pending":
+            return jsonify({"success": False, "error": f"Cannot delete feed that has already been {feed_status}"}), 400
+
         payload = payload_raw
         if isinstance(payload, str):
             try:
@@ -9425,24 +9547,36 @@ def accept_customer(feed_id):
         return {"success": False, "error": "User not logged properly"}
 
     cur.execute("""
-        SELECT local_uuid, payload
+        SELECT local_uuid, payload, status
         FROM customer_feed
         WHERE feed_id = %s
+        FOR UPDATE
     """, (feed_id,))
 
     row = cur.fetchone()
 
     if not row:
-        return {"success": False, "error": "Feed not found"}
+        cur.close()
+        conn.close()
+        return {"success": False, "error": "Feed not found"}, 404
     
     local_uuid = row[0]
     data = row[1]     # type: ignore # JSON payload
+    feed_status = row[2]
+
+    if feed_status != "pending":
+        cur.close()
+        conn.close()
+        return {"success": False, "error": f"Customer feed item has already been {feed_status}"}, 400
+
     # Ensure payload is dict
     if isinstance(data, str):
         try:
             data = json.loads(data)
         except Exception:
-            return {"success": False, "error": "Invalid payload format"}
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "Invalid payload format"}, 400
 
     # Ensure feed edit tracking tables exist safely
     ensure_feed_tables_exist(cur)
@@ -9475,7 +9609,24 @@ def accept_customer(feed_id):
     try:
         data = normalize_mobile_customer_payload(data)
     except ValueError as exc:
-        return {"success": False, "error": str(exc)}
+        cur.close()
+        conn.close()
+        return {"success": False, "error": str(exc)}, 400
+
+    # Check if (ano, vid) already exists in customer, exactly as in manual web entry (/add_customer)
+    c_ano = data.get("ano")
+    c_vid = data.get("vid")
+    if c_ano is not None and c_vid is not None:
+        cur.execute("""
+            SELECT 1
+            FROM customer
+            WHERE ano = %s AND vid = %s
+            LIMIT 1
+        """, (c_ano, c_vid))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return {"success": False, "error": f"Account number {c_ano} already exists in this village"}, 400
 
     loan_type = data.get("type") # type: ignore
     if loan_type == "weekly":
@@ -9630,6 +9781,10 @@ def accept_customer(feed_id):
 
     cur.execute("SET TIME ZONE 'UTC'")
 
+    # Invalidate cache for this village
+    if data.get("vid"):
+        invalidate_village_health_cache(cur, data.get("vid"), start_date_val)
+
     conn.commit()
     if local_uuid:
         broadcast_submission_event(data.get("vid"), {
@@ -9739,6 +9894,7 @@ def accept_existing_customer_docs(docs_feed_id):
         SELECT vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status
         FROM customer_docs_feed
         WHERE docs_feed_id = %s
+        FOR UPDATE
     """, (docs_feed_id,))
 
     row = cur.fetchone()
@@ -10051,12 +10207,15 @@ def delete_payment_feed(feed_payment_id):
         conn = get_pg_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT local_uuid, payload FROM payment_feed_items WHERE feed_payment_id = %s", (feed_payment_id,))
+        cur.execute("SELECT local_uuid, payload, status FROM payment_feed_items WHERE feed_payment_id = %s FOR UPDATE", (feed_payment_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Payment feed item not found"}), 404
 
-        local_uuid, payload_raw = row
+        local_uuid, payload_raw, feed_status = row
+        if feed_status != "pending":
+            return jsonify({"success": False, "error": f"Cannot delete payment feed item that has already been {feed_status}"}), 400
+
         payload = payload_raw
         if isinstance(payload, str):
             try:
@@ -10222,9 +10381,10 @@ def accept_payment(feed_payment_id):
         return {"success": False, "error": "User not logged properly"}
 
     cur.execute("""
-        SELECT local_uuid, payload
+        SELECT local_uuid, payload, status
         FROM payment_feed_items
         WHERE feed_payment_id = %s
+        FOR UPDATE
     """, (feed_payment_id,))
     row = cur.fetchone()
 
@@ -10235,6 +10395,12 @@ def accept_payment(feed_payment_id):
 
     local_uuid = row[0]
     data = row[1]
+    feed_status = row[2]
+
+    if feed_status != "pending":
+        cur.close()
+        conn.close()
+        return {"success": False, "error": f"Payment feed item has already been {feed_status}"}
     if isinstance(data, str):
         try:
             data = json.loads(data)
@@ -11029,6 +11195,19 @@ def update_payment_record_pg():
             if not cust_row:
                 return jsonify(success=False, error=f"Customer with Account Number {ano} not found in this village"), 404
             new_cid = cust_row[0]
+
+        # Check for duplicate payment date for this customer (another payment on same date)
+        cur.execute(f"""
+            SELECT pid, {amount_col} FROM {table_payment}
+            WHERE vid = %s AND ano = %s AND payment_date = %s AND pid != %s
+            LIMIT 1
+        """, (vid, ano, pdt, pid))
+        dup = cur.fetchone()
+        if dup:
+            return jsonify(
+                success=False,
+                error=f"A payment for Account #{ano} already exists on {format_date_display(str(pdt))} (Amount: ₹{dup[1]}). Only one payment per date is allowed."
+            ), 400
 
         # 3. Update the payment record
         if is_historic:
@@ -13118,6 +13297,11 @@ def api_ledger():
                     adj_add_h += amt
                 elif txn_sub == 'MINUS':
                     adj_minus_h += amt
+            elif txn == 'PROFIT_LOSS':
+                if txn_sub == 'PROFIT':
+                    adj_add_h += amt
+                elif txn_sub == 'LOSS':
+                    adj_minus_h += amt
 
         # Payments before start_date
         cur.execute("""
@@ -13362,6 +13546,29 @@ def api_ledger():
                 elif txn_sub == 'MINUS':
                     dates_data[d_str]["adjustments_minus"].append({
                         "notes": notes or "Adjustment Minus",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_minus"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_minus_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_minus_cash_total"] += amt
+            elif txn == 'PROFIT_LOSS':
+                if txn_sub == 'PROFIT':
+                    dates_data[d_str]["adjustments_add"].append({
+                        "notes": notes or "Profit",
+                        "amount": amt,
+                        "txn_type": txn_type
+                    })
+                    dates_data[d_str]["adjustments_total_add"] += amt
+                    if t_type == 'UPI':
+                        dates_data[d_str]["adjustments_add_upi_total"] += amt
+                    else:
+                        dates_data[d_str]["adjustments_add_cash_total"] += amt
+                elif txn_sub == 'LOSS':
+                    dates_data[d_str]["adjustments_minus"].append({
+                        "notes": notes or "Loss",
                         "amount": amt,
                         "txn_type": txn_type
                     })
@@ -15149,6 +15356,21 @@ def update_payment_date_bulk():
     cur = conn.cursor()
 
     try:
+        # Check if updating would create duplicate payments on new_iso for any customer
+        cur.execute("""
+            SELECT ano FROM payment
+            WHERE vid = %s AND payment_date = %s AND ano IN (
+                SELECT ano FROM payment WHERE vid = %s AND payment_date = %s
+            )
+            LIMIT 5
+        """, (vid, old_iso, vid, new_iso))
+        conflicts = [r[0] for r in cur.fetchall()]
+        if conflicts:
+            return jsonify(
+                success=False,
+                error=f"Cannot bulk update date: Accounts ({', '.join(map(str, conflicts))}) already have payments on {format_date_display(str(new_iso))}."
+            ), 400
+
         cur.execute("""
             UPDATE payment
             SET payment_date = %s
@@ -16069,7 +16291,7 @@ def mobile_app_version():
 # ── Mobile: authenticated APK download ───────────────────────────────────────
 
 @app.route("/api/mobile/app/download/<version>", methods=["GET"])
-@limiter.limit("10 per hour")
+@limiter.limit("60 per hour")
 def mobile_app_download(version):
     """
     GET /api/mobile/app/download/<version>
@@ -16259,6 +16481,21 @@ def admin_app_publish():
         "APK published: %s (versionCode=%s, sha256=%s, force=%s)",
         version, version_code, sha256_hex[:16] + "…", force_update
     )
+
+    # Broadcast instant OTA notification to all connected mobile clients
+    try:
+        broadcast_submission_event(None, {
+            "type": "app_update",
+            "version": version,
+            "version_code": version_code,
+            "min_version_code": min_version_code,
+            "force_update": force_update,
+            "release_notes": release_notes,
+            "url": download_url,
+            "sha256": sha256_hex
+        })
+    except Exception as _b_err:
+        logger.error("admin_app_publish: SSE broadcast failed: %s", _b_err)
 
     return jsonify({
         "success": True,

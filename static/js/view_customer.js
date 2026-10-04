@@ -1780,6 +1780,12 @@ document.addEventListener("DOMContentLoaded", () => {
         td.textContent = formatDate(localPayments[index].payment_date);
         return;
       }
+      const duplicateIndex = localPayments.findIndex((p, idx) => idx !== index && p.payment_date === iso);
+      if (duplicateIndex !== -1) {
+        alert(`A payment for date ${formatDate(iso)} already exists (₹${localPayments[duplicateIndex].amt}). Only one payment per date is allowed.`);
+        td.textContent = formatDate(localPayments[index].payment_date);
+        return;
+      }
       localPayments[index].payment_date = iso;
     } else if (field === "amt") {
       const amt = parseFloat(value.replace(/[^\d.-]/g, "")) || 0;
@@ -2181,6 +2187,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const existingIndex = localPayments.findIndex(p => p.payment_date === isoDate);
+    if (existingIndex !== -1) {
+      alert(`A payment for date ${formatDate(isoDate)} already exists (₹${localPayments[existingIndex].amt}). Only one payment per date is allowed.`);
+      return;
+    }
+
+    const custStartDate = toISO(document.getElementById("popInputStartDate")?.value || "");
+    if (custStartDate && isoDate < custStartDate) {
+      alert(`Payment date (${formatDate(isoDate)}) cannot be earlier than customer start date (${formatDate(custStartDate)}).`);
+      return;
+    }
+
     localPayments.push({
       pid: null,
       ano: activeCustomerAno,
@@ -2198,6 +2216,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Save payments changes action
   document.getElementById("popSavePaymentsBtn").addEventListener("click", async function() {
+    // Validate unique dates before sending request
+    const dateSet = new Set();
+    for (const p of localPayments) {
+      if (dateSet.has(p.payment_date)) {
+        alert(`Duplicate payment date detected: ${formatDate(p.payment_date)}. Each date can only have one payment.`);
+        return;
+      }
+      dateSet.add(p.payment_date);
+    }
+
     // Identify original payments to know what is new/changed later
     const originalKeys = new Set(originalPayments.map(p => `${p.payment_date}_${p.amt}`));
 

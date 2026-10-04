@@ -1,4 +1,43 @@
-function handleFeedAction(url, successMessage, failureFallback, body = null) {
+// Global set of in-flight feed actions to prevent duplicate concurrent submissions
+const _inFlightFeedActions = new Set();
+
+function handleFeedAction(url, successMessage, failureFallback, body = null, triggerBtn = null) {
+  if (_inFlightFeedActions.has(url)) {
+    console.warn("Feed action already processing:", url);
+    return Promise.resolve({ success: false, error: "Action already processing" });
+  }
+
+  // Identify triggering button (passed explicitly or inferred from active event)
+  let btn = triggerBtn;
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
+
+  _inFlightFeedActions.add(url);
+
+  let originalHtml = "";
+  let siblingButtons = [];
+
+  if (btn && btn.tagName === "BUTTON") {
+    originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.style.pointerEvents = "none";
+    btn.classList.add("btn-loading");
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Processing...`;
+
+    // Also disable nearby sibling action buttons in the same action group (e.g., Accept vs Delete)
+    const container = btn.closest(".cust-topbar-actions, .feed-card-actions, .pay-row-actions, td, .posting-actions");
+    if (container) {
+      siblingButtons = Array.from(container.querySelectorAll("button:not([disabled])"));
+      siblingButtons.forEach(b => {
+        if (b !== btn) {
+          b.disabled = true;
+          b.style.pointerEvents = "none";
+        }
+      });
+    }
+  }
+
   const options = {
     method: "POST"
   };
@@ -15,15 +54,44 @@ function handleFeedAction(url, successMessage, failureFallback, body = null) {
         location.reload();
       } else {
         alert(data.error || failureFallback);
+        if (btn) {
+          btn.disabled = false;
+          btn.style.pointerEvents = "";
+          btn.classList.remove("btn-loading");
+          btn.innerHTML = originalHtml;
+        }
+        siblingButtons.forEach(b => {
+          b.disabled = false;
+          b.style.pointerEvents = "";
+        });
       }
+      return data;
     })
     .catch(err => {
       console.error(err);
       alert("Server error");
+      if (btn) {
+        btn.disabled = false;
+        btn.style.pointerEvents = "";
+        btn.classList.remove("btn-loading");
+        btn.innerHTML = originalHtml;
+      }
+      siblingButtons.forEach(b => {
+        b.disabled = false;
+        b.style.pointerEvents = "";
+      });
+      return { success: false, error: "Server error" };
+    })
+    .finally(() => {
+      _inFlightFeedActions.delete(url);
     });
 }
 
-function accept(feed_id) {
+function accept(feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
+
   const dupeDataEl = document.getElementById(`cust-dupe-data-${feed_id}`);
   let dupes = [];
   if (dupeDataEl) {
@@ -43,31 +111,48 @@ function accept(feed_id) {
   return handleFeedAction(
     `/feed/customer/accept/${feed_id}`,
     "Customer accepted successfully",
-    "Failed to accept customer"
+    "Failed to accept customer",
+    null,
+    btn
   );
 }
 
-function acceptPayment(feed_payment_id) {
+function acceptPayment(feed_payment_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   return handleFeedAction(
     `/feed/payment/accept/${feed_payment_id}`,
     "Payment accepted",
-    "Failed to accept payment"
+    "Failed to accept payment",
+    null,
+    btn
   );
 }
 
-function acceptDocs(feed_id) {
+function acceptDocs(feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   return handleFeedAction(
     `/feed/docs/accept/${feed_id}`,
     "Customer documents accepted",
-    "Failed to accept customer documents"
+    "Failed to accept customer documents",
+    null,
+    btn
   );
 }
 
-function acceptExistingDocs(docs_feed_id) {
+function acceptExistingDocs(docs_feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   return handleFeedAction(
     `/feed/existing-docs/accept/${docs_feed_id}`,
     "Documents accepted into customer records",
-    "Failed to accept documents"
+    "Failed to accept documents",
+    null,
+    btn
   );
 }
 
@@ -569,40 +654,58 @@ function saveDocsEdit(e) {
 }
 
 /* Delete Functions */
-function deleteClosure(feed_id) {
+function deleteClosure(feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   if (!confirm("Are you sure you want to delete this closure request entry permanently?")) {
     return;
   }
   return handleFeedAction(
     `/feed/closure/delete/${feed_id}`,
     "Closure request deleted successfully",
-    "Failed to delete closure request"
+    "Failed to delete closure request",
+    null,
+    btn
   );
 }
 
-function deleteCustomer(feed_id) {
+function deleteCustomer(feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   if (!confirm("Are you sure you want to delete this customer registration feed entry permanently?")) {
     return;
   }
   return handleFeedAction(
     `/feed/customer/delete/${feed_id}`,
     "Customer feed entry deleted successfully",
-    "Failed to delete customer feed entry"
+    "Failed to delete customer feed entry",
+    null,
+    btn
   );
 }
 
-function deleteExistingDocs(docs_feed_id) {
+function deleteExistingDocs(docs_feed_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   if (!confirm("Are you sure you want to delete this document review entry permanently?")) {
     return;
   }
   return handleFeedAction(
     `/feed/existing-docs/delete/${docs_feed_id}`,
     "Document review entry deleted successfully",
-    "Failed to delete document review entry"
+    "Failed to delete document review entry",
+    null,
+    btn
   );
 }
 
-function deletePayment(feed_payment_id) {
+function deletePayment(feed_payment_id, btn = null) {
+  if (!btn && typeof window !== "undefined" && window.event && window.event.target) {
+    btn = window.event.target.closest("button") || window.event.target;
+  }
   if (!confirm("Are you sure you want to delete this payment feed entry permanently?")) {
     return;
   }
@@ -611,6 +714,15 @@ function deletePayment(feed_payment_id) {
   if (row) {
     row.style.opacity = "0.4";
     row.style.pointerEvents = "none";
+    row.querySelectorAll("button").forEach(b => {
+      b.disabled = true;
+      b.style.pointerEvents = "none";
+    });
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.style.pointerEvents = "none";
   }
 
   csrfFetch(`/feed/payment/delete/${feed_payment_id}`, {
