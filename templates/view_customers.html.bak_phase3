@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.customer-table-wrapper.hide-col-base_amount .col-base_amount,
+#customerTable.hide-col-base_amount .col-base_amount,
+.customer-table-wrapper.hide-col-cutting_amount .col-cutting_amount,
+#customerTable.hide-col-cutting_amount .col-cutting_amount,
+.customer-table-wrapper.hide-col-interest_amount .col-interest_amount,
+#customerTable.hide-col-interest_amount .col-interest_amount,
+.customer-table-wrapper.hide-col-interest_discount .col-interest_discount,
+#customerTable.hide-col-interest_discount .col-interest_discount {
+  display: none !important;
+}
+.customer-table-wrapper.bulk-close-mode-active .checkbox-column,
+#customerTable.bulk-close-mode-active .checkbox-column {
+  display: table-cell !important;
+}
+
+/* Premium Custom Checkbox styling */
+.checkbox-column input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.checkbox-column input[type="checkbox"]:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
+}
+
+.checkbox-column input[type="checkbox"]:checked {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+}
+
+.checkbox-column input[type="checkbox"]:checked::after {
+  content: "✓";
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Light red highlight and breathing effect for checked rows */
+table.customer-table tbody tr.checked-row td {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.2) !important;
+  animation: row-pulse-red 2s infinite ease-in-out;
+  transition: background-color 0.3s ease;
+}
+
+@keyframes row-pulse-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.06);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.12);
+  }
+  100% {
+    background-color: rgba(239, 68, 68, 0.06);
+  }
+}
+
+@media print {
+  /* Customer page print font weight override */
+  body, table, th, td, span, div, p, h1, h2, h3, h4, h5, h6, input, label, strong, b {
+    font-weight: 700 !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table th, table td {
+    border: 1.5px solid #000000 !important;
+  }
+}
+</style>
+<h2 class="page-title">Customers Table</h2>
+<div class="raised-box">
+  <div class="control-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; flex: 1;">
+      <label class="search-label" style="margin: 0; min-width: 250px; flex: 1; max-width: 400px;">
+        <input type="search" id="searchBox" placeholder="Type account number or name..." autocomplete="off" style="width: 100%;" autofocus>
+      </label>
+      <button onclick="applySearch()" class="neumorphic-btn" style="margin: 0;">Find</button>
+      <button onclick="filterBalanceReport()" class="neumorphic-btn" style="margin: 0;">Report</button>
+      <button onclick="activatePrintLayout()" class="neumorphic-btn" style="margin: 0;">Print</button>
+      <button onclick="toggleBulkCloseMode()" class="neumorphic-btn" id="bulkCloseBtn" style="margin: 0; color: var(--danger); border-color: rgba(220, 38, 38, 0.35);">Close</button>
+      
+      <!-- Columns Config Dropdown -->
+      <div class="dropdown" style="position: relative; display: inline-block;">
+        <button onclick="toggleColumnDropdown()" class="neumorphic-btn" id="colConfigBtn" style="margin: 0;">
+          Columns
+        </button>
+        <div id="columnDropdownMenu" class="dropdown-content card-glass hidden" style="position: absolute; left: 0; top: 100%; z-index: 100; min-width: 220px; padding: 16px; max-height: 320px; overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-lg); border-radius: var(--radius-lg); background: var(--surface);">
+          <h4 style="margin: 0 0 10px 0; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Toggle Columns</h4>
+          <div id="columnCheckboxesList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Rendered in JS -->
+          </div>
+        </div>
+      </div>
+      <button id="recalBtn" class="neumorphic-btn" style="margin: 0; color: var(--danger); border-color: rgba(220, 38, 38, 0.35); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        Recal
+      </button>
+    </div>
+
+    <!-- Premium Sliding Toggle Switch -->
+    <div class="sliding-toggle-container three-way mode-{{ current_mode if current_mode else 'active' }}" id="customerModeToggle">
+      <div class="sliding-toggle-pill"></div>
+      <span class="toggle-label active-label" data-mode="active">Active</span>
+      <span class="toggle-label closed-label" data-mode="closed">Closed</span>
+      <span class="toggle-label historic-label" data-mode="historic">Historic</span>
+    </div>
+  </div>
+  
+  <!-- Interactive Print Setup Bar (Hidden by default) -->
+  <div id="printSetupBar" class="hidden" style="border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; display: flex; flex-direction: column; gap: 12px; width: 100%;">
+    <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+      PRINT SETUP: Select rows using the checkbox column (now visible on the left of the table) and choose columns to print below.
+    </div>
+    <div id="printColumnsSelector" style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px;">
+      <!-- Populated in JS -->
+    </div>
+    <div style="display: flex; gap: 8px; margin-top: 4px;">
+      <button class="neumorphic-btn small" onclick="confirmPrintLayout()">Confirm Print</button>
+      <button class="neumorphic-btn small danger-btn" onclick="cancelPrintLayout()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Responsive Overhauled Analytics Tiles -->
+  <div class="customer-analytics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); gap: 20px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+    
+    <!-- Tile 1: Customers -->
+    <div class="analytics-card card-glass">
+      <div class="card-header">
+        <h3>Customers</h3>
+      </div>
+      <div class="card-stats">
+        <div class="stat-item align-center">
+          <span class="label">Active</span>
+          <span class="value" id="activeCustomersCount">...</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Defaulted</span>
+          <span class="value" id="defaultedCustomersCount">...</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Closed</span>
+          <span class="value" id="closedCustomersCount">...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 2: Balance Amount -->
+    <div class="analytics-card card-glass">
+      <div class="card-header">
+        <h3>Balance Amount</h3>
+      </div>
+      <div class="card-stats" style="flex-direction: column; gap: 10px;">
+        <div style="display: flex; width: 100%; justify-content: space-between;">
+          <div class="stat-item align-center" style="flex: 1;">
+            <span class="label">Active</span>
+            <span class="value" id="activeBalAmt" data-money style="font-size: 1.15rem;">...</span>
+            <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px; display: flex; flex-direction: row; justify-content: center; gap: 6px; flex-wrap: wrap;">
+              <span>P:<strong id="lblActiveBalSplitP">₹0.00</strong></span>
+              <span>I:<strong id="lblActiveBalSplitI">₹0.00</strong></span>
+              <span>R:<strong id="lblActiveBalSplitR">₹0.00</strong></span>
+            </div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item align-center" style="flex: 1;">
+            <span class="label">Defaulted</span>
+            <span class="value" id="defaultedBalAmt" data-money style="font-size: 1.15rem;">...</span>
+            <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px; display: flex; flex-direction: row; justify-content: center; gap: 6px; flex-wrap: wrap;">
+              <span>P:<strong id="lblDefaultedBalSplitP">₹0.00</strong></span>
+              <span>I:<strong id="lblDefaultedBalSplitI">₹0.00</strong></span>
+              <span>R:<strong id="lblDefaultedBalSplitR">₹0.00</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 3: Average Scores -->
+    <div class="analytics-card card-glass">
+      <div class="card-header">
+        <h3>Average Scores</h3>
+      </div>
+      <div class="card-stats">
+        <div class="stat-item align-center">
+          <span class="label">Active</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="activeAvgScore">...</span>
+            <span class="trend-arrow" id="activeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Defaulted</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="defaultedAvgScore">...</span>
+            <span class="trend-arrow" id="defaultedAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item align-center">
+          <span class="label">Complete</span>
+          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+            <span class="value" id="completeAvgScore">...</span>
+            <span class="trend-arrow" id="completeAvgScoreTrend" style="font-size: 0.85rem; font-weight: 800;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+    
+  </div>
+
+<div class="raised-box">
+  <div class="customer-table-wrapper app-table-wrapper hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
+    <table id="customerTable" class="customer-table hide-col-phone_number hide-col-aadhaar_number hide-col-final_frozen_rating hide-col-final_risk_level hide-col-freeze_date hide-col-latitude hide-col-longitude hide-col-eid hide-col-created_at hide-col-status hide-col-base_amount hide-col-cutting_amount hide-col-interest_amount">
+      <thead>
+        <tr>
+          <th class="checkbox-column" style="width: 40px; text-align: center;"><input type="checkbox" onclick="toggleAll(this)" /></th>
+          <th class="col-ano">ANO</th>
+          <th class="col-name">Name</th>
+          <th class="col-start_date">Start DT</th>
+          <th class="col-end_date">End DT</th>
+          <th class="col-total_amount">Total</th>
+          <th class="col-paid_amount">Paid</th>
+          <th class="col-balance_amount">Balance</th>
+          <th class="col-installment_amount">Inst</th>
+          <th class="col-type">Type</th>
+          <th class="col-period">PRD</th>
+          <th class="col-pano">P.NO</th>
+          <th class="col-notes">Notes</th>
+          
+          <!-- Default hidden -->
+          <th class="col-base_amount">Base</th>
+          <th class="col-cutting_amount">Cutting</th>
+          <th class="col-interest_amount">Interest</th>
+          <th class="col-interest_discount">Discount</th>
+          <th class="col-phone_number">Phone</th>
+          <th class="col-aadhaar_number">Aadhaar</th>
+          <th class="col-customer_rating">Rating</th>
+          <th class="col-final_frozen_rating">Frozen Rating</th>
+          <th class="col-final_risk_level">Risk Level</th>
+          <th class="col-freeze_date">Freeze Date</th>
+          <th class="col-latitude">Latitude</th>
+          <th class="col-longitude">Longitude</th>
+          <th class="col-eid">Collector EID</th>
+          <th class="col-created_at">Created At</th>
+          <th class="col-status">Status</th>
+        </tr>
+      </thead>
+      <tbody id="customerTableBody">
+        <tr id="tableLoaderRow">
+          <td colspan="30" style="text-align: center; padding: 48px; background: var(--surface);">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+              <div style="width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: notif-spin 1s linear infinite;"></div>
+              <div style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-secondary);">Loading customers...</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Bulk Close Modal -->
+<div id="bulkCloseModal" class="modal pop-inner-modal" style="display: none;">
+  <div class="modal-content card-glass" style="max-width: 600px; border-radius: 16px; padding: 24px; box-shadow: var(--shadow-lg); max-height: 85vh; display: flex; flex-direction: column;">
+    <span class="close-btn" onclick="closeBulkCloseModal()">&times;</span>
+    <h3 id="bulkCloseModalTitle" style="margin-top: 0; margin-bottom: 12px; font-weight: 700; color: var(--text);">Confirm Bulk Close</h3>
+    <div id="bulkCloseModalMsg" style="margin-bottom: 16px; font-size: 0.9rem; color: var(--text-secondary);">
+      Review the selected customers to close below:
+    </div>
+    
+    <div style="flex: 1; overflow-y: auto; max-height: 45vh; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+        <thead>
+          <tr style="background: var(--surface); border-bottom: 1px solid var(--border);">
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">A/C No</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Name</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Balance</th>
+            <th style="padding: 10px; font-weight: 600; color: var(--text-secondary);">Action</th>
+          </tr>
+        </thead>
+        <tbody id="bulkCloseModalTableBody">
+          <!-- Populated dynamically -->
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+      <button onclick="closeBulkCloseModal()" class="neumorphic-btn small" style="margin: 0;">Cancel</button>
+      <button id="bulkCloseConfirmBtn" class="neumorphic-btn small danger-btn" style="margin: 0; font-weight: bold;">Confirm Close</button>
+    </div>
+  </div>
+</div>
+
+{% include 'customer_popup.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.VILLAGE_INTEREST_RATE = {{ interest_rate }};
+window.VILLAGE_CUTTING_RATE = {{ cutting_rate }};
+window.CURRENT_MODE = "{{ current_mode }}";
+</script>
+<script src="{{ url_for('static', filename='js/view_customer.js') }}?v={{ range(1, 10000) | random }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const searchBox = document.getElementById("searchBox");
+  if (searchBox) {
+    searchBox.focus();
+  }
+
+  const toggleContainer = document.getElementById("customerModeToggle");
+  if (toggleContainer) {
+    toggleContainer.addEventListener("click", function (e) {
+      const label = e.target.closest(".toggle-label");
+      if (label) {
+        const selectedMode = label.getAttribute("data-mode");
+        if (selectedMode) {
+          window.location.href = "/view_customers?mode=" + selectedMode;
+        }
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

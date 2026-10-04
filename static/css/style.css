@@ -2652,9 +2652,16 @@ table.dataTable thead th.sorting_disabled {
   backdrop-filter: blur(8px) !important;
 }
 
+.modal.active,
+.pop-inner-modal.active,
+.pop-inner-modal[style*="display: flex"],
+.pop-inner-modal[style*="display:flex"] {
+  display: flex !important;
+}
+
 .pop-inner-modal .modal-content {
   width: 90% !important;
-  max-width: 650px !important;
+  max-width: 650px;
   border-radius: var(--radius-lg) !important;
   padding: 24px !important;
   margin-top: 5vh !important;
