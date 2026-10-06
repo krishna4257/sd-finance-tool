@@ -1715,12 +1715,26 @@
 </div>
 
 <script>
+  function getCurrentLedgerEndDay() {
+    const e1 = "{{ emp1 }}";
+    const e2 = "{{ emp2 if emp2 and emp2 != 'None' else '' }}";
+    const key = `ledger_end_day_group_${e1}_${e2}`;
+    const saved = localStorage.getItem(key) || localStorage.getItem("ledger_end_day_global");
+    if (saved !== null && saved !== undefined && saved !== "") {
+      const val = parseInt(saved, 10);
+      if (!isNaN(val) && val >= 0 && val <= 6) return val;
+    }
+    if (typeof ledgerEndDay !== 'undefined' && ledgerEndDay !== null) return ledgerEndDay;
+    return 3;
+  }
+
   function loadBreakdownData(type, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
     const emp1 = "{{ emp1 }}";
     const emp2 = "{{ emp2 if emp2 and emp2 != 'None' else '' }}";
+    const endDay = getCurrentLedgerEndDay();
 
     // Set loading spinner
     container.innerHTML = `
@@ -1730,7 +1744,7 @@
       </div>
     `;
 
-    fetch(`/api/cashbag/breakdown?emp1=${emp1}&emp2=${emp2}&type=${type}`)
+    fetch(`/api/cashbag/breakdown?emp1=${emp1}&emp2=${emp2}&type=${type}&end_day=${endDay}`)
       .then(res => res.json())
       .then(data => {
         if (!data.success) {
@@ -1766,6 +1780,7 @@
           else if (type === 'office_cash') emptyMsg = "No office cash entries for this employee group.";
           else if (type === 'expenses') emptyMsg = "No expenses logged for this employee group.";
           else if (type === 'adjustments') emptyMsg = "No adjustments logged for this employee group.";
+          else if (type === 'profit_loss') emptyMsg = "No profit/loss entries for this employee group.";
 
           container.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.5;">
@@ -1792,10 +1807,13 @@
             monthColor = '#dc2626';
           } else if (type === 'adjustments') {
             monthColor = '#2563eb';
+          } else if (type === 'profit_loss') {
+            monthColor = '#10b981';
+            monthIcon = 'fa-chart-line';
           }
 
           let formattedMonthTotal = formatCurrency(month.total_amount);
-          if (type === 'adjustments') {
+          if (type === 'adjustments' || type === 'profit_loss') {
             formattedMonthTotal = formatCurrencySigned(month.total_amount);
           }
 
@@ -1805,7 +1823,7 @@
                 <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s; color: #9ca3af;"></i>
                 <i class="fas ${monthIcon}" style="color: ${monthColor};"></i>
                 <span style="color: #fff;">${month.month_name}</span>
-                <span style="margin-left: auto; color: ${type === 'adjustments' ? (month.total_amount >= 0 ? '#16a34a' : '#dc2626') : monthColor}; font-weight: 700;">${formattedMonthTotal}</span>
+                <span style="margin-left: auto; color: ${(type === 'adjustments' || type === 'profit_loss') ? (month.total_amount >= 0 ? '#16a34a' : '#dc2626') : monthColor}; font-weight: 700;">${formattedMonthTotal}</span>
               </summary>
               <div style="padding-left: 20px; border-left: 2px solid rgba(255,255,255,0.04); margin-left: 20px; margin-top: 8px;">
           `;
@@ -1846,10 +1864,15 @@
               weekBg = 'rgba(37, 99, 235, 0.04)';
               weekBorder = 'rgba(37, 99, 235, 0.04)';
               weekIconColor = '#2563eb';
+            } else if (type === 'profit_loss') {
+              weekBg = 'rgba(16, 185, 129, 0.04)';
+              weekBorder = 'rgba(16, 185, 129, 0.04)';
+              weekIconColor = '#10b981';
+              weekAmountColor = week.total_amount >= 0 ? '#16a34a' : '#dc2626';
             }
 
             let formattedWeekTotal = formatCurrency(week.total_amount);
-            if (type === 'adjustments') {
+            if (type === 'adjustments' || type === 'profit_loss') {
               formattedWeekTotal = formatCurrencySigned(week.total_amount);
               weekAmountColor = week.total_amount >= 0 ? '#16a34a' : '#dc2626';
             }
@@ -1859,7 +1882,7 @@
                 <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 6px 10px; background: ${weekBg}; border-radius: 6px; border: 1px solid ${weekBorder};">
                   <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.75rem; transition: transform 0.2s; color: #9ca3af;"></i>
                   <i class="fas fa-calendar-week" style="color: ${weekIconColor};"></i>
-                  <span style="color: #e2e8f0;">Week of ${week.week_date}</span>
+                  <span style="color: #e2e8f0;">${week.week_label || ('Week of ' + week.week_date)}</span>
                   <span style="margin-left: auto; color: ${weekAmountColor}; font-weight: 700;">${formattedWeekTotal}</span>
                 </summary>
                 <div style="padding-left: 18px; border-left: 2px solid ${weekIconColor}1a; margin-left: 16px; margin-top: 6px;">
@@ -1899,13 +1922,22 @@
                 dayBg = 'rgba(37, 99, 235, 0.03)';
                 dayBorder = 'rgba(37, 99, 235, 0.03)';
                 dayIconColor = '#2563eb';
+              } else if (type === 'profit_loss') {
+                dayBg = 'rgba(16, 185, 129, 0.03)';
+                dayBorder = 'rgba(16, 185, 129, 0.03)';
+                dayIconColor = '#10b981';
+                dayAmountColor = day.total_amount >= 0 ? '#16a34a' : '#dc2626';
               }
 
               let formattedDayTotal = formatCurrency(day.total_amount);
-              if (type === 'adjustments') {
+              if (type === 'adjustments' || type === 'profit_loss') {
                 formattedDayTotal = formatCurrencySigned(day.total_amount);
                 dayAmountColor = day.total_amount >= 0 ? '#16a34a' : '#dc2626';
               }
+
+              const villageBadges = (day.villages && day.villages.length > 0)
+                ? `<span style="font-size: 0.72rem; color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 2px 7px; border-radius: 4px; font-weight: 600; margin-left: 6px; letter-spacing: 0.3px;">${day.villages.join(', ')}</span>`
+                : '';
 
               html += `
                 <details class="tree-node day-node" style="margin-bottom: 8px;">
@@ -1913,6 +1945,7 @@
                     <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
                     <i class="fas fa-calendar-day" style="color: ${dayIconColor};"></i>
                     <span style="color: #cbd5e1;">${day.day_date}</span>
+                    ${villageBadges}
                     <span style="margin-left: auto; color: ${dayAmountColor}; font-weight: 700;">${formattedDayTotal}</span>
                   </summary>
                   <div style="padding-left: 14px; border-left: 2px solid ${dayIconColor}1a; margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
@@ -1934,10 +1967,11 @@
                   <tbody>
                 `;
                 day.customers.forEach(cust => {
+                  const vCodeStr = cust.village_code ? ` <span style="font-size: 0.72rem; color: #9ca3af;">[${cust.village_code}]</span>` : '';
                   html += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
                       <td style="padding: 6px 8px; color: #9ca3af;">${cust.ano}</td>
-                      <td style="padding: 6px 8px; font-weight: 500; color: #fff;">${cust.name}</td>
+                      <td style="padding: 6px 8px; font-weight: 500; color: #fff;">${cust.name}${vCodeStr}</td>
                       <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${headerAmountColor};">${formatCurrency(cust.amount)}</td>
                     </tr>
                   `;
@@ -1995,6 +2029,40 @@
                   const actionBg = isDebit ? 'rgba(220, 38, 38, 0.1)' : 'rgba(22, 163, 74, 0.1)';
                   const actionColor = isDebit ? '#ef4444' : '#22c55e';
                   const actionLabel = isDebit ? 'SUBTRACT' : 'ADD';
+                  const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
+                      <td style="padding: 6px 8px;">
+                        <span style="color: ${actionColor}; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: ${actionBg}; border-radius: 4px;">${actionLabel}</span>
+                      </td>
+                      <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
+                      <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
+                      <td style="padding: 6px 8px; color: #9ca3af;">${txn.created_by || ''}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${amountPrefix}${formatCurrency(txn.amount)}</td>
+                    </tr>
+                  `;
+                });
+              } else if (type === 'profit_loss') {
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Direction</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">User</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.transactions.forEach(txn => {
+                  const isLoss = txn.txn_sub === 'LOSS';
+                  const amountPrefix = isLoss ? '-' : '+';
+                  const amountColor = isLoss ? '#dc2626' : '#10b981';
+                  const actionBg = isLoss ? 'rgba(220, 38, 38, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+                  const actionColor = isLoss ? '#ef4444' : '#10b981';
+                  const actionLabel = isLoss ? 'LOSS' : 'PROFIT';
                   const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
 
                   html += `
@@ -2306,6 +2374,7 @@
   function calculateWeekData(endDay) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayStr = formatISO(today);
 
     const currentYear = today.getFullYear();
     const startYear = Math.min(2024, currentYear - 2);
@@ -2330,14 +2399,19 @@
       const weekStart = new Date(d);
       weekStart.setDate(weekStart.getDate() - 6);
 
-      const isCurrent = (today >= weekStart && today <= weekEnd);
+      const startISO = formatISO(weekStart);
+      const endISO = formatISO(weekEnd);
+
+      // The current week remains active up to and including the end day.
+      // Exactly 1 day after the end day, the current week transitions to the next week.
+      const isCurrent = (todayStr >= startISO && todayStr <= endISO);
 
       weeks.push({
-        id: `${formatISO(weekStart)}_${formatISO(weekEnd)}`,
+        id: `${startISO}_${endISO}`,
         year: weekEnd.getFullYear(),
         month: weekEnd.getMonth(),
-        startDate: formatISO(weekStart),
-        endDate: formatISO(weekEnd),
+        startDate: startISO,
+        endDate: endISO,
         startDateObj: weekStart,
         endDateObj: weekEnd,
         isCurrent: isCurrent
@@ -2465,23 +2539,61 @@
 
     treeContainer.innerHTML = html;
 
+    // Scroll active week into view smoothly after rendering
+    setTimeout(() => {
+      if (activeWeek) {
+        const btn = document.getElementById(`btn_week_${activeWeek.id}`);
+        if (btn) {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    }, 60);
+
     // Load ledger for the active week
     if (activeWeek) {
       loadWeeklyLedger(activeWeek.startDate, activeWeek.endDate, activeWeek.fullLabel);
     }
   }
 
+  function getLedgerStorageKey(emp1, emp2) {
+    const e1 = String(emp1 || document.getElementById("ledgerEmp1")?.value || "");
+    const e2 = String(emp2 || document.getElementById("ledgerEmp2")?.value || "");
+    return `ledger_end_day_group_${e1}_${e2}`;
+  }
+
   function handleWeekEndDayChange(endDay) {
+    if (endDay === ledgerEndDay) return;
+
+    const select = document.getElementById("ledgerWeekEndDaySelect");
+    const oldDayName = LEDGER_DAYS[ledgerEndDay];
+    const newDayName = LEDGER_DAYS[endDay];
+
+    const confirmed = window.confirm(
+      `⚠️ Warning: Changing the Week Ending Day will update the accounting cycle and weekly dates for these villages from ${oldDayName} to ${newDayName}.\n\nAre you sure you want to change it?`
+    );
+
+    if (!confirmed) {
+      if (select) select.value = String(ledgerEndDay);
+      return;
+    }
+
     ledgerEndDay = endDay;
-    const startDay = (endDay + 1) % 7;
+
+    // Persist permanently for this village / employee group so it stays fixed and never resets
+    const storageKey = getLedgerStorageKey();
+    localStorage.setItem(storageKey, String(endDay));
+    localStorage.setItem("ledger_end_day_global", String(endDay));
+
+    const startDay = (ledgerEndDay + 1) % 7;
     const startName = LEDGER_DAYS[startDay];
-    const endName = LEDGER_DAYS[endDay];
+    const endName = LEDGER_DAYS[ledgerEndDay];
 
     const notice = document.getElementById("ledgerCycleNotice");
     if (notice) {
       notice.innerHTML = `<i class="fas fa-sync-alt fa-xs"></i> Cycle: <strong>${startName} &rarr; ${endName}</strong>`;
     }
 
+    ledgerActiveWeekId = null;
     renderWeeksTree();
   }
 
@@ -2523,8 +2635,17 @@
     const modal = document.getElementById("ledgerOverlay");
     if (!modal) return;
 
-    document.getElementById("ledgerEmp1").value = emp1;
+    document.getElementById("ledgerEmp1").value = emp1 || "";
     document.getElementById("ledgerEmp2").value = emp2 || "";
+
+    // Load fixed week ending day for this village / employee group
+    const storageKey = getLedgerStorageKey(emp1, emp2);
+    const savedDay = localStorage.getItem(storageKey) || localStorage.getItem("ledger_end_day_global");
+    if (savedDay !== null && savedDay !== undefined && savedDay !== "") {
+      ledgerEndDay = parseInt(savedDay, 10);
+    } else {
+      ledgerEndDay = 3; // Default Wednesday
+    }
 
     const select = document.getElementById("ledgerWeekEndDaySelect");
     if (select) select.value = String(ledgerEndDay);
@@ -2535,6 +2656,8 @@
       notice.innerHTML = `<i class="fas fa-sync-alt fa-xs"></i> Cycle: <strong>${LEDGER_DAYS[startDay]} &rarr; ${LEDGER_DAYS[ledgerEndDay]}</strong>`;
     }
 
+    // Always reset to current active week when opening modal
+    ledgerActiveWeekId = null;
     renderWeeksTree();
 
     modal.classList.add("show");
@@ -2609,6 +2732,21 @@
       const opening = parseFloat(data.opening_balance || 0);
 
       const allVillages = new Set();
+      const villageCollections = {};
+      if (data.assigned_villages && data.assigned_villages.length > 0) {
+        data.assigned_villages.forEach(v => {
+          villageCollections[v.code] = {
+            code: v.code,
+            name: v.name,
+            count: 0,
+            cash: 0.0,
+            upi: 0.0,
+            total: 0.0
+          };
+          allVillages.add(v.code);
+        });
+      }
+
       const allLoans = [];
       const allExpenses = [];
       const allOfficeCash = [];
@@ -2622,6 +2760,8 @@
       let loans_upi_total = 0;
       let commissions_cash_total = 0;
       let commissions_upi_total = 0;
+      let interest_cash_total = 0;
+      let interest_upi_total = 0;
 
       let payments_total = 0;
       let payments_cash_total = 0;
@@ -2679,10 +2819,46 @@
           loans_upi_total += parseFloat(dayData.loans_upi_total || 0);
           commissions_cash_total += parseFloat(dayData.commissions_cash_total || 0);
           commissions_upi_total += parseFloat(dayData.commissions_upi_total || 0);
+          interest_cash_total += parseFloat(dayData.interest_cash_total || 0);
+          interest_upi_total += parseFloat(dayData.interest_upi_total || 0);
 
           // Payments
           if (dayData.payments && dayData.payments.length > 0) {
             payments_count += dayData.payments.length;
+            dayData.payments.forEach(p => {
+              const vCode = p.village_code || 'OTHER';
+              const vName = p.village_name || vCode;
+              if (!villageCollections[vCode]) {
+                villageCollections[vCode] = {
+                  code: vCode,
+                  name: vName,
+                  count: 0,
+                  cash: 0.0,
+                  upi: 0.0,
+                  total: 0.0
+                };
+              }
+              const pAmt = parseFloat(p.amount || 0);
+              const pType = (p.payment_type || 'cash').toLowerCase();
+              let cAmt = 0.0;
+              let uAmt = 0.0;
+              if (pType === 'cash') {
+                cAmt = pAmt;
+              } else if (pType === 'upi') {
+                uAmt = pAmt;
+              } else if (pType === 'partial') {
+                cAmt = parseFloat(p.cash_amount || 0);
+                uAmt = parseFloat(p.upi_amount || 0);
+              } else {
+                cAmt = pAmt;
+              }
+
+              villageCollections[vCode].count += 1;
+              villageCollections[vCode].cash += cAmt;
+              villageCollections[vCode].upi += uAmt;
+              villageCollections[vCode].total += pAmt;
+              allVillages.add(vCode);
+            });
           }
           payments_total += parseFloat(dayData.payments_total || 0);
           payments_cash_total += parseFloat(dayData.payments_cash_total || 0);
@@ -2753,8 +2929,10 @@
       const adjustments_net_cash = adjustments_add_cash_total - adjustments_minus_cash_total;
       const adjustments_net_upi = adjustments_add_upi_total - adjustments_minus_upi_total;
 
-      const category_total_cash = payments_cash_total + commissions_cash_total + office_cash_cash_total + adjustments_add_cash_total + profits_cash_total - loans_cash_total - expenses_cash_total - adjustments_minus_cash_total - losses_cash_total;
-      const category_total_upi = payments_upi_total + commissions_upi_total + office_cash_upi_total + adjustments_add_upi_total + profits_upi_total - loans_upi_total - expenses_upi_total - adjustments_minus_upi_total - losses_upi_total;
+      // 1. Summing values: Collection, Rusum, Commission, Office Cash (+), Adjustments (+)
+      // 2. Subtracting values: Loans Dispensed (total amount), Expenses, Adjustments (-)
+      const category_total_cash = payments_cash_total + commissions_cash_total + interest_cash_total + office_cash_cash_total + adjustments_add_cash_total + profits_cash_total - loans_cash_total - expenses_cash_total - adjustments_minus_cash_total - losses_cash_total;
+      const category_total_upi = payments_upi_total + commissions_upi_total + interest_upi_total + office_cash_upi_total + adjustments_add_upi_total + profits_upi_total - loans_upi_total - expenses_upi_total - adjustments_minus_upi_total - losses_upi_total;
 
       const net_total_change = category_total_cash + category_total_upi;
       const closing = opening + net_total_change;
@@ -2805,18 +2983,62 @@
         loansHtml = '<div class="ledger-empty-note">No loans dispensed this week</div>';
       }
 
-      // Collections HTML
+      // Collections HTML with Village Breakdown Table
       let collectionsHtml = '';
       if (payments_count > 0) {
+        const sortedVillageCodes = Object.keys(villageCollections).sort();
+        let villageRowsHtml = '';
+        let vTotCount = 0;
+        let vTotCash = 0.0;
+        let vTotUpi = 0.0;
+        let vTotTotal = 0.0;
+
+        sortedVillageCodes.forEach(vCode => {
+          const item = villageCollections[vCode];
+          if (item.count > 0) {
+            vTotCount += item.count;
+            vTotCash += item.cash;
+            vTotUpi += item.upi;
+            vTotTotal += item.total;
+            const displayName = item.name ? `${item.code} (${item.name})` : item.code;
+            villageRowsHtml += `
+              <tr>
+                <td style="font-weight: 600;">${displayName}</td>
+                <td style="text-align: center; color: #9ca3af;">${item.count}</td>
+                <td style="text-align: right; color: #16a34a;">${formatNumber(item.cash)}</td>
+                <td style="text-align: right; color: #3b82f6;">${formatNumber(item.upi)}</td>
+                <td style="text-align: right; font-weight: 700;">${formatNumber(item.total)}</td>
+              </tr>
+            `;
+          }
+        });
+
         collectionsHtml = `
-          <div class="ledger-section-title" style="margin-bottom: 4px;">
+          <div class="ledger-section-title" style="margin-bottom: 6px;">
             <span>Collection This Week &bull; ${payments_count} collections</span>
             <span>Total: ${formatCurrency(payments_total)}</span>
           </div>
-          <div class="ledger-header-sub" style="display: flex; gap: 16px; margin-bottom: 12px; padding: 0 4px;">
-            <span>Cash: <strong>${formatCurrency(payments_cash_total)}</strong></span>
-            <span>UPI: <strong>${formatCurrency(payments_upi_total)}</strong></span>
-          </div>
+          <table class="ledger-table" style="margin-bottom: 14px;">
+            <thead>
+              <tr>
+                <th>Village</th>
+                <th style="width: 14%; text-align: center;">Count</th>
+                <th style="width: 22%; text-align: right;">Cash</th>
+                <th style="width: 22%; text-align: right;">UPI</th>
+                <th style="width: 24%; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${villageRowsHtml}
+              <tr class="ledger-total-row">
+                <td>TOTAL</td>
+                <td style="text-align: center;">${vTotCount}</td>
+                <td style="text-align: right; color: #16a34a;">${formatNumber(vTotCash)}</td>
+                <td style="text-align: right; color: #3b82f6;">${formatNumber(vTotUpi)}</td>
+                <td style="text-align: right; font-weight: 800;">${formatNumber(vTotTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
         `;
       } else {
         collectionsHtml = `
@@ -2919,7 +3141,16 @@
         `;
       }
 
-      const villagesStr = Array.from(allVillages).join(', ') || 'N/A';
+      const villagesStr = (data.assigned_villages && data.assigned_villages.length > 0)
+        ? data.assigned_villages.map(v => v.code).join(', ')
+        : (Array.from(allVillages).join(', ') || 'N/A');
+      if (allVillages.size > 0) {
+        allVillages.forEach(vCode => {
+          if (vCode) {
+            localStorage.setItem('ledger_end_day_village_' + vCode, String(ledgerEndDay));
+          }
+        });
+      }
 
       // Assemble 1 Weekly Ledger Sheet
       const sheetHtml = `
@@ -2989,7 +3220,12 @@
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(commissions_upi_total)}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 4px 6px; text-align: left;">Loans Dispensed</td>
+                  <td style="padding: 4px 6px; text-align: left;">Commission</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(interest_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(interest_upi_total)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Loan Dispensed (total amount)</td>
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(loans_cash_total)}</td>
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(loans_upi_total)}</td>
                 </tr>
@@ -3005,15 +3241,18 @@
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(office_cash_upi_total)}</td>
                 </tr>
                 ` : ''}
-                ${(adjustments_total_add > 0 || adjustments_total_minus > 0) ? `
+                ${adjustments_total_add > 0 ? `
                 <tr>
-                  <td style="padding: 4px 6px; text-align: left;">Adjustments (Net)</td>
-                  <td style="padding: 4px 6px; text-align: right;" class="${adjustments_net_cash >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
-                    ${adjustments_net_cash >= 0 ? '+' : ''}${formatNumber(adjustments_net_cash)}
-                  </td>
-                  <td style="padding: 4px 6px; text-align: right;" class="${adjustments_net_upi >= 0 ? 'ledger-amount-pos' : 'ledger-amount-neg'}">
-                    ${adjustments_net_upi >= 0 ? '+' : ''}${formatNumber(adjustments_net_upi)}
-                  </td>
+                  <td style="padding: 4px 6px; text-align: left;">Adjustment (+)</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(adjustments_add_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(adjustments_add_upi_total)}</td>
+                </tr>
+                ` : ''}
+                ${adjustments_total_minus > 0 ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left;">Adjustment (-)</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(adjustments_minus_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(adjustments_minus_upi_total)}</td>
                 </tr>
                 ` : ''}
                 ${(profits_total > 0 || losses_total > 0) ? `
