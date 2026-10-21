@@ -10,6 +10,9 @@
         <span class="user-avatar-icon"><i class="fas fa-user"></i></span>
         <h2>Customer Dashboard: <span id="popAnoTitle"></span></h2>
         <span id="popStatusBadge" class="status-badge">Active</span>
+        <span id="popCycleBadge" class="status-badge" onclick="openBorrowerLineageModal()" style="display: none; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); font-weight: 700; margin-left: 8px; cursor: pointer;" title="Click to view 360° Borrower Lineage">
+          <i class="fas fa-history" style="margin-right: 4px;"></i><span id="popCycleText">Cycle 1</span>
+        </span>
       </div>
       <button class="popup-close-btn" onclick="closeCustomerPopup()">&times;</button>
     </div>
@@ -26,6 +29,12 @@
           </div>
           <h4 id="popProfileName">Customer Name</h4>
           <p class="profile-subtext">CID: <span id="popCid"></span></p>
+          <p class="profile-subtext" id="popUcidContainer" style="display: none; margin-top: 2px;">
+            Borrower ID: <strong id="popUcid" style="color: var(--primary);"></strong>
+            <button type="button" class="btn-link" onclick="openBorrowerLineageModal()" style="margin-left: 8px; font-size: 11px; color: var(--primary); background: none; border: none; cursor: pointer; text-decoration: underline; font-weight: 600;">
+              <i class="fas fa-stream"></i> 360° Lineage
+            </button>
+          </p>
         </div>
 
         <div class="details-form-grid">
@@ -414,3 +423,56 @@
     </div>
   </div>
 </div>
+
+<!-- Borrower 360° Loan Lineage Modal -->
+<div id="popBorrowerLineageModal" class="modal pop-inner-modal" style="display: none;">
+  <div class="modal-content card-glass" style="max-width: 820px !important; margin-top: 3vh !important; max-height: 90vh; display: flex; flex-direction: column;">
+    <span class="close-btn" onclick="closeBorrowerLineageModal()">&times;</span>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+      <div>
+        <h3 id="popLineageBorrowerName" style="font-size: 1.25rem; font-weight: 700; color: var(--text); margin: 0;">
+          Borrower 360° History
+        </h3>
+        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
+          <span id="popLineageUcidBadge" class="status-badge" style="background: rgba(14, 165, 233, 0.15); color: #0284c7; padding: 2px 8px; font-weight: 700;">UCID-00000</span>
+          <span id="popLineageVillage" style="margin-left: 8px;">Village: -</span>
+          <span id="popLineagePhone" style="margin-left: 8px;">Phone: -</span>
+        </p>
+      </div>
+      <div id="popLineageCyclesPill" class="badge-count" style="font-size: 0.85rem; padding: 6px 14px; border-radius: 20px;">
+        Total Cycles: 1
+      </div>
+    </div>
+
+    <!-- Lifetime Financial Summary Strip -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
+      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Borrowed</div>
+        <div id="popLineageTotalBorrowed" style="font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 4px;">₹0.00</div>
+      </div>
+      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Repaid</div>
+        <div id="popLineageTotalRepaid" style="font-size: 1.1rem; font-weight: 800; color: var(--success); margin-top: 4px;">₹0.00</div>
+      </div>
+      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Current Balance</div>
+        <div id="popLineageActiveBalance" style="font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-top: 4px;">₹0.00</div>
+      </div>
+      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Risk Category</div>
+        <div id="popLineageRiskTier" style="font-size: 1.1rem; font-weight: 800; text-transform: uppercase; margin-top: 4px; color: var(--success);">STANDARD</div>
+      </div>
+    </div>
+
+    <!-- Cycle Timeline Container -->
+    <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);">
+      Loan Cycles Progression (Lineage)
+    </h4>
+    <div class="scroll-table-container" style="max-height: 48vh; overflow-y: auto; flex: 1; border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: rgba(0,0,0,0.02);">
+      <div id="popLineageTimeline" style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+</div>
+

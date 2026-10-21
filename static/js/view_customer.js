@@ -647,7 +647,14 @@ document.addEventListener("DOMContentLoaded", function () {
       } else if (["start_date", "end_date", "freeze_date", "created_at"].includes(key)) {
         td.setAttribute("data-order", formatDateToISO(value));
         td.textContent = formatDate(value);
-      } else if (["ano", "pano", "period"].includes(key)) {
+      } else if (key === "ano") {
+        td.setAttribute("data-order", value);
+        if (customer.cycle_number && customer.cycle_number > 1) {
+          td.innerHTML = `<span>${value}</span> <span class="badge-cycle-chip" title="Repeat Borrower (Cycle ${customer.cycle_number})" style="display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 10px; background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); vertical-align: middle; margin-left: 4px;">C${customer.cycle_number}</span>`;
+        } else {
+          td.textContent = value;
+        }
+      } else if (["pano", "period"].includes(key)) {
         td.setAttribute("data-order", value);
         td.textContent = value;
       } else {
@@ -1280,6 +1287,32 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popCid").textContent = cust.cid;
       document.getElementById("popProfileName").textContent = cust.name;
       document.getElementById("popAvatarInitial").textContent = cust.name ? cust.name.trim().charAt(0).toUpperCase() : "A";
+      
+      // Cycle Lineage Badge & UCID Display
+      const cycleBadge = document.getElementById("popCycleBadge");
+      const cycleText = document.getElementById("popCycleText");
+      const ucidContainer = document.getElementById("popUcidContainer");
+      const ucidElem = document.getElementById("popUcid");
+
+      if (cust.ucid) {
+        if (ucidContainer && ucidElem) {
+          ucidElem.textContent = `UCID-${String(cust.ucid).padStart(5, '0')}`;
+          ucidContainer.style.display = "block";
+        }
+        if (cycleBadge && cycleText) {
+          const totalCycles = (cust.borrower_summary && cust.borrower_summary.total_cycles) ? cust.borrower_summary.total_cycles : (cust.cycle_number || 1);
+          if (totalCycles > 1) {
+            cycleText.textContent = `Cycle ${cust.cycle_number || 1} of ${totalCycles} (Repeat Borrower)`;
+            cycleBadge.style.display = "inline-flex";
+          } else {
+            cycleText.textContent = `Cycle 1`;
+            cycleBadge.style.display = "inline-flex";
+          }
+        }
+      } else {
+        if (ucidContainer) ucidContainer.style.display = "none";
+        if (cycleBadge) cycleBadge.style.display = "none";
+      }
       
       // Load inputs (Auto-Edit defaults)
       document.getElementById("popInputName").value = cust.name || "";
@@ -2747,6 +2780,149 @@ document.addEventListener("DOMContentLoaded", () => {
     deactivateBulkCloseMode();
     showToast("Selected accounts defaulted and closed successfully!");
     setTimeout(() => window.location.reload(), 1000);
+  }
+
+  // ----------------------------------------------------
+  // BORROWER 360° LOAN LINEAGE MODAL
+  // ----------------------------------------------------
+  window.openBorrowerLineageModal = async function () {
+    const modal = document.getElementById("popBorrowerLineageModal");
+    if (!modal) return;
+
+    modal.style.display = "flex";
+    modal.classList.add("active");
+
+    const timelineContainer = document.getElementById("popLineageTimeline");
+    if (timelineContainer) {
+      timelineContainer.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>Loading 360° borrower history...</div>`;
+    }
+
+    try {
+      const popCidElem = document.getElementById("popCid");
+      const popUcidElem = document.getElementById("popUcid");
+      const identifier = activeCustomerCid || 
+                         (popCidElem && popCidElem.textContent.trim()) || 
+                         (popUcidElem && popUcidElem.textContent.trim()) || 
+                         activeCustomerAno;
+
+      if (!identifier) {
+        throw new Error("No customer identifier found.");
+      }
+
+      const res = await fetch(`/api/customer/${encodeURIComponent(identifier)}/borrower_360`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to load borrower profile");
+
+      const b = data.borrower;
+      const cycles = data.cycles || [];
+
+      document.getElementById("popLineageBorrowerName").textContent = b.primary_name;
+      document.getElementById("popLineageUcidBadge").textContent = b.ucid_display;
+      document.getElementById("popLineageVillage").textContent = b.village_name ? `Village: ${b.village_name}` : "";
+      document.getElementById("popLineagePhone").textContent = b.phone_number ? `Phone: ${b.phone_number}` : "";
+      document.getElementById("popLineageCyclesPill").textContent = `Total Cycles: ${b.total_cycles}`;
+
+      document.getElementById("popLineageTotalBorrowed").textContent = formatMoney(b.lifetime_borrowed);
+      document.getElementById("popLineageTotalRepaid").textContent = formatMoney(b.lifetime_repaid);
+      document.getElementById("popLineageActiveBalance").textContent = formatMoney(b.current_active_balance);
+      
+      const riskElem = document.getElementById("popLineageRiskTier");
+      if (riskElem) {
+        riskElem.textContent = (b.customer_risk_tier || "standard").toUpperCase();
+        if (b.customer_risk_tier === "low") {
+          riskElem.style.color = "var(--success)";
+        } else if (b.customer_risk_tier === "high") {
+          riskElem.style.color = "var(--danger)";
+        } else {
+          riskElem.style.color = "var(--primary)";
+        }
+      }
+
+      // Render timeline cards
+      timelineContainer.innerHTML = "";
+      cycles.forEach((c) => {
+        const isCurrent = String(c.cid) === String(activeCustomerCid) || String(c.ano) === String(activeCustomerAno);
+        const card = document.createElement("div");
+        card.className = "subcard-glass";
+        card.style.cssText = `padding: 14px 16px; border-radius: 12px; border: 1.5px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'}; background: ${isCurrent ? 'rgba(14, 165, 233, 0.08)' : 'var(--surface)'}; display: flex; flex-direction: column; gap: 8px; transition: all 0.2s ease;`;
+
+        let tierColor = "#10b981"; // active
+        let tierLabel = "Active";
+        if (c.record_tier === "closed" || c.status === "closed") {
+          tierColor = "#64748b";
+          tierLabel = "Closed (Fully Paid)";
+        } else if (c.record_tier === "historic") {
+          tierColor = "#8b5cf6";
+          tierLabel = "Historic Legacy";
+        }
+        if (c.status === "defaulted" || c.status === "written_off") {
+          tierColor = "#ef4444";
+          tierLabel = "Defaulted";
+        }
+
+        card.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: ${isCurrent ? 'var(--primary)' : 'var(--border)'}; color: #fff; font-weight: 800; font-size: 0.85rem;">
+                C${c.cycle_number}
+              </span>
+              <div>
+                <strong style="font-size: 0.95rem; color: var(--text);">Account #${c.ano}</strong>
+                ${isCurrent ? '<span class="status-badge" style="background: rgba(14, 165, 233, 0.2); color: var(--primary); padding: 1px 6px; font-size: 0.7rem; margin-left: 6px;">CURRENT VIEW</span>' : ''}
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+                  ${c.start_date || 'N/A'} ➔ ${c.end_date || 'N/A'} &bull; Period: ${c.period} (${c.type})
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <span class="status-badge" style="background: ${tierColor}20; color: ${tierColor}; border: 1px solid ${tierColor}40; font-weight: 700;">
+                ${tierLabel}
+              </span>
+              <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-top: 4px;">
+                Rating: <strong style="color: var(--text);">${c.customer_rating ? c.customer_rating.toFixed(1) : '100.0'}</strong>
+              </div>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 0.8rem;">
+            <div>Loan: <strong>${formatMoney(c.total_amount)}</strong></div>
+            <div>Repaid: <strong style="color: var(--success);">${formatMoney(c.paid_amount)}</strong></div>
+            <div>Balance: <strong style="${c.balance_amount > 0 ? 'color: var(--danger);' : ''}">${formatMoney(c.balance_amount)}</strong></div>
+          </div>
+          ${!isCurrent ? `
+            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+              <button class="neumorphic-btn small" onclick="closeBorrowerLineageModal(); openCustomerPopup('${c.cid || c.ano}');" style="font-size: 11px; padding: 4px 10px;">
+                <i class="fas fa-folder-open"></i> Switch to Account #${c.ano}
+              </button>
+            </div>
+          ` : ''}
+        `;
+        timelineContainer.appendChild(card);
+      });
+
+    } catch (err) {
+      if (timelineContainer) {
+        timelineContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--danger);">${err.message || "Failed to load borrower lineage."}</div>`;
+      }
+    }
+  };
+
+  window.closeBorrowerLineageModal = function () {
+    const modal = document.getElementById("popBorrowerLineageModal");
+    if (modal) {
+      modal.style.display = "none";
+      modal.classList.remove("active");
+    }
+  };
+
+  // Close lineage modal on backdrop click
+  const lineageModal = document.getElementById("popBorrowerLineageModal");
+  if (lineageModal) {
+    lineageModal.addEventListener("click", function(e) {
+      if (e.target === lineageModal) {
+        closeBorrowerLineageModal();
+      }
+    });
   }
 
 });
