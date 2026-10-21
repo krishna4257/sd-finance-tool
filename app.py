@@ -668,6 +668,50 @@ def execute_daily_rating_recalculation():
         conn.commit()
         logger.info("Daily rating recalculation completed successfully.")
 
+        # Recalculate lifetime credit scores for all borrowers
+        try:
+            cur.execute("""
+                WITH borrower_stats AS (
+                    SELECT 
+                        ucid,
+                        COUNT(*) AS total_cycles,
+                        COUNT(*) FILTER (WHERE balance_amount <= 0 OR status = 'closed') AS completed_cycles,
+                        BOOL_OR(status IN ('defaulted', 'written_off') OR (balance_amount > 0 AND record_tier IN ('closed', 'historic'))) AS has_default,
+                        ROUND(AVG(COALESCE(customer_rating, 100.0)), 1) AS on_time_ratio,
+                        ROUND(
+                            LEAST(100.0, GREATEST(0.0,
+                                AVG(COALESCE(customer_rating, 100.0))
+                                + LEAST(10.0, COUNT(*) FILTER (WHERE balance_amount <= 0 OR status = 'closed') * 2.0)
+                                - CASE WHEN BOOL_OR(status IN ('defaulted', 'written_off') OR (balance_amount > 0 AND record_tier IN ('closed', 'historic'))) THEN 25.0 ELSE 0.0 END
+                            )), 1
+                        ) AS lifetime_score
+                    FROM v_all_customers
+                    WHERE ucid IS NOT NULL
+                    GROUP BY ucid
+                )
+                UPDATE customer_master cm
+                SET 
+                    total_loan_cycles = bs.total_cycles,
+                    total_cycles_completed = bs.completed_cycles,
+                    lifetime_on_time_ratio = bs.on_time_ratio,
+                    lifetime_credit_score = bs.lifetime_score,
+                    customer_risk_tier = CASE 
+                        WHEN bs.has_default THEN 'default_risk'
+                        WHEN bs.lifetime_score >= 85.0 THEN 'low'
+                        WHEN bs.lifetime_score >= 65.0 THEN 'standard'
+                        WHEN bs.lifetime_score >= 45.0 THEN 'elevated'
+                        ELSE 'high'
+                    END,
+                    updated_at = NOW()
+                FROM borrower_stats bs
+                WHERE cm.ucid = bs.ucid;
+            """)
+            conn.commit()
+            logger.info("Daily lifetime credit score recalculation completed successfully.")
+        except Exception as ex:
+            conn.rollback()
+            logger.error(f"Failed daily lifetime credit score recalculation: {ex}")
+
         # Warm up village health cache for active villages
         try:
             cur.execute("""
@@ -2797,12 +2841,79 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
         WHERE cid = %s
     """, (score, new_final_frozen_rating, new_final_risk_level, new_freeze_date, cid))
 
+    # Update borrower master lifetime metrics if linked to UCID
+    cur.execute("SELECT ucid FROM customer_loan_link WHERE cid = %s LIMIT 1", (cid,))
+    ucid_row = cur.fetchone()
+    lifetime_summary = None
+    if ucid_row and ucid_row[0]:
+        lifetime_summary = update_borrower_lifetime_metrics(cur, ucid_row[0])
+
     return {
         "score": float(score),
         "risk_level": risk_level,
         "freeze_date": new_freeze_date.isoformat() if new_freeze_date else None,
-        "week_details": week_details
+        "week_details": week_details,
+        "lifetime_summary": lifetime_summary
     }
+
+
+def update_borrower_lifetime_metrics(cur, ucid):
+    if not ucid:
+        return None
+    cur.execute("""
+        WITH borrower_stats AS (
+            SELECT 
+                ucid,
+                COUNT(*) AS total_cycles,
+                COUNT(*) FILTER (WHERE balance_amount <= 0 OR status = 'closed') AS completed_cycles,
+                BOOL_OR(status IN ('defaulted', 'written_off') OR (balance_amount > 0 AND record_tier IN ('closed', 'historic'))) AS has_default,
+                ROUND(AVG(COALESCE(customer_rating, 100.0)), 1) AS on_time_ratio,
+                ROUND(
+                    LEAST(100.0, GREATEST(0.0,
+                        AVG(COALESCE(customer_rating, 100.0))
+                        + LEAST(10.0, COUNT(*) FILTER (WHERE balance_amount <= 0 OR status = 'closed') * 2.0)
+                        - CASE WHEN BOOL_OR(status IN ('defaulted', 'written_off') OR (balance_amount > 0 AND record_tier IN ('closed', 'historic'))) THEN 25.0 ELSE 0.0 END
+                    )), 1
+                ) AS lifetime_score,
+                SUM(total_amount) AS lifetime_borrowed,
+                SUM(paid_amount) AS lifetime_repaid,
+                SUM(CASE WHEN balance_amount > 0 AND record_tier = 'active' THEN balance_amount ELSE 0.0 END) AS active_balance
+            FROM v_all_customers
+            WHERE ucid = %s
+            GROUP BY ucid
+        )
+        UPDATE customer_master cm
+        SET 
+            total_loan_cycles = bs.total_cycles,
+            total_cycles_completed = bs.completed_cycles,
+            lifetime_on_time_ratio = bs.on_time_ratio,
+            lifetime_credit_score = bs.lifetime_score,
+            lifetime_borrowed = COALESCE(bs.lifetime_borrowed, 0.0),
+            lifetime_repaid = COALESCE(bs.lifetime_repaid, 0.0),
+            current_active_balance = COALESCE(bs.active_balance, 0.0),
+            customer_risk_tier = CASE 
+                WHEN bs.has_default THEN 'default_risk'
+                WHEN bs.lifetime_score >= 85.0 THEN 'low'
+                WHEN bs.lifetime_score >= 65.0 THEN 'standard'
+                WHEN bs.lifetime_score >= 45.0 THEN 'elevated'
+                ELSE 'high'
+            END,
+            updated_at = NOW()
+        FROM borrower_stats bs
+        WHERE cm.ucid = bs.ucid
+        RETURNING cm.ucid, cm.lifetime_credit_score, cm.customer_risk_tier, cm.total_loan_cycles, cm.lifetime_on_time_ratio, cm.total_cycles_completed;
+    """, (ucid,))
+    row = cur.fetchone()
+    if row:
+        return {
+            "ucid": row[0],
+            "lifetime_credit_score": float(row[1]) if row[1] is not None else 100.0,
+            "customer_risk_tier": row[2],
+            "total_cycles": row[3],
+            "lifetime_on_time_ratio": float(row[4]) if row[4] is not None else 100.0,
+            "total_cycles_completed": row[5] or 0
+        }
+    return None
 
 
 def invalidate_village_health_cache(cur, vid, invalidation_date=None):

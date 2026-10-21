@@ -66,15 +66,7 @@ def prefill_village_cache(vid, vname, cur, force_recalc=False):
     today = datetime.now(KOLKATA).date()
     
     # 1. Determine eval_today
-    cur.execute("""
-        SELECT MAX(payment_date) FROM (
-            SELECT payment_date FROM payment WHERE cid IN (SELECT cid FROM customer WHERE vid = %s)
-            UNION ALL
-            SELECT payment_date FROM closed_cust_payment WHERE cid IN (SELECT cid FROM closed_cust_account WHERE vid = %s)
-            UNION ALL
-            SELECT payment_date FROM historic_payment_data WHERE cid IN (SELECT cid FROM historic_customer_data WHERE vid = %s)
-        ) all_p
-    """, (vid, vid, vid))
+    cur.execute("SELECT MAX(payment_date) FROM v_all_payments WHERE vid = %s", (vid,))
     latest_payment_row = cur.fetchone()
     latest_payment_in_village = latest_payment_row[0] if latest_payment_row else None
     
@@ -108,15 +100,7 @@ def prefill_village_cache(vid, vname, cur, force_recalc=False):
         calculate_village_health_history(vid, cur, view, sub_view, yearly_dates, "yearly")
         
         # Complete/All Range
-        cur.execute("""
-            SELECT MIN(start_date) FROM (
-                SELECT start_date FROM customer WHERE vid = %s
-                UNION ALL
-                SELECT start_date FROM closed_cust_account WHERE vid = %s
-                UNION ALL
-                SELECT start_date FROM historic_customer_data WHERE vid = %s
-            ) all_s
-        """, (vid, vid, vid))
+        cur.execute("SELECT MIN(start_date) FROM v_all_customers WHERE vid = %s", (vid,))
         min_s_row = cur.fetchone()
         min_start = min_s_row[0] if min_s_row and min_s_row[0] else None
         
@@ -177,9 +161,7 @@ def main():
         cur.execute("""
             SELECT DISTINCT v.vid, v.village_name 
             FROM village v
-            WHERE EXISTS (SELECT 1 FROM customer c WHERE c.vid = v.vid)
-               OR EXISTS (SELECT 1 FROM closed_cust_account cc WHERE cc.vid = v.vid)
-               OR EXISTS (SELECT 1 FROM historic_customer_data hc WHERE hc.vid = v.vid)
+            JOIN v_all_customers vac ON v.vid = vac.vid
             ORDER BY v.village_name;
         """)
         villages = cur.fetchall()
