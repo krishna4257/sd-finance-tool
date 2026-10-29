@@ -637,6 +637,83 @@ def debug_session_cookie(response):
 
     return response
 
+def sync_unlinked_customer_accounts(cur):
+    """
+    Finds newly created accounts in `customer` that are not yet in `customer_loan_link`,
+    links repeat borrowers via (vid, pano) to their parent's UCID, and provisions new
+    UCIDs in `customer_master` for brand-new borrowers.
+    """
+    # 1. Link repeat borrowers via pano match
+    cur.execute("""
+        WITH repeat_matches AS (
+            SELECT DISTINCT ON (c.cid)
+                parent.ucid,
+                c.cid,
+                c.vid,
+                c.ano,
+                c.pano,
+                'active'::text AS record_tier,
+                COALESCE(parent.cycle_number, 1) + 1 AS cycle_number,
+                c.start_date,
+                c.end_date,
+                c.total_amount,
+                c.paid_amount,
+                c.balance_amount,
+                c.status
+            FROM customer c
+            JOIN v_all_customers parent 
+              ON c.vid = parent.vid 
+             AND CAST(parent.ano AS TEXT) = TRIM(c.pano) 
+             AND parent.ucid IS NOT NULL
+            LEFT JOIN customer_loan_link cll ON c.cid = cll.cid
+            WHERE cll.cid IS NULL AND c.pano IS NOT NULL AND TRIM(c.pano) != ''
+            ORDER BY c.cid, parent.cycle_number DESC
+        )
+        INSERT INTO customer_loan_link (ucid, cid, vid, ano, pano, record_tier, cycle_number, start_date, end_date, total_amount, paid_amount, balance_amount, status, created_at)
+        SELECT 
+            rm.ucid, rm.cid, rm.vid, rm.ano, rm.pano, rm.record_tier, rm.cycle_number, rm.start_date, rm.end_date, rm.total_amount, rm.paid_amount, rm.balance_amount, rm.status, NOW()
+        FROM repeat_matches rm
+        ON CONFLICT (cid, record_tier) DO NOTHING;
+    """)
+    repeat_linked = cur.rowcount
+
+    # 2. For remaining unlinked active accounts (new borrowers), create master entries and link as cycle 1
+    cur.execute("""
+        WITH unlinked_new AS (
+            SELECT DISTINCT ON (c.vid, c.name)
+                c.cid, c.name, c.vid, c.ano, c.pano, c.phone_number, c.aadhaar_number, c.start_date, c.end_date, c.total_amount, c.paid_amount, c.balance_amount, c.status
+            FROM customer c
+            LEFT JOIN customer_loan_link cll ON c.cid = cll.cid
+            WHERE cll.cid IS NULL
+            ORDER BY c.vid, c.name, c.ano ASC
+        ),
+        inserted_masters AS (
+            INSERT INTO customer_master (
+                primary_name, primary_vid, phone_number, aadhaar_number,
+                total_loan_cycles, first_loan_date, latest_loan_date,
+                lifetime_borrowed, lifetime_repaid, current_active_balance,
+                customer_risk_tier, lifetime_credit_score, lifetime_on_time_ratio, total_cycles_completed
+            )
+            SELECT 
+                un.name, un.vid, un.phone_number, un.aadhaar_number,
+                1, un.start_date, un.start_date,
+                un.total_amount, 0.0, un.balance_amount,
+                'standard', 100.0, 100.0, 0
+            FROM unlinked_new un
+            RETURNING ucid, primary_vid, primary_name
+        )
+        INSERT INTO customer_loan_link (ucid, cid, vid, ano, pano, record_tier, cycle_number, start_date, end_date, total_amount, paid_amount, balance_amount, status, created_at)
+        SELECT 
+            im.ucid, un.cid, un.vid, un.ano, un.pano, 'active', 1, un.start_date, un.end_date, un.total_amount, un.paid_amount, un.balance_amount, un.status, NOW()
+        FROM inserted_masters im
+        JOIN unlinked_new un ON im.primary_vid = un.vid AND im.primary_name = un.name
+        ON CONFLICT (cid, record_tier) DO NOTHING;
+    """)
+    new_linked = cur.rowcount
+
+    return repeat_linked, new_linked
+
+
 def execute_daily_rating_recalculation():
     logger.info("Scheduler task triggered: checking for advisory lock...")
     conn = get_pg_connection()
@@ -650,6 +727,16 @@ def execute_daily_rating_recalculation():
             return
 
         logger.info("Advisory lock acquired. Running daily rating recalculation for active customers...")
+
+        # 0. Sync and link any newly added accounts to customer_master
+        try:
+            repeat_c, new_c = sync_unlinked_customer_accounts(cur)
+            if repeat_c or new_c:
+                logger.info(f"Auto-linked {repeat_c} repeat loans and {new_c} new borrowers.")
+                conn.commit()
+        except Exception as ex:
+            logger.error(f"Failed to auto-link new accounts: {ex}")
+            conn.rollback()
         
         cur.execute("""
             SELECT cid
@@ -712,7 +799,7 @@ def execute_daily_rating_recalculation():
             conn.rollback()
             logger.error(f"Failed daily lifetime credit score recalculation: {ex}")
 
-        # Warm up village health cache for active villages
+        # Warm up default dashboard cache for active villages (non-blocking, only if not cached)
         try:
             cur.execute("""
                 SELECT DISTINCT vid
@@ -720,28 +807,18 @@ def execute_daily_rating_recalculation():
                 WHERE balance_amount > 0
             """)
             active_vids = [row[0] for row in cur.fetchall()]
-            logger.info(f"Pre-populating village health cache for {len(active_vids)} active villages...")
+            logger.info(f"Validating dashboard cache for {len(active_vids)} active villages...")
             for vid in active_vids:
                 try:
-                    for view in ["active", "complete"]:
-                        for sub_view in ["active_only", "active_defaulted"]:
-                            # 1. Warm dashboard cache
-                            with app.test_request_context(query_string={"view": view, "sub_view": sub_view, "force_recalc": "true"}):
-                                session["user_id"] = "scheduler"
-                                session["level"] = "admin"
-                                api_village_behavioral_analytics(vid)
-                                
-                            # 2. Warm health history cache for each range
-                            for time_range in ["weekly", "monthly", "yearly", "complete"]:
-                                with app.test_request_context(query_string={"view": view, "sub_view": sub_view, "range": time_range, "force_recalc": "true"}):
-                                    session["user_id"] = "scheduler"
-                                    session["level"] = "admin"
-                                    api_village_health_history(vid)
-                    logger.info(f"Successfully warmed cache for village vid={vid}")
+                    with app.test_request_context(query_string={"view": "active", "sub_view": "active_only", "force_recalc": "false"}):
+                        session["user_id"] = "scheduler"
+                        session["level"] = "admin"
+                        api_village_behavioral_analytics(vid)
                 except Exception as ex:
-                    logger.error(f"Failed to warm cache for village vid={vid}: {ex}")
+                    logger.debug(f"Dashboard cache warming error vid={vid}: {ex}")
+            logger.info("Daily active village dashboard cache check completed.")
         except Exception as cache_ex:
-            logger.error(f"Error preparing active vids for cache warming: {cache_ex}")
+            logger.error(f"Error checking active village dashboard cache: {cache_ex}")
     except Exception as e:
         conn.rollback()
         logger.error(f"Error in daily scheduler run: {e}")
@@ -5661,14 +5738,9 @@ def api_view_customers_data():
 
         cur.execute("""
             SELECT COALESCE(AVG(customer_rating), 100.0)
-            FROM (
-                SELECT customer_rating FROM closed_cust_account WHERE vid = %s
-                UNION ALL
-                SELECT customer_rating FROM customer WHERE vid = %s
-                UNION ALL
-                SELECT customer_rating FROM historic_customer_data WHERE vid = %s
-            ) complete_group
-        """, (vid, vid, vid))
+            FROM v_all_customers
+            WHERE vid = %s
+        """, (vid,))
         complete_avg_score = float(cur.fetchone()[0])
 
         # Fetch Table Rows based on mode
@@ -5738,39 +5810,17 @@ def api_view_customers_data():
                 else:
                     d[f"{key}_raw"] = ""
 
-        # Global stats list
+        # Global stats list across all tiers via unified view
         cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'active' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
+            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, record_tier AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
                    COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
-            FROM customer WHERE vid = %s
+            FROM v_all_customers WHERE vid = %s
+            ORDER BY ano DESC
         """, (vid,))
-        active_all = cur.fetchall()
-        
-        cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'closed' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
-                   COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
-            FROM closed_cust_account WHERE vid = %s
-        """, (vid,))
-        closed_all = cur.fetchall()
-        
-        cur.execute("""
-            SELECT cid, ano, name, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, period, pano, phone_number, 'historic' AS source, COALESCE(interest_discount, 0.00) AS interest_discount,
-                   COALESCE(base_amount, 0.00) AS base_amount, COALESCE(cutting_amount, 0.00) AS cutting_amount, COALESCE(interest_amount, 0.00) AS interest_amount
-            FROM historic_customer_data WHERE vid = %s
-        """, (vid,))
-        historic_all = cur.fetchall()
-
+        all_stats_rows = cur.fetchall()
         all_cols = ['cid', 'ano', 'name', 'start_date', 'end_date', 'total_amount', 'paid_amount', 'balance_amount', 'installment_amount', 'period', 'pano', 'phone_number', 'source', 'interest_discount', 'base_amount', 'cutting_amount', 'interest_amount']
-        
-        active_dicts = [dict(zip(all_cols, r)) for r in active_all]
-        closed_dicts = [dict(zip(all_cols, r)) for r in closed_all]
-        historic_dicts = [dict(zip(all_cols, r)) for r in historic_all]
-
-        active_dicts = format_customer_ratings_with_trends(cur, active_dicts)
-        closed_dicts = format_customer_ratings_with_trends(cur, closed_dicts)
-        historic_dicts = format_customer_ratings_with_trends(cur, historic_dicts)
-
-        all_stats_list = active_dicts + closed_dicts + historic_dicts
+        all_stats_dicts = [dict(zip(all_cols, r)) for r in all_stats_rows]
+        all_stats_list = format_customer_ratings_with_trends(cur, all_stats_dicts)
 
         def make_serializable(val):
             if isinstance(val, Decimal):
@@ -5843,7 +5893,7 @@ def api_balance_report():
                 longitude,
                 eid,
                 phone_number,
-                'active' AS status,
+                CASE WHEN record_tier = 'active' THEN 'active' ELSE status END AS status,
                 customer_rating,
                 final_frozen_rating,
                 final_risk_level,
@@ -5851,82 +5901,14 @@ def api_balance_report():
                 base_amount,
                 cutting_amount,
                 interest_amount,
-                interest_discount
-            FROM customer
+                interest_discount,
+                record_tier,
+                ucid,
+                cycle_number
+            FROM v_all_customers
             WHERE vid = %s AND balance_amount > 0
-            
-            UNION ALL
-            
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date,
-                base_amount,
-                cutting_amount,
-                interest_amount,
-                interest_discount
-            FROM closed_cust_account
-            WHERE vid = %s AND balance_amount > 0
-            
-            UNION ALL
-            
-            SELECT
-                cid,
-                ano,
-                name,
-                vid,
-                start_date,
-                end_date,
-                total_amount,
-                paid_amount,
-                balance_amount,
-                installment_amount,
-                type,
-                period,
-                pano,
-                created_at,
-                aadhaar_number,
-                notes,
-                latitude,
-                longitude,
-                eid,
-                phone_number,
-                status,
-                customer_rating,
-                final_frozen_rating,
-                final_risk_level,
-                freeze_date,
-                base_amount,
-                cutting_amount,
-                interest_amount,
-                interest_discount
-            FROM historic_customer_data
-            WHERE vid = %s AND balance_amount > 0
-            
             ORDER BY ano DESC
-        """, (vid, vid, vid))
+        """, (vid,))
         
         rows = cur.fetchall()
         headers = [desc[0] for desc in cur.description]
@@ -5965,7 +5947,10 @@ def api_balance_report():
                 "base_amount": float(c.get("base_amount") or 0.0),
                 "cutting_amount": float(c.get("cutting_amount") or 0.0),
                 "interest_amount": float(c.get("interest_amount") or 0.0),
-                "interest_discount": float(c.get("interest_discount") or 0.0)
+                "interest_discount": float(c.get("interest_discount") or 0.0),
+                "source": c.get("record_tier"),
+                "ucid": c.get("ucid"),
+                "cycle_number": c.get("cycle_number")
             })
             
         return jsonify({"success": True, "customers": serialized})
@@ -7567,7 +7552,8 @@ def api_customer_detail_with_payments(account_no):
         borrower_summary = None
         if cust.get("ucid"):
             cur.execute("""
-                SELECT total_loan_cycles, lifetime_borrowed, lifetime_repaid, current_active_balance, customer_risk_tier
+                SELECT total_loan_cycles, lifetime_borrowed, lifetime_repaid, current_active_balance, customer_risk_tier,
+                       lifetime_credit_score, lifetime_on_time_ratio, total_cycles_completed
                 FROM customer_master
                 WHERE ucid = %s
             """, (cust["ucid"],))
@@ -7578,7 +7564,10 @@ def api_customer_detail_with_payments(account_no):
                     "lifetime_borrowed": float(bm_row[1] or 0),
                     "lifetime_repaid": float(bm_row[2] or 0),
                     "current_active_balance": float(bm_row[3] or 0),
-                    "customer_risk_tier": bm_row[4] or "standard"
+                    "customer_risk_tier": bm_row[4] or "standard",
+                    "lifetime_credit_score": float(bm_row[5]) if bm_row[5] is not None else 100.0,
+                    "lifetime_on_time_ratio": float(bm_row[6]) if bm_row[6] is not None else 100.0,
+                    "total_cycles_completed": int(bm_row[7] or 0)
                 }
         cust["borrower_summary"] = borrower_summary
 
@@ -7642,28 +7631,14 @@ def api_recalculate_customer_rating(account_no):
         row = None
         if cid_val is not None:
             cur.execute("""
-                SELECT cid 
-                FROM (
-                    SELECT cid, vid FROM customer
-                    UNION ALL
-                    SELECT cid, vid FROM closed_cust_account
-                    UNION ALL
-                    SELECT cid, vid FROM historic_customer_data
-                ) all_cust
+                SELECT cid FROM v_all_customers
                 WHERE vid = %s AND cid = %s 
                 LIMIT 1
             """, (vid, cid_val))
             row = cur.fetchone()
         if not row:
             cur.execute("""
-                SELECT cid 
-                FROM (
-                    SELECT cid, vid, ano FROM customer
-                    UNION ALL
-                    SELECT cid, vid, ano FROM closed_cust_account
-                    UNION ALL
-                    SELECT cid, vid, ano FROM historic_customer_data
-                ) all_cust
+                SELECT cid FROM v_all_customers
                 WHERE vid = %s AND CAST(ano AS TEXT) = %s 
                 LIMIT 1
             """, (vid, account_no))
@@ -7891,7 +7866,8 @@ def api_customer_borrower_360(identifier):
                 cm.ucid, cm.primary_name, cm.primary_vid, v.village_name, cm.phone_number, cm.aadhaar_number,
                 cm.total_loan_cycles, cm.first_loan_date, cm.latest_loan_date,
                 cm.lifetime_borrowed, cm.lifetime_repaid, cm.current_active_balance,
-                cm.customer_risk_tier, cm.created_at
+                cm.customer_risk_tier, cm.created_at,
+                cm.lifetime_credit_score, cm.lifetime_on_time_ratio, cm.total_cycles_completed
             FROM customer_master cm
             LEFT JOIN village v ON cm.primary_vid = v.vid
             WHERE cm.ucid = %s
@@ -7914,7 +7890,10 @@ def api_customer_borrower_360(identifier):
             "lifetime_borrowed": float(master_row[9] or 0.0),
             "lifetime_repaid": float(master_row[10] or 0.0),
             "current_active_balance": float(master_row[11] or 0.0),
-            "customer_risk_tier": master_row[12] or "standard"
+            "customer_risk_tier": master_row[12] or "standard",
+            "lifetime_credit_score": float(master_row[14]) if master_row[14] is not None else 100.0,
+            "lifetime_on_time_ratio": float(master_row[15]) if master_row[15] is not None else 100.0,
+            "total_cycles_completed": int(master_row[16] or 0)
         }
 
         # 2. Fetch All Cycles for this borrower from v_all_customers
@@ -11656,19 +11635,11 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         return history_payload
 
     # 3. Cache Miss: We need to calculate ratings for the uncached dates
-    # Fetch all customers of the village (all three tables)
+    # Fetch all customers of the village via unified view
     cur.execute("""
-        SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, origin
-        FROM (
-            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, 'customer' as origin, vid
-            FROM customer
-            UNION ALL
-            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, 'closed' as origin, vid
-            FROM closed_cust_account
-            UNION ALL
-            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, 'historic' as origin, vid
-            FROM historic_customer_data
-        ) all_cust
+        SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status,
+               CASE WHEN record_tier = 'active' THEN 'customer' ELSE record_tier END AS origin
+        FROM v_all_customers
         WHERE vid = %s
     """, (vid,))
     all_cust_rows = cur.fetchall()
@@ -11677,17 +11648,13 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
 
     cids = [r[0] for r in all_cust_rows]
     
-    # Fetch all payments for these customers
+    # Fetch all payments for these customers via unified view
     cur.execute("""
-        SELECT cid, amt, payment_date FROM (
-            SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
-            UNION ALL
-            SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
-            UNION ALL
-            SELECT cid, amount AS amt, payment_date FROM historic_payment_data WHERE cid = ANY(%s)
-        ) all_pmts
+        SELECT cid, amt, payment_date
+        FROM v_all_payments
+        WHERE cid = ANY(%s)
         ORDER BY payment_date
-    """, (cids, cids, cids))
+    """, (cids,))
     pmt_rows = cur.fetchall()
     
     # Pre-parse payment dates and convert amounts to Decimal to avoid conversion overhead in loops
@@ -11790,17 +11757,43 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
 
         return customer["payments"][:idx]
 
-    # For each date in calc_dates_needed, calculate ratings for all active/defaulted customers
+    # Precompute bal_at_d for all customers across calc_dates_needed
+    for d in calc_dates_needed:
+        for c in cust_list:
+            if c["start_dt"] > d:
+                continue
+            total_paid_at_d = get_total_paid_until(c["cumulative_payments"], d)
+            balance_by_date[d][c["cid"]] = max(0.0, c["total_amount"] - total_paid_at_d)
+
+    # For each date in calc_dates_needed, calculate ratings only for active/defaulted customers in pool
     for d in calc_dates_needed:
         for c in cust_list:
             if c["start_dt"] > d:
                 continue
             
+            bal_at_d = balance_by_date[d][c["cid"]]
+            
+            # Optimization: Skip closed/historic accounts that have 0 balance on date d if evaluating active view
+            if view == "active":
+                if sub_view == "active_only" and c["origin"] != "customer":
+                    ratings_by_date[d][c["cid"]] = 100.0
+                    statuses_by_date[d][c["cid"]] = "Closed"
+                    overdue_6_w_by_date[d][c["cid"]] = False
+                    continue
+                elif sub_view == "active_defaulted" and c["origin"] != "customer" and bal_at_d <= 0:
+                    ratings_by_date[d][c["cid"]] = 100.0
+                    statuses_by_date[d][c["cid"]] = "Closed"
+                    overdue_6_w_by_date[d][c["cid"]] = False
+                    continue
+            elif bal_at_d <= 0 and c["origin"] != "customer":
+                # For complete view: if loan is already closed with 0 balance, rating is fixed/closed
+                ratings_by_date[d][c["cid"]] = 100.0
+                statuses_by_date[d][c["cid"]] = "Closed"
+                overdue_6_w_by_date[d][c["cid"]] = False
+                continue
+
             # Filter payments before or equal to d
             sub_payments = get_payments_until(c, d)
-            total_paid_at_d = get_total_paid_until(c["cumulative_payments"],d)
-            bal_at_d = max(0.0,c["total_amount"] - total_paid_at_d)
-            balance_by_date[d][c["cid"]] = bal_at_d
             # Run rating details
             score_h, risk_h, pen_h, wk_details_h = calculate_customer_rating_details(
                 c["start_dt"], c["end_dt"], c["installment_amount"], c["period"], sub_payments, bal_at_d, loan_type=c["type"], today=d
@@ -12040,15 +12033,7 @@ def api_village_health_history(vid):
             cur.execute("DELETE FROM village_health_cache WHERE vid = %s", (vid,))
 
         # Shifting reference date to mitigate posting lag
-        cur.execute("""
-            SELECT MAX(payment_date) FROM (
-                SELECT payment_date FROM payment WHERE cid IN (SELECT cid FROM customer WHERE vid = %s)
-                UNION ALL
-                SELECT payment_date FROM closed_cust_payment WHERE cid IN (SELECT cid FROM closed_cust_account WHERE vid = %s)
-                UNION ALL
-                SELECT payment_date FROM historic_payment_data WHERE cid IN (SELECT cid FROM historic_customer_data WHERE vid = %s)
-            ) all_p
-        """, (vid, vid, vid))
+        cur.execute("SELECT MAX(payment_date) FROM v_all_payments WHERE vid = %s", (vid,))
         latest_payment_row = cur.fetchone()
         latest_payment_in_village = latest_payment_row[0] if latest_payment_row else None
         
@@ -12071,15 +12056,7 @@ def api_village_health_history(vid):
         elif time_range == "yearly":
             dates = [eval_today - timedelta(days=30 * i) for i in range(11, -1, -1)]
         else: # complete view
-            cur.execute("""
-                SELECT MIN(start_date) FROM (
-                    SELECT start_date FROM customer WHERE vid = %s
-                    UNION ALL
-                    SELECT start_date FROM closed_cust_account WHERE vid = %s
-                    UNION ALL
-                    SELECT start_date FROM historic_customer_data WHERE vid = %s
-                ) all_s
-            """, (vid, vid, vid))
+            cur.execute("SELECT MIN(start_date) FROM v_all_customers WHERE vid = %s", (vid,))
             min_s_row = cur.fetchone()
             min_start = min_s_row[0] if min_s_row and min_s_row[0] else None
             if min_start:
@@ -12169,15 +12146,7 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
     is_monthly = is_village_monthly(vid, cur)
 
     # Shifting reference date to mitigate posting lag
-    cur.execute("""
-        SELECT MAX(payment_date) FROM (
-            SELECT payment_date FROM payment WHERE cid IN (SELECT cid FROM customer WHERE vid = %s)
-            UNION ALL
-            SELECT payment_date FROM closed_cust_payment WHERE cid IN (SELECT cid FROM closed_cust_account WHERE vid = %s)
-            UNION ALL
-            SELECT payment_date FROM historic_payment_data WHERE cid IN (SELECT cid FROM historic_customer_data WHERE vid = %s)
-        ) all_p
-    """, (vid, vid, vid))
+    cur.execute("SELECT MAX(payment_date) FROM v_all_payments WHERE vid = %s", (vid,))
     latest_payment_row = cur.fetchone()
     latest_payment_in_village = latest_payment_row[0] if latest_payment_row else None
     
@@ -12213,44 +12182,26 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
                 return cached_metrics
             # Otherwise fall through and recompute (stale/wrong format)
 
-    # Get evaluated customers for the village
+    # Get evaluated customers for the village via unified view
     if view == "active":
         if sub_view == "active_only":
             cur.execute("""
                 SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, customer_rating
-                FROM customer
-                WHERE vid = %s
+                FROM v_all_customers
+                WHERE vid = %s AND record_tier = 'active'
             """, (vid,))
         else: # active_defaulted
             cur.execute("""
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, customer_rating
-                FROM (
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid, customer_rating
-                    FROM customer
-                    UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
-                    FROM closed_cust_account
-                    WHERE balance_amount > 0
-                    UNION ALL
-                    SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
-                    FROM historic_customer_data
-                    WHERE balance_amount > 0
-                ) all_cust
-                WHERE vid = %s
+                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 
+                       CASE WHEN record_tier = 'active' THEN 'active' ELSE status END AS status, customer_rating
+                FROM v_all_customers
+                WHERE vid = %s AND (record_tier = 'active' OR balance_amount > 0)
             """, (vid,))
     else: # complete view
         cur.execute("""
-            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, customer_rating
-            FROM (
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 'active' AS status, vid, customer_rating
-                FROM customer
-                UNION ALL
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
-                FROM closed_cust_account
-                UNION ALL
-                SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, status, vid, customer_rating
-                FROM historic_customer_data
-            ) all_cust
+            SELECT cid, name, ano, start_date, end_date, total_amount, paid_amount, balance_amount, installment_amount, type, period, phone_number, 
+                   CASE WHEN record_tier = 'active' THEN 'active' ELSE status END AS status, customer_rating
+            FROM v_all_customers
             WHERE vid = %s
         """, (vid,))
 
@@ -12264,17 +12215,13 @@ def compute_and_cache_behavioral_analytics(vid, cur, view, sub_view, today, forc
 
     cids = [r[0] for r in cust_rows]
     
-    # Get all payments for these customers
+    # Get all payments for these customers via unified view
     cur.execute("""
-        SELECT cid, amt, payment_date FROM (
-            SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
-            UNION ALL
-            SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
-            UNION ALL
-            SELECT cid, amount AS amt, payment_date FROM historic_payment_data WHERE cid = ANY(%s)
-        ) all_pmts
+        SELECT cid, amt, payment_date
+        FROM v_all_payments
+        WHERE cid = ANY(%s)
         ORDER BY payment_date
-    """, (cids, cids, cids))
+    """, (cids,))
     pmt_rows = cur.fetchall()
     
     payments_by_cid = {cid: [] for cid in cids}
@@ -12697,60 +12644,38 @@ def api_dashboard_analytics(vid):
         interest_rate = float(rates_row[0]) if rates_row and rates_row[0] is not None else 0.0
         cutting_rate = float(rates_row[1]) if rates_row and rates_row[1] is not None else 0.0
 
-        # 1. Fetch active customers
-        cur.execute("""
-            SELECT cid, start_date, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
-            FROM customer
-            WHERE vid = %s
-        """, (vid,))
-        active_rows = cur.fetchall()
-
-        # 2. Fetch closed customers
+        # Fetch customers across all tiers via unified view
         if view == "active":
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
-                FROM closed_cust_account
-                WHERE vid = %s AND balance_amount > 0
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier
+                FROM v_all_customers
+                WHERE vid = %s AND (record_tier = 'active' OR balance_amount > 0)
             """, (vid,))
         else:
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
-                FROM closed_cust_account
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier
+                FROM v_all_customers
                 WHERE vid = %s
             """, (vid,))
-        closed_rows = cur.fetchall()
-
-        # 2b. Fetch historic customers
-        if view == "active":
-            cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
-                FROM historic_customer_data
-                WHERE vid = %s AND balance_amount > 0
-            """, (vid,))
-        else:
-            cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount
-                FROM historic_customer_data
-                WHERE vid = %s
-            """, (vid,))
-        historic_rows = cur.fetchall()
+        all_cust_rows = cur.fetchall()
+        
+        # Partition into active (8 fields without closed_at) and closed/historic (9 fields with closed_at)
+        active_rows = [(r[0], r[1], r[3], r[4], r[5], r[6], r[7], r[8]) for r in all_cust_rows if r[9] == 'active']
+        closed_rows = [r[:9] for r in all_cust_rows if r[9] == 'closed']
+        historic_rows = [r[:9] for r in all_cust_rows if r[9] == 'historic']
 
         # Gather all customer IDs to fetch their payments
-        cids = [r[0] for r in active_rows] + [r[0] for r in closed_rows] + [r[0] for r in historic_rows]
+        cids = [r[0] for r in all_cust_rows]
 
         payments_by_cid = {}
         if cids:
-            # 3. Fetch all payments
+            # 3. Fetch all payments via unified view
             cur.execute("""
-                SELECT cid, amt, payment_date FROM (
-                    SELECT cid, amt, payment_date FROM payment WHERE cid = ANY(%s)
-                    UNION ALL
-                    SELECT cid, amt, payment_date FROM closed_cust_payment WHERE cid = ANY(%s)
-                    UNION ALL
-                    SELECT cid, amount AS amt, payment_date FROM historic_payment_data WHERE cid = ANY(%s)
-                ) all_pmts
+                SELECT cid, amt, payment_date
+                FROM v_all_payments
+                WHERE cid = ANY(%s)
                 ORDER BY payment_date
-            """, (cids, cids, cids))
+            """, (cids,))
             pmt_rows = cur.fetchall()
             for cid, amt, p_date in pmt_rows:
                 if cid not in payments_by_cid:

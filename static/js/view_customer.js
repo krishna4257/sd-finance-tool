@@ -1243,6 +1243,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popScoreValue").style.textShadow = "none";
       document.getElementById("popRiskBadge").textContent = "EXCELLENT";
       document.getElementById("popRiskBadge").className = "risk-badge risk-badge-excellent";
+      const lifetimeScoreContainerReset = document.getElementById("popLifetimeScoreContainer");
+      if (lifetimeScoreContainerReset) lifetimeScoreContainerReset.style.display = "none";
       
       // Reset Evaluation status details
       const evalStatus = document.getElementById("popEvalStatus");
@@ -1476,6 +1478,33 @@ document.addEventListener("DOMContentLoaded", () => {
       riskBadge.className = `risk-badge ${riskClass}`;
       scoreEl.style.color = scoreColor;
       scoreEl.style.textShadow = "none";
+
+      // Render Lifetime Repayment Reliability (BRI)
+      const lifetimeScoreContainer = document.getElementById("popLifetimeScoreContainer");
+      const lifetimeScoreVal = document.getElementById("popLifetimeScoreVal");
+      const lifetimeRatioVal = document.getElementById("popLifetimeRatioVal");
+      if (lifetimeScoreContainer && cust.borrower_summary && cust.borrower_summary.lifetime_credit_score !== undefined) {
+        const lScore = cust.borrower_summary.lifetime_credit_score;
+        const lRatio = cust.borrower_summary.lifetime_on_time_ratio !== undefined ? cust.borrower_summary.lifetime_on_time_ratio : 100.0;
+        if (lifetimeScoreVal) {
+          lifetimeScoreVal.textContent = Math.round(lScore);
+          if (lScore >= 85) {
+            lifetimeScoreVal.style.color = "#0284c7";
+          } else if (lScore >= 65) {
+            lifetimeScoreVal.style.color = "#10b981";
+          } else if (lScore >= 45) {
+            lifetimeScoreVal.style.color = "#fbbf24";
+          } else {
+            lifetimeScoreVal.style.color = "#ef4444";
+          }
+        }
+        if (lifetimeRatioVal) {
+          lifetimeRatioVal.textContent = `${Math.round(lRatio)}% on-time`;
+        }
+        lifetimeScoreContainer.style.display = "flex";
+      } else if (lifetimeScoreContainer) {
+        lifetimeScoreContainer.style.display = "none";
+      }
 
       // Render Customer Behavioral Intelligence Panel
       const popBehavioralPanel = document.getElementById("popBehavioralIntelligencePanel");
@@ -2827,6 +2856,23 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("popLineageTotalRepaid").textContent = formatMoney(b.lifetime_repaid);
       document.getElementById("popLineageActiveBalance").textContent = formatMoney(b.current_active_balance);
       
+      const scoreElem = document.getElementById("popLineageLifetimeScore");
+      if (scoreElem) {
+        scoreElem.textContent = (b.lifetime_credit_score !== undefined ? b.lifetime_credit_score.toFixed(1) : "100.0");
+        if (b.lifetime_credit_score < 65) {
+          scoreElem.style.color = "var(--danger)";
+        } else if (b.lifetime_credit_score < 85) {
+          scoreElem.style.color = "var(--warning)";
+        } else {
+          scoreElem.style.color = "#0284c7";
+        }
+      }
+
+      const ratioElem = document.getElementById("popLineageOnTimeRatio");
+      if (ratioElem) {
+        ratioElem.textContent = `${(b.lifetime_on_time_ratio !== undefined ? b.lifetime_on_time_ratio.toFixed(1) : "100.0")}%`;
+      }
+
       const riskElem = document.getElementById("popLineageRiskTier");
       if (riskElem) {
         riskElem.textContent = (b.customer_risk_tier || "standard").toUpperCase();

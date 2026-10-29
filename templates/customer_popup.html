@@ -235,8 +235,17 @@
             <span id="popScoreValue" style="font-size: 1.9rem; font-weight: 850; color: var(--primary);">100</span>
           </div>
           <div class="risk-info" style="flex: 1; margin-left: 18px; display: flex; flex-direction: column; gap: 6px;">
-            <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Risk Profile</span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Cycle Rating</span>
             <span id="popRiskBadge" class="risk-badge" style="display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; width: fit-content; text-transform: uppercase; border: 1px solid transparent;">EXCELLENT</span>
+          </div>
+          <!-- Lifetime Scoring Summary Badge -->
+          <div id="popLifetimeScoreContainer" style="display: none; flex-direction: column; gap: 3px; border-left: 1px solid var(--border); padding-left: 14px; margin-left: 10px; margin-right: 10px;">
+            <span style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Lifetime BRI</span>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span id="popLifetimeScoreVal" style="font-size: 1.2rem; font-weight: 850; color: #0284c7;">100</span>
+              <span style="font-size: 0.7rem; color: var(--text-secondary);">/100</span>
+            </div>
+            <span id="popLifetimeRatioVal" style="font-size: 0.7rem; color: var(--success); font-weight: 600;">100% on-time</span>
           </div>
           <!-- Glassmorphic Details Button with list icon -->
           <button id="popWeeklyLogBtn" class="pop-recalc-btn" style="width: 32px !important; height: 32px !important; font-size: 1rem;" title="View Weekly Repayment Log" onclick="openPopWeeklyLogModal()"><i class="fas fa-file-alt"></i></button>
@@ -445,22 +454,30 @@
     </div>
 
     <!-- Lifetime Financial Summary Strip -->
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
-      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Borrowed</div>
-        <div id="popLineageTotalBorrowed" style="font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 4px;">₹0.00</div>
+    <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px;">
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Borrowed</div>
+        <div id="popLineageTotalBorrowed" style="font-size: 1rem; font-weight: 800; color: var(--text); margin-top: 4px;">₹0.00</div>
       </div>
-      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Repaid</div>
-        <div id="popLineageTotalRepaid" style="font-size: 1.1rem; font-weight: 800; color: var(--success); margin-top: 4px;">₹0.00</div>
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Repaid</div>
+        <div id="popLineageTotalRepaid" style="font-size: 1rem; font-weight: 800; color: var(--success); margin-top: 4px;">₹0.00</div>
       </div>
-      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Current Balance</div>
-        <div id="popLineageActiveBalance" style="font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-top: 4px;">₹0.00</div>
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Current Balance</div>
+        <div id="popLineageActiveBalance" style="font-size: 1rem; font-weight: 800; color: var(--primary); margin-top: 4px;">₹0.00</div>
       </div>
-      <div class="subcard-glass" style="padding: 10px 14px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Risk Category</div>
-        <div id="popLineageRiskTier" style="font-size: 1.1rem; font-weight: 800; text-transform: uppercase; margin-top: 4px; color: var(--success);">STANDARD</div>
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Lifetime Score</div>
+        <div id="popLineageLifetimeScore" style="font-size: 1rem; font-weight: 800; color: #0284c7; margin-top: 4px;">100.0</div>
+      </div>
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">On-Time Ratio</div>
+        <div id="popLineageOnTimeRatio" style="font-size: 1rem; font-weight: 800; color: var(--success); margin-top: 4px;">100.0%</div>
+      </div>
+      <div class="subcard-glass" style="padding: 10px 10px; text-align: center; border-radius: 10px; border: 1px solid var(--border);">
+        <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Risk Category</div>
+        <div id="popLineageRiskTier" style="font-size: 0.95rem; font-weight: 800; text-transform: uppercase; margin-top: 4px; color: var(--success);">STANDARD</div>
       </div>
     </div>
 
