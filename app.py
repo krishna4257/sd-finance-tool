@@ -2752,13 +2752,10 @@ def format_customer_ratings_with_trends(cur, data):
     # Fetch all payments for these customers
     cur.execute("""
         SELECT cid, ano, payment_date, amt, pid
-        FROM (
-            SELECT cid, ano, payment_date, amt, pid FROM payment WHERE cid = ANY(%s)
-            UNION ALL
-            SELECT cid, ano, payment_date, amt, pid FROM closed_cust_payment WHERE cid = ANY(%s)
-        ) p
+        FROM v_all_payments
+        WHERE cid = ANY(%s)
         ORDER BY payment_date, pid
-    """, (cids, cids))
+    """, (cids,))
     prows = cur.fetchall()
     
     payments_by_cid = {}
@@ -6206,11 +6203,7 @@ def payment_day_stats():
                 WITH eligible_customers AS (
                     SELECT
                         COUNT(*) AS expected_accounts
-                    FROM (
-                        SELECT start_date, NULL::timestamptz AS closed_at, vid FROM customer
-                        UNION ALL
-                        SELECT start_date, closed_at, vid FROM closed_cust_account
-                    ) c
+                    FROM v_all_customers c
                     WHERE c.vid = %s
                       AND (c.closed_at IS NULL OR c.closed_at::date > %s::date)
                       AND c.start_date <= %s::date
@@ -6218,11 +6211,7 @@ def payment_day_stats():
                 actual_payments AS (
                     SELECT
                         COUNT(DISTINCT ano) AS paid_accounts
-                    FROM (
-                        SELECT ano, vid, payment_date FROM payment
-                        UNION ALL
-                        SELECT ano, vid, payment_date FROM closed_cust_payment
-                    ) all_p
+                    FROM v_all_payments all_p
                     WHERE vid = %s
                       AND payment_date = %s
                 )
@@ -6248,11 +6237,7 @@ def payment_day_stats():
                         TRIM(TO_CHAR(p.payment_date, 'Day'))
                             AS collection_day,
                         COUNT(*) AS payment_count
-                    FROM (
-                        SELECT payment_date, vid FROM payment
-                        UNION ALL
-                        SELECT payment_date, vid FROM closed_cust_payment
-                    ) p
+                    FROM v_all_payments p
                     WHERE p.vid = %s
                     GROUP BY
                         p.vid,
@@ -6264,11 +6249,7 @@ def payment_day_stats():
                 eligible_customers AS (
                     SELECT
                         COUNT(*) AS expected_accounts
-                    FROM (
-                        SELECT type, start_date, NULL::timestamptz AS closed_at, vid FROM customer
-                        UNION ALL
-                        SELECT type, start_date, closed_at, vid FROM closed_cust_account
-                    ) c
+                    FROM v_all_customers c
                     JOIN village_collection_day vcd
                         ON vcd.vid = c.vid
                     WHERE c.vid = %s
@@ -6283,11 +6264,7 @@ def payment_day_stats():
                 actual_payments AS (
                     SELECT
                         COUNT(DISTINCT ano) AS paid_accounts
-                    FROM (
-                        SELECT ano, vid, payment_date FROM payment
-                        UNION ALL
-                        SELECT ano, vid, payment_date FROM closed_cust_payment
-                    ) all_p
+                    FROM v_all_payments all_p
                     WHERE vid = %s
                       AND payment_date = %s
                 )
@@ -6354,11 +6331,7 @@ def post_payment_analytics():
         # 2. Get all active or historically active customers for this village (both open and closed)
         cur.execute("""
             SELECT cid, ano, name, total_amount, installment_amount, start_date, closed_at
-            FROM (
-                SELECT cid, ano, name, total_amount, installment_amount, start_date, NULL::timestamp AS closed_at, vid FROM customer
-                UNION ALL
-                SELECT cid, ano, name, total_amount, installment_amount, start_date, closed_at, vid FROM closed_cust_account
-            ) all_c
+            FROM v_all_customers
             WHERE vid = %s
         """, (vid,))
         customers = []
@@ -6376,11 +6349,7 @@ def post_payment_analytics():
         # 3. Get all payments (both active and closed) for this village
         cur.execute("""
             SELECT cid, amt, payment_date
-            FROM (
-                SELECT cid, amt, payment_date, vid FROM payment
-                UNION ALL
-                SELECT cid, amt, payment_date, vid FROM closed_cust_payment
-            ) all_p
+            FROM v_all_payments
             WHERE vid = %s
         """, (vid,))
         payments = []
@@ -6403,14 +6372,10 @@ def post_payment_analytics():
         if is_monthly:
             cur.execute("""
                 SELECT DISTINCT payment_date 
-                FROM (
-                    SELECT payment_date FROM payment WHERE vid = %s
-                    UNION ALL
-                    SELECT payment_date FROM closed_cust_payment WHERE vid = %s
-                ) p
-                WHERE payment_date IS NOT NULL
+                FROM v_all_payments
+                WHERE vid = %s AND payment_date IS NOT NULL
                 ORDER BY payment_date DESC
-            """, (vid, vid))
+            """, (vid,))
             posting_dates = [r[0] for r in cur.fetchall()]
             target_dates = list(reversed(posting_dates[:5])) if posting_dates else [last_date]
             
@@ -12958,12 +12923,9 @@ def api_dashboard_posting_analytics(vid):
         # 3. Fetch all payments (active and closed)
         cur.execute("""
             SELECT cid, amt, payment_date, created_at, eid
-            FROM (
-                SELECT cid, amt, payment_date, created_at, eid FROM payment WHERE vid = %s
-                UNION ALL
-                SELECT cid, amt, payment_date, created_at, eid FROM closed_cust_payment WHERE vid = %s
-            ) all_pmts;
-        """, (vid, vid))
+            FROM v_all_payments
+            WHERE vid = %s;
+        """, (vid,))
         raw_payments = cur.fetchall()
 
         # Do not globally filter payments by year so the history chart remains intact
@@ -13912,16 +13874,8 @@ def api_cashbag_breakdown():
 
             cur.execute("""
                 SELECT p.pid, c.ano, c.name, p.amt, p.payment_date
-                FROM (
-                    SELECT pid, cid, amt, payment_date, vid FROM payment
-                    UNION ALL
-                    SELECT pid, cid, amt, payment_date, vid FROM closed_cust_payment
-                ) p
-                JOIN (
-                    SELECT cid, ano, name FROM customer
-                    UNION ALL
-                    SELECT cid, ano, name FROM closed_cust_account
-                ) c ON p.cid = c.cid
+                FROM v_all_payments p
+                JOIN v_all_customers c ON p.cid = c.cid
                 WHERE p.vid = ANY(%s)
                 ORDER BY p.payment_date DESC, p.pid DESC
             """, (vids,))
@@ -15586,11 +15540,7 @@ def cashbag():
                         WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.upi_amount, 0)
                         ELSE 0 
                     END), 0) AS upi
-                FROM (
-                    SELECT amt, payment_type, cash_amount, upi_amount, vid FROM payment
-                    UNION ALL
-                    SELECT amt, 'cash' AS payment_type, amt AS cash_amount, 0 AS upi_amount, vid FROM closed_cust_payment
-                ) p
+                FROM v_all_payments p
                 WHERE p.vid = ANY(%s)
             """, (vids,))
             row_inst = cur.fetchone()
@@ -15639,11 +15589,7 @@ def cashbag():
                         WHEN c.interest_amount > 0 THEN c.interest_amount 
                         ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
                     END), 0) AS interest_total
-                FROM (
-                    SELECT base_amount, total_amount, cutting_amount, interest_amount, payment_type, status, vid FROM customer
-                    UNION ALL
-                    SELECT base_amount, total_amount, cutting_amount, interest_amount, payment_type, status, vid FROM closed_cust_account
-                ) c
+                FROM v_all_customers c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
             """, (vids,))
@@ -15770,16 +15716,8 @@ def cashbag():
                         'Collection from ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
                         'System' AS created_by,
                         p.created_at AS created_at
-                    FROM (
-                        SELECT pid, cid, payment_type, amt, created_at, vid FROM payment
-                        UNION ALL
-                        SELECT pid, cid, 'cash' AS payment_type, amt, created_at, vid FROM closed_cust_payment
-                    ) p
-                    JOIN (
-                        SELECT cid, name, ano FROM customer
-                        UNION ALL
-                        SELECT cid, name, ano FROM closed_cust_account
-                    ) c ON p.cid = c.cid
+                    FROM v_all_payments p
+                    JOIN v_all_customers c ON p.cid = c.cid
                     WHERE p.vid = ANY(%s)
                 ) AS combined
                 ORDER BY combined.created_at DESC, id DESC
