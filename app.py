@@ -13299,8 +13299,8 @@ def api_ledger():
         cur.execute(f"""
             SELECT txn, txn_sub, amount
             FROM cashbag_transactions
-            WHERE {pair_filter} AND created_at::date < %s
-        """, pair_params_single + (start_date,))
+            WHERE ({pair_filter} OR vid = ANY(%s)) AND created_at::date < %s
+        """, pair_params_single + (vids, start_date))
         hist_manual = cur.fetchall()
 
         office_cash_h = 0.0
@@ -13325,49 +13325,59 @@ def api_ledger():
                 elif txn_sub == 'LOSS':
                     adj_minus_h += amt
 
-        # Payments before start_date
+        # Payments before start_date (including archived/closed payments)
         cur.execute("""
-            SELECT COALESCE(SUM(amt), 0)
-            FROM payment p
-            JOIN customer c ON p.cid = c.cid
-            WHERE c.vid = ANY(%s) AND p.payment_date < %s
+            SELECT COALESCE(SUM(p.amt), 0)
+            FROM (
+                SELECT pid, cid, amt, payment_date, vid FROM payment
+                UNION ALL
+                SELECT pid, cid, amt, payment_date, vid FROM closed_cust_payment
+            ) p
+            WHERE p.vid = ANY(%s) AND p.payment_date < %s
         """, (vids, start_date))
         installments_h = float(cur.fetchone()[0] or 0)
 
-        # Loans & commissions before start_date
+        # Loans & commissions before start_date (including archived/closed accounts)
         cur.execute("""
             SELECT c.base_amount, c.cutting_amount, c.total_amount,
                    v.interest_rate, v.cutting_rate
-            FROM customer c
+            FROM (
+                SELECT base_amount, cutting_amount, total_amount, start_date, status, vid FROM customer
+                UNION ALL
+                SELECT base_amount, cutting_amount, total_amount, start_date, status, vid FROM closed_cust_account
+            ) c
             JOIN village v ON c.vid = v.vid
             WHERE c.vid = ANY(%s) AND c.status != 'deleted' AND c.start_date < %s
         """, (vids, start_date))
         hist_loans = cur.fetchall()
 
-        loans_disbursed_h = 0.0
-        loan_commission_h = 0.0
+        loans_total_h = 0.0
+        loans_commission_h = 0.0
+        loans_interest_h = 0.0
 
         for base_amt_db, cutting_amt_db, total_amt_db, ir_db, cr_db in hist_loans:
             base_amt = float(base_amt_db or 0)
             cutting_amt = float(cutting_amt_db or 0)
             total_amt = float(total_amt_db or 0)
+            ir = float(ir_db or 0)
+            cr = float(cr_db or 0)
+            interest = round_curr(total_amt * (ir / 100.0))
 
             if base_amt <= 0.0:
-                ir = float(ir_db or 0)
-                cr = float(cr_db or 0)
-                interest = round_curr(total_amt * (ir / 100.0))
                 cutting_amt = round_curr(total_amt * (cr / 100.0))
                 base_amt = round_curr(total_amt - interest - cutting_amt)
 
-            loans_disbursed_h += base_amt
-            loan_commission_h += cutting_amt
+            loans_total_h += total_amt
+            loans_commission_h += cutting_amt
+            loans_interest_h += interest
 
         opening_balance = (
             office_cash_h
             + installments_h
-            + loan_commission_h
+            + loans_commission_h
+            + loans_interest_h
             + adj_add_h
-            - loans_disbursed_h
+            - loans_total_h
             - expenses_h
             - adj_minus_h
         )
@@ -13375,11 +13385,15 @@ def api_ledger():
         # -----------------------------------------------------------------
         # QUERY DAILY DETAILS (within [start_date, end_date])
         # -----------------------------------------------------------------
-        # A. Loans & Commissions within range
+        # A. Loans & Commissions within range (including archived/closed accounts)
         cur.execute("""
             SELECT c.cid, c.ano, c.name, c.base_amount, c.cutting_amount, c.total_amount, c.start_date,
-                   v.village_code, v.interest_rate, v.cutting_rate
-            FROM customer c
+                   v.village_code, v.interest_rate, v.cutting_rate, c.payment_type
+            FROM (
+                SELECT cid, ano, name, base_amount, cutting_amount, total_amount, start_date, status, vid, payment_type FROM customer
+                UNION ALL
+                SELECT cid, ano, name, base_amount, cutting_amount, total_amount, start_date, status, vid, payment_type FROM closed_cust_account
+            ) c
             JOIN village v ON c.vid = v.vid
             WHERE c.vid = ANY(%s) AND c.status != 'deleted'
               AND c.start_date >= %s AND c.start_date <= %s
@@ -13387,13 +13401,21 @@ def api_ledger():
         """, (vids, start_date, end_date))
         loans_rows = cur.fetchall()
 
-        # B. Payments (Collections) within range
+        # B. Payments (Collections) within range (including archived/closed payments)
         cur.execute("""
-            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code, p.payment_type, p.cash_amount, p.upi_amount
-            FROM payment p
-            JOIN customer c ON p.cid = c.cid
-            JOIN village v ON c.vid = v.vid
-            WHERE c.vid = ANY(%s)
+            SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code, p.payment_type, p.cash_amount, p.upi_amount, v.village_name
+            FROM (
+                SELECT pid, cid, ano, amt, payment_date, vid, payment_type, cash_amount, upi_amount FROM payment
+                UNION ALL
+                SELECT pid, cid, ano, amt, payment_date, vid, 'cash' AS payment_type, amt AS cash_amount, 0.0 AS upi_amount FROM closed_cust_payment
+            ) p
+            JOIN (
+                SELECT cid, ano, name, vid FROM customer
+                UNION ALL
+                SELECT cid, ano, name, vid FROM closed_cust_account
+            ) c ON p.cid = c.cid
+            JOIN village v ON p.vid = v.vid
+            WHERE p.vid = ANY(%s)
               AND p.payment_date >= %s AND p.payment_date <= %s
             ORDER BY p.payment_date ASC, p.pid ASC
         """, (vids, start_date, end_date))
@@ -13403,10 +13425,10 @@ def api_ledger():
         cur.execute(f"""
             SELECT id, txn, txn_sub, txn_type, amount, notes, created_at
             FROM cashbag_transactions
-            WHERE {pair_filter}
+            WHERE ({pair_filter} OR vid = ANY(%s))
               AND created_at::date >= %s AND created_at::date <= %s
             ORDER BY created_at ASC, id ASC
-        """, pair_params_single + (start_date, end_date))
+        """, pair_params_single + (vids, start_date, end_date))
         manual_rows = cur.fetchall()
 
         # -----------------------------------------------------------------
@@ -13425,11 +13447,15 @@ def api_ledger():
                 "date_label": d.strftime("%d-%m-%Y"),
                 "villages": [],
                 "loans": [],
-                "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0},
+                "loans_total": {"commission": 0.0, "amount": 0.0, "interest": 0.0, "base_amount": 0.0},
                 "loans_cash_total": 0.0,
                 "loans_upi_total": 0.0,
+                "loans_base_cash_total": 0.0,
+                "loans_base_upi_total": 0.0,
                 "commissions_cash_total": 0.0,
                 "commissions_upi_total": 0.0,
+                "interest_cash_total": 0.0,
+                "interest_upi_total": 0.0,
                 "payments": [],
                 "payments_total": 0.0,
                 "payments_cash_total": 0.0,
@@ -13453,7 +13479,7 @@ def api_ledger():
             }
 
         # Populate Loans
-        for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_dt, v_code, ir_db, cr_db in loans_rows:
+        for cid, ano, name, base_amt_db, cutting_amt_db, total_amt_db, start_dt, v_code, ir_db, cr_db, pay_type in loans_rows:
             d_str = start_dt.strftime("%Y-%m-%d")
             if d_str not in dates_data:
                 continue
@@ -13469,27 +13495,42 @@ def api_ledger():
                 cutting_amt = round_curr(total_amt * (cr / 100.0))
                 base_amt = round_curr(total_amt - interest - cutting_amt)
 
+            # In the loans dispensed section, Amount is the Total Loan Amount (e.g. 12,500)
             dates_data[d_str]["loans"].append({
                 "ano": ano,
                 "name": name,
-                "amount": base_amt,
+                "amount": total_amt,
+                "base_amount": base_amt,
+                "total_amount": total_amt,
                 "interest": interest,
                 "commission": cutting_amt,
-                "village_code": v_code
+                "village_code": v_code,
+                "payment_type": pay_type
             })
-            dates_data[d_str]["loans_total"]["amount"] += base_amt
+            dates_data[d_str]["loans_total"]["amount"] += total_amt
+            dates_data[d_str]["loans_total"]["base_amount"] = dates_data[d_str]["loans_total"].get("base_amount", 0.0) + base_amt
             dates_data[d_str]["loans_total"]["interest"] += interest
             dates_data[d_str]["loans_total"]["commission"] += cutting_amt
 
-            # Since loans are default to CASH in database:
-            dates_data[d_str]["loans_cash_total"] += base_amt
-            dates_data[d_str]["commissions_cash_total"] += cutting_amt
+            # Loans dispensed breakdown: loans_cash_total / loans_upi_total tracks total loan amount
+            # Rusum (cutting_amt) and Commission (interest) are also tracked by cash/upi
+            is_upi = (pay_type or '').strip().lower() == 'upi'
+            if is_upi:
+                dates_data[d_str]["loans_upi_total"] += total_amt
+                dates_data[d_str]["loans_base_upi_total"] += base_amt
+                dates_data[d_str]["commissions_upi_total"] += cutting_amt
+                dates_data[d_str]["interest_upi_total"] += interest
+            else:
+                dates_data[d_str]["loans_cash_total"] += total_amt
+                dates_data[d_str]["loans_base_cash_total"] += base_amt
+                dates_data[d_str]["commissions_cash_total"] += cutting_amt
+                dates_data[d_str]["interest_cash_total"] += interest
 
             if v_code not in dates_data[d_str]["villages"]:
                 dates_data[d_str]["villages"].append(v_code)
 
         # Populate Payments
-        for pid, ano, name, amt, payment_date, v_code, pay_type, cash_amt, upi_amt in payments_rows:
+        for pid, ano, name, amt, payment_date, v_code, pay_type, cash_amt, upi_amt, v_name in payments_rows:
             d_str = payment_date.strftime("%Y-%m-%d")
             if d_str not in dates_data:
                 continue
@@ -13499,6 +13540,7 @@ def api_ledger():
                 "name": name,
                 "amount": float(amt or 0),
                 "village_code": v_code,
+                "village_name": v_name,
                 "payment_type": pay_type,
                 "cash_amount": float(cash_amt or 0),
                 "upi_amount": float(upi_amt or 0)
@@ -13601,12 +13643,17 @@ def api_ledger():
                         dates_data[d_str]["adjustments_minus_cash_total"] += amt
 
         dates_list = [d.strftime("%Y-%m-%d") for d in dates_in_range]
+        assigned_villages = [
+            {"vid": r[0], "name": r[1], "code": r[2]}
+            for r in village_rows
+        ]
 
         return jsonify(
             success=True,
             opening_balance=opening_balance,
             dates=dates_data,
-            dates_list=dates_list
+            dates_list=dates_list,
+            assigned_villages=assigned_villages
         )
 
     except Exception as e:
@@ -13622,6 +13669,9 @@ def api_cashbag_breakdown():
     emp1 = request.args.get("emp1", type=int)
     emp2 = request.args.get("emp2", type=int)
     breakdown_type = request.args.get("type", type=str)
+    end_day = request.args.get("end_day", default=3, type=int)
+    if end_day is None or end_day < 0 or end_day > 6:
+        end_day = 3
 
     if not emp1 or not breakdown_type:
         return jsonify(success=False, error="Missing required parameters"), 400
@@ -13637,20 +13687,28 @@ def api_cashbag_breakdown():
     cur = conn.cursor()
 
     try:
-        def parse_month_key(key):
-            try:
-                m_name, y_str = key.split('/')
-                m_num = datetime.strptime(m_name, "%B").month
-                return (int(y_str), m_num)
-            except Exception:
-                return (0, 0)
+        def get_breakdown_timeline(dt_val, end_day_val):
+            d = dt_val.date() if isinstance(dt_val, datetime) else dt_val
+            our_day = (d.weekday() + 1) % 7  # 0=Sunday, 1=Monday, ..., 6=Saturday
+            days_to_end = (end_day_val - our_day) % 7
+            week_end = d + timedelta(days=days_to_end)
+            week_start = week_end - timedelta(days=6)
 
-        def parse_date_key(key):
-            try:
-                d, m, y = map(int, key.split('/'))
-                return (y, m, d)
-            except Exception:
-                return (0, 0, 0)
+            month_name = week_end.strftime("%B")
+            month_key = f"{month_name} {week_end.year}"
+            month_sort = (week_end.year, week_end.month)
+
+            start_str = week_start.strftime("%d %b")
+            end_str = week_end.strftime("%d %b %Y")
+            week_label = f"{start_str} – {end_str}"
+            week_key = f"{week_start.strftime('%Y-%m-%d')}_{week_end.strftime('%Y-%m-%d')}"
+            week_sort = week_start
+
+            day_str = d.strftime("%d/%m/%Y")
+            day_key = d.strftime("%Y-%m-%d")
+            day_sort = d
+
+            return month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort
 
         # 1. Fetch active villages for this employee group
         if emp2:
@@ -13681,12 +13739,19 @@ def api_cashbag_breakdown():
             elif breakdown_type == 'profit_loss':
                 txn_filter = "txn = 'PROFIT_LOSS'"
 
+            if vids:
+                manual_filter = f"({pair_filter} OR vid = ANY(%s))"
+                manual_params = pair_params_single + (vids,)
+            else:
+                manual_filter = pair_filter
+                manual_params = pair_params_single
+
             cur.execute(f"""
                 SELECT id, txn, txn_sub, txn_type, amount, notes, created_by, created_at
                 FROM cashbag_transactions
-                WHERE {pair_filter} AND {txn_filter}
+                WHERE {manual_filter} AND {txn_filter}
                 ORDER BY created_at DESC, id DESC
-            """, pair_params_single)
+            """, manual_params)
             rows = cur.fetchall()
 
             grouped = {}
@@ -13695,41 +13760,26 @@ def api_cashbag_breakdown():
                 if not created_at:
                     continue
 
-                month_name = created_at.strftime("%B")
-                month_key = f"{month_name}/{created_at.year}"
-
-                day_val = created_at.day
-                if day_val <= 7:
-                    w_day = 1
-                elif day_val <= 14:
-                    w_day = 8
-                elif day_val <= 21:
-                    w_day = 15
-                elif day_val <= 28:
-                    w_day = 22
-                else:
-                    w_day = 29
-                week_start_date = created_at.replace(day=w_day)
-                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
-
-                day_key = f"{created_at.day}/{created_at.month}/{created_at.year}"
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(created_at, end_day)
 
                 signed_amt = amt
                 if txn == 'ADJUSTMENT' and txn_sub == 'MINUS':
                     signed_amt = -amt
+                elif txn == 'PROFIT_LOSS' and txn_sub == 'LOSS':
+                    signed_amt = -amt
 
                 if month_key not in grouped:
-                    grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
                 grouped[month_key]["total_amount"] += signed_amt
 
                 weeks = grouped[month_key]["weeks"]
                 if week_key not in weeks:
-                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
                 weeks[week_key]["total_amount"] += signed_amt
 
                 days = weeks[week_key]["days"]
                 if day_key not in days:
-                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "transactions": []}
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "transactions": []}
                 days[day_key]["total_amount"] += signed_amt
 
                 txn_dict = {
@@ -13739,24 +13789,21 @@ def api_cashbag_breakdown():
                     "notes": notes,
                     "created_by": created_by
                 }
-                if txn == 'ADJUSTMENT':
+                if txn in ('ADJUSTMENT', 'PROFIT_LOSS'):
                     txn_dict["txn_sub"] = txn_sub
                     txn_dict["signed_amount"] = signed_amt
 
                 days[day_key]["transactions"].append(txn_dict)
 
             tree_list = []
-            sorted_months = sorted(grouped.keys(), key=parse_month_key, reverse=True)
-            for m_key in sorted_months:
-                m_data = grouped[m_key]
-                sorted_weeks = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
                 weeks_list = []
-                for w_key in sorted_weeks:
-                    w_data = m_data["weeks"][w_key]
-                    sorted_days = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
                     days_list = []
-                    for d_key in sorted_days:
-                        d_data = w_data["days"][d_key]
+                    for d_data in sorted_days:
                         days_list.append({
                             "day_date": d_data["day_date"],
                             "total_amount": d_data["total_amount"],
@@ -13764,6 +13811,7 @@ def api_cashbag_breakdown():
                         })
                     weeks_list.append({
                         "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
                         "total_amount": w_data["total_amount"],
                         "days": days_list
                     })
@@ -13818,58 +13866,40 @@ def api_cashbag_breakdown():
                 if not start_date:
                     continue
 
-                month_name = start_date.strftime("%B")
-                month_key = f"{month_name}/{start_date.year}"
-
-                day_val = start_date.day
-                if day_val <= 7:
-                    w_day = 1
-                elif day_val <= 14:
-                    w_day = 8
-                elif day_val <= 21:
-                    w_day = 15
-                elif day_val <= 28:
-                    w_day = 22
-                else:
-                    w_day = 29
-                week_start_date = start_date.replace(day=w_day)
-                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
-
-                day_key = f"{start_date.day}/{start_date.month}/{start_date.year}"
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(start_date, end_day)
 
                 if month_key not in grouped:
-                    grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
                 grouped[month_key]["total_amount"] += amt
 
                 weeks = grouped[month_key]["weeks"]
                 if week_key not in weeks:
-                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
                 weeks[week_key]["total_amount"] += amt
 
                 days = weeks[week_key]["days"]
                 if day_key not in days:
-                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "customers": []}
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "customers": []}
                 days[day_key]["total_amount"] += amt
 
                 days[day_key]["customers"].append({
                     "cid": cid,
                     "ano": ano,
                     "name": name,
-                    "amount": amt
+                    "amount": amt,
+                    "base_amount": base_amt,
+                    "total_amount": total_amt
                 })
 
             tree_list = []
-            sorted_months = sorted(grouped.keys(), key=parse_month_key, reverse=True)
-            for m_key in sorted_months:
-                m_data = grouped[m_key]
-                sorted_weeks = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
                 weeks_list = []
-                for w_key in sorted_weeks:
-                    w_data = m_data["weeks"][w_key]
-                    sorted_days = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
                     days_list = []
-                    for d_key in sorted_days:
-                        d_data = w_data["days"][d_key]
+                    for d_data in sorted_days:
                         days_list.append({
                             "day_date": d_data["day_date"],
                             "total_amount": d_data["total_amount"],
@@ -13877,6 +13907,7 @@ def api_cashbag_breakdown():
                         })
                     weeks_list.append({
                         "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
                         "total_amount": w_data["total_amount"],
                         "days": days_list
                     })
@@ -13892,7 +13923,7 @@ def api_cashbag_breakdown():
                 return jsonify(success=True, tree=[])
 
             cur.execute("""
-                SELECT p.pid, c.ano, c.name, p.amt, p.payment_date
+                SELECT p.pid, c.ano, c.name, p.amt, p.payment_date, v.village_code, v.village_name
                 FROM (
                     SELECT pid, cid, amt, payment_date, vid FROM payment
                     UNION ALL
@@ -13903,77 +13934,67 @@ def api_cashbag_breakdown():
                     UNION ALL
                     SELECT cid, ano, name FROM closed_cust_account
                 ) c ON p.cid = c.cid
+                JOIN village v ON p.vid = v.vid
                 WHERE p.vid = ANY(%s)
                 ORDER BY p.payment_date DESC, p.pid DESC
             """, (vids,))
             pay_rows = cur.fetchall()
 
             grouped = {}
-            for pid, ano, name, amt, payment_date in pay_rows:
+            for pid, ano, name, amt, payment_date, v_code, v_name in pay_rows:
                 if not payment_date:
                     continue
 
-                month_name = payment_date.strftime("%B")
-                month_key = f"{month_name}/{payment_date.year}"
-
-                day_val = payment_date.day
-                if day_val <= 7:
-                    w_day = 1
-                elif day_val <= 14:
-                    w_day = 8
-                elif day_val <= 21:
-                    w_day = 15
-                elif day_val <= 28:
-                    w_day = 22
-                else:
-                    w_day = 29
-                week_start_date = payment_date.replace(day=w_day)
-                week_key = f"{week_start_date.day}/{week_start_date.month}/{week_start_date.year}"
-
-                day_key = f"{payment_date.day}/{payment_date.month}/{payment_date.year}"
-
                 val = float(amt or 0)
+                if val <= 0.0:
+                    continue
+
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(payment_date, end_day)
 
                 if month_key not in grouped:
-                    grouped[month_key] = {"month_name": month_key, "total_amount": 0.0, "weeks": {}}
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
                 grouped[month_key]["total_amount"] += val
 
                 weeks = grouped[month_key]["weeks"]
                 if week_key not in weeks:
-                    weeks[week_key] = {"week_date": week_key, "total_amount": 0.0, "days": {}}
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
                 weeks[week_key]["total_amount"] += val
 
                 days = weeks[week_key]["days"]
                 if day_key not in days:
-                    days[day_key] = {"day_date": day_key, "total_amount": 0.0, "customers": []}
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "villages": [], "customers": []}
                 days[day_key]["total_amount"] += val
+
+                v_label = v_code if not v_name else f"{v_code} ({v_name})"
+                if v_label not in days[day_key]["villages"]:
+                    days[day_key]["villages"].append(v_label)
 
                 days[day_key]["customers"].append({
                     "pid": pid,
                     "ano": ano,
                     "name": name,
+                    "village_code": v_code,
                     "amount": val
                 })
 
             tree_list = []
-            sorted_months = sorted(grouped.keys(), key=parse_month_key, reverse=True)
-            for m_key in sorted_months:
-                m_data = grouped[m_key]
-                sorted_weeks = sorted(m_data["weeks"].keys(), key=parse_date_key, reverse=True)
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
                 weeks_list = []
-                for w_key in sorted_weeks:
-                    w_data = m_data["weeks"][w_key]
-                    sorted_days = sorted(w_data["days"].keys(), key=parse_date_key, reverse=True)
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
                     days_list = []
-                    for d_key in sorted_days:
-                        d_data = w_data["days"][d_key]
+                    for d_data in sorted_days:
                         days_list.append({
                             "day_date": d_data["day_date"],
                             "total_amount": d_data["total_amount"],
+                            "villages": d_data.get("villages", []),
                             "customers": d_data["customers"]
                         })
                     weeks_list.append({
                         "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
                         "total_amount": w_data["total_amount"],
                         "days": days_list
                     })
