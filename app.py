@@ -5589,27 +5589,10 @@ def get_fleet_telemetry(cur=None):
 def admin_control():
     conn = None
     cur = None
-    employees = []
     telemetry_servers = []
     try:
         conn = get_pg_connection()
         cur = conn.cursor()
-        cur.execute("""
-            SELECT e.eid, e.name, u.username, e.level
-            FROM employee e
-            LEFT JOIN users u ON u.employee_id = e.eid
-            WHERE e.is_active = TRUE
-            ORDER BY e.name
-        """)
-        employees = [
-            {
-                "eid": row[0],
-                "name": row[1],
-                "username": row[2] or "N/A",
-                "level": row[3] or "N/A"
-            }
-            for row in cur.fetchall()
-        ]
         telemetry_servers = get_fleet_telemetry(cur)
     except Exception as e:
         logger.error(f"[admin_control] DB query error: {e}")
@@ -5621,7 +5604,6 @@ def admin_control():
 
     return render_template(
         "admin_control.html", 
-        employees=employees, 
         telemetry_servers=telemetry_servers,
         telemetry_secret_key=TELEMETRY_SECRET_KEY
     )
@@ -15244,14 +15226,7 @@ def users_page():
         flash("Access denied")
         return redirect("/dashboard")
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM users")
-    total_users = cur.fetchone()[0]
-    cur.close()
-    conn.close()
-
-    return render_template("user_management.html", total_users=total_users)
+    return redirect("/employee")
 
 @app.route("/api/users/list")
 @login_required

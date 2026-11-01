@@ -158,14 +158,13 @@
     <div class="nav-section-label">MENU</div>
 
     {% block sidebar %}
-    {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'users_page', 'admin_control'] %}
+    {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'admin_control'] %}
     <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
     <a href="/village"  class="nav-link {% if request.endpoint == 'village_page' %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Village</a>
     <a href="/employee" class="nav-link {% if request.endpoint in ['employee_page', 'employee_detail_page'] %}active{% endif %}"><i class="fas fa-user-tie"></i> Employee</a>
     {% endif %}
     {% if session.level == 'admin' %}
-    <a href="/users"         class="nav-link {% if request.endpoint == 'users_page' %}active{% endif %}"><i class="fas fa-users-cog"></i> User Management</a>
     <a href="/admin_control" class="nav-link {% if request.endpoint == 'admin_control' %}active{% endif %}"><i class="fas fa-cog"></i> Admin Control</a>
     {% endif %}
 
@@ -195,14 +194,7 @@
         </button>
 
         <!-- Context tiles -->
-        {% if request.endpoint == 'users_page' %}
-        <div class="header-context-tiles">
-          <div class="header-tile header-tile-employee" title="Total Users">
-            <i class="fas fa-users"></i>
-            <span>Users: <strong id="headerTotalUsers">{{ total_users }}</strong></span>
-          </div>
-        </div>
-        {% elif request.endpoint in ['village_page', 'employee_page'] %}
+        {% if request.endpoint in ['village_page', 'employee_page'] %}
         <div class="header-context-tiles">
           <div class="header-tile header-tile-village" title="Total Villages">
             <i class="fas fa-map-marker-alt"></i>
