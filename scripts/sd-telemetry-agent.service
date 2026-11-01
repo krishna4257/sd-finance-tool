@@ -1,0 +1,24 @@
+[Unit]
+Description=Siva Durga Remote Node Telemetry & Infrastructure Sentinel
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/sd-finance-tool/SD_Accounting_Tool
+EnvironmentFile=-/etc/sd-telemetry.conf
+EnvironmentFile=-/srv/sd-finance-tool/SD_Accounting_Tool/.env
+ExecStart=/usr/bin/python3 /srv/sd-finance-tool/SD_Accounting_Tool/scripts/sd_node_agent.py
+
+# Autonomous Auto-Restart on crash or network loss
+Restart=always
+RestartSec=10s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sd-telemetry-agent
+
+[Install]
+WantedBy=multi-user.target

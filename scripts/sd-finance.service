@@ -1,0 +1,29 @@
+[Unit]
+Description=Siva Durga Finance Accounting Web Application
+Documentation=https://sivadurga.in
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=jayakrishna
+Group=jayakrishna
+WorkingDirectory=/srv/sd-finance-tool/SD_Accounting_Tool
+Environment="PATH=/srv/sd-finance-tool/SD_Accounting_Tool/venv/bin:/srv/sd-finance-tool/SD_Accounting_Tool/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+EnvironmentFile=-/srv/sd-finance-tool/SD_Accounting_Tool/.env
+ExecStart=/srv/sd-finance-tool/SD_Accounting_Tool/venv/bin/gunicorn --workers 4 --threads 2 --bind 127.0.0.1:8000 --timeout 120 --access-logfile - --error-logfile - app:app
+
+# Auto-recovery & autonomous reboot resilience
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=30
+
+# Resource & File Descriptors Hardening
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sd-finance
+
+[Install]
+WantedBy=multi-user.target

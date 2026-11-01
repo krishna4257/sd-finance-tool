@@ -439,6 +439,464 @@
         box-shadow: 0 0 8px var(--success);
         animation: pulse-dot 2s infinite ease-in-out;
     }
+
+    /* ── Server Fleet & Infrastructure Telemetry Styling ── */
+    .fleet-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .badge-subtle {
+        background: var(--border-light);
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        padding: 5px 12px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--border);
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .server-fleet-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 24px;
+        margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+        .server-fleet-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .node-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 22px;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .node-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: rgba(26, 77, 46, 0.3);
+    }
+
+    .node-card.status-border-healthy {
+        border-top: 4px solid var(--success);
+    }
+
+    .node-card.status-border-warning {
+        border-top: 4px solid var(--warning);
+    }
+
+    .node-card.status-border-critical {
+        border-top: 4px solid var(--danger);
+    }
+
+    .node-card.status-border-offline {
+        border-top: 4px solid #9ca3af;
+        background: #fbfbfb;
+    }
+
+    .node-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    .node-identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .node-avatar-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .node-avatar-icon.primary {
+        background: var(--primary-lighter);
+        color: var(--primary);
+    }
+
+    .node-avatar-icon.backup {
+        background: var(--info-light);
+        color: var(--info);
+    }
+
+    .node-title-group h4 {
+        margin: 0 0 4px 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-headline);
+    }
+
+    .node-subtext {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: var(--radius-pill);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .status-pill.healthy {
+        background: var(--success-light);
+        color: var(--success);
+        border: 1px solid rgba(22, 163, 74, 0.2);
+    }
+
+    .status-pill.warning {
+        background: var(--warning-light);
+        color: var(--warning);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .status-pill.critical {
+        background: var(--danger-light);
+        color: var(--danger);
+        border: 1px solid rgba(220, 38, 38, 0.25);
+    }
+
+    .status-pill.offline {
+        background: #f3f4f6;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+    }
+
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .pulse-dot.healthy {
+        background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+        animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    .pulse-dot.warning {
+        background: var(--warning);
+        box-shadow: 0 0 6px var(--warning);
+        animation: pulse-dot 1.5s infinite ease-in-out;
+    }
+
+    .pulse-dot.critical {
+        background: var(--danger);
+        box-shadow: 0 0 8px var(--danger);
+        animation: pulse-dot 1s infinite ease-in-out;
+    }
+
+    .pulse-dot.offline {
+        background: #9ca3af;
+    }
+
+    .node-alert-banner {
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
+        font-size: 0.825rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+    }
+
+    .node-alert-banner.healthy {
+        background: var(--primary-lighter);
+        color: var(--primary);
+        border-left: 3px solid var(--primary);
+    }
+
+    .node-alert-banner.warning {
+        background: var(--warning-light);
+        color: #92400e;
+        border-left: 3px solid var(--warning);
+    }
+
+    .node-alert-banner.critical {
+        background: var(--danger-light);
+        color: var(--danger);
+        border-left: 3px solid var(--danger);
+    }
+
+    .node-alert-banner.offline {
+        background: #f3f4f6;
+        color: #4b5563;
+        border-left: 3px solid #9ca3af;
+    }
+
+    .gauge-card {
+        background: var(--border-light);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+    }
+
+    .gauge-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+    }
+
+    .gauge-title {
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .gauge-val-badge {
+        font-weight: 700;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+
+    .gauge-track {
+        height: 10px;
+        background: #e5e7eb;
+        border-radius: var(--radius-pill);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .gauge-fill {
+        height: 100%;
+        border-radius: var(--radius-pill);
+        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .gauge-fill.fill-green {
+        background: linear-gradient(90deg, #10b981, #16a34a);
+    }
+
+    .gauge-fill.fill-amber {
+        background: linear-gradient(90deg, #fbbf24, #f59e0b);
+    }
+
+    .gauge-fill.fill-red {
+        background: linear-gradient(90deg, #f87171, #dc2626);
+    }
+
+    .gauge-meta-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.775rem;
+        color: var(--text-secondary);
+        margin-top: 6px;
+    }
+
+    .metrics-dual-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    @media (max-width: 500px) {
+        .metrics-dual-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .telemetry-specs-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.825rem;
+    }
+
+    .telemetry-specs-table tr {
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    .telemetry-specs-table tr:last-child {
+        border-bottom: none;
+    }
+
+    .telemetry-specs-table td {
+        padding: 7px 4px;
+        color: var(--text);
+    }
+
+    .telemetry-specs-table td.label-col {
+        color: var(--text-secondary);
+        width: 40%;
+        font-weight: 500;
+    }
+
+    .service-pills-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+
+    .service-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        padding: 3px 9px;
+        border-radius: var(--radius-pill);
+        font-weight: 600;
+        background: #f3f4f6;
+        color: #4b5563;
+        border: 1px solid #e5e7eb;
+    }
+
+    .service-pill.active {
+        background: var(--success-light);
+        color: var(--success);
+        border-color: rgba(22, 163, 74, 0.25);
+    }
+
+    .service-pill.failed {
+        background: var(--danger-light);
+        color: var(--danger);
+        border-color: rgba(220, 38, 38, 0.25);
+    }
+
+    .fleet-action-bar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+    }
+
+    /* ── Safeguards Grid ── */
+    .safeguards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 18px;
+    }
+
+    .safeguard-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .safeguard-card:hover {
+        box-shadow: var(--shadow-sm);
+        border-color: var(--primary);
+    }
+
+    .safeguard-icon-badge {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: var(--primary-lighter);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+    }
+
+    .safeguard-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--text);
+        margin: 0;
+        font-family: var(--font-headline);
+    }
+
+    .safeguard-desc {
+        font-size: 0.825rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+        margin: 0;
+    }
+
+    .safeguard-badge {
+        margin-top: auto;
+        font-size: 0.725rem;
+        font-weight: 600;
+        color: var(--primary);
+        background: var(--primary-light);
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        width: fit-content;
+    }
+
+    .modal-code-block {
+        background: #111827;
+        color: #f3f4f6;
+        border-radius: var(--radius);
+        padding: 16px;
+        font-family: monospace;
+        font-size: 0.825rem;
+        line-height: 1.6;
+        position: relative;
+        overflow-x: auto;
+        margin: 14px 0;
+    }
+
+    .btn-copy-code {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border: none;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .btn-copy-code:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
 </style>
 
 <div class="admin-container">
@@ -519,6 +977,314 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <!-- ── Remote Server Fleet & Disaster Recovery Telemetry Sentinel ── -->
+    <div class="admin-card" id="fleetMonitoringCard">
+        <div class="admin-card-header">
+            <h5 class="admin-card-title">
+                <i class="fas fa-server me-1" style="color: var(--primary);"></i>
+                Server Fleet & Disaster Recovery Sentinel
+            </h5>
+            <div class="fleet-header-actions">
+                <span id="fleetLiveIndicator" class="badge-subtle">
+                    <span class="pulse-dot healthy me-1"></span> Live Fleet Telemetry
+                </span>
+                <span id="telemetryLastCheckedBadge" class="badge-subtle" title="Polling every 15 seconds">
+                    <i class="fas fa-clock me-1"></i> Checked: Just now
+                </span>
+                <button type="button" class="btn btn-outline btn-sm" onclick="fetchLiveTelemetry(true)" id="refreshBtn" title="Query remote nodes now">
+                    <i class="fas fa-sync-alt me-1"></i> Refresh
+                </button>
+            </div>
+        </div>
+        <div class="admin-card-body">
+            <div class="info-intro">
+                <i class="fas fa-shield-alt"></i>
+                <div>
+                    Continuous multi-node telemetry for <strong>Primary Core Server</strong> and <strong>Backup Disaster Recovery Machine</strong>. 
+                    Heartbeats are authenticated with <strong>HMAC-SHA256</strong>. Lapsed heartbeats (>90s) detect remote power cuts or ISP outages instantly, while dynamic disk meters prevent storage exhaustion from halting database transactions.
+                </div>
+            </div>
+
+            <!-- Server Cards Grid -->
+            <div class="server-fleet-grid" id="serverFleetGrid">
+                {% for s in telemetry_servers %}
+                <div class="node-card status-border-{{ s.status }}" id="node-card-{{ s.server_id }}">
+                    <div class="node-card-top">
+                        <div class="node-identity">
+                            <div class="node-avatar-icon {% if s.server_id == 'main_server' %}primary{% else %}backup{% endif %}">
+                                <i class="fas {% if s.server_id == 'main_server' %}fa-server{% else %}fa-database{% endif %}"></i>
+                            </div>
+                            <div class="node-title-group">
+                                <h4>
+                                    <span class="node-name-text">{{ s.server_name }}</span>
+                                </h4>
+                                <div class="node-subtext">
+                                    <span><i class="fas fa-microchip me-1"></i>{{ s.server_role }}</span>
+                                    <span>•</span>
+                                    <span><i class="fas fa-map-marker-alt me-1"></i>{{ s.location }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="status-pill {{ s.status }}" id="status-pill-{{ s.server_id }}">
+                                <span class="pulse-dot {{ s.status }}"></span>
+                                <span class="status-text">{{ s.status | upper }}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Alert message banner -->
+                    <div class="node-alert-banner {{ s.status }}" id="alert-banner-{{ s.server_id }}">
+                        <i class="fas {% if s.status == 'healthy' %}fa-check-circle{% elif s.status == 'warning' %}fa-exclamation-triangle{% elif s.status == 'critical' %}fa-radiation{% else %}fa-power-off{% endif %} me-1" id="alert-icon-{{ s.server_id }}"></i>
+                        <span id="alert-msg-{{ s.server_id }}">{{ s.status_msg }}</span>
+                    </div>
+
+                    <!-- Storage Utilization Gauge (CRUCIAL FOR STORAGE ISSUES) -->
+                    <div class="gauge-card">
+                        <div class="gauge-header-row">
+                            <span class="gauge-title">
+                                <i class="fas fa-hdd me-1" style="color: var(--primary);"></i> Storage Capacity (Crash Prevention)
+                            </span>
+                            <span class="gauge-val-badge {% if s.disk_percent >= 90 %}text-danger{% elif s.disk_percent >= 80 %}text-warning{% else %}text-success{% endif %}" id="disk-badge-{{ s.server_id }}">
+                                {{ s.disk_percent }}% Used
+                            </span>
+                        </div>
+                        <div class="gauge-track">
+                            <div class="gauge-fill {% if s.disk_percent >= 90 %}fill-red{% elif s.disk_percent >= 80 %}fill-amber{% else %}fill-green{% endif %}" 
+                                 id="disk-bar-{{ s.server_id }}" 
+                                 style="width: {{ s.disk_percent }}%;"></div>
+                        </div>
+                        <div class="gauge-meta-row">
+                            <span id="disk-used-{{ s.server_id }}">Used: <strong>{{ s.disk_used_gb }} GB</strong> of {{ s.disk_total_gb }} GB</span>
+                            <span id="disk-free-{{ s.server_id }}">Free: <strong class="{% if s.disk_percent >= 90 %}text-danger{% else %}text-success{% endif %}">{{ s.disk_free_gb }} GB</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Dual RAM & CPU Gauges -->
+                    <div class="metrics-dual-grid">
+                        <!-- RAM -->
+                        <div class="gauge-card">
+                            <div class="gauge-header-row">
+                                <span class="gauge-title"><i class="fas fa-memory me-1"></i> RAM</span>
+                                <span class="gauge-val-badge" id="ram-badge-{{ s.server_id }}">{{ s.memory_percent }}%</span>
+                            </div>
+                            <div class="gauge-track">
+                                <div class="gauge-fill {% if s.memory_percent >= 90 %}fill-red{% elif s.memory_percent >= 80 %}fill-amber{% else %}fill-green{% endif %}" 
+                                     id="ram-bar-{{ s.server_id }}" 
+                                     style="width: {{ s.memory_percent }}%;"></div>
+                            </div>
+                            <div class="gauge-meta-row">
+                                <span id="ram-meta-{{ s.server_id }}">{{ s.memory_used_gb }} / {{ s.memory_total_gb }} GB</span>
+                            </div>
+                        </div>
+                        <!-- CPU -->
+                        <div class="gauge-card">
+                            <div class="gauge-header-row">
+                                <span class="gauge-title"><i class="fas fa-tachometer-alt me-1"></i> CPU</span>
+                                <span class="gauge-val-badge" id="cpu-badge-{{ s.server_id }}">{{ s.cpu_percent }}%</span>
+                            </div>
+                            <div class="gauge-track">
+                                <div class="gauge-fill {% if s.cpu_percent >= 90 %}fill-red{% elif s.cpu_percent >= 80 %}fill-amber{% else %}fill-green{% endif %}" 
+                                     id="cpu-bar-{{ s.server_id }}" 
+                                     style="width: {{ s.cpu_percent }}%;"></div>
+                            </div>
+                            <div class="gauge-meta-row">
+                                <span id="cpu-meta-{{ s.server_id }}">Load: {{ s.load_avg }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Telemetry Details & Power Diagnostics -->
+                    <div class="gauge-card" style="background: transparent;">
+                        <table class="telemetry-specs-table">
+                            <tbody>
+                                <tr>
+                                    <td class="label-col"><i class="fas fa-history me-1"></i> System Uptime</td>
+                                    <td><strong id="uptime-{{ s.server_id }}">{{ s.uptime_formatted }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="label-col"><i class="fas fa-bolt me-1"></i> Power / Boot</td>
+                                    <td id="boot-{{ s.server_id }}">
+                                        {{ s.power_status }} • Boot: {{ s.boot_time[:19] if s.boot_time else 'N/A' }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label-col"><i class="fas fa-network-wired me-1"></i> Host & IPs</td>
+                                    <td id="net-{{ s.server_id }}">
+                                        <code>{{ s.hostname }}</code> • LAN: <code>{{ s.ip_address }}</code> {% if s.tailscale_ip %}• Mesh: <code>{{ s.tailscale_ip }}</code>{% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label-col"><i class="fas fa-cogs me-1"></i> Monitored Daemons</td>
+                                    <td>
+                                        <div class="service-pills-row" id="services-{{ s.server_id }}">
+                                            {% for s_name, s_stat in s.services.items() %}
+                                            {% set s_str = s_stat | string %}
+                                            {% set is_act = s_str.startswith('active') %}
+                                            {% set is_fail = s_str.startswith('failed') %}
+                                            <span class="service-pill {{ 'active' if is_act else 'failed' if is_fail else '' }}">
+                                                <i class="fas {% if is_act %}fa-check-circle text-success{% elif is_fail %}fa-times-circle text-danger{% else %}fa-circle{% endif %}"></i>
+                                                {{ s_name }}{% if ' (' in s_str %}<span style="opacity: 0.85; font-size: 0.7rem; margin-left: 3px;">{{ s_str[s_str.find(' ('):] }}</span>{% endif %}
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label-col"><i class="fas fa-heartbeat me-1"></i> Last Heartbeat</td>
+                                    <td>
+                                        <span id="hb-time-{{ s.server_id }}">{{ s.last_heartbeat }}</span>
+                                        <span class="badge-subtle ms-1" style="font-size: 0.72rem;"><i class="fas fa-lock text-success me-1"></i>HMAC-SHA256</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Fleet Management Quick Actions -->
+            <div class="fleet-action-bar">
+                <button type="button" class="btn btn-outline btn-sm" onclick="openAgentModal()">
+                    <i class="fas fa-key me-1" style="color: var(--primary);"></i> View Telemetry Agent Setup & HMAC Key
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openCleanerModal()">
+                    <i class="fas fa-broom me-1 text-warning"></i> Safe Storage Auto-Purge Playbook
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="testFleetPing()">
+                    <i class="fas fa-vial me-1 text-info"></i> Verify Agent Ingestion API
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Autonomous Resilience & Power Safeguards ── -->
+    <div class="admin-card">
+        <div class="admin-card-header">
+            <h5 class="admin-card-title">
+                <i class="fas fa-shield-virus me-1" style="color: var(--primary);"></i>
+                Autonomous Server Resilience & Power Safeguards
+            </h5>
+            <span class="pulse-security-badge" title="Auto-Recovery Active"></span>
+        </div>
+        <div class="admin-card-body">
+            <div class="safeguards-grid">
+                <!-- Safeguard 1: No Terminal Auto-Start -->
+                <div class="safeguard-card">
+                    <div class="safeguard-icon-badge">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h5 class="safeguard-title">No-Terminal Autonomous Boot</h5>
+                    <p class="safeguard-desc">
+                        Configured with <code>systemd</code> daemon management. The web app and telemetry agent resurrect automatically upon machine power-on or crash without requiring any manual SSH terminal command.
+                    </p>
+                    <span class="safeguard-badge"><i class="fas fa-check-circle"></i> Service: sd-finance.service</span>
+                </div>
+
+                <!-- Safeguard 2: Power Outage Hardware Recovery -->
+                <div class="safeguard-card">
+                    <div class="safeguard-icon-badge">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <h5 class="safeguard-title">Power Outage Auto-Reboot</h5>
+                    <p class="safeguard-desc">
+                        Remote motherboards/laptops should have BIOS setting <strong>"Restore on AC Power Loss" &rarr; "Power On"</strong> enabled. When remote grid power returns, servers turn on autonomously.
+                    </p>
+                    <span class="safeguard-badge"><i class="fas fa-plug"></i> BIOS AC Recovery Enabled</span>
+                </div>
+
+                <!-- Safeguard 3: Storage Full Crash Protection -->
+                <div class="safeguard-card">
+                    <div class="safeguard-icon-badge">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <h5 class="safeguard-title">Storage Full Crash Shield</h5>
+                    <p class="safeguard-desc">
+                        Prevents disk-full crashes by capping systemd journals at <code>200M</code>, rotating application logs, and monitoring Postgres WAL bloat before disk capacity triggers a read-only halt.
+                    </p>
+                    <span class="safeguard-badge"><i class="fas fa-shield-alt"></i> Auto-Vacuum &lt; 200MB</span>
+                </div>
+
+                <!-- Safeguard 4: Graceful Software Updates -->
+                <div class="safeguard-card">
+                    <div class="safeguard-icon-badge">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h5 class="safeguard-title">Safe OS Updates Window</h5>
+                    <p class="safeguard-desc">
+                        Ubuntu <code>unattended-upgrades</code> configured to execute security patches exclusively during off-peak maintenance windows (03:30 AM), protecting operational hours from sudden reboots.
+                    </p>
+                    <span class="safeguard-badge"><i class="fas fa-calendar-check"></i> Window: 03:30 AM</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Agent Setup & HMAC Credentials Modal -->
+<div id="agentModal" class="modal modal-backdrop-blur" style="display: none;">
+    <div class="modal-content-styled" style="max-width: 620px;">
+        <div class="modal-header-styled">
+            <h5 class="modal-title-styled">
+                <i class="fas fa-key text-success"></i> Telemetry Agent Setup & Credentials
+            </h5>
+            <button onclick="closeAgentModal()" class="modal-close-styled">&times;</button>
+        </div>
+        <div style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+            Run this one-command installer on each remote node. The agent will run as an autonomous <code>systemd</code> service and push authenticated heartbeats every 30 seconds.
+        </div>
+
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px;">Primary Server (Core App & DB):</div>
+        <div class="modal-code-block">
+            <button class="btn-copy-code" onclick="copySnippet('cmdPrimary')"><i class="fas fa-copy"></i> Copy</button>
+            <span id="cmdPrimary">sudo bash /srv/sd-finance-tool/scripts/setup_telemetry_agent.sh main_server "Primary Core Server (sivadurga.in)" "Core Web & DB" "Primary Remote Office"</span>
+        </div>
+
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; margin-top: 14px;">Secondary Backup Machine:</div>
+        <div class="modal-code-block">
+            <button class="btn-copy-code" onclick="copySnippet('cmdBackup')"><i class="fas fa-copy"></i> Copy</button>
+            <span id="cmdBackup">sudo bash /home/sd-fin-backup/scripts/setup_telemetry_agent.sh backup_server "Secondary Disaster Recovery Machine" "Database Replica & Cold Backup" "Backup Remote Site"</span>
+        </div>
+
+        <div style="margin-top: 16px; font-size: 12.5px; color: var(--text-secondary);">
+            <strong>Pre-shared HMAC Secret Key:</strong>
+            <div class="url-input-group" style="margin-top: 6px;">
+                <input type="text" id="telemetrySecretInput" class="url-input" readonly value="{{ telemetry_secret_key }}" onclick="this.select()">
+                <button onclick="copySnippet('telemetrySecretInput', true)" class="btn-copy">
+                    <i class="fas fa-copy"></i> Copy Key
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Storage Auto-Purge Playbook Modal -->
+<div id="cleanerModal" class="modal modal-backdrop-blur" style="display: none;">
+    <div class="modal-content-styled" style="max-width: 620px;">
+        <div class="modal-header-styled">
+            <h5 class="modal-title-styled">
+                <i class="fas fa-broom text-warning"></i> Safe Storage Auto-Purge Playbook
+            </h5>
+            <button onclick="closeCleanerModal()" class="modal-close-styled">&times;</button>
+        </div>
+        <div style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px;">
+            If disk usage exceeds 80%, execute these safe maintenance commands on the remote server to free several gigabytes without any risk of database data loss:
+        </div>
+
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px;">Run Siva Durga Storage Cleaner Script:</div>
+        <div class="modal-code-block">
+            <button class="btn-copy-code" onclick="copySnippet('cleanerCmd')"><i class="fas fa-copy"></i> Copy</button>
+            <span id="cleanerCmd">sudo bash /srv/sd-finance-tool/scripts/sd_emergency_disk_cleaner.sh</span>
+        </div>
+
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; margin-top: 14px;">Install as Weekly Cron Job (Recommended):</div>
+        <div class="modal-code-block">
+            <button class="btn-copy-code" onclick="copySnippet('cronCmd')"><i class="fas fa-copy"></i> Copy</button>
+            <span id="cronCmd">echo "0 3 * * 0 root /srv/sd-finance-tool/scripts/sd_emergency_disk_cleaner.sh >/var/log/sd-storage-clean.log 2>&1" | sudo tee /etc/cron.d/sd-storage-clean</span>
         </div>
     </div>
 </div>
@@ -726,6 +1492,206 @@ function copyLink() {
         copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
         copyBtn.style.background = "var(--primary)";
     }, 2000);
+}
+
+/* ── Live Fleet Telemetry Sentinel Script ── */
+let isFetchingTelemetry = false;
+
+function fetchLiveTelemetry(isManual = false) {
+    if (isFetchingTelemetry) return;
+    isFetchingTelemetry = true;
+
+    const refreshBtn = document.getElementById("refreshBtn");
+    if (isManual && refreshBtn) {
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Querying...';
+        refreshBtn.disabled = true;
+    }
+
+    fetch("/api/v1/telemetry/status")
+        .then(response => {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success || !data.servers) return;
+
+            const nowTime = new Date().toLocaleTimeString();
+            const lastCheckedBadge = document.getElementById("telemetryLastCheckedBadge");
+            if (lastCheckedBadge) {
+                lastCheckedBadge.innerHTML = `<i class="fas fa-clock me-1"></i> Checked: ${nowTime}`;
+            }
+
+            data.servers.forEach(s => {
+                const sid = s.server_id;
+                const card = document.getElementById(`node-card-${sid}`);
+                if (!card) return;
+
+                // Update card border & background classes
+                card.className = `node-card status-border-${s.status}`;
+
+                // Update status pill
+                const pill = document.getElementById(`status-pill-${sid}`);
+                if (pill) {
+                    pill.className = `status-pill ${s.status}`;
+                    pill.innerHTML = `<span class="pulse-dot ${s.status}"></span><span class="status-text">${s.status.toUpperCase()}</span>`;
+                }
+
+                // Update alert banner
+                const banner = document.getElementById(`alert-banner-${sid}`);
+                const alertMsg = document.getElementById(`alert-msg-${sid}`);
+                const alertIcon = document.getElementById(`alert-icon-${sid}`);
+                if (banner && alertMsg) {
+                    banner.className = `node-alert-banner ${s.status}`;
+                    alertMsg.innerText = s.status_msg;
+                    if (alertIcon) {
+                        alertIcon.className = s.status === 'healthy' ? 'fas fa-check-circle me-1' :
+                                              s.status === 'warning' ? 'fas fa-exclamation-triangle me-1' :
+                                              s.status === 'critical' ? 'fas fa-radiation me-1' : 'fas fa-power-off me-1';
+                    }
+                }
+
+                // Update Disk Meter
+                const diskBadge = document.getElementById(`disk-badge-${sid}`);
+                const diskBar = document.getElementById(`disk-bar-${sid}`);
+                const diskUsed = document.getElementById(`disk-used-${sid}`);
+                const diskFree = document.getElementById(`disk-free-${sid}`);
+
+                if (diskBadge) {
+                    diskBadge.innerText = `${s.disk_percent}% Used`;
+                    diskBadge.className = `gauge-val-badge ${s.disk_percent >= 90 ? 'text-danger' : s.disk_percent >= 80 ? 'text-warning' : 'text-success'}`;
+                }
+                if (diskBar) {
+                    diskBar.style.width = `${Math.min(100, Math.max(0, s.disk_percent))}%`;
+                    diskBar.className = `gauge-fill ${s.disk_percent >= 90 ? 'fill-red' : s.disk_percent >= 80 ? 'fill-amber' : 'fill-green'}`;
+                }
+                if (diskUsed) {
+                    diskUsed.innerHTML = `Used: <strong>${s.disk_used_gb} GB</strong> of ${s.disk_total_gb} GB`;
+                }
+                if (diskFree) {
+                    diskFree.innerHTML = `Free: <strong class="${s.disk_percent >= 90 ? 'text-danger' : 'text-success'}">${s.disk_free_gb} GB</strong>`;
+                }
+
+                // Update RAM
+                const ramBadge = document.getElementById(`ram-badge-${sid}`);
+                const ramBar = document.getElementById(`ram-bar-${sid}`);
+                const ramMeta = document.getElementById(`ram-meta-${sid}`);
+                if (ramBadge) ramBadge.innerText = `${s.memory_percent}%`;
+                if (ramBar) {
+                    ramBar.style.width = `${Math.min(100, Math.max(0, s.memory_percent))}%`;
+                    ramBar.className = `gauge-fill ${s.memory_percent >= 90 ? 'fill-red' : s.memory_percent >= 80 ? 'fill-amber' : 'fill-green'}`;
+                }
+                if (ramMeta) ramMeta.innerText = `${s.memory_used_gb} / ${s.memory_total_gb} GB`;
+
+                // Update CPU
+                const cpuBadge = document.getElementById(`cpu-badge-${sid}`);
+                const cpuBar = document.getElementById(`cpu-bar-${sid}`);
+                const cpuMeta = document.getElementById(`cpu-meta-${sid}`);
+                if (cpuBadge) cpuBadge.innerText = `${s.cpu_percent}%`;
+                if (cpuBar) {
+                    cpuBar.style.width = `${Math.min(100, Math.max(0, s.cpu_percent))}%`;
+                    cpuBar.className = `gauge-fill ${s.cpu_percent >= 90 ? 'fill-red' : s.cpu_percent >= 80 ? 'fill-amber' : 'fill-green'}`;
+                }
+                if (cpuMeta) cpuMeta.innerText = `Load: ${s.load_avg}`;
+
+                // Update Specs
+                const uptimeEl = document.getElementById(`uptime-${sid}`);
+                if (uptimeEl) uptimeEl.innerText = s.uptime_formatted;
+
+                const bootEl = document.getElementById(`boot-${sid}`);
+                if (bootEl) bootEl.innerText = `${s.power_status} • Boot: ${s.boot_time.substring(0, 19)}`;
+
+                const netEl = document.getElementById(`net-${sid}`);
+                if (netEl) {
+                    netEl.innerHTML = `<code>${s.hostname}</code> • LAN: <code>${s.ip_address}</code> ${s.tailscale_ip ? '• Mesh: <code>' + s.tailscale_ip + '</code>' : ''}`;
+                }
+
+                const hbEl = document.getElementById(`hb-time-${sid}`);
+                if (hbEl) hbEl.innerText = s.last_heartbeat;
+
+                // Update Services Pills
+                const servContainer = document.getElementById(`services-${sid}`);
+                if (servContainer && s.services) {
+                    let pillsHtml = '';
+                    for (const [sName, sStat] of Object.entries(s.services)) {
+                        const statStr = String(sStat || "");
+                        const isActive = statStr.startsWith('active');
+                        const isFailed = statStr.startsWith('failed');
+                        const iconClass = isActive ? 'fa-check-circle text-success' : isFailed ? 'fa-times-circle text-danger' : 'fa-circle';
+                        const badgeClass = isActive ? 'active' : isFailed ? 'failed' : '';
+                        let extra = "";
+                        if (statStr.includes(" (")) {
+                            extra = `<span style="opacity: 0.85; font-size: 0.7rem; margin-left: 3px;">${statStr.substring(statStr.indexOf(" ("))}</span>`;
+                        }
+                        pillsHtml += `<span class="service-pill ${badgeClass}"><i class="fas ${iconClass}"></i> ${sName}${extra}</span> `;
+                    }
+                    servContainer.innerHTML = pillsHtml;
+                }
+            });
+        })
+        .catch(err => {
+            console.error("[Telemetry] Polling error:", err);
+        })
+        .finally(() => {
+            isFetchingTelemetry = false;
+            if (isManual && refreshBtn) {
+                refreshBtn.innerHTML = '<i class="fas fa-sync-alt me-1"></i> Refresh';
+                refreshBtn.disabled = false;
+            }
+        });
+}
+
+// Start periodic polling every 15 seconds
+setInterval(fetchLiveTelemetry, 15000);
+
+// Modal Controls
+function openAgentModal() {
+    const m = document.getElementById("agentModal");
+    if (m) m.style.display = "flex";
+}
+
+function closeAgentModal() {
+    const m = document.getElementById("agentModal");
+    if (m) m.style.display = "none";
+}
+
+function openCleanerModal() {
+    const m = document.getElementById("cleanerModal");
+    if (m) m.style.display = "flex";
+}
+
+function closeCleanerModal() {
+    const m = document.getElementById("cleanerModal");
+    if (m) m.style.display = "none";
+}
+
+function copySnippet(elementId, isInput = false) {
+    let text = "";
+    if (isInput) {
+        const el = document.getElementById(elementId);
+        text = el ? el.value : "";
+    } else {
+        const el = document.getElementById(elementId);
+        text = el ? el.innerText : "";
+    }
+
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Command / Secret copied to clipboard!");
+    }).catch(() => {
+        // Fallback for older browsers
+        const temp = document.createElement("textarea");
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand("copy");
+        document.body.removeChild(temp);
+        alert("Command / Secret copied to clipboard!");
+    });
+}
+
+function testFleetPing() {
+    fetchLiveTelemetry(true);
+    alert("Triggered on-demand fleet ping! Status metrics refreshed.");
 }
 </script>
 {% endblock %}

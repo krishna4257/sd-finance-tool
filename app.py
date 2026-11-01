@@ -5350,13 +5350,250 @@ def get_dashboard_totals(vid):
         "sum_bamt": float(row[3]),
     }
 
+# ----------------------------------------------------
+# SERVER TELEMETRY & INFRASTRUCTURE MONITORING
+# ----------------------------------------------------
+TELEMETRY_SECRET_KEY = os.environ.get("TELEMETRY_SECRET_KEY") or os.environ.get("MOBILE_QUEUE_HMAC_SECRET") or os.environ.get("SECRET_KEY", "sdfinance-telemetry-default-key-2026")
+
+def format_uptime(seconds):
+    if not seconds or seconds < 0:
+        return "0m"
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    minutes = int((seconds % 3600) // 60)
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+def format_duration(seconds):
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours}h {minutes % 60}m"
+    days = int(hours // 24)
+    return f"{days}d {hours % 24}h"
+
+def ensure_server_telemetry_table(cur):
+    """Ensure server_telemetry table exists and has default records."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS server_telemetry (
+            server_id VARCHAR(64) PRIMARY KEY,
+            server_name VARCHAR(128) NOT NULL,
+            server_role VARCHAR(64) DEFAULT 'primary',
+            location VARCHAR(128) DEFAULT 'Remote Office 1',
+            hostname VARCHAR(128),
+            ip_address VARCHAR(64),
+            tailscale_ip VARCHAR(64),
+            status VARCHAR(32) DEFAULT 'unknown',
+            cpu_percent REAL DEFAULT 0.0,
+            cpu_cores INTEGER DEFAULT 1,
+            load_avg VARCHAR(64) DEFAULT '0.00, 0.00, 0.00',
+            memory_percent REAL DEFAULT 0.0,
+            memory_used_gb REAL DEFAULT 0.0,
+            memory_total_gb REAL DEFAULT 0.0,
+            disk_percent REAL DEFAULT 0.0,
+            disk_used_gb REAL DEFAULT 0.0,
+            disk_free_gb REAL DEFAULT 0.0,
+            disk_total_gb REAL DEFAULT 0.0,
+            uptime_seconds BIGINT DEFAULT 0,
+            boot_time TIMESTAMPTZ,
+            services JSONB DEFAULT '{}'::jsonb,
+            power_status VARCHAR(64) DEFAULT 'AC Main Normal',
+            last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("SELECT COUNT(*) FROM server_telemetry")
+    count = cur.fetchone()[0]
+    if count == 0:
+        cur.execute("""
+            INSERT INTO server_telemetry 
+            (server_id, server_name, server_role, location, status, disk_percent, disk_free_gb, disk_total_gb, memory_percent, memory_used_gb, memory_total_gb, cpu_percent, uptime_seconds, services, last_heartbeat)
+            VALUES 
+            ('main_server', 'Primary Core Server (sivadurga.in)', 'Core Web & Database', 'Primary Site', 'offline', 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, '{"sd_app": "standby", "postgresql": "standby", "cloudflared": "standby"}'::jsonb, NOW() - INTERVAL '15 minutes'),
+            ('backup_server', 'Secondary Disaster Recovery Machine', 'Database Replica & Cold Backup', 'Secondary Site', 'offline', 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, '{"replication": "standby", "backup_agent": "standby"}'::jsonb, NOW() - INTERVAL '15 minutes')
+        """)
+
+_telemetry_cache = {}
+
+def _get_default_telemetry():
+    return [
+        {
+            "server_id": "main_server",
+            "server_name": "Primary Core Server (sivadurga.in)",
+            "server_role": "Core Web & Database",
+            "location": "Primary Site",
+            "hostname": "ubuntu-sivadurga",
+            "ip_address": "192.168.1.48",
+            "tailscale_ip": "100.110.107.116",
+            "status": "offline",
+            "status_msg": "Awaiting initial agent telemetry heartbeat",
+            "cpu_percent": 0.0,
+            "cpu_cores": 4,
+            "load_avg": "0.0, 0.0, 0.0",
+            "memory_percent": 0.0,
+            "memory_used_gb": 0.0,
+            "memory_total_gb": 16.0,
+            "disk_percent": 0.0,
+            "disk_used_gb": 0.0,
+            "disk_free_gb": 0.0,
+            "disk_total_gb": 500.0,
+            "uptime_seconds": 0,
+            "uptime_formatted": "0m",
+            "boot_time": "N/A",
+            "services": {"sd_app": "standby", "postgresql": "standby", "cloudflared": "standby"},
+            "power_status": "Normal AC",
+            "last_heartbeat": "Never",
+            "seconds_since_ping": 999999,
+            "is_active": False
+        },
+        {
+            "server_id": "backup_server",
+            "server_name": "Secondary Disaster Recovery Machine",
+            "server_role": "Database Replica & Standby",
+            "location": "Secondary Site",
+            "hostname": "ubuntu-backup",
+            "ip_address": "192.168.1.213",
+            "tailscale_ip": "100.x.x.x",
+            "status": "offline",
+            "status_msg": "Awaiting initial agent telemetry heartbeat",
+            "cpu_percent": 0.0,
+            "cpu_cores": 4,
+            "load_avg": "0.0, 0.0, 0.0",
+            "memory_percent": 0.0,
+            "memory_used_gb": 0.0,
+            "memory_total_gb": 16.0,
+            "disk_percent": 0.0,
+            "disk_used_gb": 0.0,
+            "disk_free_gb": 0.0,
+            "disk_total_gb": 500.0,
+            "uptime_seconds": 0,
+            "uptime_formatted": "0m",
+            "boot_time": "N/A",
+            "services": {"replication": "standby", "backup_agent": "standby"},
+            "power_status": "Normal AC",
+            "last_heartbeat": "Never",
+            "seconds_since_ping": 999999,
+            "is_active": False
+        }
+    ]
+
+def get_fleet_telemetry(cur=None):
+    global _telemetry_cache
+    close_conn = False
+    if cur is None:
+        try:
+            conn = get_pg_connection()
+            cur = conn.cursor()
+            close_conn = True
+        except Exception as e:
+            logger.error(f"[Telemetry] DB connection failed for telemetry: {e}")
+            return list(_telemetry_cache.values()) if _telemetry_cache else _get_default_telemetry()
+    try:
+        ensure_server_telemetry_table(cur)
+        cur.execute("""
+            SELECT server_id, server_name, server_role, location, hostname, 
+                   ip_address, tailscale_ip, status, cpu_percent, cpu_cores, 
+                   load_avg, memory_percent, memory_used_gb, memory_total_gb, 
+                   disk_percent, disk_used_gb, disk_free_gb, disk_total_gb, 
+                   uptime_seconds, boot_time, services, power_status, 
+                   last_heartbeat, updated_at
+            FROM server_telemetry
+            ORDER BY CASE WHEN server_id = 'main_server' THEN 1 ELSE 2 END
+        """)
+        rows = cur.fetchall()
+        now = datetime.now(timezone.utc)
+        results = []
+        for r in rows:
+            last_hb = r[22]
+            if last_hb and last_hb.tzinfo is None:
+                last_hb = last_hb.replace(tzinfo=timezone.utc)
+            
+            diff_seconds = (now - last_hb).total_seconds() if last_hb else 999999
+            
+            # Determine health status based on thresholds
+            if diff_seconds > 120:
+                calc_status = "offline"
+                status_msg = f"Offline ({format_duration(diff_seconds)} since ping - Power/ISP out)"
+            elif (r[14] or 0) >= 90:
+                calc_status = "critical"
+                status_msg = f"CRITICAL: Storage at {r[14]:.1f}%! Immediate crash risk"
+            elif (r[14] or 0) >= 80 or (r[8] or 0) >= 90:
+                calc_status = "warning"
+                status_msg = "Warning: High Resource Utilization"
+            else:
+                calc_status = "healthy"
+                status_msg = "Optimal & Active"
+
+            uptime_formatted = format_uptime(r[18])
+            boot_formatted = r[19].strftime("%Y-%m-%d %H:%M:%S") if r[19] else "N/A"
+            last_hb_formatted = last_hb.strftime("%Y-%m-%d %H:%M:%S UTC") if last_hb else "Never"
+
+            services_data = r[20] if isinstance(r[20], dict) else {}
+            if isinstance(r[20], str):
+                try:
+                    services_data = json.loads(r[20])
+                except Exception:
+                    services_data = {}
+
+            item = {
+                "server_id": r[0],
+                "server_name": r[1],
+                "server_role": r[2],
+                "location": r[3],
+                "hostname": r[4] or "Unregistered Host",
+                "ip_address": r[5] or "N/A",
+                "tailscale_ip": r[6] or "N/A",
+                "status": calc_status,
+                "status_msg": status_msg,
+                "cpu_percent": round(float(r[8] or 0), 1),
+                "cpu_cores": int(r[9] or 1),
+                "load_avg": r[10] or "0.0, 0.0, 0.0",
+                "memory_percent": round(float(r[11] or 0), 1),
+                "memory_used_gb": round(float(r[12] or 0), 2),
+                "memory_total_gb": round(float(r[13] or 0), 2),
+                "disk_percent": round(float(r[14] or 0), 1),
+                "disk_used_gb": round(float(r[15] or 0), 2),
+                "disk_free_gb": round(float(r[16] or 0), 2),
+                "disk_total_gb": round(float(r[17] or 0), 2),
+                "uptime_seconds": int(r[18] or 0),
+                "uptime_formatted": uptime_formatted,
+                "boot_time": boot_formatted,
+                "services": services_data,
+                "power_status": r[21] or "Normal AC",
+                "last_heartbeat": last_hb_formatted,
+                "seconds_since_ping": int(diff_seconds),
+                "is_active": diff_seconds <= 120
+            }
+            results.append(item)
+            _telemetry_cache[r[0]] = item
+        return results
+    except Exception as e:
+        logger.error(f"[Telemetry] Error fetching telemetry: {e}")
+        return list(_telemetry_cache.values()) if _telemetry_cache else _get_default_telemetry()
+    finally:
+        if close_conn and cur:
+            cur.close()
+            conn.close()
+
 @app.route("/admin_control")
 @login_required
 @admin_required
 def admin_control():
-    conn = get_pg_connection()
-    cur = conn.cursor()
+    conn = None
+    cur = None
+    employees = []
+    telemetry_servers = []
     try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
         cur.execute("""
             SELECT e.eid, e.name, u.username, e.level
             FROM employee e
@@ -5373,10 +5610,141 @@ def admin_control():
             }
             for row in cur.fetchall()
         ]
-        return render_template("admin_control.html", employees=employees)
+        telemetry_servers = get_fleet_telemetry(cur)
+    except Exception as e:
+        logger.error(f"[admin_control] DB query error: {e}")
+        if not telemetry_servers:
+            telemetry_servers = get_fleet_telemetry(None)
     finally:
-        cur.close()
-        conn.close()
+        if cur: cur.close()
+        if conn: conn.close()
+
+    return render_template(
+        "admin_control.html", 
+        employees=employees, 
+        telemetry_servers=telemetry_servers,
+        telemetry_secret_key=TELEMETRY_SECRET_KEY
+    )
+
+@csrf.exempt
+@app.route("/api/v1/telemetry/heartbeat", methods=["POST"])
+def ingest_telemetry():
+    server_id = request.headers.get("X-Server-Id")
+    timestamp = request.headers.get("X-Timestamp")
+    signature = request.headers.get("X-Signature")
+
+    if not server_id or not timestamp or not signature:
+        return jsonify({"error": "Missing security authentication headers (X-Server-Id, X-Timestamp, X-Signature)"}), 401
+
+    try:
+        ts = int(timestamp)
+        now_ts = int(pytime.time())
+        if abs(now_ts - ts) > 300:
+            return jsonify({"error": "Timestamp outside acceptable 5-minute replay window"}), 401
+    except ValueError:
+        return jsonify({"error": "Invalid timestamp format"}), 400
+
+    raw_body = request.get_data(as_text=True)
+    expected_msg = f"{timestamp}:{raw_body}".encode("utf-8")
+    expected_sig = hmac.new(
+        TELEMETRY_SECRET_KEY.encode("utf-8"),
+        expected_msg,
+        hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(signature, expected_sig):
+        return jsonify({"error": "Invalid HMAC-SHA256 signature - rejected"}), 403
+
+    data = request.json or {}
+    conn = None
+    cur = None
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        ensure_server_telemetry_table(cur)
+        cur.execute("""
+            INSERT INTO server_telemetry (
+                server_id, server_name, server_role, location, hostname,
+                ip_address, tailscale_ip, status, cpu_percent, cpu_cores,
+                load_avg, memory_percent, memory_used_gb, memory_total_gb,
+                disk_percent, disk_used_gb, disk_free_gb, disk_total_gb,
+                uptime_seconds, boot_time, services, power_status,
+                last_heartbeat, updated_at
+            ) VALUES (
+                %(server_id)s, %(server_name)s, %(server_role)s, %(location)s, %(hostname)s,
+                %(ip_address)s, %(tailscale_ip)s, %(status)s, %(cpu_percent)s, %(cpu_cores)s,
+                %(load_avg)s, %(memory_percent)s, %(memory_used_gb)s, %(memory_total_gb)s,
+                %(disk_percent)s, %(disk_used_gb)s, %(disk_free_gb)s, %(disk_total_gb)s,
+                %(uptime_seconds)s, %(boot_time)s, %(services)s, %(power_status)s,
+                NOW(), NOW()
+            )
+            ON CONFLICT (server_id) DO UPDATE SET
+                server_name = COALESCE(EXCLUDED.server_name, server_telemetry.server_name),
+                server_role = COALESCE(EXCLUDED.server_role, server_telemetry.server_role),
+                location = COALESCE(EXCLUDED.location, server_telemetry.location),
+                hostname = EXCLUDED.hostname,
+                ip_address = EXCLUDED.ip_address,
+                tailscale_ip = EXCLUDED.tailscale_ip,
+                status = EXCLUDED.status,
+                cpu_percent = EXCLUDED.cpu_percent,
+                cpu_cores = EXCLUDED.cpu_cores,
+                load_avg = EXCLUDED.load_avg,
+                memory_percent = EXCLUDED.memory_percent,
+                memory_used_gb = EXCLUDED.memory_used_gb,
+                memory_total_gb = EXCLUDED.memory_total_gb,
+                disk_percent = EXCLUDED.disk_percent,
+                disk_used_gb = EXCLUDED.disk_used_gb,
+                disk_free_gb = EXCLUDED.disk_free_gb,
+                disk_total_gb = EXCLUDED.disk_total_gb,
+                uptime_seconds = EXCLUDED.uptime_seconds,
+                boot_time = EXCLUDED.boot_time,
+                services = EXCLUDED.services,
+                power_status = EXCLUDED.power_status,
+                last_heartbeat = NOW(),
+                updated_at = NOW()
+        """, {
+            "server_id": server_id,
+            "server_name": data.get("server_name", "Remote Node"),
+            "server_role": data.get("server_role", "Standby"),
+            "location": data.get("location", "Remote Site"),
+            "hostname": data.get("hostname", "Unknown"),
+            "ip_address": data.get("ip_address", request.remote_addr),
+            "tailscale_ip": data.get("tailscale_ip", ""),
+            "status": "online",
+            "cpu_percent": float(data.get("cpu_percent", 0)),
+            "cpu_cores": int(data.get("cpu_cores", 1)),
+            "load_avg": data.get("load_avg", "0.0, 0.0, 0.0"),
+            "memory_percent": float(data.get("memory_percent", 0)),
+            "memory_used_gb": float(data.get("memory_used_gb", 0)),
+            "memory_total_gb": float(data.get("memory_total_gb", 0)),
+            "disk_percent": float(data.get("disk_percent", 0)),
+            "disk_used_gb": float(data.get("disk_used_gb", 0)),
+            "disk_free_gb": float(data.get("disk_free_gb", 0)),
+            "disk_total_gb": float(data.get("disk_total_gb", 0)),
+            "uptime_seconds": int(data.get("uptime_seconds", 0)),
+            "boot_time": data.get("boot_time"),
+            "services": json.dumps(data.get("services", {})),
+            "power_status": data.get("power_status", "Normal AC"),
+        })
+        conn.commit()
+        return jsonify({"success": True, "server_id": server_id, "status": "heartbeat_recorded", "timestamp": now_ts})
+    except Exception as e:
+        logger.error(f"[Telemetry] Ingest error: {e}")
+        return jsonify({"error": "Failed to record telemetry", "details": str(e)}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@app.route("/api/v1/telemetry/status")
+@login_required
+@admin_required
+def telemetry_status_api():
+    servers = get_fleet_telemetry()
+    return jsonify({
+        "success": True,
+        "servers": servers,
+        "checked_at": datetime.now(timezone.utc).isoformat()
+    })
 
 def get_customer_analytics(vid):
     conn = get_pg_connection()
