@@ -1940,7 +1940,10 @@ document.addEventListener("DOMContentLoaded", () => {
       data: {
         cid: activeCustomerCid,
         name: name,
-        status: (document.getElementById("popStatusBadge")?.textContent || "active").trim().toLowerCase(),
+        status: (function() {
+          const raw = (document.getElementById("popStatusBadge")?.textContent || "active").trim().toLowerCase();
+          return (raw === "open" || raw === "active") ? "active" : raw;
+        })(),
         total_amount: parseFloat(document.getElementById("popInputTotalAmount").value) || 0,
         installment_amount: parseFloat(document.getElementById("popInputInstallment").value) || 0,
         type: document.getElementById("popInputType").value,

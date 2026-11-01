@@ -11351,18 +11351,17 @@ def update_customer_pg():
     try:
 
         # ðŸ”¹ Detect table based on status
-        status = (data.get("status") or "active").strip().lower()
-
-        if status == "active":
-            table_name = "customer"
-        else:
-            table_name = "closed_cust_account"        # ðŸ”¹ Fetch existing paid amount and interest discount
-        cur.execute(f"""
-            SELECT paid_amount, COALESCE(interest_discount, 0.00)
-            FROM {table_name}
+        # 🔹 Detect target table and fetch existing data by cid
+        cur.execute("""
+            SELECT paid_amount, COALESCE(interest_discount, 0.00), vid, 'customer' AS target_table
+            FROM customer
             WHERE cid = %s
-              AND vid = %s
-        """, (cid, vid))
+            UNION ALL
+            SELECT paid_amount, COALESCE(interest_discount, 0.00), vid, 'closed_cust_account' AS target_table
+            FROM closed_cust_account
+            WHERE cid = %s
+            LIMIT 1;
+        """, (cid, cid))
 
         existing = cur.fetchone()
 
@@ -11370,6 +11369,9 @@ def update_customer_pg():
             return jsonify(success=False, error="Customer not found"), 404
 
         paid_amount = float(existing[0] or 0)
+        actual_vid = existing[2]
+        table_name = existing[3]
+        target_vid = actual_vid if actual_vid else vid
         try:
             interest_discount = float(data.get("interest_discount") if data.get("interest_discount") is not None else existing[1] or 0.0)
         except Exception:
@@ -11468,12 +11470,11 @@ def update_customer_pg():
                     interest_discount = %s,
                     updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
                 WHERE cid = %s
-                  AND vid = %s
             """, (
                 name, start_date, end_date, total_amount, balance_amount, installment_amount,
                 loan_type, period, pano, notes, phone_number,
                 base_amount, cutting_amount, interest_amount, interest_discount,
-                cid, vid
+                cid
             ))
         else:
             cur.execute(f"""
@@ -11495,12 +11496,11 @@ def update_customer_pg():
                     interest_amount = %s,
                     interest_discount = %s
                 WHERE cid = %s
-                  AND vid = %s
             """, (
                 name, start_date, end_date, total_amount, balance_amount, installment_amount,
                 loan_type, period, pano, notes, phone_number,
                 base_amount, cutting_amount, interest_amount, interest_discount,
-                cid, vid
+                cid
             ))
 
 
@@ -11508,7 +11508,7 @@ def update_customer_pg():
         recalc_customer_repayment_score(cur, cid, force_recalc=True)
 
         # Invalidate cache for this village
-        invalidate_village_health_cache(cur, vid, start_date)
+        invalidate_village_health_cache(cur, target_vid, start_date)
 
         conn.commit()
 
