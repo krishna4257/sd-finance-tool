@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investor Statement – {{ investor.full_name }} ({{ investor.investor_code }})</title>
+
+  <!-- Google Fonts: Space Grotesk & Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    .font-brand {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .font-mono-fig {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .statement-sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 20px auto;
+      background: #ffffff;
+      padding: 20mm 18mm;
+      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    @media print {
+      body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .statement-sheet {
+        margin: 0 !important;
+        padding: 12mm 15mm !important;
+        width: 100% !important;
+        min-height: auto !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+
+      table {
+        page-break-inside: auto;
+      }
+
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+    }
+  </style>
+</head>
+
+<body class="py-6">
+
+  <!-- Print & Download Control Bar (Screen Only) -->
+  <div class="no-print max-w-4xl mx-auto mb-6 px-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/banking/investors/{{ investor.id }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors shadow-xs">
+        &larr; Back to Investor Folio
+      </a>
+      <span class="text-xs text-slate-500">Official Confidential Statement</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="window.print()" class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-black shadow-md transition-all cursor-pointer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
+        <span>Print Statement / Save as PDF</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Printable Statement Sheet (A4 Layout) -->
+  <div class="statement-sheet">
+
+    <!-- ==================== CORPORATE LETTERHEAD ==================== -->
+    <div class="flex items-start justify-between border-b-2 border-slate-900 pb-5">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <div class="h-10 w-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-bold text-lg">
+            SD
+          </div>
+          <div>
+            <h1 class="text-xl font-brand font-bold text-slate-900 tracking-tight">
+              SIVA DURGA FINANCE
+            </h1>
+            <p class="text-[11px] font-semibold text-slate-600 uppercase tracking-widest">
+              Investment Banking & Rural Treasury Services
+            </p>
+          </div>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-2 leading-relaxed">
+          Central Treasury Office · Head Office Branch · Andhra Pradesh<br>
+          Contact: +91 94400 00000 · Email: treasury@sivadurgafinance.com
+        </p>
+      </div>
+
+      <div class="text-right">
+        <span class="inline-block px-3 py-1 bg-slate-100 text-slate-900 font-bold text-[11px] rounded-md tracking-wider uppercase mb-1.5 border border-slate-200">
+          INVESTOR FOLIO STATEMENT
+        </span>
+        <p class="text-[10px] text-slate-500">
+          Statement Date: <b class="text-slate-800">{{ today_date or '' }}</b>
+        </p>
+        <p class="text-[10px] text-slate-500">
+          Folio Code: <b class="font-mono text-slate-900">{{ investor.investor_code }}</b>
+        </p>
+      </div>
+    </div>
+
+    <!-- ==================== INVESTOR DOSSIER & KYC SUMMARY ==================== -->
+    <div class="grid grid-cols-2 gap-4 py-4 border-b border-slate-200 text-xs">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Investor Profile</span>
+        <h2 class="text-sm font-bold text-slate-900">{{ investor.full_name }}</h2>
+        <p class="text-slate-600 mt-0.5">Phone: <span class="font-mono">{{ investor.phone_number }}</span></p>
+        {% if investor.address %}
+          <p class="text-slate-500 text-[11px] mt-0.5 leading-snug">{{ investor.address }}</p>
+        {% endif %}
+      </div>
+
+      <div class="text-right">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Tax & Regulatory Identity</span>
+        <p class="text-slate-600">PAN: <span class="font-mono font-bold uppercase text-slate-800">{{ investor.pan_number or 'N/A' }}</span></p>
+        <p class="text-slate-600 mt-0.5">Aadhaar: <span class="font-mono text-slate-800">{% if investor.aadhaar_number %}•••• •••• {{ investor.aadhaar_number[-4:] }}{% else %}N/A{% endif %}</span></p>
+        <p class="text-slate-600 mt-0.5">Global Shareholding: <span class="font-mono font-bold text-slate-900">{{ '{:.3f}%'.format(investor.global_share_pct or 0) }}</span></p>
+      </div>
+    </div>
+
+    <!-- ==================== FINANCIAL SUMMARY CARDS ==================== -->
+    <div class="my-5">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Folio Balance Summary</span>
+      <div class="grid grid-cols-4 gap-3 text-center">
+        <!-- 1. Total Capital -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <span class="text-[10px] font-bold text-slate-500 uppercase">Total Capital</span>
+          <p class="font-mono-fig text-sm font-bold text-slate-900 mt-1">
+            {{ format_inr(investor.total_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.total_capital or 0)) }}
+          </p>
+        </div>
+
+        <!-- 2. Deployed Capital -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <span class="text-[10px] font-bold text-blue-700 uppercase">Deployed to Routes</span>
+          <p class="font-mono-fig text-sm font-bold text-blue-800 mt-1">
+            {{ format_inr(investor.deployed_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.deployed_capital or 0)) }}
+          </p>
+        </div>
+
+        <!-- 3. Accrued 24% Interest -->
+        <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
+          <span class="text-[10px] font-bold text-amber-800 uppercase">Accrued Return</span>
+          <p class="font-mono-fig text-sm font-bold text-amber-900 mt-1">
+            {{ format_inr(investor.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.accrued_interest or 0)) }}
+          </p>
+        </div>
+
+        <!-- 4. Liquid Idle Cash -->
+        <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+          <span class="text-[10px] font-bold text-emerald-800 uppercase">Liquid Idle Cash</span>
+          <p class="font-mono-fig text-sm font-bold text-emerald-900 mt-1">
+            {{ format_inr(investor.idle_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.idle_balance or 0)) }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ACTIVE VILLAGE ROUTE DEPLOYMENTS ==================== -->
+    <div class="my-6">
+      <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">
+          Active Village Route Deployments (24% Annual Compounding)
+        </h3>
+        <span class="text-[10px] text-slate-500 font-mono">30/360 Day Model</span>
+      </div>
+
+      <table class="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
+        <thead class="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200">
+          <tr>
+            <th class="py-2 px-3">Route Bank</th>
+            <th class="py-2 px-3 text-right">Capital Deployed</th>
+            <th class="py-2 px-3">Allocation Date</th>
+            <th class="py-2 px-3 text-right">Days</th>
+            <th class="py-2 px-3 text-right">Accrued Return (₹)</th>
+            <th class="py-2 px-3 text-right">Payoff Balance (₹)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% if allocations and allocations|length > 0 %}
+            {% for a in allocations %}
+              {% if not a.is_reversed %}
+                <tr>
+                  <td class="py-2 px-3 font-semibold text-slate-900">
+                    {{ a.group_name }} <span class="font-mono text-slate-500 text-[10px]">({{ a.group_code }})</span>
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono-fig font-bold text-slate-900">
+                    {{ format_inr(a.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.amount)) }}
+                  </td>
+                  <td class="py-2 px-3 text-slate-600">
+                    {{ a.allocation_date.strftime('%d-%m-%Y') if a.allocation_date.strftime is defined else a.allocation_date }}
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono-fig text-slate-600">
+                    {{ a.days_elapsed or 0 }}
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono-fig font-semibold text-amber-700">
+                    {{ format_inr(a.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.accrued_interest or 0)) }}
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono-fig font-bold text-slate-900">
+                    {{ format_inr(a.total_payoff) if format_inr is defined else ('₹' ~ '{:,.0f}'.format((a.amount or 0) + (a.accrued_interest or 0))) }}
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="py-4 text-center text-slate-400 italic">No active capital allocations deployed to village routes currently.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ==================== PERSONAL DRAWINGS & EXPENSES ==================== -->
+    <div class="my-6">
+      <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">
+          Personal Expense Account / Drawings (Debited to Folio)
+        </h3>
+        <span class="text-[10px] text-slate-500">Total: {{ format_inr(investor.personal_expenses_total) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.personal_expenses_total or 0)) }}</span>
+      </div>
+
+      <table class="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
+        <thead class="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200">
+          <tr>
+            <th class="py-2 px-3">Date</th>
+            <th class="py-2 px-3">Item Description</th>
+            <th class="py-2 px-3">Receipt / Bill #</th>
+            <th class="py-2 px-3">Mode</th>
+            <th class="py-2 px-3 text-right">Amount Debited (₹)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% if personal_expenses and personal_expenses|length > 0 %}
+            {% for pe in personal_expenses %}
+              {% if not pe.is_reversed %}
+                <tr>
+                  <td class="py-2 px-3 text-slate-700 whitespace-nowrap">
+                    {{ pe.expense_date.strftime('%d-%m-%Y') if pe.expense_date.strftime is defined else pe.expense_date }}
+                  </td>
+                  <td class="py-2 px-3 font-medium text-slate-900">
+                    {{ pe.item_description }}
+                  </td>
+                  <td class="py-2 px-3 font-mono text-slate-500">
+                    {{ pe.receipt_no or '-' }}
+                  </td>
+                  <td class="py-2 px-3 font-mono text-slate-600">
+                    {{ pe.payment_mode }}
+                  </td>
+                  <td class="py-2 px-3 text-right font-mono-fig font-bold text-rose-600">
+                    {{ format_inr(pe.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(pe.amount)) }}
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="py-3 text-center text-slate-400 italic">No personal drawings logged for this period.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ==================== SIGNATURE & AUTHORIZATION FOOTER ==================== -->
+    <div class="mt-14 pt-6 border-t border-slate-300">
+      <div class="grid grid-cols-3 gap-6 text-center text-xs">
+        <div>
+          <div class="h-12 flex items-end justify-center">
+            <span class="text-[11px] font-mono text-slate-400">System Generated</span>
+          </div>
+          <div class="border-t border-slate-400 pt-1.5 font-bold text-slate-700">
+            Prepared By
+          </div>
+        </div>
+
+        <div>
+          <div class="h-12 flex items-end justify-center">
+            <span class="text-[11px] font-mono font-semibold text-slate-800">Admin Treasury</span>
+          </div>
+          <div class="border-t border-slate-400 pt-1.5 font-bold text-slate-700">
+            Checked & Verified By
+          </div>
+        </div>
+
+        <div>
+          <div class="h-12"></div>
+          <div class="border-t border-slate-400 pt-1.5 font-bold text-slate-700">
+            Investor Signature
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 text-center text-[9px] text-slate-400">
+        This document is an official financial statement issued by Siva Durga Finance. Any discrepancies must be reported within 15 days of issue.
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Auto-trigger print dialog if ?print=true parameter is present in URL
+    document.addEventListener('DOMContentLoaded', function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('print') === 'true') {
+        window.print();
+      }
+    });
+  </script>
+</body>
+
+</html>

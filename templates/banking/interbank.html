@@ -1,0 +1,316 @@
+{% extends "banking/base.html" %}
+
+{% block title %}Chit Fund Bridge – Central Bank{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ==================== HEADER & TRANSFER TRIGGER ==================== -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+          Chit Fund Bridge
+        </h2>
+        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-300 dark:border-teal-700">
+          Liquidity Protocol
+        </span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="button" onclick="openTransferModal()"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-95 shadow-md shadow-teal-600/20 transition-all">
+        <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+        <span>Transfer Funds (PIN Protected)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <!-- Chit -> Investment -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Chit ➔ Investment Bank</span>
+        <div class="h-8 w-8 rounded-xl bg-teal-500/10 text-teal-500 flex items-center justify-center">
+          <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-teal-600 dark:text-teal-400 mt-2">
+        {{ format_inr(summary.total_chit_to_inv) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_chit_to_inv or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Foreman commission surpluses transferred</p>
+    </div>
+
+    <!-- Investment -> Chit -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Investment ➔ Chit Bank</span>
+        <div class="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+          <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-blue-600 dark:text-blue-400 mt-2">
+        {{ format_inr(summary.total_inv_to_chit) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_inv_to_chit or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Pot deficit liquidity injections</p>
+    </div>
+
+    <!-- Net Balance -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Net Liquidity Position</span>
+        <div class="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <i data-lucide="scale" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-slate-900 dark:text-white mt-2">
+        {{ format_inr(summary.net_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.net_balance or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Net position with Chit Banking system</p>
+    </div>
+  </div>
+
+  <!-- ==================== INTER-BANK TRANSFERS LEDGER ==================== -->
+  <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="history" class="w-5 h-5 text-teal-500"></i>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Inter-Bank Liquidity Movements Ledger</h3>
+        <span class="text-xs text-slate-400">({{ transfers|length if transfers is defined else 0 }} records)</span>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+            <th class="py-3 px-4">Transfer Date</th>
+            <th class="py-3 px-4">Direction</th>
+            <th class="py-3 px-4">Related Chit Group</th>
+            <th class="py-3 px-4">Mode</th>
+            <th class="py-3 px-4 text-right">Amount</th>
+            <th class="py-3 px-4">Reason / Notes</th>
+            <th class="py-3 px-4 text-center">Auth Status</th>
+            <th class="py-3 px-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+          {% if transfers and transfers|length > 0 %}
+            {% for tr in transfers %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors {% if tr.is_reversed %}reversed-row{% endif %}">
+                <td class="py-3.5 px-4 font-medium whitespace-nowrap {% if tr.is_reversed %}reversed-text{% endif %}">
+                  {{ tr.transfer_date.strftime('%d-%m-%Y') if tr.transfer_date.strftime is defined else tr.transfer_date }}
+                </td>
+
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                  {% if tr.direction == 'CHIT_TO_INVESTMENT' %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-300">
+                      <i data-lucide="arrow-down-left" class="w-3 h-3"></i>
+                      Chit ➔ Investment
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300">
+                      <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+                      Investment ➔ Chit
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3.5 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                  {{ tr.chit_group_name or 'General Pool' }}
+                </td>
+
+                <td class="py-3.5 px-4 font-mono font-medium whitespace-nowrap">
+                  {{ tr.payment_mode }}
+                </td>
+
+                <td class="py-3.5 px-4 text-right font-mono font-black text-slate-900 dark:text-white whitespace-nowrap {% if tr.is_reversed %}reversed-text{% endif %}">
+                  {{ format_inr(tr.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(tr.amount)) }}
+                </td>
+
+                <td class="py-3.5 px-4 text-slate-600 dark:text-slate-400 max-w-sm truncate">
+                  {{ tr.reason }}
+                </td>
+
+                <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                  {% if tr.is_reversed %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300">[REVERSED]</span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300">Admin Verified</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  {% if not tr.is_reversed %}
+                    <button type="button" onclick="reverseTransfer('{{ tr.id }}', {{ tr.amount }})"
+                      title="Reverse Transfer"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400 italic">Reversed</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="py-10 text-center text-slate-400">
+                <i data-lucide="arrow-left-right" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
+                <p class="text-sm font-semibold">No inter-bank fund transfers recorded</p>
+                <p class="text-xs text-slate-400 mt-0.5">Use "Transfer Funds" above to bridge liquidity between Chit & Investment Bank</p>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: TRANSFER FUNDS (PIN PROTECTED) ==================== -->
+<div id="transferFundsModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full my-6 overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-teal-500/10 text-teal-500 flex items-center justify-center">
+          <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Inter-Bank Liquidity Bridge</h3>
+          <p class="text-xs text-teal-600 dark:text-teal-400 font-semibold">Admin Master PIN Required</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeTransferModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <form id="transferFundsForm" onsubmit="submitInterbankTransfer(event)" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Transfer Direction *</label>
+        <select name="direction" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="CHIT_TO_INVESTMENT">Chit Fund ➔ Investment Treasury (Surplus Deposit)</option>
+          <option value="INVESTMENT_TO_CHIT">Investment Treasury ➔ Chit Fund (Pot Deficit Funding)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Associated Chit Group (Optional)</label>
+        <select name="chit_group_id" class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="">-- General Chit Entity --</option>
+          {% if chit_groups %}
+            {% for cg in chit_groups %}
+              <option value="{{ cg.id }}">{{ cg.name }} (Value: ₹{{ '{:,.0f}'.format(cg.chit_value or 0) }})</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Transfer Amount (₹) *</label>
+          <input type="number" step="0.01" min="1" name="amount" required placeholder="50000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI / Bank Transfer</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Transfer Date *</label>
+        <input type="date" name="transfer_date" id="interbankDateInput" required
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason / Purpose *</label>
+        <input type="text" name="reason" required placeholder="e.g. Month 12 foreman auction surplus transfer"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closeTransferModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-md">Authorize & Transfer</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().split('T')[0];
+    const tdInp = document.getElementById('interbankDateInput');
+    if (tdInp) tdInp.value = today;
+  });
+
+  function openTransferModal() {
+    const m = document.getElementById('transferFundsModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeTransferModal() {
+    const m = document.getElementById('transferFundsModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  async function submitInterbankTransfer(e) {
+    e.preventDefault();
+    const form = e.target;
+    const amount = parseFloat(form.querySelector('[name="amount"]').value) || 0;
+    const direction = form.querySelector('[name="direction"]').value;
+    const directionLabel = direction === 'CHIT_TO_INVESTMENT' ? 'Chit ➔ Investment Bank' : 'Investment ➔ Chit Bank';
+
+    try {
+      const auth = await SD_BANKING.promptAdminPin({
+        title: 'Authorize Inter-Bank Transfer',
+        message: `Confirm moving ${SD_BANKING.formatINR(amount)} across systems (${directionLabel})?`,
+        actionLabel: 'Authorize Inter-Bank Bridge'
+      });
+
+      const res = await SD_BANKING.bankingFetch('/banking/api/interbank/transfer', {
+        method: 'POST',
+        body: {
+          direction: direction,
+          chit_group_id: form.querySelector('[name="chit_group_id"]').value || null,
+          amount: amount,
+          payment_mode: form.querySelector('[name="payment_mode"]').value,
+          transfer_date: form.querySelector('[name="transfer_date"]').value,
+          reason: form.querySelector('[name="reason"]').value,
+          pin: auth.pin
+        }
+      });
+
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Transferred ${SD_BANKING.formatINR(amount)} successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        throw new Error(res.error || 'Transfer failed');
+      }
+    } catch (err) {
+      if (err.message !== 'Verification cancelled') {
+        SD_BANKING.showToast(err.message, 'error');
+      }
+    }
+  }
+
+  function reverseTransfer(id, amount) {
+    SD_BANKING.promptReversal({
+      txnType: 'Inter-Bank Transfer',
+      txnId: id,
+      amount: amount,
+      endpoint: `/banking/api/interbank/${id}/reverse`
+    });
+  }
+</script>
+{% endblock %}

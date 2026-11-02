@@ -1,0 +1,525 @@
+{% extends "banking/base.html" %}
+
+{% block title %}Direct Loans – Central Bank{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ==================== HEADER & ACTIONS ==================== -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+          Direct Loans
+        </h2>
+        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+          {{ loans|length if loans is defined else 0 }} Loans
+        </span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="button" onclick="openRecordRepaymentModal()"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-all">
+        <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+        <span>Record Repayment</span>
+      </button>
+
+      <button type="button" onclick="openIssueLoanModal()"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-95 shadow-md shadow-amber-600/20 transition-all">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Issue Direct Loan</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Disbursed</div>
+      <p class="money-fig text-xl font-black text-slate-900 dark:text-white mt-1">
+        {{ format_inr(summary.total_disbursed) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_disbursed or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Balance Outstanding</div>
+      <p class="money-fig text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+        {{ format_inr(summary.total_outstanding) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_outstanding or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Interest Collected</div>
+      <p class="money-fig text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+        {{ format_inr(summary.total_interest_collected) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_interest_collected or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Borrowers</div>
+      <p class="money-fig text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
+        {{ summary.active_borrowers or (loans|length if loans is defined else 0) }} Accounts
+      </p>
+    </div>
+  </div>
+
+  <!-- ==================== DIRECT LOANS TABLE ==================== -->
+  <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <i data-lucide="briefcase" class="w-5 h-5 text-amber-500"></i>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Active Loan Contracts</h3>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <select id="loanStatusFilter" onchange="filterLoansTable()"
+          class="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="ALL">All Status</option>
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="SETTLED">SETTLED</option>
+          <option value="DEFAULTED">DEFAULTED</option>
+        </select>
+
+        <div class="relative">
+          <input type="search" id="loanSearchInput" name="loan_search_term" role="searchbox" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="filterLoansTable()" placeholder="Search borrower, phone..."
+            class="w-48 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-8 pr-3 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse" id="loansMasterTable">
+        <thead>
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+            <th class="py-3 px-4">Borrower Details</th>
+            <th class="py-3 px-4 text-right">Principal</th>
+            <th class="py-3 px-4 text-center">Rate</th>
+            <th class="py-3 px-4">Disbursed Date</th>
+            <th class="py-3 px-4">Repayment Type</th>
+            <th class="py-3 px-4">Revenue Attribution</th>
+            <th class="py-3 px-4 text-right">Outstanding</th>
+            <th class="py-3 px-4 text-center">Status</th>
+            <th class="py-3 px-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+          {% if loans and loans|length > 0 %}
+            {% for ln in loans %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors loan-row {% if ln.is_reversed %}reversed-row{% endif %}"
+                  data-status="{{ ln.status }}"
+                  data-search="{{ (ln.borrower_name or '') ~ ' ' ~ (ln.phone_number or '') ~ ' ' ~ (ln.aadhaar_number or '') }}">
+                
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                  <div class="font-bold text-slate-900 dark:text-white {% if ln.is_reversed %}reversed-text{% endif %}">
+                    {{ ln.borrower_name }}
+                  </div>
+                  <div class="text-[10px] text-slate-400 font-mono">
+                    {{ ln.phone_number }} {% if ln.aadhaar_number %}· Aadhaar: ••••{{ ln.aadhaar_number[-4:] }}{% endif %}
+                  </div>
+                </td>
+
+                <td class="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap {% if ln.is_reversed %}reversed-text{% endif %}">
+                  {{ format_inr(ln.principal_amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(ln.principal_amount)) }}
+                </td>
+
+                <td class="py-3.5 px-4 text-center font-mono text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">
+                  {{ ln.annual_interest_rate }}%
+                </td>
+
+                <td class="py-3.5 px-4 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                  {{ ln.disbursal_date.strftime('%d-%m-%Y') if ln.disbursal_date.strftime is defined else ln.disbursal_date }}
+                </td>
+
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    {{ ln.repayment_type }}
+                  </span>
+                </td>
+
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                  {% if ln.revenue_allocation == 'ATTRIBUTED' and ln.investor_name %}
+                    <span class="text-blue-600 dark:text-blue-400 font-semibold">{{ ln.investor_name }}</span>
+                  {% else %}
+                    <span class="text-slate-500 font-medium">Pooled Treasury</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3.5 px-4 text-right font-mono font-black text-rose-600 dark:text-rose-400 whitespace-nowrap {% if ln.is_reversed %}reversed-text{% endif %}">
+                  {{ format_inr(ln.outstanding_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(ln.outstanding_balance or ln.principal_amount)) }}
+                </td>
+
+                <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                  {% if ln.is_reversed %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">[REVERSED]</span>
+                  {% elif ln.status == 'SETTLED' %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300">Settled</span>
+                  {% elif ln.status == 'DEFAULTED' %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">Defaulted</span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300">Active</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3.5 px-4 text-right whitespace-nowrap space-x-1">
+                  {% if not ln.is_reversed and ln.status != 'SETTLED' %}
+                    <button type="button" onclick="selectLoanForRepayment('{{ ln.id }}', '{{ ln.borrower_name }}', {{ ln.outstanding_balance or ln.principal_amount }})"
+                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      Repay
+                    </button>
+                    <button type="button" onclick="reverseLoan('{{ ln.id }}', {{ ln.principal_amount }})"
+                      title="Reverse Loan"
+                      class="p-1 rounded-lg text-slate-400 hover:text-rose-500">
+                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    </button>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400 italic">Closed</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="9" class="py-8 text-center text-slate-400">No direct loans issued yet. Click "Issue Direct Loan" to disburse credit.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: ISSUE DIRECT LOAN ==================== -->
+<div id="issueLoanModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full my-6 overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <i data-lucide="briefcase" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Issue Direct Loan</h3>
+          <p class="text-xs text-slate-500">Direct credit line contract</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeIssueLoanModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <form id="issueLoanForm" onsubmit="submitIssueLoan(event)" class="p-6 space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Borrower Full Name *</label>
+          <input type="text" name="borrower_name" required placeholder="V. Ramakrishna"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number *</label>
+          <input type="tel" name="phone_number" required placeholder="9876543210" pattern="[0-9]{10}"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Aadhaar (Optional)</label>
+          <input type="text" name="aadhaar_number" placeholder="12-digit Aadhaar" maxlength="12"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Principal Amount (₹) *</label>
+          <input type="number" step="0.01" min="1" name="principal_amount" required placeholder="100000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Annual Interest Rate (% p.a.) *</label>
+          <input type="number" step="0.1" min="1" max="100" name="annual_interest_rate" value="24.0" required
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Disbursal Date *</label>
+          <input type="date" name="disbursal_date" id="loanDisbursalDate" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Due Date</label>
+          <input type="date" name="due_date"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Repayment Type *</label>
+          <select name="repayment_type" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="MONTHLY_INTEREST">Monthly Interest (Bullet Principal)</option>
+            <option value="INSTALLMENT">Monthly EMI / Installment</option>
+            <option value="BULLET">Bullet Payoff at Maturity</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Revenue Allocation *</label>
+          <select name="revenue_allocation" id="loanRevenueAlloc" onchange="toggleLoanInvestorSelect()" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="POOLED">POOLED (Treasury Pool)</option>
+            <option value="ATTRIBUTED">ATTRIBUTED (Specific Investor)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="loanInvestorGroup" class="hidden">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Funding Investor *</label>
+        <select name="funding_investor_id" class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="">-- Choose Investor --</option>
+          {% if investors %}
+            {% for inv in investors %}
+              <option value="{{ inv.id }}">{{ inv.full_name }} ({{ inv.investor_code }})</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Notes / Security Details</label>
+        <input type="text" name="notes" placeholder="Promissory note # / Property deed copy reference"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button type="button" onclick="closeIssueLoanModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+        <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md">Disburse Loan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: RECORD REPAYMENT ==================== -->
+<div id="recordRepaymentModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+          <i data-lucide="arrow-down-left" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Record Loan Repayment</h3>
+      </div>
+      <button type="button" onclick="closeRecordRepaymentModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <form id="recordRepaymentForm" onsubmit="submitLoanRepayment(event)" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Select Loan Account *</label>
+        <select name="loan_id" id="repayLoanSelect" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="">-- Choose Loan --</option>
+          {% if loans %}
+            {% for ln in loans %}
+              {% if ln.status != 'SETTLED' and not ln.is_reversed %}
+                <option value="{{ ln.id }}">{{ ln.borrower_name }} (Bal: ₹{{ '{:,.0f}'.format(ln.outstanding_balance or ln.principal_amount) }})</option>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Principal Paid (₹) *</label>
+          <input type="number" step="1" min="0" name="principal_amount" id="repayPrincipalInp" value="0" oninput="calcRepaymentTotal()"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Interest Paid (₹) *</label>
+          <input type="number" step="1" min="0" name="interest_amount" id="repayInterestInp" value="0" oninput="calcRepaymentTotal()"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Total Repaid (₹)</label>
+          <input type="text" id="repayTotalDisplay" readonly value="₹0"
+            class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2.5 text-emerald-600">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Payment Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Repayment Date *</label>
+        <input type="date" name="repayment_date" id="repaymentDateInput" required
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closeRecordRepaymentModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">Confirm Repayment</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().split('T')[0];
+    const ld = document.getElementById('loanDisbursalDate');
+    const rd = document.getElementById('repaymentDateInput');
+    if (ld) ld.value = today;
+    if (rd) rd.value = today;
+
+    // Check URL query param ?action=new
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'new') {
+      openIssueLoanModal();
+    }
+  });
+
+  function openIssueLoanModal() {
+    const m = document.getElementById('issueLoanModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeIssueLoanModal() {
+    const m = document.getElementById('issueLoanModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function openRecordRepaymentModal() {
+    const m = document.getElementById('recordRepaymentModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeRecordRepaymentModal() {
+    const m = document.getElementById('recordRepaymentModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function toggleLoanInvestorSelect() {
+    const alloc = document.getElementById('loanRevenueAlloc').value;
+    const grp = document.getElementById('loanInvestorGroup');
+    if (alloc === 'ATTRIBUTED') {
+      grp.classList.remove('hidden');
+    } else {
+      grp.classList.add('hidden');
+    }
+  }
+
+  function filterLoansTable() {
+    const input = document.getElementById('loanSearchInput');
+    if (input && input.value && !input._userHasTyped) {
+      input.value = '';
+    }
+    const status = document.getElementById('loanStatusFilter').value;
+    const query = ((input ? input.value : '') || '').toLowerCase();
+    const rows = document.querySelectorAll('.loan-row');
+
+    rows.forEach(r => {
+      const st = r.dataset.status;
+      const sr = (r.dataset.search || '').toLowerCase();
+      const matchSt = (status === 'ALL' || st === status);
+      const matchQ = (!query || sr.includes(query));
+      r.style.display = (matchSt && matchQ) ? '' : 'none';
+    });
+  }
+
+  function calcRepaymentTotal() {
+    const p = parseFloat(document.getElementById('repayPrincipalInp').value) || 0;
+    const i = parseFloat(document.getElementById('repayInterestInp').value) || 0;
+    const total = p + i;
+    document.getElementById('repayTotalDisplay').value = SD_BANKING.formatINR(total);
+  }
+
+  function selectLoanForRepayment(loanId, borrowerName, outstanding) {
+    const sel = document.getElementById('repayLoanSelect');
+    if (sel) sel.value = loanId;
+    openRecordRepaymentModal();
+  }
+
+  async function submitIssueLoan(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const payload = {};
+    formData.forEach((v, k) => { payload[k] = v; });
+
+    try {
+      const res = await SD_BANKING.bankingFetch('/banking/api/direct-loans', {
+        method: 'POST',
+        body: payload
+      });
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Loan to ${payload.borrower_name} issued successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 700);
+      } else {
+        throw new Error(res.error || 'Failed to issue loan');
+      }
+    } catch (err) {
+      SD_BANKING.showToast(err.message, 'error');
+    }
+  }
+
+  async function submitLoanRepayment(e) {
+    e.preventDefault();
+    const form = e.target;
+    const p = parseFloat(form.querySelector('[name="principal_amount"]').value) || 0;
+    const i = parseFloat(form.querySelector('[name="interest_amount"]').value) || 0;
+    const loanId = form.querySelector('[name="loan_id"]').value;
+
+    if (p + i <= 0) {
+      SD_BANKING.showToast('Please enter principal or interest repayment amount', 'error');
+      return;
+    }
+
+    try {
+      const res = await SD_BANKING.bankingFetch(`/banking/api/direct-loans/${loanId}/repayments`, {
+        method: 'POST',
+        body: {
+          principal_amount: p,
+          interest_amount: i,
+          total_amount: p + i,
+          payment_mode: form.querySelector('[name="payment_mode"]').value,
+          repayment_date: form.querySelector('[name="repayment_date"]').value
+        }
+      });
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Recorded repayment of ${SD_BANKING.formatINR(p + i)}!`, 'success');
+        setTimeout(() => window.location.reload(), 700);
+      } else {
+        throw new Error(res.error || 'Failed to record repayment');
+      }
+    } catch (err) {
+      SD_BANKING.showToast(err.message, 'error');
+    }
+  }
+
+  function reverseLoan(id, amount) {
+    SD_BANKING.promptReversal({
+      txnType: 'Direct Loan',
+      txnId: id,
+      amount: amount,
+      endpoint: `/banking/api/direct-loans/${id}/reverse`
+    });
+  }
+</script>
+{% endblock %}

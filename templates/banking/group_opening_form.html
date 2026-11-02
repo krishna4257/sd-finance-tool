@@ -1,0 +1,284 @@
+{% extends "banking/base.html" %}
+
+{% block title %}Group Setup – Central Bank{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- ==================== HEADER ==================== -->
+  <div class="pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div class="flex items-center gap-2.5">
+      <div class="h-9 w-9 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center">
+        <i data-lucide="settings-2" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+          Group Setup
+        </h2>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup Info Banner -->
+  <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 flex items-start gap-3 text-xs text-amber-900 dark:text-amber-200">
+    <i data-lucide="info" class="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"></i>
+    <div class="leading-relaxed">
+      <b>Opening Balance Calibration:</b> This form injects historical balances into a village group bank without creating backdated fake transactions. It locks in the historical principal, accrued 24% compound interest milestone, circulating profit, cashbag balance, and assigns partner equity shares (must total 100%).
+    </div>
+  </div>
+
+  <!-- ==================== MAIN SETUP FORM ==================== -->
+  <form id="legacyOpeningForm" onsubmit="submitLegacyOpening(event)" class="bg-white dark:bg-slate-850 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-6 md:p-8 space-y-6">
+
+    <!-- Section 1: Route Selection & Operational Parameters -->
+    <div>
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+        <i data-lucide="building-2" class="w-4 h-4 text-emerald-500"></i>
+        <span>1. Route Bank Identification</span>
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Select Village Route *</label>
+          <select name="group_id" id="setupGroupId" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="">-- Choose Route Bank --</option>
+            {% if groups %}
+              {% for g in groups %}
+                <option value="{{ g.id }}" {% if selected_group_id == g.id %}selected{% endif %}>{{ g.group_name }} ({{ g.group_code }})</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">As-of Opening Date *</label>
+          <input type="date" name="as_of_date" id="asOfDateInput" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Collection Days / Week (1-7) *</label>
+          <input type="number" name="collection_days_per_week" min="1" max="7" value="6" required
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Historical Financial Balances -->
+    <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+        <i data-lucide="coins" class="w-4 h-4 text-amber-500"></i>
+        <span>2. Historical Balance Injection</span>
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Initial Invested Principal -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Initial Invested Principal (₹) *</label>
+          <input type="number" step="0.01" min="0" name="initial_invested_principal" required placeholder="1000000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <p class="text-[10px] text-slate-400 mt-1">Foundational seed capital</p>
+        </div>
+
+        <!-- Accrued Interest to Date -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Accrued Interest to Date (₹) *</label>
+          <input type="number" step="0.01" min="0" name="accrued_interest_to_date" required placeholder="450000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <p class="text-[10px] text-slate-400 mt-1">Accumulated 24% return</p>
+        </div>
+
+        <!-- Profit in Circulation -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Profit in Circulation (₹) *</label>
+          <input type="number" step="0.01" min="0" name="profit_in_circulation" required placeholder="250000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <p class="text-[10px] text-slate-400 mt-1">Excess circulating surplus</p>
+        </div>
+
+        <!-- Cashbag Opening Cash -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Cashbag Opening Cash (₹) *</label>
+          <input type="number" step="0.01" min="0" name="cashbag_opening_cash" required placeholder="50000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <p class="text-[10px] text-slate-400 mt-1">Physical cash on hand</p>
+        </div>
+
+        <!-- Cashbag Opening UPI -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Cashbag Opening UPI (₹) *</label>
+          <input type="number" step="0.01" min="0" name="cashbag_opening_upi" required placeholder="25000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <p class="text-[10px] text-slate-400 mt-1">Digital UPI collections on hand</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Investor Equity Shareholding Distribution (100% Validation) -->
+    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="pie-chart" class="w-4 h-4 text-violet-500"></i>
+            <span>3. Investor Shareholdings Breakdown</span>
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sum of all shareholder equity percentages must equal 100% exactly.</p>
+        </div>
+        <button type="button" onclick="GroupBank.addShareholderRow('legacyShareRows')"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Add Partner</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 dark:bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+            <tr>
+              <th class="py-3 px-4">Investor Partner</th>
+              <th class="py-3 px-4 text-right">Ownership Share (%)</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="legacyShareRows" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <!-- Initial row -->
+            <tr class="group-share-row">
+              <td class="py-2.5 px-4">
+                <select name="investor_id[]" required class="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  <option value="">Select Investor</option>
+                  {% if investors %}
+                    {% for inv in investors %}
+                      <option value="{{ inv.id }}">{{ inv.full_name }} ({{ inv.investor_code }})</option>
+                    {% endfor %}
+                  {% endif %}
+                </select>
+              </td>
+              <td class="py-2.5 px-4 text-right">
+                <div class="relative max-w-xs ml-auto">
+                  <input type="number" step="1" min="0" max="100" name="share_pct[]" value="100" required
+                    class="share-pct-input w-full text-xs text-right font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-7 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    oninput="GroupBank.checkSharePercentages('#legacyShareRows')">
+                  <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">%</span>
+                </div>
+              </td>
+              <td class="py-2.5 px-4 text-right">
+                <button type="button" onclick="this.closest('tr').remove(); GroupBank.checkSharePercentages('#legacyShareRows');" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Live Shareholding Total Indicator -->
+      <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-bold">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-500 dark:text-slate-400">Total Assigned Shareholdings:</span>
+          <span id="totalSharePctDisplay" class="font-mono text-sm text-slate-900 dark:text-white">100%</span>
+        </div>
+        <span id="sharePctStatusBadge"></span>
+      </div>
+    </div>
+
+    <!-- Submit Button & PIN Confirmation Notice -->
+    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <span class="text-xs text-slate-400">Submitting will initialize group database records permanently</span>
+      <button type="submit" id="saveLegacyOpeningBtn"
+        class="px-8 py-3 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span>Save & Initialize Opening Balances</span>
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/banking/group_bank.js') }}"></script>
+<script>
+  window.INVESTORS_OPTIONS_HTML = `
+    <option value="">Select Investor</option>
+    {% if investors %}
+      {% for inv in investors %}
+        <option value="{{ inv.id }}">{{ inv.full_name }} ({{ inv.investor_code }})</option>
+      {% endfor %}
+    {% endif %}
+  `;
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().split('T')[0];
+    const asOfInp = document.getElementById('asOfDateInput');
+    if (asOfInp && !asOfInp.value) asOfInp.value = today;
+
+    GroupBank.checkSharePercentages('#legacyShareRows');
+  });
+
+  async function submitLegacyOpening(e) {
+    e.preventDefault();
+    const form = e.target;
+
+    const check = GroupBank.checkSharePercentages('#legacyShareRows');
+    if (!check.isValid) {
+      SD_BANKING.showToast(`Total shareholdings must sum to exactly 100% (currently ${Math.round(check.total)}%)`, 'error');
+      return;
+    }
+
+    const groupId = form.querySelector('[name="group_id"]').value;
+    if (!groupId) {
+      SD_BANKING.showToast('Please select a target route bank', 'error');
+      return;
+    }
+
+    // Collect shares array
+    const shareRows = form.querySelectorAll('#legacyShareRows tr');
+    const shares = [];
+    shareRows.forEach(r => {
+      const invSelect = r.querySelector('[name="investor_id[]"]');
+      const pctInput = r.querySelector('[name="share_pct[]"]');
+      if (invSelect && pctInput && invSelect.value) {
+        shares.push({
+          investor_id: invSelect.value,
+          share_pct: parseFloat(pctInput.value) || 0
+        });
+      }
+    });
+
+    const payload = {
+      group_id: groupId,
+      as_of_date: form.querySelector('[name="as_of_date"]').value,
+      collection_days_per_week: parseInt(form.querySelector('[name="collection_days_per_week"]').value),
+      initial_invested_principal: parseFloat(form.querySelector('[name="initial_invested_principal"]').value) || 0,
+      accrued_interest_to_date: parseFloat(form.querySelector('[name="accrued_interest_to_date"]').value) || 0,
+      profit_in_circulation: parseFloat(form.querySelector('[name="profit_in_circulation"]').value) || 0,
+      cashbag_opening_cash: parseFloat(form.querySelector('[name="cashbag_opening_cash"]').value) || 0,
+      cashbag_opening_upi: parseFloat(form.querySelector('[name="cashbag_opening_upi"]').value) || 0,
+      shares: shares
+    };
+
+    const submitBtn = document.getElementById('saveLegacyOpeningBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Initializing Route...';
+    }
+
+    try {
+      const res = await SD_BANKING.bankingFetch('/banking/api/groups/opening-setup', {
+        method: 'POST',
+        body: payload
+      });
+
+      if (res && res.success !== false) {
+        SD_BANKING.showToast('Legacy Route Opening Balances Initialized Successfully!', 'success');
+        setTimeout(() => { window.location.href = `/banking/groups/${groupId}`; }, 800);
+      } else {
+        throw new Error(res.error || 'Failed to save opening setup');
+      }
+    } catch (err) {
+      SD_BANKING.showToast(err.message, 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4 mr-1.5"></i> Save & Initialize Opening Balances';
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+  }
+</script>
+{% endblock %}

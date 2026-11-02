@@ -540,7 +540,7 @@
   let currentMonthlyReportData = null;
 
   function formatINR(val) {
-    return '₹' + Number(val || 0).toLocaleString('en-IN');
+    return '₹' + Math.round(Number(val || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   }
 
   // 1. Tab Switching

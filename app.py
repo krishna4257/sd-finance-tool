@@ -12269,9 +12269,11 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         portfolio_size_factor = min(5.0, (active_loan_sum / 3000000.0) * 5.0)
         
         # Base Score
-        base_score = (avg_rating * 0.65) + (stability_pct * 0.15) + default_score \
-                     - (overdue_pct * 0.3) - (high_risk_pct * 0.3) \
-                     - collection_drop_penalty + customer_count_adjustment
+        base_score = (
+            (avg_rating * 0.65) + (stability_pct * 0.15) + default_score
+            - (overdue_pct * 0.3) - (high_risk_pct * 0.3)
+            - collection_drop_penalty + customer_count_adjustment
+        )
                      
         if base_score >= 75.0:
             portfolio_adjustment = portfolio_size_factor

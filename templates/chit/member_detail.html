@@ -1758,7 +1758,7 @@
       const totalPayoff = calc.total_payoff !== undefined ? calc.total_payoff : (remPrincipal + accInterest);
       const totalRepaid = (l.repaid_principal || 0) + (l.repaid_interest || 0);
       const daysElapsed = calc.days_elapsed || 0;
-      const yearsElapsed = (daysElapsed / 365.25).toFixed(2);
+      const yearsElapsed = Math.round(daysElapsed / 365.25);
 
       let capsuleBoxHtml = '';
       if (isSettled) {

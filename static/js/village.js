@@ -399,21 +399,50 @@ document.addEventListener("DOMContentLoaded", async function () {
           }).join("")}
         </div>
 
-        <div class="tile-cashbag-footer">
-          <div class="tile-cashbag-divider">
-            <span class="tile-cashbag-divider-label"></span>
+        ${(() => {
+          const groupCashbags = (window.allCashbags || []).filter(c => {
+            const m1 = String(c.emp1) === String(group.emp1);
+            const m2 = group.emp2 && group.emp2 !== 'None'
+              ? String(c.emp2) === String(group.emp2)
+              : (!c.emp2 || String(c.emp2) === String(group.emp1));
+            return m1 && m2;
+          });
+          if (groupCashbags.length === 0) {
+            groupCashbags.push({
+              id: '',
+              name: 'Cash Bag',
+              village_codes: group.villages.map(v => v.village_code)
+            });
+          }
+          return `
+          <div class="tile-cashbag-footer">
+            <div class="tile-cashbag-divider">
+              <span class="tile-cashbag-divider-label"></span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; width: 100%;">
+                ${groupCashbags.map(cb => `
+                  <a
+                    href="/cashbag?emp1=${group.emp1}&emp2=${group.emp2 && group.emp2 !== 'None' ? group.emp2 : ''}${cb.id ? '&cashbag_id=' + cb.id : ''}"
+                    class="tile-cashbag-btn"
+                    style="flex: 1 1 calc(50% - 6px); min-width: 105px;"
+                    onclick="event.stopPropagation();"
+                    title="${cb.name}: ${(cb.village_codes || []).join(', ')}">
+                    <i class="fas fa-wallet"></i> ${cb.name}
+                  </a>
+                `).join('')}
+              </div>
+              <button
+                type="button"
+                class="tile-manage-cashbags-btn"
+                style="background: transparent; border: 1px dashed rgba(245, 158, 11, 0.45); color: #d97706; padding: 5px 10px; border-radius: 14px; font-size: 0.73rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; transition: all 0.2s;"
+                onclick="event.stopPropagation(); window.openManageCashbagsModal(${group.emp1}, ${group.emp2 && group.emp2 !== 'None' ? group.emp2 : 'null'})">
+                <i class="fas fa-sliders-h"></i> Manage Cash Bags
+              </button>
+            </div>
           </div>
-          <div style="display: flex; gap: 8px; width: 100%;">
-            <a
-              href="/cashbag?emp1=${group.emp1}&emp2=${group.emp2 && group.emp2 !== 'None' ? group.emp2 : ''}"
-              class="tile-cashbag-btn"
-              style="width: 100%;"
-              onclick="event.stopPropagation();">
-              <i class="fas fa-wallet"></i> Cash Bag
-            </a>
-          </div>
-        </div>
-      `;
+          `;
+        })()}`;
 
       employeeTilesContainer.appendChild(tile);
       enableTileDrop(tile);
@@ -2153,5 +2182,197 @@ window.geocodeVillage = async function(vid, btn) {
     alert('Geocode request failed: ' + err.message);
     btn.innerHTML = originalHtml;
     btn.disabled = false;
+  }
+};
+
+// ── Multi-Cashbag Management Modal ─────────────────────────────────────────
+window.activeModalCashbags = [];
+window.activeModalGroup = null;
+
+window.openManageCashbagsModal = function(emp1, emp2) {
+  const modal = document.getElementById("manageCashbagsModal");
+  if (!modal) return;
+
+  const villages = (window.villageData || []).filter(v => {
+    const m1 = String(v.emp1) === String(emp1);
+    const m2 = emp2 && emp2 !== 'None'
+      ? String(v.emp2) === String(emp2)
+      : (!v.emp2 || String(v.emp2) === String(emp1));
+    return m1 && m2;
+  });
+
+  const emp1Name = villages[0]?.emp1_name || `Employee ${emp1}`;
+  const emp2Name = villages[0]?.emp2_name;
+  const groupTitle = emp2Name ? `${emp1Name} + ${emp2Name}` : emp1Name;
+
+  window.activeModalGroup = { emp1, emp2, villages, title: groupTitle };
+
+  const sub = document.getElementById("manageCbSubtitle");
+  if (sub) sub.textContent = `${groupTitle} (${villages.length} Villages)`;
+
+  let cbs = (window.allCashbags || []).filter(c => {
+    const m1 = String(c.emp1) === String(emp1);
+    const m2 = emp2 && emp2 !== 'None'
+      ? String(c.emp2) === String(emp2)
+      : (!c.emp2 || String(c.emp2) === String(emp1));
+    return m1 && m2;
+  });
+
+  if (cbs.length === 0) {
+    cbs = [{
+      id: null,
+      name: 'Main Cashbag',
+      village_codes: villages.map(v => v.village_code),
+      week_ending_day: 3
+    }];
+  }
+
+  window.activeModalCashbags = JSON.parse(JSON.stringify(cbs));
+  window.renderManageCashbagsList();
+  modal.classList.remove("hidden");
+};
+
+window.closeManageCashbagsModal = function() {
+  const modal = document.getElementById("manageCashbagsModal");
+  if (modal) modal.classList.add("hidden");
+};
+
+window.renderManageCashbagsList = function() {
+  const container = document.getElementById("manageCbListContainer");
+  if (!container || !window.activeModalGroup) return;
+
+  const allVillageCodes = window.activeModalGroup.villages.map(v => v.village_code);
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  function escapeHtml(str) {
+    return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  container.innerHTML = window.activeModalCashbags.map((cb, idx) => {
+    return `
+      <div class="cb-manage-card" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <div style="flex: 1;">
+            <label style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Cash Bag Name</label>
+            <input type="text" value="${escapeHtml(cb.name)}" oninput="window.activeModalCashbags[${idx}].name = this.value" style="width: 100%; background: #2b2b3d; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 0.85rem; font-weight: 700;">
+          </div>
+          <div style="width: 140px;">
+            <label style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Week Ending Day</label>
+            <select onchange="window.activeModalCashbags[${idx}].week_ending_day = parseInt(this.value)" style="width: 100%; background: #2b2b3d; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; padding: 6px 8px; font-size: 0.8rem; font-weight: 600;">
+              ${days.map((d, dIdx) => `<option value="${dIdx}" ${parseInt(cb.week_ending_day || 3) === dIdx ? 'selected' : ''}>${d}</option>`).join('')}
+            </select>
+          </div>
+          ${window.activeModalCashbags.length > 1 ? `
+            <button type="button" onclick="window.removeCashbagInModal(${idx})" title="Delete Cashbag" style="background: transparent; border: none; color: #ef4444; cursor: pointer; padding: 6px 8px; font-size: 1rem; margin-top: 16px;">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          ` : ''}
+        </div>
+
+        <div>
+          <label style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 6px;">
+            Assigned Villages (Click chip to toggle in this cashbag) (${(cb.village_codes || []).length}):
+          </label>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            ${allVillageCodes.map(code => {
+              const isAssigned = (cb.village_codes || []).includes(code);
+              return `
+                <button type="button" onclick="window.toggleVillageInCashbag(${idx}, '${code}')"
+                  style="border-radius: 12px; padding: 4px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid ${isAssigned ? '#10b981' : 'rgba(255,255,255,0.15)'}; background: ${isAssigned ? 'rgba(16, 185, 129, 0.2)' : 'transparent'}; color: ${isAssigned ? '#34d399' : '#9ca3af'};">
+                  ${isAssigned ? '✓ ' : ''}${code}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+};
+
+window.addNewCashbagInModal = function() {
+  const num = window.activeModalCashbags.length + 1;
+  window.activeModalCashbags.push({
+    id: null,
+    name: `Cash Bag ${num}`,
+    village_codes: [],
+    week_ending_day: 3
+  });
+  window.renderManageCashbagsList();
+};
+
+window.removeCashbagInModal = function(idx) {
+  if (window.activeModalCashbags.length <= 1) return;
+  const removed = window.activeModalCashbags.splice(idx, 1)[0];
+  if (removed.village_codes && removed.village_codes.length > 0 && window.activeModalCashbags[0]) {
+    removed.village_codes.forEach(c => {
+      if (!window.activeModalCashbags[0].village_codes.includes(c)) {
+        window.activeModalCashbags[0].village_codes.push(c);
+      }
+    });
+  }
+  window.renderManageCashbagsList();
+};
+
+window.toggleVillageInCashbag = function(targetIdx, code) {
+  const targetCb = window.activeModalCashbags[targetIdx];
+  if (!targetCb) return;
+
+  const isAssigned = (targetCb.village_codes || []).includes(code);
+  if (isAssigned) {
+    targetCb.village_codes = targetCb.village_codes.filter(c => c !== code);
+  } else {
+    window.activeModalCashbags.forEach((cb, i) => {
+      if (i !== targetIdx) {
+        cb.village_codes = (cb.village_codes || []).filter(c => c !== code);
+      }
+    });
+    if (!targetCb.village_codes) targetCb.village_codes = [];
+    targetCb.village_codes.push(code);
+  }
+  window.renderManageCashbagsList();
+};
+
+window.saveCashbagsFromModal = async function() {
+  const btn = document.getElementById("saveCashbagsBtn");
+  if (!window.activeModalGroup || !window.activeModalCashbags) return;
+
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Saving...`;
+
+  try {
+    const fetchFunc = (typeof csrfFetch === 'function') ? csrfFetch : fetch;
+    const res = await fetchFunc('/api/village/cashbags/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emp1: window.activeModalGroup.emp1,
+        emp2: window.activeModalGroup.emp2,
+        cashbags: window.activeModalCashbags
+      })
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      const cRes = await fetch('/api/village/cashbags');
+      const cData = await cRes.json();
+      if (cData && cData.cashbags) {
+        window.allCashbags = cData.cashbags;
+      }
+      window.closeManageCashbagsModal();
+      buildTileView();
+      if (typeof showToast === 'function') {
+        showToast("Cash bags updated successfully!", "success");
+      }
+    } else {
+      alert("Error saving cashbags: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    console.error("Save cashbags error:", err);
+    alert("Network error saving cashbags");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `Save Changes`;
   }
 };

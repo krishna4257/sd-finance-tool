@@ -29,7 +29,7 @@ def round_curr(val):
     if val is None or val == "":
         return 0.0
     try:
-        return float(Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        return float(Decimal(str(val)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     except Exception:
         return 0.0
 

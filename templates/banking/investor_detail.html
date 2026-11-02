@@ -1,0 +1,1017 @@
+{% extends "banking/base.html" %}
+
+{% block title %}{{ investor.full_name }} – 360° Investor Folio – Siva Durga Banking
+
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ==================== BREADCRUMB & FOLIO HEADER ==================== -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div class="flex items-center gap-3">
+      <a href="/banking/investors" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </a>
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+            {{ investor.full_name }}
+          </h2>
+          <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+            {{ investor.investor_code }}
+          </span>
+          {% if investor.global_share_pct %}
+            <span class="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+              {{ '{:.3f}%'.format(investor.global_share_pct) }} Global
+            </span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Phone: <span class="font-mono font-medium text-slate-700 dark:text-slate-300">{{ investor.phone_number }}</span>
+          {% if investor.pan_number %} · PAN: <span class="font-mono uppercase">{{ investor.pan_number }}</span>{% endif %}
+          {% if investor.aadhaar_number %} · Aadhaar: <span class="font-mono">••••{{ investor.aadhaar_number[-4:] }}</span>{% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Deposit -->
+      <button type="button" onclick="openDepositModal()"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-all">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Deposit Capital</span>
+      </button>
+
+      <!-- Withdraw Idle Cash (PIN Protected) -->
+      <button type="button" onclick="openWithdrawModal()"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 active:scale-95 transition-all">
+        <i data-lucide="banknote" class="w-4 h-4"></i>
+        <span>Withdraw Idle Cash</span>
+      </button>
+
+      <!-- Add Personal Expense -->
+      <button type="button" onclick="openPersonalExpenseModal()"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all">
+        <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-500"></i>
+        <span>Add Personal Expense</span>
+      </button>
+
+      <!-- Print Statement -->
+      <button type="button" onclick="InvestorFolio.printStatement('{{ investor.id }}')"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+        <i data-lucide="printer" class="w-4 h-4"></i>
+        <span>Print Statement</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== 360° FOLIO BALANCE CARDS ==================== -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- 1. Idle Cash -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Idle Cash Balance</span>
+        <div class="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+          <i data-lucide="wallet" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2" id="folioIdleBalance">
+        {{ format_inr(investor.idle_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.idle_balance or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Ready for withdrawal or route deployment</p>
+    </div>
+
+    <!-- 2. Total Deployed Capital -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Deployed Capital</span>
+        <div class="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+          <i data-lucide="building-2" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-blue-600 dark:text-blue-400 mt-2">
+        {{ format_inr(investor.deployed_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.deployed_capital or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Earning 24% annual compound interest</p>
+    </div>
+
+    <!-- 3. Accrued Compound Interest -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Accrued Compound Return</span>
+        <div class="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <i data-lucide="trending-up" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-amber-600 dark:text-amber-400 mt-2" id="statTotalAccruedInterest" data-auto-calc="true">
+        {{ format_inr(investor.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.accrued_interest or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Calculated via 30/360 day-count convention</p>
+    </div>
+
+    <!-- 4. Personal Expenses / Drawings (Negative Balance) -->
+    <div class="bg-white dark:bg-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Personal Drawings / Debits</span>
+        <div class="h-8 w-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+          <i data-lucide="credit-card" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <p class="money-fig text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
+        {{ format_inr(investor.personal_expenses_total) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.personal_expenses_total or 0)) }}
+      </p>
+      <p class="text-[11px] text-slate-400 mt-1">Debited against investor idle cash</p>
+    </div>
+  </div>
+
+  <!-- ==================== SIDE-BY-SIDE: ACTIVE DEPLOYMENTS & PERSONAL DRAWINGS ==================== -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+    <!-- ==================== LEFT CARD: ACTIVE VILLAGE GROUP DEPLOYMENTS ==================== -->
+    <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-200" id="deploymentsCard">
+      <!-- Header with minimize toggle and Open button -->
+      <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/40 dark:bg-slate-900/20">
+        <div class="flex items-center gap-2 cursor-pointer select-none group flex-1 min-w-0" onclick="InvestorFolio.toggleCardCollapse('deploymentsCardBody', 'deployChevron')" title="Click heading to collapse / expand">
+          <i data-lucide="landmark" class="w-5 h-5 text-blue-500 shrink-0"></i>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors truncate">Active Village Group Deployments</h3>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60 shrink-0">
+            {{ active_deployments|length if active_deployments is defined else 0 }}
+          </span>
+          <i data-lucide="chevron-down" id="deployChevron" class="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 shrink-0"></i>
+        </div>
+        
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="InvestorFolio.openAllDeploymentsModal()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 active:scale-95 transition-all shadow-sm">
+            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+            <span>Open</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Body -->
+      <div id="deploymentsCardBody" class="transition-all duration-200">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+                <th class="py-3 px-4">Village Route / Group</th>
+                <th class="py-3 px-4 text-right">Capital Deployed</th>
+                <th class="py-3 px-4 text-right">Days Elapsed</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+              {% if active_deployments and active_deployments|length > 0 %}
+                {% for a in active_deployments %}
+                  <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                      data-allocation-row
+                      data-principal="{{ a.amount }}"
+                      data-start-date="{{ a.allocation_date.strftime('%Y-%m-%d') if a.allocation_date.strftime is defined else a.allocation_date }}"
+                      data-rate="{{ a.interest_rate or 24.0 }}">
+                    
+                    <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                      <a href="/banking/groups/{{ a.group_id }}" class="hover:text-blue-500 flex items-center gap-2 group/link">
+                        <div class="h-6 w-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-500 flex items-center justify-center shrink-0">
+                          <i data-lucide="building" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <div class="min-w-0">
+                          <p class="truncate font-bold text-slate-800 dark:text-slate-100 group-hover/link:text-blue-600">{{ a.group_name }}</p>
+                          <p class="font-mono text-[10px] text-slate-400">({{ a.group_code }})</p>
+                        </div>
+                      </a>
+                    </td>
+
+                    <td class="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                      {{ format_inr(a.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.amount)) }}
+                    </td>
+
+                    <td class="py-3 px-4 text-right font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap allocation-days">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {{ a.days_elapsed or '-' }}d
+                      </span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="3" class="py-8 text-center text-slate-400">
+                    <div class="flex flex-col items-center justify-center gap-1">
+                      <i data-lucide="inbox" class="w-6 h-6 text-slate-300 dark:text-slate-600 stroke-[1.5]"></i>
+                      <p class="text-xs">No active village group deployments.</p>
+                    </div>
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Bottom Hide / Deactivated Section -->
+        {% if deactivated_deployments and deactivated_deployments|length > 0 %}
+          <div class="border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 p-3">
+            <button type="button" onclick="InvestorFolio.toggleDeactivatedDeployments()"
+              class="w-full flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+                <span id="deactToggleLabel">Show Settled / Deactivated Investments ({{ deactivated_deployments|length }})</span>
+              </span>
+              <i data-lucide="chevron-down" id="deactChevron" class="w-4 h-4 transition-transform duration-200"></i>
+            </button>
+
+            <div id="deactivatedDeploymentsBox" class="hidden mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 space-y-2">
+              {% for da in deactivated_deployments %}
+                <div class="p-2.5 rounded-xl bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between text-xs opacity-75">
+                  <div>
+                    <p class="font-bold text-slate-700 dark:text-slate-300 line-through">{{ da.group_name }} ({{ da.group_code }})</p>
+                    <p class="text-[10px] text-slate-400">Original: ₹{{ '{:,.0f}'.format(da.original_amount or 0) }}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                      Settled / Inactive
+                    </span>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ==================== RIGHT CARD: PERSONAL EXPENSE ACCOUNT / DRAWINGS (APPLE NOTES DESIGN) ==================== -->
+    <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-200" id="drawingsCard">
+      <!-- Header with minimize toggle, Add Drawing button, and Open button -->
+      <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/40 dark:bg-slate-900/20">
+        <div class="flex items-center gap-2 cursor-pointer select-none group flex-1 min-w-0" onclick="InvestorFolio.toggleCardCollapse('drawingsCardBody', 'drawingsChevron')" title="Click heading to collapse / expand">
+          <i data-lucide="receipt" class="w-5 h-5 text-rose-500 shrink-0"></i>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-rose-600 transition-colors truncate">Personal Expense Account / Drawings</h3>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/60 shrink-0">
+            {{ active_drawings|length if active_drawings is defined else 0 }}
+          </span>
+          <i data-lucide="chevron-down" id="drawingsChevron" class="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 shrink-0"></i>
+        </div>
+        
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="openPersonalExpenseModal()"
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 active:scale-95 transition-all shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Add Drawing</span>
+          </button>
+          <button type="button" onclick="InvestorFolio.openAllPersonalExpensesModal()"
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm">
+            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+            <span>Open</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Body (Apple Notes Checklist Style) -->
+      <div id="drawingsCardBody" class="transition-all duration-200">
+        <div class="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[380px] overflow-y-auto">
+          {% if active_drawings and active_drawings|length > 0 %}
+            {% for pe in active_drawings %}
+              <div class="p-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex items-start gap-3 group/drawing">
+                <!-- Circular Checkbox / Tick to Settle -->
+                <button type="button"
+                  onclick="InvestorFolio.openSettleExpenseModal('{{ pe.id }}', '{{ pe.item_description | replace("'", "\'") }}', {{ pe.amount }})"
+                  title="Click to Settle this drawing"
+                  class="mt-0.5 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 flex items-center justify-center transition-all cursor-pointer shrink-0">
+                  <i data-lucide="check" class="w-3 h-3 text-transparent group-hover/drawing:text-slate-400 transition-colors"></i>
+                </button>
+
+                <!-- Main content: Date + Aging Badge, Item Description -->
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {{ pe.expense_date.strftime('%d-%m-%Y') if pe.expense_date.strftime is defined else pe.expense_date }}
+                    </span>
+                    
+                    <!-- Aging Badges: >60d Red (2+ months), >30d Yellow (1+ month) -->
+                    {% if pe.age_badge == 'overdue_red' %}
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 animate-pulse">
+                        ⚠️ {{ pe.age_text }} (2+ mo)
+                      </span>
+                    {% elif pe.age_badge == 'warning_yellow' %}
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                        ⏳ {{ pe.age_text }}
+                      </span>
+                    {% else %}
+                      <span class="text-[10px] text-slate-400 font-mono">
+                        {{ pe.days_aged }}d
+                      </span>
+                    {% endif %}
+
+                    {% if pe.receipt_no %}
+                      <span class="font-mono text-[10px] text-slate-400">
+                        #{{ pe.receipt_no }}
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <p class="text-xs font-bold text-slate-900 dark:text-white mt-1 break-words">
+                    {{ pe.item_description }}
+                  </p>
+                  
+                  <p class="text-[10px] text-slate-400 mt-0.5">
+                    Via {{ pe.payment_mode }}
+                  </p>
+                </div>
+
+                <!-- Amount Debited & Settle Link -->
+                <div class="text-right shrink-0">
+                  <p class="font-mono font-bold text-rose-600 dark:text-rose-400 text-sm whitespace-nowrap">
+                    {{ format_inr(pe.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(pe.amount)) }}
+                  </p>
+                  <button type="button"
+                    onclick="InvestorFolio.openSettleExpenseModal('{{ pe.id }}', '{{ pe.item_description | replace("'", "\'") }}', {{ pe.amount }})"
+                    class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline mt-0.5 inline-block">
+                    Settle
+                  </button>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="py-8 text-center text-slate-400">
+              <div class="flex flex-col items-center justify-center gap-1">
+                <i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-400 stroke-[1.5]"></i>
+                <p class="text-xs">All clear! No active personal drawings.</p>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Bottom Hide / Settled Drawings Section -->
+        {% if settled_drawings and settled_drawings|length > 0 %}
+          <div class="border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 p-3">
+            <button type="button" onclick="InvestorFolio.toggleSettledDrawings()"
+              class="w-full flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="check-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+                <span id="settledToggleLabel">Completed / Settled Drawings ({{ settled_drawings|length }})</span>
+              </span>
+              <i data-lucide="chevron-down" id="settledChevron" class="w-4 h-4 transition-transform duration-200"></i>
+            </button>
+
+            <div id="settledDrawingsBox" class="hidden mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 space-y-2 max-h-[220px] overflow-y-auto">
+              {% for spe in settled_drawings %}
+                <div class="p-2.5 rounded-xl bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 flex items-start justify-between gap-3 text-xs">
+                  <div class="flex items-start gap-2.5 min-w-0">
+                    <div class="mt-0.5 h-4 w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-[10px]">
+                      <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="font-medium text-slate-500 dark:text-slate-400 line-through truncate">
+                        {{ spe.item_description }}
+                      </p>
+                      <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        Settled via {{ spe.settlement_mode }} {% if spe.settlement_ref %}• Ref: {{ spe.settlement_ref }}{% endif %}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="text-right shrink-0">
+                    <p class="font-mono text-slate-400 line-through">
+                      {{ format_inr(spe.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(spe.amount)) }}
+                    </p>
+                    <button type="button" onclick="InvestorFolio.unsettlePersonalExpense('{{ spe.id }}')"
+                      title="Re-open drawing"
+                      class="text-[10px] text-slate-400 hover:text-amber-500 hover:underline">
+                      Re-open
+                    </button>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== MASTER TRANSACTIONS AUDIT LEDGER ==================== -->
+  <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="history" class="w-5 h-5 text-amber-500"></i>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Transaction Audit History</h3>
+        <span class="text-xs text-slate-400">({{ transactions|length if transactions is defined else 0 }} entries)</span>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+            <th class="py-3 px-4">Date</th>
+            <th class="py-3 px-4">Transaction Type</th>
+            <th class="py-3 px-4">Payment Mode</th>
+            <th class="py-3 px-4 text-right">Amount</th>
+            <th class="py-3 px-4">Audit Status</th>
+            <th class="py-3 px-4">Notes</th>
+            <th class="py-3 px-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+          {% if transactions and transactions|length > 0 %}
+            {% for t in transactions %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors {% if t.is_reversed %}reversed-row{% endif %}">
+                <td class="py-3 px-4 font-medium whitespace-nowrap {% if t.is_reversed %}reversed-text{% endif %}">
+                  {{ t.txn_date.strftime('%d-%m-%Y') if t.txn_date.strftime is defined else t.txn_date }}
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                  <span class="font-bold text-slate-800 dark:text-slate-200">{{ t.txn_type }}</span>
+                </td>
+                <td class="py-3 px-4 font-mono whitespace-nowrap">{{ t.payment_mode }}</td>
+                <td class="py-3 px-4 text-right font-mono font-bold whitespace-nowrap {% if t.is_reversed %}reversed-text{% endif %}">
+                  {{ format_inr(t.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(t.amount)) }}
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                  {% if t.is_reversed %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300">
+                      [REVERSED]
+                    </span>
+                  {% elif t.is_backdated %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                      [Backdated]
+                    </span>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400">Standard</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                  {{ t.reversal_reason if t.is_reversed else (t.notes or '-') }}
+                </td>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                  {% if not t.is_reversed %}
+                    <button type="button" onclick="reverseTransaction('{{ t.id }}', {{ t.amount }}, '{{ t.txn_type }}')"
+                      title="Reverse Transaction"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400 italic">Reversed</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-400">No transaction records found for this investor.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: DEPOSIT CAPITAL ==================== -->
+<div id="depositCapitalModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+          <i data-lucide="plus-circle" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Deposit Capital</h3>
+      </div>
+      <button type="button" onclick="closeDepositModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <form id="depositCapitalForm" onsubmit="InvestorFolio.handleDepositSubmit(event, '{{ investor.id }}')" class="p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount (₹) *</label>
+          <input type="number" step="0.01" min="1" name="amount" required placeholder="500000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Effective Date *</label>
+          <input type="date" name="txn_date" id="invDepositDateInput" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div class="flex items-center pt-5">
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <input type="checkbox" name="is_backdated" class="rounded text-amber-500">
+            <span>Mark Backdated</span>
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Narration / Notes</label>
+        <input type="text" name="notes" placeholder="Cheque / Transfer reference"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closeDepositModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">Confirm Deposit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: WITHDRAW IDLE CASH (PIN PROTECTED) ==================== -->
+<div id="withdrawCashModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+          <i data-lucide="shield-alert" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Withdraw Idle Cash</h3>
+          <p class="text-xs text-rose-500 font-semibold">Master Admin PIN Required</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeWithdrawModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <form id="withdrawCashForm" onsubmit="InvestorFolio.handleWithdrawSubmit(event, '{{ investor.id }}', {{ investor.idle_balance or 0 }})" class="p-5 space-y-4">
+      <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs">
+        <span class="text-slate-500 dark:text-slate-400">Available Liquid Idle Balance:</span>
+        <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 block text-sm mt-0.5">
+          {{ format_inr(investor.idle_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(investor.idle_balance or 0)) }}
+        </span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount to Payout (₹) *</label>
+          <input type="number" step="0.01" min="1" max="{{ investor.idle_balance or 0 }}" name="amount" required placeholder="50000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Payout Date *</label>
+        <input type="date" name="txn_date" id="invWithdrawDateInput" required
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Payout Narration / Reason</label>
+        <input type="text" name="notes" placeholder="Investor personal cash-out request"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closeWithdrawModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md">Authorize & Withdraw</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: ADD PERSONAL EXPENSE ==================== -->
+<div id="personalExpenseModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Record Personal Drawing / Expense</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Debits Directly from Investor Idle Cash</p>
+        </div>
+      </div>
+      <button type="button" onclick="closePersonalExpenseModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <form id="addPersonalExpenseForm" onsubmit="InvestorFolio.handlePersonalExpenseSubmit(event, '{{ investor.id }}')" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Item Description *</label>
+        <input type="text" name="item_description" required placeholder="e.g. Courier charges / Mobile recharge / Vehicle diesel"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount (₹) *</label>
+          <input type="number" step="0.01" min="1" name="amount" required placeholder="1250"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Expense Date *</label>
+          <input type="date" name="expense_date" id="peDateInput" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Receipt / Bill #</label>
+          <input type="text" name="receipt_no" placeholder="REC-4029"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closePersonalExpenseModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md">Save Drawing</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: SETTLE PERSONAL DRAWING ==================== -->
+<div id="settleExpenseModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+          <i data-lucide="check-circle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Settle Personal Drawing</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Mark drawing as reimbursed / paid back</p>
+        </div>
+      </div>
+      <button type="button" onclick="InvestorFolio.closeSettleExpenseModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <form id="settleExpenseForm" onsubmit="InvestorFolio.submitSettleExpense(event)" class="p-5 space-y-4">
+      <input type="hidden" id="settleExpenseId" name="expense_id">
+
+      <!-- Summary of drawing to settle -->
+      <div class="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 flex items-center justify-between">
+        <div class="min-w-0 pr-2">
+          <span class="text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">Drawing Description</span>
+          <p id="settleExpenseDesc" class="font-bold text-slate-800 dark:text-slate-100 text-sm mt-0.5 truncate">-</p>
+        </div>
+        <div class="text-right shrink-0">
+          <span class="text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">Amount Due</span>
+          <p id="settleExpenseAmount" class="font-mono font-black text-emerald-600 dark:text-emerald-400 text-base mt-0.5">₹0</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Settlement Mode *</label>
+          <select id="settlePaymentMode" name="settlement_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+            <option value="CASH">CASH (Paid at Desk)</option>
+            <option value="UPI">UPI</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+            <option value="IDLE_CASH">Debited from Idle Cash</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Settlement Date *</label>
+          <input type="date" id="settleDateInput" name="settled_at" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Payment Reference / Receipt #</label>
+        <input type="text" id="settleRefInput" name="settlement_ref" placeholder="e.g. Desk receipt / UPI txn ref"
+          class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Settlement Notes</label>
+        <input type="text" id="settleNotesInput" name="settlement_notes" placeholder="Optional notes"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="InvestorFolio.closeSettleExpenseModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">Confirm Settlement</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: ALL DEPLOYMENTS ELABORATE POPUP ==================== -->
+<div id="allDeploymentsModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+          <i data-lucide="landmark" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">All Village Group Deployments</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Complete audit of route capital investments & 24% accrued return</p>
+        </div>
+      </div>
+      <button type="button" onclick="InvestorFolio.closeAllDeploymentsModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="relative w-full sm:w-72">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="depModalSearch" onkeyup="InvestorFolio.filterAllDeploymentsModal()" placeholder="Search route or code..."
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div class="flex items-center gap-1.5 self-end sm:self-auto">
+        <button type="button" onclick="InvestorFolio.setDepFilter('ALL')" id="depFilterAll"
+          class="px-3 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-sm">All</button>
+        <button type="button" onclick="InvestorFolio.setDepFilter('ACTIVE')" id="depFilterActive"
+          class="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800">Active</button>
+        <button type="button" onclick="InvestorFolio.setDepFilter('INACTIVE')" id="depFilterInactive"
+          class="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800">Deactivated</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-y-auto flex-1">
+      <table class="w-full text-left border-collapse">
+        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900 shadow-sm z-10">
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="py-3 px-4">Village Route / Group</th>
+            <th class="py-3 px-4 text-right">Capital Deployed</th>
+            <th class="py-3 px-4">Start Date</th>
+            <th class="py-3 px-4 text-right">Days Elapsed</th>
+            <th class="py-3 px-4 text-right">24% Accrued Interest</th>
+            <th class="py-3 px-4 text-right">Total Payoff Value</th>
+            <th class="py-3 px-4 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs" id="depModalTableBody">
+          {% if allocations and allocations|length > 0 %}
+            {% for a in allocations %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors dep-modal-row"
+                  data-dep-status="{% if a.amount > 0 and not a.is_reversed %}ACTIVE{% else %}INACTIVE{% endif %}"
+                  data-dep-search="{{ a.group_name | lower }} {{ a.group_code | lower }}"
+                  data-allocation-row
+                  data-principal="{{ a.amount }}"
+                  data-start-date="{{ a.allocation_date.strftime('%Y-%m-%d') if a.allocation_date.strftime is defined else a.allocation_date }}"
+                  data-rate="{{ a.interest_rate or 24.0 }}">
+                
+                <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                  <a href="/banking/groups/{{ a.group_id }}" class="hover:text-blue-500 flex items-center gap-1.5">
+                    <i data-lucide="building" class="w-4 h-4 text-slate-400"></i>
+                    <span>{{ a.group_name }}</span>
+                    <span class="font-mono text-[10px] text-slate-400">({{ a.group_code }})</span>
+                  </a>
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                  {{ format_inr(a.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.amount)) }}
+                </td>
+
+                <td class="py-3 px-4 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                  {{ a.allocation_date.strftime('%d-%m-%Y') if a.allocation_date.strftime is defined else a.allocation_date }}
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono text-slate-600 dark:text-slate-400 allocation-days whitespace-nowrap">
+                  {{ a.days_elapsed or '-' }}d
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400 allocation-interest whitespace-nowrap">
+                  {{ format_inr(a.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.accrued_interest or 0)) }}
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 allocation-total whitespace-nowrap">
+                  {{ format_inr(a.total_payoff) if format_inr is defined else ('₹' ~ '{:,.0f}'.format((a.amount or 0) + (a.accrued_interest or 0))) }}
+                </td>
+
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                  {% if a.is_reversed %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">[REVERSED]</span>
+                  {% elif a.amount <= 0 %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Settled</span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300">Active</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="py-8 text-center text-slate-400">No group deployments on record.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+      <button type="button" onclick="InvestorFolio.closeAllDeploymentsModal()" class="px-5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: ALL PERSONAL EXPENSES ELABORATE POPUP ==================== -->
+<div id="allPersonalExpensesModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+          <i data-lucide="receipt" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Personal Expenses & Drawings Ledger</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Detailed record of all debits, receipts & settlements</p>
+        </div>
+      </div>
+      <button type="button" onclick="InvestorFolio.closeAllPersonalExpensesModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="relative w-full sm:w-72">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="peModalSearch" onkeyup="InvestorFolio.filterAllPersonalExpensesModal()" placeholder="Search item, receipt #, mode..."
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500">
+      </div>
+      <div class="flex items-center gap-1.5 self-end sm:self-auto">
+        <button type="button" onclick="InvestorFolio.setPeFilter('ALL')" id="peFilterAll"
+          class="px-3 py-1 rounded-lg text-xs font-bold bg-rose-600 text-white shadow-sm">All</button>
+        <button type="button" onclick="InvestorFolio.setPeFilter('UNSETTLED')" id="peFilterUnsettled"
+          class="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800">Unsettled</button>
+        <button type="button" onclick="InvestorFolio.setPeFilter('SETTLED')" id="peFilterSettled"
+          class="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800">Settled</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-y-auto flex-1">
+      <table class="w-full text-left border-collapse">
+        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900 shadow-sm z-10">
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="py-3 px-4">Date</th>
+            <th class="py-3 px-4">Item Description</th>
+            <th class="py-3 px-4">Receipt / Bill #</th>
+            <th class="py-3 px-4">Mode</th>
+            <th class="py-3 px-4 text-right">Amount Debited</th>
+            <th class="py-3 px-4">Aging / Status</th>
+            <th class="py-3 px-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs" id="peModalTableBody">
+          {% if personal_expenses and personal_expenses|length > 0 %}
+            {% for pe in personal_expenses %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors pe-modal-row {% if pe.is_reversed %}reversed-row{% endif %}"
+                  data-pe-status="{% if pe.is_settled %}SETTLED{% else %}UNSETTLED{% endif %}"
+                  data-pe-search="{{ pe.item_description | lower }} {{ (pe.receipt_no or '') | lower }} {{ (pe.payment_mode or '') | lower }}">
+                
+                <td class="py-3 px-4 font-medium whitespace-nowrap {% if pe.is_reversed %}reversed-text{% endif %}">
+                  {{ pe.expense_date.strftime('%d-%m-%Y') if pe.expense_date.strftime is defined else pe.expense_date }}
+                </td>
+
+                <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white {% if pe.is_reversed %}reversed-text{% elif pe.is_settled %}line-through text-slate-400{% endif %}">
+                  {{ pe.item_description }}
+                </td>
+
+                <td class="py-3 px-4 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                  {{ pe.receipt_no or '-' }}
+                </td>
+
+                <td class="py-3 px-4 font-mono font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                  {{ pe.payment_mode }}
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap {% if pe.is_reversed or pe.is_settled %}line-through text-slate-400{% endif %}">
+                  {{ format_inr(pe.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(pe.amount)) }}
+                </td>
+
+                <td class="py-3 px-4 whitespace-nowrap">
+                  {% if pe.is_reversed %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">[REVERSED]</span>
+                  {% elif pe.is_settled %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300">
+                      ✓ Settled ({{ pe.settlement_mode }})
+                    </span>
+                  {% elif pe.age_badge == 'overdue_red' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 animate-pulse">
+                      ⚠️ {{ pe.age_text }} (2+ mo)
+                    </span>
+                  {% elif pe.age_badge == 'warning_yellow' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                      ⏳ {{ pe.age_text }}
+                    </span>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400 font-mono">{{ pe.days_aged }}d</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                  <div class="flex items-center justify-end gap-1.5">
+                    {% if not pe.is_reversed %}
+                      {% if not pe.is_settled %}
+                        <button type="button" onclick="InvestorFolio.openSettleExpenseModal('{{ pe.id }}', '{{ pe.item_description | replace("'", "\'") }}', {{ pe.amount }})"
+                          title="Settle Drawing"
+                          class="px-2 py-1 rounded-lg text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm">
+                          Settle
+                        </button>
+                      {% else %}
+                        <button type="button" onclick="InvestorFolio.unsettlePersonalExpense('{{ pe.id }}')"
+                          title="Reopen Drawing"
+                          class="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">
+                          Reopen
+                        </button>
+                      {% endif %}
+                      <button type="button" onclick="InvestorFolio.reversePersonalExpense('{{ pe.id }}', {{ pe.amount }})"
+                        title="Reverse Drawing"
+                        class="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                      </button>
+                    {% else %}
+                      <span class="text-[10px] text-slate-400 italic">Reversed</span>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="py-8 text-center text-slate-400">No personal drawings logged yet.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+      <button type="button" onclick="InvestorFolio.closeAllPersonalExpensesModal()" class="px-5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">Close</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/banking/investor_folio.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().split('T')[0];
+    const dInp = document.getElementById('invDepositDateInput');
+    const wInp = document.getElementById('invWithdrawDateInput');
+    const peInp = document.getElementById('peDateInput');
+    if (dInp) dInp.value = today;
+    if (wInp) wInp.value = today;
+    if (peInp) peInp.value = today;
+  });
+
+  function openDepositModal() {
+    const m = document.getElementById('depositCapitalModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeDepositModal() {
+    const m = document.getElementById('depositCapitalModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function openWithdrawModal() {
+    const m = document.getElementById('withdrawCashModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeWithdrawModal() {
+    const m = document.getElementById('withdrawCashModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function openPersonalExpenseModal() {
+    const m = document.getElementById('personalExpenseModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closePersonalExpenseModal() {
+    const m = document.getElementById('personalExpenseModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function reverseTransaction(id, amount, type) {
+    SD_BANKING.promptReversal({
+      txnType: type || 'Transaction',
+      txnId: id,
+      amount: amount,
+      endpoint: `/banking/api/transactions/${id}/reverse`
+    });
+  }
+</script>
+{% endblock %}

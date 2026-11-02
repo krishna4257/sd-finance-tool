@@ -82,6 +82,31 @@
         </div>
       </div>
     </div>
+
+    <!-- Tile 4: Interest Discount -->
+    <div class="dashboard-tile-card" id="tileInterestDiscount">
+      <div class="tile-header">
+        <span class="tile-title">INTEREST DISCOUNT</span>
+        <span class="tile-badge"><i class="fas fa-tags" style="color: #8b5cf6;"></i></span>
+      </div>
+      <div class="tile-main">
+        <span class="tile-value-large" id="lblTotalInterestDiscount">₹{{ "{:,.0f}".format(sum_interest_discount|default(0)|float) }}</span>
+        <span class="trend-indicator-large" id="trendTotalInterestDiscount"></span>
+      </div>
+      <div class="tile-splits">
+        <div class="tile-progress-bar">
+          <div class="progress-segment" id="barInterestDiscount" style="width: 100%; background: #8b5cf6;"></div>
+        </div>
+        <div class="tile-bar-legend">
+          <span class="legend-item"><span class="legend-dot" style="background: #8b5cf6;"></span> Waived: <strong id="lblInterestDiscountWaived">₹{{ "{:,.0f}".format(sum_interest_discount|default(0)|float) }}</strong></span>
+          <span class="legend-item"><span class="legend-dot dot-closed"></span> Accts: <strong id="lblInterestDiscountAccounts">0</strong></span>
+        </div>
+        <div class="tile-bar-legend" style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 8px; padding-top: 8px; font-size: 0.72rem; justify-content: space-between; gap: 8px;">
+          <span style="color: var(--text-secondary);">Avg / Acct: <strong id="lblAvgInterestDiscount" style="color: var(--text);">₹0</strong></span>
+          <span style="color: var(--text-secondary);">% of Interest: <strong id="lblInterestDiscountPct" style="color: var(--text);">0%</strong></span>
+        </div>
+      </div>
+    </div>
   </div>
 
   {% if session.get("vid") %}

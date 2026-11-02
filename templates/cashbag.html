@@ -4,9 +4,6 @@
 <a href="#" class="nav-link" onclick="openLedgerModal('{{ emp1 }}', '{{ emp2 if emp2 and emp2 != 'None' else '' }}')">
   <i class="fas fa-book"></i> Daily Sheet
 </a>
-<a href="#" class="nav-link" onclick="openAddEntryModal('OFFICE_CASH')">
-  <i class="fas fa-university"></i> Office Cash
-</a>
 <a href="#" class="nav-link" onclick="openAddEntryModal('EXPENSE')">
   <i class="fas fa-receipt"></i> Expense
 </a>
@@ -16,6 +13,28 @@
 <a href="#" class="nav-link" onclick="openAddEntryModal('PROFIT_LOSS')">
   <i class="fas fa-chart-line"></i> Profit / Loss
 </a>
+{% endblock %}
+
+{% block general_sidebar %}
+{% if current_bank %}
+<a href="/banking/groups/{{ current_bank.id }}" class="nav-link" style="color: #f59e0b; font-weight: 700; background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b;" title="Open {{ current_bank.group_name }}">
+  <i class="fas fa-university" style="color: #f59e0b;"></i> {{ current_bank.group_name }}
+</a>
+{% endif %}
+{% if group_cashbags and group_cashbags|length > 1 %}
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Cashbag:</span>
+      <select onchange="window.location.href='/cashbag?emp1={{ emp1 }}{% if emp2 %}&emp2={{ emp2 }}{% endif %}&cashbag_id=' + this.value{% if current_bank %}+'&bank_id={{ current_bank.id }}'{% endif %}" class="cb-select" style="height: 34px; padding: 4px 10px; font-size: 0.82rem; background: #1e1e2d; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 700; border-radius: 8px;">
+        {% for cb in group_cashbags %}
+        <option value="{{ cb.id }}" {% if current_cashbag and current_cashbag.id == cb.id %}selected{% endif %}>{{ cb.name }} ({{ cb.village_codes|length }} Villages)</option>
+        {% endfor %}
+      </select>
+    </div>
+{% endif %}
+{% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
+<a href="/mobile_app" class="nav-link"><i class="fas fa-mobile-screen-button"></i> Mobile App</a>
+{% endif %}
+<a href="/village" class="nav-link"><i class="fas fa-home"></i> Home</a>
 {% endblock %}
 
 {% block content %}
@@ -82,14 +101,52 @@
     flex-shrink: 0;
   }
 
-  /* ── Summary Cards — 6-column uniform ── */
-  .cashbag-summary-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 14px;
+  /* ── Summary Cards — Two Clean Symmetrical Rows ── */
+  .cashbag-summary-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
-  @media (max-width: 1300px) { .cashbag-summary-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 700px)  { .cashbag-summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  .cashbag-summary-row1 {
+    display: flex;
+    gap: 12px;
+  }
+  .cashbag-summary-row1 > .cb-card {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 14px 12px;
+  }
+  .cashbag-summary-row2 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .cashbag-summary-row2 > .cb-card {
+    padding: 11px 16px;
+  }
+  @media (max-width: 1200px) {
+    .cashbag-summary-row1 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .cashbag-summary-row2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 768px) {
+    .cashbag-summary-row1 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .cashbag-summary-row2 {
+      grid-template-columns: 1fr;
+    }
+  }
+  /* Backward-compatible alias */
+  .cashbag-summary-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
   .cb-card {
     background: var(--surface, #fff);
@@ -905,20 +962,47 @@
 <div class="section" style="display: flex; flex-direction: column; gap: 20px;">
 
   <!-- ① PAGE HEADER -->
-  <div style="display: flex; align-items: center; gap: 14px;">
-    <h2 class="page-title" style="margin: 0;">💼 Cash Bag Management</h2>
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <h2 class="page-title" style="margin: 0;">💼 Cash Bag Management</h2>
+      {% if current_bank %}
+      <a href="/banking/groups/{{ current_bank.id }}" style="text-decoration: none;">
+        <span class="cb-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px;">
+          <i class="fas fa-university"></i> {{ current_bank.group_name }}
+        </span>
+      </a>
+      {% endif %}
+    </div>
+    {% if group_banks and group_banks|length > 1 %}
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Select Cashbag:</span>
+      <select onchange="window.location.href='/cashbag?emp1={{ emp1 }}{% if emp2 %}&emp2={{ emp2 }}{% endif %}&bank_id=' + this.value" class="cb-select" style="height: 34px; padding: 4px 10px; font-size: 0.82rem; background: #1e1e2d; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 700; border-radius: 8px;">
+        {% for b in group_banks %}
+        <option value="{{ b.id }}" {% if current_bank and current_bank.id == b.id %}selected{% endif %}>{{ b.group_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
   </div>
 
-  <!-- ② SUMMARY CARDS (Now first row) -->
-  <div class="raised-box" style="padding: 22px;">
-    <div class="cashbag-summary-grid">
+  <!-- ② SUMMARY CARDS (Arranged in Two Clean Rows) -->
+  <div class="raised-box" style="padding: 18px 20px;">
+    <div class="cashbag-summary-container">
 
-      <div class="cb-card total-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <!-- ROW 1: Capital, Volumes & Commission -->
+      <div class="cashbag-summary-row1">
+
+      <div class="cb-card total-card cb-card-row1" onclick="openCashbagFormulaModal()" style="display: flex; flex-direction: column; justify-content: space-between; cursor: pointer;" title="Click to view Cash Bag Formula & Receivable Reconciliation">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
-          <div class="cb-card-label" style="color: rgba(255,255,255,0.75);">Cash Bag Total</div>
-          <div class="cb-card-icon" style="color: #fff; opacity: 0.7;"><i class="fas fa-wallet"></i></div>
+          <div class="cb-card-label" style="color: rgba(255,255,255,0.85); display: flex; align-items: center; gap: 6px;">
+            <span>Cash Bag Total</span>
+            <span style="font-size: 0.62rem; background: rgba(255,255,255,0.18); padding: 1px 6px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;" title="Click to view formula breakdown">
+              <i class="fas fa-calculator" style="font-size: 0.6rem;"></i> Formula
+            </span>
+          </div>
+          <div class="cb-card-icon" style="color: #fff; opacity: 0.85;"><i class="fas fa-wallet"></i></div>
         </div>
-        <div class="cb-card-value" style="color: #fff; font-size: 1.35rem;" data-money>₹{{ "{:,.2f}".format(cashbag_total|float) }}</div>
+        <div class="cb-card-value" style="color: #fff; font-size: 1.35rem;" data-money>₹{{ "{:,.0f}".format(cashbag_total|float) }}</div>
         
         <!-- Divider -->
         <div style="height: 1px; background: rgba(255, 255, 255, 0.15); margin: 8px 0 6px 0;"></div>
@@ -927,66 +1011,93 @@
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: rgba(255, 255, 255, 0.85); font-family: var(--font-body), sans-serif;">
           <div style="display: flex; flex-direction: column; gap: 2px;">
             <span style="opacity: 0.7; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.3px;">Cash</span>
-            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.2f}".format(cashbag_total_cash|float) }}</span>
+            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.0f}".format(cashbag_total_cash|float) }}</span>
           </div>
           <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
             <span style="opacity: 0.7; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.3px;">UPI</span>
-            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.2f}".format(cashbag_total_upi|float) }}</span>
+            <span style="font-weight: 700; font-family: var(--font-headline); font-size: 0.82rem;">₹{{ "{:,.0f}".format(cashbag_total_upi|float) }}</span>
           </div>
         </div>
       </div>
 
-      <div class="cb-card" ondblclick="openOfficeCashModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
-        <div class="cb-card-icon" style="color: var(--primary);"><i class="fas fa-university"></i></div>
+      {% if capital_deployed is defined and (capital_deployed > 0 or current_bank) %}
+      <div class="cb-card cb-card-row1" ondblclick="openCapitalDeployedModal()" style="cursor: pointer;" title="Double click to view capital deployment breakdown">
+        <div class="cb-card-icon" style="color: #f59e0b;"><i class="fas fa-coins"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
-          Office Cash <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+          Capital Deployed <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(office_cash|float) }}</div>
+        <div class="cb-card-value" style="color: #f59e0b;" data-money>₹{{ "{:,.0f}".format(capital_deployed|default(0)|float) }}</div>
       </div>
+      {% endif %}
 
-      <div class="cb-card" ondblclick="openInstallmentsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+      {% if total_withdrawn is defined and (total_withdrawn > 0 or current_bank) %}
+      <div class="cb-card cb-card-row1" onclick="openCapitalWithdrawnModal()" ondblclick="openCapitalWithdrawnModal()" style="cursor: pointer;" title="Click to view withdrawals breakdown">
+        <div class="cb-card-icon" style="color: #ef4444;"><i class="fas fa-hand-holding-usd"></i></div>
+        <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
+          Amount Withdrawn <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Click to open breakdown"></i>
+        </div>
+        <div class="cb-card-value" style="color: #ef4444;" data-money>₹{{ "{:,.0f}".format(total_withdrawn|default(0)|float) }}</div>
+      </div>
+      {% endif %}
+
+      <div class="cb-card cb-card-row1" ondblclick="openInstallmentsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div class="cb-card-icon" style="color: #16a34a;"><i class="fas fa-hand-holding-usd"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
-          Installments Collected <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+          Collection <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(installments|float) }}</div>
+        <div class="cb-card-value" data-money>₹{{ "{:,.0f}".format(installments|float) }}</div>
       </div>
 
-      <div class="cb-card" ondblclick="openLoansModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+      <div class="cb-card cb-card-row1" ondblclick="openLoansModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div class="cb-card-icon" style="color: #2563eb;"><i class="fas fa-paper-plane"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
           Loans Dispensed <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(loans_disbursed|float) }}</div>
+        <div class="cb-card-value" data-money>₹{{ "{:,.0f}".format(loans_disbursed|float) }}</div>
       </div>
 
-      <div class="cb-card" ondblclick="openCommissionsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+      <div class="cb-card cb-card-row1" ondblclick="openCommissionsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div class="cb-card-icon" style="color: #b45309;"><i class="fas fa-percentage"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
           Rusum <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(loan_commission|float) }}</div>
+        <div class="cb-card-value" data-money>₹{{ "{:,.0f}".format(loan_commission|float) }}</div>
       </div>
 
-      <div class="cb-card" ondblclick="openInterestModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+      <div class="cb-card cb-card-row1" ondblclick="openInterestModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div class="cb-card-icon" style="color: #0284c7;"><i class="fas fa-percentage"></i></div>
         <div class="cb-card-label" style="display: flex; align-items: center; gap: 4px;">
           Commission <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
         </div>
-        <div class="cb-card-value" data-money>₹{{ "{:,.2f}".format(interest_total|float) }}</div>
+        <div class="cb-card-value" data-money>₹{{ "{:,.0f}".format(interest_total|float) }}</div>
       </div>
 
-      <div class="cb-card" ondblclick="openExpensesModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
+      </div><!-- End ROW 1 -->
+
+      <!-- ROW 2: Deductions, Adjustments & Net P/L -->
+      <div class="cashbag-summary-row2">
+
+      <div class="cb-card cb-card-row2" ondblclick="openInterestDiscountModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="cb-card-icon" style="color: #dc2626;"><i class="fas fa-receipt"></i></div>
+          <div class="cb-card-icon" style="color: #8b5cf6;"><i class="fas fa-tags"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
-            Total Expenses <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+            Interest Discount <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
           </div>
-          <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto;" data-money>₹{{ "{:,.2f}".format(expenses|float) }}</div>
+          <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto; color: #8b5cf6;" data-money>₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }}</div>
         </div>
       </div>
 
-      <div class="cb-card" ondblclick="openAdjustmentsModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
+      <div class="cb-card cb-card-row2" ondblclick="openExpensesModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="cb-card-icon" style="color: #dc2626;"><i class="fas fa-receipt"></i></div>
+          <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
+            Expenses <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
+          </div>
+          <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto;" data-money>₹{{ "{:,.0f}".format(expenses|float) }}</div>
+        </div>
+      </div>
+
+      <div class="cb-card cb-card-row2" ondblclick="openAdjustmentsModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="cb-card-icon" style="color: #2563eb;"><i class="fas fa-sliders-h"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
@@ -994,24 +1105,26 @@
           </div>
           <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto; color: {{ '#16a34a' if (adjustments_add >= adjustments_minus) else '#dc2626' }};">
             {% set net_adj = adjustments_add - adjustments_minus %}
-            {% if net_adj >= 0 %}+{% endif %}₹{{ "{:,.2f}".format(net_adj|float) }}
+            {% if net_adj >= 0 %}+{% endif %}₹{{ "{:,.0f}".format(net_adj|float) }}
           </div>
         </div>
       </div>
 
-      <div class="cb-card" ondblclick="openProfitLossModal()" style="cursor: pointer; grid-column: span 2;" title="Double click to view detailed breakdown">
+      <div class="cb-card cb-card-row2" ondblclick="openProfitLossModal()" style="cursor: pointer;" title="Double click to view detailed breakdown">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="cb-card-icon" style="color: #10b981;"><i class="fas fa-chart-line"></i></div>
           <div class="cb-card-label" style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
             Profit / Loss <i class="fas fa-info-circle" style="font-size: 0.65rem; opacity: 0.6;" title="Double click to open breakdown"></i>
           </div>
           <div class="cb-card-value" style="font-size: 1.2rem; margin-left: auto; color: {{ '#16a34a' if (profit_loss_net >= 0) else '#dc2626' }};">
-            {% if profit_loss_net >= 0 %}+{% endif %}₹{{ "{:,.2f}".format(profit_loss_net|float) }}
+            {% if profit_loss_net >= 0 %}+{% endif %}₹{{ "{:,.0f}".format(profit_loss_net|float) }}
           </div>
         </div>
       </div>
 
-    </div>
+      </div><!-- End ROW 2 -->
+
+    </div><!-- End cashbag-summary-container -->
   </div>
 
   <!-- ③ LEDGER TABLE -->
@@ -1028,6 +1141,8 @@
         <form method="GET" action="{{ url_for('cashbag') }}" style="display: flex; align-items: center; gap: 8px; font-family: var(--font-body), sans-serif; font-size: 0.85rem;">
           <input type="hidden" name="emp1" value="{{ emp1 }}">
           {% if emp2 and emp2 != 'None' %}<input type="hidden" name="emp2" value="{{ emp2 }}">{% endif %}
+          {% if cashbag_id %}<input type="hidden" name="cashbag_id" value="{{ cashbag_id }}">{% endif %}
+          {% if current_bank and current_bank.id %}<input type="hidden" name="bank_id" value="{{ current_bank.id }}">{% endif %}
           <span style="color: var(--text-secondary); font-weight: 500;">Rows to Load:</span>
           <input type="number" name="limit" value="{{ limit_val|default(250) }}" 
                  style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-family: inherit; font-size: inherit; outline: none;" 
@@ -1049,14 +1164,17 @@
         <div class="cb-field-group">
           <label class="cb-field-label">Transaction Category</label>
           <select id="fltTxn" class="cb-select" style="height: 36px; padding: 6px 12px; background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;" onchange="applyLedgerFilters()">
-            <option value="ALL">All Transactions</option>
-            <option value="INSTALLMENT_AMOUNT">Installment</option>
-            <option value="LOAN">Loan</option>
+            <option value="ALL">All Categories</option>
+            <option value="CAPITAL_DEPLOYED">Capital Deployed</option>
+            <option value="CAPITAL_WITHDRAWN">Capital Withdrawn</option>
+            <option value="INSTALLMENT_AMOUNT">Collection</option>
+            <option value="LOAN">Loan Dispensed</option>
             <option value="LOAN_COMMISION">Rusum</option>
             <option value="LOAN_INTEREST">Commission</option>
+            <option value="EXPENSE">Expenses</option>
             <option value="OFFICE_CASH">Office Cash</option>
-            <option value="EXPENSE">Expense</option>
             <option value="ADJUSTMENT">Adjustment</option>
+            <option value="PROFIT_LOSS">Profit / Loss (Net)</option>
           </select>
         </div>
         <div class="cb-field-group">
@@ -1157,9 +1275,9 @@
   let ledgerViewMode = 'grouped'; // default is grouped
 
   function isDebit(txn, txn_sub) {
-    return ['EXPENSE', 'LOAN'].includes(txn) || 
+    return ['EXPENSE', 'LOAN', 'CAPITAL_WITHDRAWN', 'INTEREST_WITHDRAWN', 'PROFIT_WITHDRAWN'].includes(txn) || 
            (txn === 'ADJUSTMENT' && txn_sub === 'MINUS') || 
-           (txn === 'PROFIT_LOSS' && txn_sub === 'LOSS');
+           (txn === 'PROFIT_LOSS' && ['LOSS', 'PROFIT_WITHDRAWN'].includes(txn_sub));
   }
 
   function groupTransactions(list) {
@@ -1173,6 +1291,10 @@
         catKey = 'ADJUSTMENT_' + (tx.txn_sub || 'general');
       } else if (tx.txn === 'PROFIT_LOSS') {
         catKey = 'PROFIT_LOSS_' + (tx.txn_sub || 'general');
+      } else if (tx.txn === 'CAPITAL_WITHDRAWN') {
+        catKey = 'CAPITAL_WITHDRAWN_' + (tx.txn_sub || 'general');
+      } else if (tx.txn === 'INTEREST_WITHDRAWN') {
+        catKey = 'INTEREST_WITHDRAWN_' + (tx.txn_sub || 'general');
       }
       
       const key = datePart + '_' + catKey;
@@ -1189,9 +1311,9 @@
       }
       
       const factor = isDebit(tx.txn, tx.txn_sub) ? -1 : 1;
-      groups[key].cash_amount += (tx.cash_amount || 0.0) * factor;
-      groups[key].upi_amount += (tx.upi_amount || 0.0) * factor;
-      groups[key].amount += (tx.amount || 0.0) * factor;
+      groups[key].cash_amount += (parseFloat(tx.cash_amount) || 0.0) * factor;
+      groups[key].upi_amount += (parseFloat(tx.upi_amount) || 0.0) * factor;
+      groups[key].amount += (parseFloat(tx.amount) || 0.0) * factor;
       groups[key].count += 1;
     });
     
@@ -1232,7 +1354,14 @@
       
       // 3. Method filter
       if (fltMethod !== 'ALL') {
-        if (tx.txn_type !== fltMethod) return false;
+        const methodUpper = (tx.txn_type || '').toUpperCase();
+        if (fltMethod === 'CASH') {
+          if (parseFloat(tx.cash_amount || 0) <= 0 && methodUpper !== 'CASH') return false;
+        } else if (fltMethod === 'UPI') {
+          if (parseFloat(tx.upi_amount || 0) <= 0 && methodUpper !== 'UPI') return false;
+        } else if (fltMethod === 'PARTIAL') {
+          if (methodUpper !== 'PARTIAL') return false;
+        }
       }
       
       // 4. Amount filter
@@ -1284,51 +1413,69 @@
     let html = '';
     groupedList.forEach(grp => {
       let txnBadge = '';
-      if (grp.txn === 'OFFICE_CASH') {
+      if (grp.txn === 'CAPITAL_DEPLOYED') {
+        txnBadge = '<span class="txn-badge office" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fas fa-coins"></i> Capital Deployed</span>';
+      } else if (grp.txn === 'CAPITAL_WITHDRAWN') {
+        txnBadge = '<span class="txn-badge expense" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35);"><i class="fas fa-hand-holding-usd"></i> Capital Withdrawn</span>';
+      } else if (grp.txn === 'INTEREST_WITHDRAWN') {
+        txnBadge = '<span class="txn-badge expense" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;"><i class="fas fa-percentage"></i> 24% Return Payout</span>';
+      } else if (grp.txn === 'PROFIT_WITHDRAWN') {
+        txnBadge = '<span class="txn-badge expense" style="background: rgba(16, 185, 129, 0.12); color: #10b981;"><i class="fas fa-chart-line"></i> Profit Payout</span>';
+      } else if (grp.txn === 'OFFICE_CASH') {
         txnBadge = '<span class="txn-badge office"><i class="fas fa-university"></i> Office Cash</span>';
       } else if (grp.txn === 'EXPENSE') {
         const subLabel = grp.txn_sub ? ` — <em style="font-weight:400; opacity:0.85;">${grp.txn_sub.replace(/_/g, ' ')}</em>` : '';
-        txnBadge = `<span class="txn-badge expense"><i class="fas fa-receipt"></i> Expense${subLabel}</span>`;
+        txnBadge = `<span class="txn-badge expense"><i class="fas fa-receipt"></i> Expenses${subLabel}</span>`;
       } else if (grp.txn === 'LOAN') {
-        txnBadge = '<span class="txn-badge loan"><i class="fas fa-paper-plane"></i> Loan</span>';
+        txnBadge = '<span class="txn-badge loan"><i class="fas fa-paper-plane"></i> Loan Dispensed</span>';
       } else if (grp.txn === 'LOAN_COMMISION') {
         txnBadge = '<span class="txn-badge commis"><i class="fas fa-percentage"></i> Rusum</span>';
       } else if (grp.txn === 'LOAN_INTEREST') {
         txnBadge = '<span class="txn-badge commis" style="background: rgba(2, 132, 199, 0.08); color: #0284c7;"><i class="fas fa-percentage"></i> Commission</span>';
       } else if (grp.txn === 'INSTALLMENT_AMOUNT') {
-        txnBadge = '<span class="txn-badge install"><i class="fas fa-hand-holding-usd"></i> Installment</span>';
+        txnBadge = '<span class="txn-badge install"><i class="fas fa-hand-holding-usd"></i> Collection</span>';
       } else if (grp.txn === 'ADJUSTMENT') {
-        const adjLabel = grp.txn_sub === 'ADD' ? 'Add (+)' : 'Subtract (-)';
-        txnBadge = `<span class="txn-badge office" style="background: rgba(107, 114, 128, 0.08); color: #4b5563;"><i class="fas fa-sliders-h"></i> Adjustment — <em style="font-weight:400; opacity:0.85;">${adjLabel}</em></span>`;
+        const isAdd = grp.txn_sub === 'ADD';
+        const adjLabel = isAdd ? 'Adjustment (+)' : 'Adjustment (-)';
+        const adjColor = isAdd ? '#16a34a' : '#dc2626';
+        const adjBg = isAdd ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.08)';
+        txnBadge = `<span class="txn-badge office" style="background: ${adjBg}; color: ${adjColor};"><i class="fas fa-sliders-h"></i> ${adjLabel}</span>`;
       } else if (grp.txn === 'PROFIT_LOSS') {
-        const plLabel = grp.txn_sub === 'PROFIT' ? 'Profit (+)' : 'Loss (-)';
-        const plColor = grp.txn_sub === 'PROFIT' ? '#16a34a' : '#dc2626';
-        const plBg = grp.txn_sub === 'PROFIT' ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.08)';
-        txnBadge = `<span class="txn-badge office" style="background: ${plBg}; color: ${plColor};"><i class="fas fa-chart-line"></i> Profit/Loss — <em style="font-weight:400; opacity:0.85;">${plLabel}</em></span>`;
+        let plLabel = 'Loss (-)';
+        if (grp.txn_sub === 'PROFIT') {
+          plLabel = 'Profit (+)';
+        } else if (grp.txn_sub === 'PROFIT_WITHDRAWN') {
+          plLabel = 'Profit Payout (-)';
+        }
+        const plColor = (grp.txn_sub === 'PROFIT') ? '#16a34a' : '#dc2626';
+        const plBg = (grp.txn_sub === 'PROFIT') ? 'rgba(22, 163, 74, 0.08)' : 'rgba(220, 38, 38, 0.08)';
+        txnBadge = `<span class="txn-badge office" style="background: ${plBg}; color: ${plColor};"><i class="fas fa-chart-line"></i> Profit / Loss (Net) — <em style="font-weight:400; opacity:0.85;">${plLabel}</em></span>`;
       } else {
         txnBadge = `<span class="txn-badge office">${grp.txn || '—'}</span>`;
       }
       
-      const cashColor = grp.cash_amount < 0 ? '#dc2626' : (grp.cash_amount > 0 ? '#16a34a' : 'inherit');
-      const upiColor = grp.upi_amount < 0 ? '#dc2626' : (grp.upi_amount > 0 ? '#16a34a' : 'inherit');
-      const totalColor = grp.amount < 0 ? '#dc2626' : (grp.amount > 0 ? '#16a34a' : 'inherit');
-      
-      const cashSign = grp.cash_amount > 0 ? '+' : '';
-      const upiSign = grp.upi_amount > 0 ? '+' : '';
-      const totalSign = grp.amount > 0 ? '+' : '';
-      
+      const formatCellCurrency = (val) => {
+        if (Math.abs(Math.round(val)) === 0) {
+          return '<span style="color: rgba(255,255,255,0.4);">₹0</span>';
+        }
+        const isPositive = val > 0;
+        const color = isPositive ? '#16a34a' : '#dc2626';
+        const sign = isPositive ? '+' : '-';
+        return `<span style="color: ${color};">${sign}₹${Math.abs(Math.round(val)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>`;
+      };
+
       html += `
         <tr>
-          <td>${grp.date}</td>
+          <td style="font-weight: 500;">${grp.date}</td>
           <td>${txnBadge}</td>
-          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600; color: ${cashColor};">
-            ${cashSign}₹${grp.cash_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600;">
+            ${formatCellCurrency(grp.cash_amount)}
           </td>
-          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600; color: ${upiColor};">
-            ${upiSign}₹${grp.upi_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 600;">
+            ${formatCellCurrency(grp.upi_amount)}
           </td>
-          <td style="text-align: right; font-family: var(--font-headline); font-weight: 700; color: ${totalColor};">
-            ${totalSign}₹${grp.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <td style="text-align: right; font-family: var(--font-headline); font-weight: 700;">
+            ${formatCellCurrency(grp.amount)}
           </td>
           <td>
             <span class="cb-badge" style="background: rgba(26, 77, 46, 0.05); border: none; color: var(--primary);">
@@ -1345,6 +1492,219 @@
     applyLedgerFilters();
   });
 </script>
+
+<!-- CASH BAG FORMULA & RECONCILIATION MODAL -->
+<dialog id="cashbagFormulaModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 780px; width: 92%;">
+  <div style="background: #181826; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.75);">
+    
+    <!-- Modal Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <div>
+        <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.25rem; display: flex; align-items: center; gap: 10px; color: #fff;">
+          <span style="width: 32px; height: 32px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-calculator" style="color: #10b981; font-size: 1rem;"></i>
+          </span>
+          Cash Bag Formula & Accounting Reconciliation
+        </h3>
+        <p style="margin: 4px 0 0 42px; font-size: 0.8rem; color: #9ca3af;">
+          Live comparison: <strong>Physical Cash In Bag</strong> vs. <strong>Customer Receivables (Dashboard)</strong>
+        </p>
+      </div>
+      <button onclick="closeCashbagFormulaModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.25rem; cursor: pointer; transition: color 0.2s; padding: 4px;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body (Scrollable) -->
+    <div style="overflow-y: auto; flex-grow: 1; padding-right: 6px; display: flex; flex-direction: column; gap: 20px;" class="custom-scroll">
+      
+      <!-- SECTION 1: PHYSICAL CASH IN HAND -->
+      <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 18px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Formula 1</span>
+            <span style="font-size: 1rem; font-weight: 700; color: #fff;">💵 Physical Cash in Hand (Cash Bag Total)</span>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700; color: #10b981;">₹{{ "{:,.0f}".format(cashbag_total|float) }}</span>
+            <span style="display: block; font-size: 0.72rem; color: #9ca3af;">Cash: ₹{{ "{:,.0f}".format(cashbag_total_cash|float) }} | UPI: ₹{{ "{:,.0f}".format(cashbag_total_upi|float) }}</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.82rem; margin-bottom: 14px; font-family: monospace; color: #d1fae5;">
+          Cash Bag Total = Capital Deployed + Collection + Rusum + Commission - Loans Dispensed
+        </div>
+
+        <!-- Line by Line Arithmetic -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+          <tbody>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-coins" style="color: #f59e0b; width: 18px;"></i> Capital Deployed</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #f59e0b; font-family: var(--font-headline);">+₹{{ "{:,.0f}".format(capital_deployed|default(0)|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-hand-holding-usd" style="color: #10b981; width: 18px;"></i> Total Collection (Customer Repayments)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #10b981; font-family: var(--font-headline);">+₹{{ "{:,.0f}".format(installments|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-percentage" style="color: #b45309; width: 18px;"></i> Rusum (Cutting collected upfront)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #b45309; font-family: var(--font-headline);">+₹{{ "{:,.0f}".format(loan_commission|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-percentage" style="color: #0284c7; width: 18px;"></i> Commission (Interest collected upfront)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #0284c7; font-family: var(--font-headline);">+₹{{ "{:,.0f}".format(interest_total|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-paper-plane" style="color: #ef4444; width: 18px;"></i> Loans Dispensed (Gross Loan Amount)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #ef4444; font-family: var(--font-headline);">-₹{{ "{:,.0f}".format(loans_disbursed|float) }}</td>
+            </tr>
+            {% set net_misc = (office_cash|float) + (adjustments_add|float) + (profit_loss_net|float) - (capital_withdrawn|default(0)|float) - (expenses|float) - (adjustments_minus|float) %}
+            {% if net_misc != 0 %}
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-sliders-h" style="color: #6366f1; width: 18px;"></i> Net Other (Office Cash, Expenses, Adjustments, P&L)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: {{ '#10b981' if net_misc >= 0 else '#ef4444' }}; font-family: var(--font-headline);">{{ '+' if net_misc >= 0 else '' }}₹{{ "{:,.0f}".format(net_misc|float) }}</td>
+            </tr>
+            {% endif %}
+            <tr style="background: rgba(16, 185, 129, 0.08); font-weight: 700;">
+              <td style="padding: 9px 6px; color: #fff; font-size: 0.9rem;">= Physical Cash in Bag</td>
+              <td style="padding: 9px 6px; text-align: right; color: #10b981; font-size: 1.05rem; font-family: var(--font-headline);">₹{{ "{:,.0f}".format(cashbag_total|float) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Equivalent Net Cash Box -->
+        <div style="margin-top: 14px; padding: 12px 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px;">
+          <div style="font-size: 0.76rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; margin-bottom: 4px;">
+            <i class="fas fa-coins" style="color: #f59e0b; margin-right: 5px;"></i> Net Disbursed Cash Equivalence:
+          </div>
+          <div style="font-size: 0.8rem; color: #9ca3af; line-height: 1.5;">
+            Gross Loans (₹{{ "{:,.0f}".format(loans_disbursed|float) }}) minus Rusum (₹{{ "{:,.0f}".format(loan_commission|float) }}) minus Commission (₹{{ "{:,.0f}".format(interest_total|float) }}) equals <strong>₹{{ "{:,.0f}".format(base_amount_total|default(0)|float) }}</strong> (Actual Base Cash handed to borrowers).<br>
+            <span style="font-family: monospace; color: #e2e8f0;">Capital (₹{{ "{:,.0f}".format(capital_deployed|default(0)|float) }}) + Collections (₹{{ "{:,.0f}".format(installments|float) }}) - Base Cash Disbursed (₹{{ "{:,.0f}".format(base_amount_total|default(0)|float) }}) = <strong style="color: #10b981;">₹{{ "{:,.0f}".format(cashbag_total|float) }}</strong></span>
+          </div>
+        </div>
+
+        <!-- Why Interest Discount is Not Deducted Here -->
+        <div style="margin-top: 12px; padding: 12px 14px; background: rgba(139, 92, 246, 0.07); border-left: 3px solid #8b5cf6; border-radius: 0 8px 8px 0;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #c4b5fd; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <i class="fas fa-tags" style="color: #8b5cf6;"></i> Why Interest Discount (₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }}) is NOT Deducted Here:
+          </div>
+          <div style="font-size: 0.78rem; color: #d8b4fe; line-height: 1.5;">
+            Interest Discount is a <strong>non-cash settlement concession</strong>. When you grant a discount to close a borrower's account, <strong>zero cash leaves the cash bag</strong>. Deducting ₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }} from this bag total would falsely report ₹{{ "{:,.0f}".format((cashbag_total - (interest_discount_total|default(0)))|float) }}, which would cause a fake ₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }} cash shortage error against your physical rupee notes!
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: RECEIVABLES & OUTSTANDING BALANCE -->
+      <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 18px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px;">Formula 2</span>
+            <span style="font-size: 1rem; font-weight: 700; color: #fff;">📊 Customer Receivables (Village Dashboard View)</span>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700; color: #3b82f6;">₹{{ "{:,.0f}".format(outstanding_balance_total|default(0)|float) }}</span>
+            <span style="display: block; font-size: 0.72rem; color: #9ca3af;">Active: ₹{{ "{:,.0f}".format(active_balance_total|default(0)|float) }} | Defaulted: ₹{{ "{:,.0f}".format(((outstanding_balance_total|default(0)) - (active_balance_total|default(0)))|float) }}</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(59, 130, 246, 0.05); border-left: 3px solid #3b82f6; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.82rem; margin-bottom: 14px; font-family: monospace; color: #bfdbfe;">
+          Outstanding Balance = Gross Loans Dispensed - Collections - Interest Discount Waived
+        </div>
+
+        <!-- Line by Line Arithmetic -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+          <tbody>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-file-invoice" style="color: #3b82f6; width: 18px;"></i> Total Gross Loans Dispensed</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #fff; font-family: var(--font-headline);">₹{{ "{:,.0f}".format(loans_disbursed|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 7px 6px; color: #9ca3af;"><i class="fas fa-check" style="color: #10b981; width: 18px;"></i> Less: Total Cash Collections</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #10b981; font-family: var(--font-headline);">-₹{{ "{:,.0f}".format(installments|float) }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); background: rgba(139, 92, 246, 0.05);">
+              <td style="padding: 7px 6px; color: #c4b5fd; font-weight: 600;"><i class="fas fa-tags" style="color: #8b5cf6; width: 18px;"></i> Less: Interest Discount Waived (Settlement)</td>
+              <td style="padding: 7px 6px; text-align: right; font-weight: 700; color: #8b5cf6; font-family: var(--font-headline);">-₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }}</td>
+            </tr>
+            <tr style="background: rgba(59, 130, 246, 0.08); font-weight: 700;">
+              <td style="padding: 9px 6px; color: #fff; font-size: 0.9rem;">= Total Outstanding Balance Remaining</td>
+              <td style="padding: 9px 6px; text-align: right; color: #3b82f6; font-size: 1.05rem; font-family: var(--font-headline);">₹{{ "{:,.0f}".format(outstanding_balance_total|default(0)|float) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Where Interest Discount applies -->
+        <div style="margin-top: 12px; padding: 12px 14px; background: rgba(59, 130, 246, 0.06); border-left: 3px solid #3b82f6; border-radius: 0 8px 8px 0;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">
+            <i class="fas fa-info-circle" style="color: #3b82f6; margin-right: 5px;"></i> This is where Interest Discount takes effect!
+          </div>
+          <div style="font-size: 0.78rem; color: #bfdbfe; line-height: 1.5;">
+            Because the borrower paid their settlement cash and you waived ₹{{ "{:,.0f}".format(interest_discount_total|default(0)|float) }} interest, their remaining debt drops to <strong>₹0</strong>. The discount reduces <strong>what borrowers owe you on the Village Dashboard</strong>, rather than taking cash out of your pocket.
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: RECONCILIATION SUMMARY -->
+      <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i class="fas fa-shield-alt" style="color: #10b981; font-size: 1.1rem;"></i>
+          </div>
+          <div>
+            <div style="font-size: 0.88rem; font-weight: 700; color: #fff;">Dual-Ledger Mathematical Integrity: 100% Balanced</div>
+            <div style="font-size: 0.75rem; color: #9ca3af;">
+              Physical Cash in Hand (₹{{ "{:,.0f}".format(cashbag_total|float) }}) + Borrower Receivables (₹{{ "{:,.0f}".format(outstanding_balance_total|default(0)|float) }}) = Tangible Assets (₹{{ "{:,.0f}".format(((cashbag_total|default(0)) + (outstanding_balance_total|default(0)))|float) }})
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="closeCashbagFormulaModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 600; padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
+          Got It
+        </button>
+      </div>
+
+    </div>
+  </div>
+</dialog>
+
+<!-- CAPITAL DEPLOYED BREAKDOWN MODAL -->
+<dialog id="capitalDeployedModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 720px; width: 90%;">
+  <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #f59e0b;">
+        <i class="fas fa-coins" style="color: #f59e0b;"></i> Capital Deployed Breakdown
+      </h3>
+      <button onclick="closeCapitalDeployedModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div id="capitalDeployedModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- AMOUNT WITHDRAWN BREAKDOWN MODAL -->
+<dialog id="capitalWithdrawnModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 720px; width: 90%;">
+  <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+      <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #ef4444;">
+        <i class="fas fa-hand-holding-usd" style="color: #ef4444;"></i> Amount Withdrawn Breakdown
+      </h3>
+      <button onclick="closeCapitalWithdrawnModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div id="capitalWithdrawnModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+      <div style="text-align: center; padding: 40px; opacity: 0.5;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+        <p>Loading breakdown details...</p>
+      </div>
+    </div>
+  </div>
+</dialog>
 
 <!-- LOANS BREAKDOWN MODAL -->
 <dialog id="loansModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
@@ -1378,7 +1738,7 @@
     <!-- Modal Header -->
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
       <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
-        <i class="fas fa-hand-holding-usd" style="color: #16a34a;"></i> Installments Collected Breakdown
+        <i class="fas fa-hand-holding-usd" style="color: #16a34a;"></i> Collection Breakdown
       </h3>
       <button onclick="closeInstallmentsModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
         <i class="fas fa-times"></i>
@@ -1470,6 +1830,31 @@
 
   </div>
 </dialog>
+
+<!-- INTEREST DISCOUNT BREAKDOWN MODAL -->
+  <dialog id="interestDiscountModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
+    <div style="background: #1e1e2d; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; color: #e2e8f0; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      
+      <!-- Modal Header -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <h3 style="margin: 0; font-family: var(--font-headline), 'Space Grotesk', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: #fff;">
+          <i class="fas fa-tags" style="color: #8b5cf6;"></i> Interest Discount Breakdown
+        </h3>
+        <button onclick="closeInterestDiscountModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Timeline) -->
+      <div id="interestDiscountModalBody" style="overflow-y: auto; flex-grow: 1; padding-right: 4px;" class="custom-scroll">
+        <div style="text-align: center; padding: 40px; opacity: 0.5;">
+          <i class="fas fa-spinner fa-spin" style="font-size: 2.2rem; margin-bottom: 8px;"></i>
+          <p>Loading breakdown details...</p>
+        </div>
+      </div>
+  
+    </div>
+  </dialog>
 
 <!-- EXPENSES BREAKDOWN MODAL -->
 <dialog id="expensesModal" class="modern-dialog-box" style="padding: 0; border: none; border-radius: 16px; background: transparent; outline: none; max-width: 650px; width: 90%;">
@@ -1563,6 +1948,8 @@
     <form method="POST" action="{{ url_for('add_cashbag_transaction') }}" style="display: flex; flex-direction: column; gap: 16px;">
       <input type="hidden" name="emp1" value="{{ emp1 }}">
       <input type="hidden" name="emp2" value="{{ emp2 or '' }}">
+      <input type="hidden" name="cashbag_id" value="{{ cashbag_id or '' }}">
+      <input type="hidden" name="bank_id" value="{{ current_bank.id if current_bank else '' }}">
       <input type="hidden" name="txn" id="modalTxnTypeInput" value="">
       <input type="hidden" name="txn_sub" id="modalTxnSubHiddenInput" value="">
 
@@ -1623,7 +2010,7 @@
       <!-- Amount -->
       <div class="cb-field-group">
         <label class="cb-field-label">Amount (₹)</label>
-        <input type="number" step="0.01" name="amount" placeholder="0.00" required class="cb-input" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;">
+        <input type="number" step="1" name="amount" placeholder="0" required class="cb-input" style="background-color: #2b2b3d; border-color: rgba(255,255,255,0.1); color: #fff;">
       </div>
 
       <!-- Notes -->
@@ -1716,16 +2103,16 @@
 
 <script>
   function getCurrentLedgerEndDay() {
+    const cbId = "{{ cashbag_id or '' }}";
     const e1 = "{{ emp1 }}";
     const e2 = "{{ emp2 if emp2 and emp2 != 'None' else '' }}";
-    const key = `ledger_end_day_group_${e1}_${e2}`;
-    const saved = localStorage.getItem(key) || localStorage.getItem("ledger_end_day_global");
+    const key = cbId ? `ledger_end_day_cashbag_${cbId}` : `ledger_end_day_group_${e1}_${e2}`;
+    const saved = localStorage.getItem(key);
     if (saved !== null && saved !== undefined && saved !== "") {
       const val = parseInt(saved, 10);
       if (!isNaN(val) && val >= 0 && val <= 6) return val;
     }
-    if (typeof ledgerEndDay !== 'undefined' && ledgerEndDay !== null) return ledgerEndDay;
-    return 3;
+    return {{ week_ending_day if week_ending_day is defined and week_ending_day is not none else 3 }};
   }
 
   function loadBreakdownData(type, containerId) {
@@ -1734,6 +2121,7 @@
 
     const emp1 = "{{ emp1 }}";
     const emp2 = "{{ emp2 if emp2 and emp2 != 'None' else '' }}";
+    const bankId = "{{ current_bank.id if current_bank else '' }}";
     const endDay = getCurrentLedgerEndDay();
 
     // Set loading spinner
@@ -1744,7 +2132,16 @@
       </div>
     `;
 
-    fetch(`/api/cashbag/breakdown?emp1=${emp1}&emp2=${emp2}&type=${type}&end_day=${endDay}`)
+    const cbId = "{{ cashbag_id if cashbag_id else '' }}";
+    let url = `/api/cashbag/breakdown?emp1=${emp1}&emp2=${emp2}&type=${type}&end_day=${endDay}`;
+    if (cbId) {
+      url += `&cashbag_id=${cbId}`;
+    }
+    if (bankId) {
+      url += `&bank_id=${bankId}`;
+    }
+
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         if (!data.success) {
@@ -1759,15 +2156,15 @@
 
         const formatCurrency = (val) => {
           const num = parseFloat(val);
-          if (isNaN(num)) return '₹0.00';
-          return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          if (isNaN(num)) return '₹0';
+          return '₹' + Math.round(num).toLocaleString('en-IN', { maximumFractionDigits: 0 });
         };
 
         const formatCurrencySigned = (val) => {
           const num = parseFloat(val);
-          if (isNaN(num)) return '₹0.00';
+          if (isNaN(num)) return '₹0';
           const sign = num >= 0 ? '+' : '-';
-          return `${sign}₹` + Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return `${sign}₹` + Math.abs(Math.round(num)).toLocaleString('en-IN', { maximumFractionDigits: 0 });
         };
 
         const tree = data.tree || [];
@@ -1778,9 +2175,12 @@
           else if (type === 'commissions') emptyMsg = "No Rusum collected for this employee group.";
           else if (type === 'interest') emptyMsg = "No Commission collected for this employee group.";
           else if (type === 'office_cash') emptyMsg = "No office cash entries for this employee group.";
+          else if (type === 'capital_deployed') emptyMsg = "No capital deployed entries for this employee group.";
+          else if (type === 'interest_discount') emptyMsg = "No interest discount entries for this employee group.";
           else if (type === 'expenses') emptyMsg = "No expenses logged for this employee group.";
           else if (type === 'adjustments') emptyMsg = "No adjustments logged for this employee group.";
           else if (type === 'profit_loss') emptyMsg = "No profit/loss entries for this employee group.";
+          else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') emptyMsg = "No withdrawals logged for this cashbag.";
 
           container.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.5;">
@@ -1803,6 +2203,15 @@
             monthColor = '#0284c7';
           } else if (type === 'office_cash') {
             monthColor = 'var(--primary)';
+          } else if (type === 'capital_deployed') {
+            monthColor = '#f59e0b';
+            monthIcon = 'fa-coins';
+          } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+            monthColor = '#ef4444';
+            monthIcon = 'fa-hand-holding-usd';
+          } else if (type === 'interest_discount') {
+            monthColor = '#8b5cf6';
+            monthIcon = 'fa-tags';
           } else if (type === 'expenses') {
             monthColor = '#dc2626';
           } else if (type === 'adjustments') {
@@ -1815,6 +2224,8 @@
           let formattedMonthTotal = formatCurrency(month.total_amount);
           if (type === 'adjustments' || type === 'profit_loss') {
             formattedMonthTotal = formatCurrencySigned(month.total_amount);
+          } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+            formattedMonthTotal = '-' + formatCurrency(Math.abs(month.total_amount));
           }
 
           html += `
@@ -1836,7 +2247,17 @@
             let weekIconColor = '#2563eb';
             let weekAmountColor = '#16a34a';
 
-            if (type === 'installments') {
+            if (type === 'capital_deployed') {
+              weekBg = 'rgba(245, 158, 11, 0.04)';
+              weekBorder = 'rgba(245, 158, 11, 0.04)';
+              weekIconColor = '#f59e0b';
+              weekAmountColor = '#f59e0b';
+            } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+              weekBg = 'rgba(239, 68, 68, 0.04)';
+              weekBorder = 'rgba(239, 68, 68, 0.04)';
+              weekIconColor = '#ef4444';
+              weekAmountColor = '#ef4444';
+            } else if (type === 'installments') {
               weekBg = 'rgba(22, 163, 74, 0.04)';
               weekBorder = 'rgba(22, 163, 74, 0.04)';
               weekIconColor = '#16a34a';
@@ -1875,6 +2296,9 @@
             if (type === 'adjustments' || type === 'profit_loss') {
               formattedWeekTotal = formatCurrencySigned(week.total_amount);
               weekAmountColor = week.total_amount >= 0 ? '#16a34a' : '#dc2626';
+            } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+              formattedWeekTotal = '-' + formatCurrency(Math.abs(week.total_amount));
+              weekAmountColor = '#ef4444';
             }
 
             html += `
@@ -1888,13 +2312,23 @@
                 <div style="padding-left: 18px; border-left: 2px solid ${weekIconColor}1a; margin-left: 16px; margin-top: 6px;">
             `;
 
-            week.days.forEach(day => {
+            week.days.forEach((day, dIdx) => {
               let dayBg = 'rgba(22, 163, 74, 0.03)';
               let dayBorder = 'rgba(22, 163, 74, 0.03)';
               let dayIconColor = '#16a34a';
               let dayAmountColor = '#16a34a';
 
-              if (type === 'loans') {
+              if (type === 'capital_deployed') {
+                dayBg = 'rgba(245, 158, 11, 0.03)';
+                dayBorder = 'rgba(245, 158, 11, 0.03)';
+                dayIconColor = '#f59e0b';
+                dayAmountColor = '#f59e0b';
+              } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+                dayBg = 'rgba(239, 68, 68, 0.03)';
+                dayBorder = 'rgba(239, 68, 68, 0.03)';
+                dayIconColor = '#ef4444';
+                dayAmountColor = '#ef4444';
+              } else if (type === 'loans') {
                 dayBg = 'rgba(22, 163, 74, 0.03)';
                 dayBorder = 'rgba(22, 163, 74, 0.03)';
                 dayIconColor = '#16a34a';
@@ -1913,6 +2347,11 @@
                 dayBorder = 'rgba(255, 107, 0, 0.03)';
                 dayIconColor = 'var(--primary)';
                 dayAmountColor = 'var(--primary)';
+              } else if (type === 'interest_discount') {
+                dayBg = 'rgba(139, 92, 246, 0.03)';
+                dayBorder = 'rgba(139, 92, 246, 0.03)';
+                dayIconColor = '#8b5cf6';
+                dayAmountColor = '#8b5cf6';
               } else if (type === 'expenses') {
                 dayBg = 'rgba(220, 38, 38, 0.03)';
                 dayBorder = 'rgba(220, 38, 38, 0.03)';
@@ -1933,19 +2372,29 @@
               if (type === 'adjustments' || type === 'profit_loss') {
                 formattedDayTotal = formatCurrencySigned(day.total_amount);
                 dayAmountColor = day.total_amount >= 0 ? '#16a34a' : '#dc2626';
+              } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+                formattedDayTotal = '-' + formatCurrency(Math.abs(day.total_amount));
+                dayAmountColor = '#ef4444';
               }
+
+              const isDayOpen = (mIdx === 0 && wIdx === 0 && dIdx === 0) ? 'open' : '';
 
               const villageBadges = (day.villages && day.villages.length > 0)
                 ? `<span style="font-size: 0.72rem; color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 2px 7px; border-radius: 4px; font-weight: 600; margin-left: 6px; letter-spacing: 0.3px;">${day.villages.join(', ')}</span>`
                 : '';
 
+              const investorBadges = (type === 'capital_deployed' && day.investors && day.investors.length > 0)
+                ? `<span style="font-size: 0.72rem; color: #f59e0b; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); padding: 2px 7px; border-radius: 4px; font-weight: 600; margin-left: 6px; letter-spacing: 0.3px;"><i class="fas fa-user-tie" style="margin-right: 4px;"></i>${day.investors.join(', ')}</span>`
+                : '';
+
               html += `
-                <details class="tree-node day-node" style="margin-bottom: 8px;">
+                <details class="tree-node day-node" ${isDayOpen} style="margin-bottom: 8px;">
                   <summary style="list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; padding: 4px 8px; background: ${dayBg}; border-radius: 4px; border: 1px solid ${dayBorder};">
                     <i class="fas fa-chevron-right arrow-icon" style="font-size: 0.7rem; transition: transform 0.2s; color: #9ca3af;"></i>
                     <i class="fas fa-calendar-day" style="color: ${dayIconColor};"></i>
                     <span style="color: #cbd5e1;">${day.day_date}</span>
                     ${villageBadges}
+                    ${investorBadges}
                     <span style="margin-left: auto; color: ${dayAmountColor}; font-weight: 700;">${formattedDayTotal}</span>
                   </summary>
                   <div style="padding-left: 14px; border-left: 2px solid ${dayIconColor}1a; margin-left: 12px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;">
@@ -1953,9 +2402,9 @@
 
               // Render Table
               html += `<table class="tree-customer-table" style="width: 100%; border-collapse: collapse; margin-top: 4px;">`;
-              if (type === 'loans' || type === 'installments' || type === 'commissions' || type === 'interest') {
-                const headerAmount = type === 'commissions' ? 'Rusum' : (type === 'interest' ? 'Commission' : 'Amount');
-                const headerAmountColor = type === 'commissions' ? '#b45309' : (type === 'interest' ? '#0284c7' : '#16a34a');
+              if (type === 'loans' || type === 'installments' || type === 'commissions' || type === 'interest' || type === 'interest_discount') {
+                const headerAmount = type === 'commissions' ? 'Rusum' : (type === 'interest' ? 'Commission' : (type === 'interest_discount' ? 'Discount Waived' : 'Amount'));
+                const headerAmountColor = type === 'commissions' ? '#b45309' : (type === 'interest' ? '#0284c7' : (type === 'interest_discount' ? '#8b5cf6' : '#16a34a'));
                 html += `
                   <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
@@ -1981,7 +2430,8 @@
                 html += `
                   <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Type</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Category</th>
+                      <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Mode</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">Notes</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af;">User</th>
                       <th style="padding: 6px 8px; font-size: 0.75rem; color: #9ca3af; text-align: right;">Amount</th>
@@ -1994,13 +2444,13 @@
                   const amountPrefix = isDebit ? '-' : '+';
                   const actionBg = isDebit ? 'rgba(220, 38, 38, 0.1)' : 'rgba(22, 163, 74, 0.1)';
                   const actionColor = isDebit ? '#ef4444' : '#22c55e';
-                  const actionLabel = isDebit ? 'EXPENSE' : 'OFFICE CASH';
+                  const catText = isDebit ? (txn.txn_sub ? `EXPENSE · ${txn.txn_sub}` : 'EXPENSE') : 'OFFICE CASH';
                   const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
 
                   html += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.8rem;">
                       <td style="padding: 6px 8px;">
-                        <span style="color: ${actionColor}; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: ${actionBg}; border-radius: 4px;">${actionLabel}</span>
+                        <span style="color: ${actionColor}; font-weight: 600; font-size: 0.75rem; padding: 2px 6px; background: ${actionBg}; border-radius: 4px;">${catText}</span>
                       </td>
                       <td style="padding: 6px 8px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
                       <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
@@ -2057,12 +2507,12 @@
                   <tbody>
                 `;
                 day.transactions.forEach(txn => {
-                  const isLoss = txn.txn_sub === 'LOSS';
+                  const isLoss = txn.txn_sub === 'LOSS' || txn.txn_sub === 'PROFIT_WITHDRAWN';
                   const amountPrefix = isLoss ? '-' : '+';
                   const amountColor = isLoss ? '#dc2626' : '#10b981';
                   const actionBg = isLoss ? 'rgba(220, 38, 38, 0.1)' : 'rgba(16, 185, 129, 0.1)';
                   const actionColor = isLoss ? '#ef4444' : '#10b981';
-                  const actionLabel = isLoss ? 'LOSS' : 'PROFIT';
+                  const actionLabel = (txn.txn_sub === 'PROFIT_WITHDRAWN') ? 'WITHDRAWAL' : (isLoss ? 'LOSS' : 'PROFIT');
                   const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
 
                   html += `
@@ -2074,6 +2524,80 @@
                       <td style="padding: 6px 8px; color: #fff;">${txn.notes || ''}</td>
                       <td style="padding: 6px 8px; color: #9ca3af;">${txn.created_by || ''}</td>
                       <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: ${amountColor};">${amountPrefix}${formatCurrency(txn.amount)}</td>
+                    </tr>
+                  `;
+                });
+              } else if (type === 'capital_withdrawn' || type === 'withdrawn' || type === 'amount_withdrawn') {
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left;">
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Tier / Category</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Mode</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Notes</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">User</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; text-align: right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.transactions.forEach(txn => {
+                  let tierLabel = txn.txn_sub || txn.txn || 'WITHDRAWAL';
+                  if (tierLabel === 'PRINCIPAL') tierLabel = 'Tier 1 · Principal';
+                  else if (tierLabel === 'INTEREST') tierLabel = 'Tier 2 · 24% Return';
+                  else if (tierLabel === 'PROFIT_WITHDRAWN') tierLabel = 'Tier 3 · Profit Split';
+
+                  const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.82rem; transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                      <td style="padding: 7px 10px;">
+                        <span style="color: #ef4444; font-weight: 700; font-size: 0.75rem; padding: 2px 7px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                          <i class="fas fa-hand-holding-usd"></i> ${tierLabel}
+                        </span>
+                      </td>
+                      <td style="padding: 7px 10px; color: #9ca3af;"><span class="badge ${badgeClass}">${txn.txn_type}</span></td>
+                      <td style="padding: 7px 10px; color: #fff;">${txn.notes || 'Withdrawal'}</td>
+                      <td style="padding: 7px 10px; color: #9ca3af;">${txn.created_by || 'Admin'}</td>
+                      <td style="padding: 7px 10px; text-align: right; font-weight: 700; color: #ef4444; font-family: var(--font-headline);">-₹${Math.round(Math.abs(txn.amount)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                    </tr>
+                  `;
+                });
+              } else if (type === 'capital_deployed') {
+                html += `
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left;">
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Investor Code</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Investor Name</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Mode</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px;">Target Group / Bank</th>
+                      <th style="padding: 6px 10px; font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; text-align: right;">Amount Deployed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                `;
+                day.transactions.forEach(txn => {
+                  const badgeClass = txn.txn_type === 'UPI' ? 'badge-upi' : 'badge-cash';
+                  const invCode = txn.investor_code 
+                    ? `<span class="cb-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 700; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">${txn.investor_code}</span>`
+                    : '';
+                  const invName = txn.investor_name || 'Unknown Investor';
+                  const groupLabel = txn.group_code 
+                    ? `${txn.group_code}${txn.group_name ? ' (' + txn.group_name + ')' : ''}`
+                    : (txn.notes ? txn.notes.replace(/^Capital Deployed\s*-\s*/, '') : '—');
+
+                  html += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.82rem; transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                      <td style="padding: 7px 10px;">${invCode}</td>
+                      <td style="padding: 7px 10px; font-weight: 600; color: #fff;">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                          <div style="width: 22px; height: 22px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-user-tie" style="color: #f59e0b; font-size: 0.7rem;"></i>
+                          </div>
+                          <span>${invName}</span>
+                        </div>
+                      </td>
+                      <td style="padding: 7px 10px;"><span class="badge ${badgeClass}" style="font-size: 0.7rem; padding: 2px 6px;">${txn.txn_type || 'CASH'}</span></td>
+                      <td style="padding: 7px 10px; color: #9ca3af; font-size: 0.78rem;">${groupLabel}</td>
+                      <td style="padding: 7px 10px; text-align: right; font-weight: 700; color: #f59e0b; font-size: 0.92rem; font-family: var(--font-headline), 'Space Grotesk', sans-serif;">+${formatCurrency(txn.amount)}</td>
                     </tr>
                   `;
                 });
@@ -2111,6 +2635,91 @@
         `;
       });
   }
+
+  // --- Cash Bag Formula Modal ---
+  function openCashbagFormulaModal() {
+    const modal = document.getElementById('cashbagFormulaModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+    }
+  }
+  function closeCashbagFormulaModal() {
+    const modal = document.getElementById('cashbagFormulaModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+  document.getElementById('cashbagFormulaModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeCashbagFormulaModal();
+    }
+  });
+
+  function openCapitalDeployedModal() {
+    const modal = document.getElementById('capitalDeployedModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+      loadBreakdownData('capital_deployed', 'capitalDeployedModalBody');
+    }
+  }
+
+  function closeCapitalDeployedModal() {
+    const modal = document.getElementById('capitalDeployedModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+
+  document.getElementById('capitalDeployedModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeCapitalDeployedModal();
+    }
+  });
+
+  function openCapitalWithdrawnModal() {
+    const modal = document.getElementById('capitalWithdrawnModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+      loadBreakdownData('capital_withdrawn', 'capitalWithdrawnModalBody');
+    }
+  }
+
+  function closeCapitalWithdrawnModal() {
+    const modal = document.getElementById('capitalWithdrawnModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+
+  document.getElementById('capitalWithdrawnModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeCapitalWithdrawnModal();
+    }
+  });
 
   function openLoansModal() {
     const modal = document.getElementById('loansModal');
@@ -2256,6 +2865,34 @@
   document.getElementById('officeCashModal')?.addEventListener('click', function(e) {
     if (e.target === this) {
       closeOfficeCashModal();
+    }
+  });
+
+  // --- Interest Discount Modal ---
+  function openInterestDiscountModal() {
+    const modal = document.getElementById('interestDiscountModal');
+    if (modal) {
+      modal.showModal();
+      requestAnimationFrame(() => {
+        modal.classList.add('dialog-open');
+      });
+      loadBreakdownData('interest_discount', 'interestDiscountModalBody');
+    }
+  }
+  function closeInterestDiscountModal() {
+    const modal = document.getElementById('interestDiscountModal');
+    if (modal) {
+      modal.classList.remove('dialog-open');
+      const handleTransitionEnd = () => {
+        modal.close();
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+      };
+      modal.addEventListener('transitionend', handleTransitionEnd);
+    }
+  }
+  document.getElementById('interestDiscountModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeInterestDiscountModal();
     }
   });
 
@@ -2556,6 +3193,8 @@
   }
 
   function getLedgerStorageKey(emp1, emp2) {
+    const cbId = "{{ cashbag_id or '' }}";
+    if (cbId) return `ledger_end_day_cashbag_${cbId}`;
     const e1 = String(emp1 || document.getElementById("ledgerEmp1")?.value || "");
     const e2 = String(emp2 || document.getElementById("ledgerEmp2")?.value || "");
     return `ledger_end_day_group_${e1}_${e2}`;
@@ -2579,10 +3218,21 @@
 
     ledgerEndDay = endDay;
 
-    // Persist permanently for this village / employee group so it stays fixed and never resets
+    // Persist permanently for this cashbag
     const storageKey = getLedgerStorageKey();
     localStorage.setItem(storageKey, String(endDay));
-    localStorage.setItem("ledger_end_day_global", String(endDay));
+
+    const cbId = "{{ cashbag_id or '' }}";
+    if (cbId) {
+      const fetchFn = (typeof csrfFetch === 'function') ? csrfFetch : fetch;
+      fetchFn('/api/cashbag/update_week_end_day', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cashbag_id: cbId, week_ending_day: endDay })
+      }).catch(err => console.error("Failed to sync week ending day:", err));
+    }
 
     const startDay = (ledgerEndDay + 1) % 7;
     const startName = LEDGER_DAYS[startDay];
@@ -2638,13 +3288,13 @@
     document.getElementById("ledgerEmp1").value = emp1 || "";
     document.getElementById("ledgerEmp2").value = emp2 || "";
 
-    // Load fixed week ending day for this village / employee group
+    // Load fixed week ending day for this cashbag
     const storageKey = getLedgerStorageKey(emp1, emp2);
-    const savedDay = localStorage.getItem(storageKey) || localStorage.getItem("ledger_end_day_global");
+    const savedDay = localStorage.getItem(storageKey);
     if (savedDay !== null && savedDay !== undefined && savedDay !== "") {
       ledgerEndDay = parseInt(savedDay, 10);
     } else {
-      ledgerEndDay = 3; // Default Wednesday
+      ledgerEndDay = {{ week_ending_day if week_ending_day is defined and week_ending_day is not none else 3 }};
     }
 
     const select = document.getElementById("ledgerWeekEndDaySelect");
@@ -2772,6 +3422,14 @@
       let expenses_cash_total = 0;
       let expenses_upi_total = 0;
 
+      let capital_deployed_total = 0;
+      let capital_deployed_cash_total = 0;
+      let capital_deployed_upi_total = 0;
+
+      let capital_withdrawn_total = 0;
+      let capital_withdrawn_cash_total = 0;
+      let capital_withdrawn_upi_total = 0;
+
       let office_cash_total = 0;
       let office_cash_cash_total = 0;
       let office_cash_upi_total = 0;
@@ -2877,6 +3535,15 @@
           expenses_cash_total += parseFloat(dayData.expenses_cash_total || 0);
           expenses_upi_total += parseFloat(dayData.expenses_upi_total || 0);
 
+          // Capital Deployed & Withdrawn
+          capital_deployed_total += parseFloat(dayData.capital_deployed_total || 0);
+          capital_deployed_cash_total += parseFloat(dayData.capital_deployed_cash_total || 0);
+          capital_deployed_upi_total += parseFloat(dayData.capital_deployed_upi_total || 0);
+
+          capital_withdrawn_total += parseFloat(dayData.capital_withdrawn_total || 0);
+          capital_withdrawn_cash_total += parseFloat(dayData.capital_withdrawn_cash_total || 0);
+          capital_withdrawn_upi_total += parseFloat(dayData.capital_withdrawn_upi_total || 0);
+
           // Office Cash
           if (dayData.office_cash && dayData.office_cash.length > 0) {
             dayData.office_cash.forEach(oc => {
@@ -2931,8 +3598,8 @@
 
       // 1. Summing values: Collection, Rusum, Commission, Office Cash (+), Adjustments (+)
       // 2. Subtracting values: Loans Dispensed (total amount), Expenses, Adjustments (-)
-      const category_total_cash = payments_cash_total + commissions_cash_total + interest_cash_total + office_cash_cash_total + adjustments_add_cash_total + profits_cash_total - loans_cash_total - expenses_cash_total - adjustments_minus_cash_total - losses_cash_total;
-      const category_total_upi = payments_upi_total + commissions_upi_total + interest_upi_total + office_cash_upi_total + adjustments_add_upi_total + profits_upi_total - loans_upi_total - expenses_upi_total - adjustments_minus_upi_total - losses_upi_total;
+      const category_total_cash = payments_cash_total + commissions_cash_total + interest_cash_total + capital_deployed_cash_total + office_cash_cash_total + adjustments_add_cash_total + profits_cash_total - loans_cash_total - capital_withdrawn_cash_total - expenses_cash_total - adjustments_minus_cash_total - losses_cash_total;
+      const category_total_upi = payments_upi_total + commissions_upi_total + interest_upi_total + capital_deployed_upi_total + office_cash_upi_total + adjustments_add_upi_total + profits_upi_total - loans_upi_total - capital_withdrawn_upi_total - expenses_upi_total - adjustments_minus_upi_total - losses_upi_total;
 
       const net_total_change = category_total_cash + category_total_upi;
       const closing = opening + net_total_change;
@@ -3234,6 +3901,20 @@
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(expenses_cash_total)}</td>
                   <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(expenses_upi_total)}</td>
                 </tr>
+                ${capital_deployed_total > 0 ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left; color: #f59e0b; font-weight: 600;">Capital Deployed</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(capital_deployed_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-pos">+${formatNumber(capital_deployed_upi_total)}</td>
+                </tr>
+                ` : ''}
+                ${capital_withdrawn_total > 0 ? `
+                <tr>
+                  <td style="padding: 4px 6px; text-align: left; color: #ef4444; font-weight: 600;">Capital Withdrawn</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(capital_withdrawn_cash_total)}</td>
+                  <td style="padding: 4px 6px; text-align: right;" class="ledger-amount-neg">-${formatNumber(capital_withdrawn_upi_total)}</td>
+                </tr>
+                ` : ''}
                 ${office_cash_total > 0 ? `
                 <tr>
                   <td style="padding: 4px 6px; text-align: left;">Office Cash</td>

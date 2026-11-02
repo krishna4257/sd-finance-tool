@@ -1,0 +1,462 @@
+{% extends "banking/base.html" %}
+
+{% block title %}Investors Registry – Central Bank{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ==================== HEADER & TOP STATS ==================== -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+          Investors Registry
+        </h2>
+        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-300 dark:border-sky-700">
+          {{ investors|length if investors is defined else 0 }} Partners
+        </span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3">
+      <button type="button" onclick="openAddInvestorModal()"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 active:scale-95 shadow-md shadow-sky-600/20 transition-all">
+        <i data-lucide="user-plus" class="w-4 h-4"></i>
+        <span>Add New Investor</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Capital Enrolled</div>
+      <p class="money-fig text-xl font-black text-slate-900 dark:text-white mt-1">
+        {{ format_inr(summary.total_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_capital or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Deployed Capital</div>
+      <p class="money-fig text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
+        {{ format_inr(summary.total_deployed) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_deployed or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Liquid Idle Cash</div>
+      <p class="money-fig text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+        {{ format_inr(summary.total_idle) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_idle or 0)) }}
+      </p>
+    </div>
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Accrued Compound Return</div>
+      <p class="money-fig text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+        {{ format_inr(summary.total_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(summary.total_interest or 0)) }}
+      </p>
+    </div>
+  </div>
+
+  <!-- ==================== INVESTOR TABLE & SEARCH ==================== -->
+  <!-- ==================== INVESTOR DIRECTORY (TILE CARDS + TABLE VIEW) ==================== -->
+  <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <!-- Toolbar: Search Bar + View Mode Toggle -->
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="relative flex-1 max-w-md">
+        <input type="search" id="investorSearchInput" name="investor_search_term" role="searchbox" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="filterInvestors()" placeholder="Search by investor name or phone..."
+          class="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+      </div>
+      
+      <!-- View Mode Buttons -->
+      <div class="flex items-center gap-2">
+        <div class="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex items-center border border-slate-200 dark:border-slate-700/60">
+          <button type="button" id="viewCardsBtn" onclick="switchInvestorView('cards')"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+            <span>Cards</span>
+          </button>
+          <button type="button" id="viewTableBtn" onclick="switchInvestorView('table')"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+            <i data-lucide="table" class="w-3.5 h-3.5"></i>
+            <span>Table</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. TILE CARD VIEW (DEFAULT) -->
+    <div id="investorsCardView" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 md:p-5">
+      {% if investors and investors|length > 0 %}
+        {% for inv in investors %}
+          <div onclick="window.location.href='/banking/investors/{{ inv.id }}'"
+               class="inv-item inv-card cursor-pointer group bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500/50 hover:shadow-lg transition-all duration-200 flex flex-col justify-between"
+               data-search="{{ (inv.full_name or '') ~ ' ' ~ (inv.phone_number or '') }}">
+            
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                    {{ (inv.full_name or inv.name or 'I')[0] | upper }}
+                  </div>
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-sm text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors truncate">
+                      {{ inv.full_name }}
+                    </h3>
+                    <p class="text-[10px] text-slate-400 font-mono">{{ inv.phone_number }}</p>
+                  </div>
+                </div>
+                {% if inv.is_active %}
+                  <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active Partner"></span>
+                {% endif %}
+              </div>
+
+              <!-- Core Metrics on Tile Card -->
+              <div class="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                <!-- Idle Cash -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Idle Cash</span>
+                  {% if (inv.idle_balance or 0) < 0 %}
+                    <span class="money-fig text-sm font-black text-rose-600 dark:text-rose-400">
+                      {{ format_inr(inv.idle_balance) if format_inr is defined else ('-₹' ~ '{:,.0f}'.format(inv.idle_balance|abs)) }}
+                    </span>
+                  {% else %}
+                    <span class="money-fig text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {{ format_inr(inv.idle_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.idle_balance or 0)) }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                <!-- Personal Expenses (Unsettled) -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Personal Expenses (Unsettled)</span>
+                  <span class="money-fig text-xs font-bold text-amber-600 dark:text-amber-400">
+                    {{ format_inr(inv.unsettled_personal_expenses or inv.personal_draws or 0) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.unsettled_personal_expenses or 0)) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer Action Link -->
+            <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+              <span>Deployed: <strong class="text-slate-700 dark:text-slate-300 font-mono">{{ format_inr(inv.deployed_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.deployed_capital or 0)) }}</strong></span>
+              <span class="text-sky-600 dark:text-sky-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">360° Folio <i data-lucide="chevron-right" class="w-3.5 h-3.5 inline"></i></span>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="col-span-full py-12 text-center text-slate-400">
+          <i data-lucide="users" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
+          <p class="text-sm font-semibold">No investors enrolled yet</p>
+          <p class="text-xs text-slate-400 mt-0.5">Click "Add New Investor" above to onboard your first capital partner</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- 2. TABLE VIEW (SECONDARY) -->
+    <div id="investorsTableView" class="hidden overflow-x-auto">
+      <table class="w-full text-left border-collapse" id="investorsMasterTable">
+        <thead>
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+            <th class="py-3 px-4">Investor Name</th>
+            <th class="py-3 px-4 text-right">Idle Cash</th>
+            <th class="py-3 px-4 text-right">Deployed</th>
+            <th class="py-3 px-4 text-right">Accrued Return</th>
+            <th class="py-3 px-4 text-right">Total Capital</th>
+            <th class="py-3 px-4 text-right">Personal Expenses (Unsettled)</th>
+            <th class="py-3 px-4 text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+          {% if investors and investors|length > 0 %}
+            {% for inv in investors %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors inv-item inv-row cursor-pointer"
+                  onclick="window.location.href='/banking/investors/{{ inv.id }}'"
+                  data-search="{{ (inv.full_name or '') ~ ' ' ~ (inv.phone_number or '') }}">
+                
+                <!-- 1. Investor Name -->
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                    <div class="h-7 w-7 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">
+                      {{ (inv.full_name or inv.name or 'I')[0] | upper }}
+                    </div>
+                    <span class="font-bold text-slate-900 dark:text-white">{{ inv.full_name }}</span>
+                  </div>
+                </td>
+
+                <!-- 2. Idle Cash -->
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  {% if (inv.idle_balance or 0) < 0 %}
+                    <span class="money-fig font-black text-rose-600 dark:text-rose-400">
+                      {{ format_inr(inv.idle_balance) if format_inr is defined else ('-₹' ~ '{:,.0f}'.format(inv.idle_balance|abs)) }}
+                    </span>
+                  {% else %}
+                    <span class="money-fig font-bold text-emerald-600 dark:text-emerald-400">
+                      {{ format_inr(inv.idle_balance) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.idle_balance or 0)) }}
+                    </span>
+                  {% endif %}
+                </td>
+
+                <!-- 3. Deployed -->
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  <span class="money-fig font-semibold text-blue-600 dark:text-blue-400">
+                    {{ format_inr(inv.deployed_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.deployed_capital or 0)) }}
+                  </span>
+                </td>
+
+                <!-- 4. Accrued Return -->
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  <span class="money-fig font-bold text-amber-600 dark:text-amber-400">
+                    {{ format_inr(inv.accrued_return or inv.accrued_interest or 0) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.accrued_return or 0)) }}
+                  </span>
+                </td>
+
+                <!-- 5. Total Capital -->
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  <span class="money-fig font-bold text-slate-900 dark:text-white">
+                    {{ format_inr(inv.total_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.total_capital or 0)) }}
+                  </span>
+                </td>
+
+                <!-- 6. Personal Expenses (Unsettled) -->
+                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                  <span class="money-fig font-semibold text-amber-600 dark:text-amber-400">
+                    {{ format_inr(inv.unsettled_personal_expenses or inv.personal_draws or 0) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(inv.unsettled_personal_expenses or 0)) }}
+                  </span>
+                </td>
+
+                <!-- 7. Action -->
+                <td class="py-3.5 px-4 text-center whitespace-nowrap" onclick="event.stopPropagation()">
+                  <a href="/banking/investors/{{ inv.id }}"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 transition-colors">
+                    <span>360° Folio</span>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="py-12 text-center text-slate-400">
+                <i data-lucide="users" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
+                <p class="text-sm font-semibold">No investors enrolled yet</p>
+                <p class="text-xs text-slate-400 mt-0.5">Click "Add New Investor" above to onboard your first capital partner</p>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: ADD NEW INVESTOR ==================== -->
+<div id="addInvestorModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full my-8 overflow-hidden">
+    <!-- Header -->
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
+          <i data-lucide="user-plus" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Register New Capital Investor</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">KYC Registry & Identity Linkage</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeAddInvestorModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <form id="addInvestorForm" onsubmit="submitNewInvestor(event)" class="p-6 space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
+          <input type="text" name="full_name" required placeholder="Srikanth Varma"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number *</label>
+          <input type="tel" name="phone_number" required placeholder="9876543210" pattern="[0-9]{10}"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email (Optional)</label>
+          <input type="email" name="email" placeholder="investor@example.com"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Global Share % (Default)</label>
+          <input type="number" step="1" min="0" max="100" name="global_share_pct" placeholder="5" value="0"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+      </div>
+
+      <!-- KYC Section -->
+      <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">KYC & Identity</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">PAN Card Number</label>
+            <input type="text" name="pan_number" placeholder="ABCDE1234F" maxlength="10"
+              class="w-full text-xs uppercase font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Aadhaar Card Number</label>
+            <input type="text" name="aadhaar_number" placeholder="12-digit Aadhaar" maxlength="12" pattern="[0-9]{12}"
+              class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Residential Address</label>
+          <textarea name="address" rows="2" placeholder="House no, street, village/town, PIN code"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"></textarea>
+        </div>
+      </div>
+
+      <!-- Link Chit Member -->
+      <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Link to Existing Chit Member (Optional)</label>
+        <select name="linked_chit_member_id" class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="" selected>-- None (Pure Investment Banking Partner) --</option>
+          {% if chit_members %}
+            {% for cm in chit_members %}
+              <option value="{{ cm.id }}">{{ cm.full_name or cm.name }} ({{ cm.phone or cm.phone_number }})</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+
+      <!-- Nominee Details -->
+      <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Nominee Details</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nominee Name</label>
+            <input type="text" name="nominee_name" placeholder="Nominee full name"
+              class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Relation</label>
+            <input type="text" name="nominee_relation" placeholder="Spouse / Son / Daughter"
+              class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nominee Phone</label>
+            <input type="tel" name="nominee_phone" placeholder="9876543210"
+              class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Portal Credentials (Optional) -->
+      <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Investor Self-Service Portal Access</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username (Portal)</label>
+            <input type="text" name="username" placeholder="Auto-generated if empty"
+              class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Default Password / PIN</label>
+            <input type="text" name="portal_password" placeholder="e.g. 123456"
+              class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button type="button" onclick="closeAddInvestorModal()"
+          class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+          Cancel
+        </button>
+        <button type="submit"
+          class="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-95 transition-all">
+          Enrol Investor
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function openAddInvestorModal() {
+    const m = document.getElementById('addInvestorModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeAddInvestorModal() {
+    const m = document.getElementById('addInvestorModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function switchInvestorView(mode) {
+    const cardsView = document.getElementById('investorsCardView');
+    const tableView = document.getElementById('investorsTableView');
+    const cardsBtn = document.getElementById('viewCardsBtn');
+    const tableBtn = document.getElementById('viewTableBtn');
+
+    if (mode === 'table') {
+      if (cardsView) cardsView.classList.add('hidden');
+      if (tableView) tableView.classList.remove('hidden');
+      if (cardsBtn) cardsBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+      if (tableBtn) tableBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs';
+      localStorage.setItem('banking_investor_view', 'table');
+    } else {
+      if (cardsView) cardsView.classList.remove('hidden');
+      if (tableView) tableView.classList.add('hidden');
+      if (cardsBtn) cardsBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs';
+      if (tableBtn) tableBtn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+      localStorage.setItem('banking_investor_view', 'cards');
+    }
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function filterInvestors() {
+    const input = document.getElementById('investorSearchInput');
+    const query = ((input ? input.value : '') || '').toLowerCase().trim();
+    const items = document.querySelectorAll('.inv-item');
+    items.forEach(el => {
+      const s = (el.dataset.search || '').toLowerCase();
+      el.style.display = (!query || s.includes(query)) ? '' : 'none';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('banking_investor_view') || 'cards';
+    switchInvestorView(saved);
+  });
+
+  async function submitNewInvestor(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const payload = {};
+    formData.forEach((val, key) => { payload[key] = val; });
+
+    try {
+      const res = await SD_BANKING.bankingFetch('/banking/api/investors', {
+        method: 'POST',
+        body: payload
+      });
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Investor ${payload.full_name} enrolled successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 700);
+      } else {
+        throw new Error(res.error || 'Failed to enroll investor');
+      }
+    } catch (err) {
+      SD_BANKING.showToast(err.message, 'error');
+    }
+  }
+</script>
+{% endblock %}

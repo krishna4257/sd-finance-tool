@@ -1,0 +1,402 @@
+{% extends "banking/base.html" %}
+
+{% block title %}Office Expenses – Central Bank{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ==================== HEADER & ACTIONS ==================== -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+          Office Expenses
+        </h2>
+        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
+          Unsettled: {{ format_inr(total_unsettled) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(total_unsettled or 0)) }}
+        </span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- Expense Settlement button shifted to top bar left of Add Office Expense -->
+      <button type="button" onclick="executeAnnualSettlement()"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-md shadow-amber-500/20 active:scale-95 transition-all">
+        <i data-lucide="shield-check" class="w-4 h-4"></i>
+        <span>Execute Settlement (PIN Protected)</span>
+      </button>
+
+      <button type="button" onclick="openExpenseModal()"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-md shadow-rose-600/20 transition-all">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Add Office Expense</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== ANNUAL REALLOCATION REVIEW SECTION ==================== -->
+  <div class="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 text-white rounded-3xl p-6 md:p-8 border border-slate-800 shadow-xl relative overflow-hidden">
+    <!-- Summary Metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Unsettled Expenses</span>
+        <p class="money-fig text-2xl font-black text-rose-400 mt-1">
+          {{ format_inr(total_unsettled) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(total_unsettled or 0)) }}
+        </p>
+      </div>
+      <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Aggregate Route Days</span>
+        <p class="money-fig text-2xl font-black text-amber-400 mt-1">
+          {{ total_collection_days or 0 }} Days / Wk
+        </p>
+      </div>
+      <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Expense per Route Day</span>
+        <p class="money-fig text-2xl font-black text-emerald-400 mt-1">
+          {% if total_collection_days and total_collection_days > 0 %}
+            {{ format_inr(total_unsettled / total_collection_days) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(total_unsettled / total_collection_days)) }}
+          {% else %}
+            ₹0
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Live Breakdown Preview Table -->
+    <div class="mt-6 border border-white/10 rounded-2xl overflow-hidden bg-black/20">
+      <div class="p-3.5 bg-white/5 border-b border-white/10 flex items-center justify-between text-xs font-bold text-slate-300">
+        <span>Route Allocation Preview</span>
+        <span class="text-[11px] text-slate-400">{{ reallocation_preview|length if reallocation_preview is defined else 0 }} Participating Groups</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-white/10 text-[10px] uppercase text-slate-400 font-bold bg-white/5">
+              <th class="py-2.5 px-4">Route Bank</th>
+              <th class="py-2.5 px-4 text-center">Collection Days / Wk</th>
+              <th class="py-2.5 px-4 text-right">Percentage Share</th>
+              <th class="py-2.5 px-4 text-right">Allocated Expense Share (₹)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {% if reallocation_preview and reallocation_preview|length > 0 %}
+              {% for rp in reallocation_preview %}
+                <tr class="hover:bg-white/5 transition-colors">
+                  <td class="py-2.5 px-4 font-bold text-white">{{ rp.group_name }} <span class="font-mono text-slate-400 text-[10px]">({{ rp.group_code }})</span></td>
+                  <td class="py-2.5 px-4 text-center font-mono text-amber-300">{{ rp.days }} days</td>
+                  <td class="py-2.5 px-4 text-right font-mono text-slate-300">{{ '{:.2f}%'.format(rp.share_pct or 0) }}</td>
+                  <td class="py-2.5 px-4 text-right font-mono font-bold text-rose-300">
+                    {{ format_inr(rp.allocated_expense) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(rp.allocated_expense or 0)) }}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" class="py-4 text-center text-slate-400">No active groups available for reallocation preview</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CENTRAL EXPENSES LEDGER TABLE ==================== -->
+  <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <i data-lucide="receipt" class="w-5 h-5 text-rose-500"></i>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Central Operating Expenses Ledger</h3>
+        <span class="text-xs text-slate-400">({{ expenses|length if expenses is defined else 0 }} entries)</span>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-2">
+        <select id="expenseCategoryFilter" onchange="filterExpensesTable()"
+          class="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="ALL">All Categories</option>
+          <option value="RENT">Rent</option>
+          <option value="ELECTRICITY">Electricity</option>
+          <option value="SALARY">Salary</option>
+          <option value="STATIONERY">Stationery</option>
+          <option value="SOFTWARE">Software</option>
+          <option value="MAINTENANCE">Maintenance</option>
+          <option value="OTHER">Other</option>
+        </select>
+
+        <div class="relative">
+          <input type="search" id="expenseSearchInput" name="expense_search_term" role="searchbox" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="filterExpensesTable()" placeholder="Search description..."
+            class="w-48 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-8 pr-3 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse" id="expensesMasterTable">
+        <thead>
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+            <th class="py-3 px-4">Date</th>
+            <th class="py-3 px-4">Category</th>
+            <th class="py-3 px-4">Description</th>
+            <th class="py-3 px-4">Mode</th>
+            <th class="py-3 px-4 text-right">Amount</th>
+            <th class="py-3 px-4 text-center">Settlement</th>
+            <th class="py-3 px-4 text-center">Audit Status</th>
+            <th class="py-3 px-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+          {% if expenses and expenses|length > 0 %}
+            {% for exp in expenses %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors exp-row {% if exp.is_reversed %}reversed-row{% endif %}"
+                  data-category="{{ exp.expense_category }}"
+                  data-search="{{ (exp.description or '') ~ ' ' ~ (exp.expense_category or '') }}">
+                
+                <td class="py-3 px-4 whitespace-nowrap font-medium {% if exp.is_reversed %}reversed-text{% endif %}">
+                  {{ exp.expense_date.strftime('%d-%m-%Y') if exp.expense_date.strftime is defined else exp.expense_date }}
+                </td>
+
+                <td class="py-3 px-4 whitespace-nowrap">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                    {{ exp.expense_category }}
+                  </span>
+                </td>
+
+                <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white max-w-sm truncate {% if exp.is_reversed %}reversed-text{% endif %}">
+                  {{ exp.description or '-' }}
+                </td>
+
+                <td class="py-3 px-4 font-mono font-medium whitespace-nowrap">
+                  {{ exp.payment_mode }}
+                </td>
+
+                <td class="py-3 px-4 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap {% if exp.is_reversed %}reversed-text{% endif %}">
+                  {{ format_inr(exp.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(exp.amount)) }}
+                </td>
+
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                  {% if exp.is_settled %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300">
+                      Settled
+                    </span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300">
+                      Unsettled
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                  {% if exp.is_reversed %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300">
+                      [REVERSED]
+                    </span>
+                  {% elif exp.is_backdated %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                      [Backdated]
+                    </span>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400">Standard</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                  {% if not exp.is_reversed and not exp.is_settled %}
+                    <button type="button" onclick="reverseExpense('{{ exp.id }}', {{ exp.amount }})"
+                      title="Reverse Expense"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400 italic">Locked</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="py-8 text-center text-slate-400">No office expenses recorded in ledger.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== MODAL: ADD OFFICE EXPENSE ==================== -->
+<div id="addExpenseModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+          <i data-lucide="receipt" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Record Central Office Expense</h3>
+      </div>
+      <button type="button" onclick="closeExpenseModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <form id="addExpenseForm" onsubmit="submitNewExpense(event)" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Expense Category *</label>
+        <select name="expense_category" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+          <option value="RENT">Office Rent</option>
+          <option value="ELECTRICITY">Electricity & Power</option>
+          <option value="SALARY">Office Staff Salary</option>
+          <option value="STATIONERY">Printing & Stationery</option>
+          <option value="SOFTWARE">Software & Cloud Infra</option>
+          <option value="MAINTENANCE">Facility Maintenance</option>
+          <option value="OTHER">Other Operating Expense</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount (₹) *</label>
+          <input type="number" step="0.01" min="1" name="amount" required placeholder="25000"
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+            <option value="CASH">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Expense Date *</label>
+          <input type="date" name="expense_date" id="offExpDateInput" required
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div class="flex items-center pt-5">
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <input type="checkbox" name="is_backdated" class="rounded text-amber-500">
+            <span>Mark Backdated</span>
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Description / Bill Notes</label>
+        <input type="text" name="description" placeholder="Main office quarterly lease payment"
+          class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button type="button" onclick="closeExpenseModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md">Record Expense</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().split('T')[0];
+    const expInp = document.getElementById('offExpDateInput');
+    if (expInp) expInp.value = today;
+  });
+
+  function openExpenseModal() {
+    const m = document.getElementById('addExpenseModal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (window.lucide) lucide.createIcons();
+  }
+  function closeExpenseModal() {
+    const m = document.getElementById('addExpenseModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+
+  function filterExpensesTable() {
+    const input = document.getElementById('expenseSearchInput');
+    if (input && input.value && !input._userHasTyped) {
+      input.value = '';
+    }
+    const cat = document.getElementById('expenseCategoryFilter').value;
+    const query = ((input ? input.value : '') || '').toLowerCase();
+    const rows = document.querySelectorAll('.exp-row');
+
+    rows.forEach(r => {
+      const c = r.dataset.category;
+      const s = (r.dataset.search || '').toLowerCase();
+      const matchCat = (cat === 'ALL' || c === cat);
+      const matchQuery = (!query || s.includes(query));
+      r.style.display = (matchCat && matchQuery) ? '' : 'none';
+    });
+  }
+
+  async function submitNewExpense(e) {
+    e.preventDefault();
+    const form = e.target;
+    const payload = {
+      expense_category: form.querySelector('[name="expense_category"]').value,
+      amount: parseFloat(form.querySelector('[name="amount"]').value),
+      payment_mode: form.querySelector('[name="payment_mode"]').value,
+      expense_date: form.querySelector('[name="expense_date"]').value,
+      is_backdated: form.querySelector('[name="is_backdated"]').checked,
+      description: form.querySelector('[name="description"]').value
+    };
+
+    try {
+      const res = await SD_BANKING.bankingFetch('/banking/api/expenses', {
+        method: 'POST',
+        body: payload
+      });
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Recorded office expense of ${SD_BANKING.formatINR(payload.amount)}!`, 'success');
+        setTimeout(() => window.location.reload(), 700);
+      } else {
+        throw new Error(res.error || 'Failed to save expense');
+      }
+    } catch (err) {
+      SD_BANKING.showToast(err.message, 'error');
+    }
+  }
+
+  async function executeAnnualSettlement() {
+    const year = prompt('Enter Financial Settlement Year code (e.g. FY-2025-26):', 'FY-2025-26');
+    if (!year) return;
+
+    try {
+      const auth = await SD_BANKING.promptAdminPin({
+        title: 'Execute Annual Expense Reallocation',
+        message: `Reallocate all unsettled office expenses across route banks for ${year}? This creates permanent allocation debits.`,
+        actionLabel: 'Confirm & Execute Settlement'
+      });
+
+      const res = await SD_BANKING.bankingFetch('/banking/api/expenses/settlement', {
+        method: 'POST',
+        body: {
+          settlement_year: year,
+          pin: auth.pin
+        }
+      });
+
+      if (res && res.success !== false) {
+        SD_BANKING.showToast(`Annual Expense Settlement for ${year} executed successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 900);
+      } else {
+        throw new Error(res.error || 'Settlement failed');
+      }
+    } catch (err) {
+      if (err.message !== 'Verification cancelled') {
+        SD_BANKING.showToast(err.message, 'error');
+      }
+    }
+  }
+
+  function reverseExpense(id, amount) {
+    SD_BANKING.promptReversal({
+      txnType: 'Office Expense',
+      txnId: id,
+      amount: amount,
+      endpoint: `/banking/api/expenses/${id}/reverse`
+    });
+  }
+</script>
+{% endblock %}
