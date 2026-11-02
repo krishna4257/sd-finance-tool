@@ -768,17 +768,38 @@ function populateDashboardTiles(dbData) {
   document.getElementById("lblBalanceSplitInterest").textContent = formatRupee(balSplit.total.i);
   document.getElementById("lblBalanceSplitRusum").textContent = formatRupee(balSplit.total.r);
 
-  // Hide/Show Closed legends based on selected dashboard view
-  const currentView = localStorage.getItem("dashboardView") || "active";
+  // Show Closed legends whenever closed accounts exist so tile breakdowns reconcile 100%
   const legendClosedCust = document.getElementById("legendClosedCustomers");
   const legendClosedLoan = document.getElementById("legendClosedLoanAmount");
 
-  if (currentView === "active") {
-    if (legendClosedCust) legendClosedCust.style.display = "none";
-    if (legendClosedLoan) legendClosedLoan.style.display = "none";
-  } else {
-    if (legendClosedCust) legendClosedCust.style.display = "";
-    if (legendClosedLoan) legendClosedLoan.style.display = "";
+  if (legendClosedCust) legendClosedCust.style.display = (current.customers && current.customers.closed > 0) ? "" : "none";
+  if (legendClosedLoan) legendClosedLoan.style.display = (current.loan_amount && current.loan_amount.closed > 0) ? "" : "none";
+
+  // 4. Interest Discount
+  const discData = current.interest_discount || { total: 0, accounts: 0, avg: 0, pct_of_interest: 0 };
+  const totalDisc = discData.total || 0;
+  const discAccts = discData.accounts || 0;
+  const avgDisc = discData.avg || 0;
+  const pctDisc = discData.pct_of_interest || 0;
+
+  const lblTotalDisc = document.getElementById("lblTotalInterestDiscount");
+  if (lblTotalDisc) lblTotalDisc.textContent = formatRupee(totalDisc);
+
+  const lblDiscWaived = document.getElementById("lblInterestDiscountWaived");
+  if (lblDiscWaived) lblDiscWaived.textContent = formatRupee(totalDisc);
+
+  const lblDiscAccts = document.getElementById("lblInterestDiscountAccounts");
+  if (lblDiscAccts) lblDiscAccts.textContent = discAccts;
+
+  const lblAvgD = document.getElementById("lblAvgInterestDiscount");
+  if (lblAvgD) lblAvgD.textContent = formatRupee(avgDisc);
+
+  const lblPctD = document.getElementById("lblInterestDiscountPct");
+  if (lblPctD) lblPctD.textContent = `${Math.round(pctDisc)}%`;
+
+  const trendDisc = document.getElementById("trendTotalInterestDiscount");
+  if (trendDisc && trends && trends.interest_discount) {
+    updateLargeTrendEl(trendDisc, trends.interest_discount.total);
   }
 }
 
@@ -798,6 +819,10 @@ function bindTileDoubleClickListeners() {
   }
   if (tileBalance) {
     tileBalance.addEventListener("dblclick", () => openHistoryModal("balance"));
+  }
+  const tileInterestDiscount = document.getElementById("tileInterestDiscount");
+  if (tileInterestDiscount) {
+    tileInterestDiscount.addEventListener("dblclick", () => openHistoryModal("interest_discount"));
   }
   if (villageHealthCard) {
     villageHealthCard.addEventListener("dblclick", (e) => {
@@ -842,6 +867,7 @@ function openHistoryModal(category) {
     if (category === "customers") titleEl.textContent = `Historical Customers Trend (${rangeText})`;
     else if (category === "loan_amount") titleEl.textContent = `Historical Loan Amount Trend (${rangeText})`;
     else if (category === "balance") titleEl.textContent = `Historical Outstanding Balance Trend (${rangeText})`;
+    else if (category === "interest_discount") titleEl.textContent = `Historical Interest Discount Trend (${rangeText})`;
   }
 
   modal.classList.add("show");
@@ -884,6 +910,7 @@ function switchModalTimeRange(range) {
     if (currentModalCategory === "customers") titleEl.textContent = `Historical Customers Trend (${rangeText})`;
     else if (currentModalCategory === "loan_amount") titleEl.textContent = `Historical Loan Amount Trend (${rangeText})`;
     else if (currentModalCategory === "balance") titleEl.textContent = `Historical Outstanding Balance Trend (${rangeText})`;
+    else if (currentModalCategory === "interest_discount") titleEl.textContent = `Historical Interest Discount Trend (${rangeText})`;
   }
 
   // Redraw chart
@@ -1030,6 +1057,20 @@ function renderHistoryChart(category, range) {
         tension: 0.35,
         pointRadius: 5,
         pointBackgroundColor: getChartThemeColors().totalLine
+      }
+    ];
+  } else if (category === "interest_discount") {
+    datasets = [
+      {
+        label: "Interest Discount Waived",
+        data: historyData.map(h => (h.interest_discount && h.interest_discount.total) || 0),
+        borderColor: "#8b5cf6",
+        backgroundColor: "rgba(139, 92, 246, 0.08)",
+        borderWidth: 2.5,
+        tension: 0.35,
+        pointRadius: 4,
+        pointBackgroundColor: "#8b5cf6",
+        fill: true
       }
     ];
   }
@@ -1476,7 +1517,7 @@ function populatePostingAnalytics(data) {
   }
   const avgLagEl = document.getElementById("lblPostingAvgLag");
   if (avgLagEl) {
-    avgLagEl.textContent = `${data.recent_posting.avg_entry_lag_days.toFixed(1)} days`;
+    avgLagEl.textContent = `${Math.round(data.recent_posting.avg_entry_lag_days)} days`;
   }
   
   const statusBadge = document.getElementById("badgePostingLagStatus");
@@ -1517,20 +1558,20 @@ function populatePostingAnalytics(data) {
   }
   const ratePctEl = document.getElementById("lblPostingCollectionRatePct");
   if (ratePctEl) {
-    ratePctEl.textContent = `${collectionRate.toFixed(1)}%`;
+    ratePctEl.textContent = `${Math.round(collectionRate)}%`;
   }
 
   const compHistEl = document.getElementById("lblPostingAmountvsHist");
   if (compHistEl) {
     const val = data.comparisons.historical.amount_vs_avg_pct || 0;
-    compHistEl.textContent = `${val >= 0 ? "+" : ""}${val.toFixed(1)}% vs hist`;
+    compHistEl.textContent = `${val >= 0 ? "+" : ""}${Math.round(val)}% vs hist`;
     compHistEl.style.color = val >= 0 ? "#10b981" : "#ef4444";
   }
 
   // Card 3: Skipping
   const skippingPctEl = document.getElementById("lblPostingSkippingPct");
   if (skippingPctEl) {
-    skippingPctEl.textContent = `${stats.skipping_pct.toFixed(1)}%`;
+    skippingPctEl.textContent = `${Math.round(stats.skipping_pct)}%`;
   }
   const skippedCustEl = document.getElementById("lblPostingSkippedCustomers");
   if (skippedCustEl) {
@@ -1548,7 +1589,7 @@ function populatePostingAnalytics(data) {
   const compPrevEl = document.getElementById("lblPostingSkippingvsPrev");
   if (compPrevEl) {
     const val = data.comparisons.previous_week.skipping_change_pct || 0;
-    compPrevEl.textContent = `${val >= 0 ? "+" : ""}${val.toFixed(1)}% vs prev ${isMonthly ? "month" : "week"}`;
+    compPrevEl.textContent = `${val >= 0 ? "+" : ""}${Math.round(val)}% vs prev ${isMonthly ? "month" : "week"}`;
     compPrevEl.style.color = val <= 0 ? "#10b981" : "#ef4444";
   }
 

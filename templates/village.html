@@ -706,6 +706,38 @@
   </div>
 </div>
 
+
+<!-- Manage Cashbags Modal -->
+<div id="manageCashbagsModal" class="column-modal hidden" style="z-index: 10050;">
+  <div class="column-modal-content" style="max-width: 650px; width: 95%; max-height: 85vh; display: flex; flex-direction: column; padding: 24px; border-radius: 20px; background: #1e1e2d; color: #fff; box-shadow: 0 25px 50px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);">
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px; margin-bottom: 16px;">
+      <div>
+        <h3 id="manageCbTitle" style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+          <i class="fas fa-wallet" style="color: #f59e0b;"></i> Manage Cash Bags
+        </h3>
+        <span id="manageCbSubtitle" style="font-size: 0.78rem; color: #9ca3af;">Route Group</span>
+      </div>
+      <button type="button" onclick="closeManageCashbagsModal()" style="background: transparent; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer;">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div id="manageCbListContainer" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; padding-right: 4px;">
+      <!-- Dynamically filled with cashbag cards -->
+    </div>
+
+    <div style="padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+      <button type="button" onclick="addNewCashbagInModal()" class="neumorphic-btn small" style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #f59e0b; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 12px; cursor: pointer;">
+        <i class="fas fa-plus"></i> New Cash Bag
+      </button>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" onclick="closeManageCashbagsModal()" class="neumorphic-btn small" style="background: transparent; color: #9ca3af; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 7px 16px; cursor: pointer;">Cancel</button>
+        <button type="button" id="saveCashbagsBtn" onclick="saveCashbagsFromModal()" class="neumorphic-btn small" style="background: var(--primary, #1a4d2e); border: 1px solid var(--primary, #1a4d2e); color: #fff; font-weight: 700; border-radius: 12px; padding: 7px 20px; cursor: pointer;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -719,5 +751,6 @@ window.villageData = JSON.parse(villageDataJson);
   window.userLevel = "{{ session.get('level', '') }}";
   const stateListJson = '{{ ["ANDHRA PRADESH","TELANGANA","KARNATAKA","MAHARASHTRA","ODISHA","GUJARAT"] | tojson | safe }}';
   window.stateList = JSON.parse(stateListJson);
+  window.allCashbags = {{ all_cashbags | tojson if all_cashbags is defined else '[]' }};
 </script>
 {% endblock %}

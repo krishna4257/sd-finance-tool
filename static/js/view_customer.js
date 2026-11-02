@@ -251,9 +251,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (lblDefaultedBalSplitI) lblDefaultedBalSplitI.textContent = formatMoney(defaultedBalI);
     if (lblDefaultedBalSplitR) lblDefaultedBalSplitR.textContent = formatMoney(defaultedBalR);
     
-    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
-    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
-    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
+    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(0);
+    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(0);
+    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(0);
 
     const activeAvgScoreTrendEl = document.getElementById("activeAvgScoreTrend");
     const defaultedAvgScoreTrendEl = document.getElementById("defaultedAvgScoreTrend");
@@ -265,9 +265,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (activeBalAmtEl) activeBalAmtEl.textContent = activeBalSum.toFixed(0);
     if (defaultedBalAmtEl) defaultedBalAmtEl.textContent = defaultedBalSum.toFixed(0);
     
-    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(1);
-    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(1);
-    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(1);
+    if (activeAvgScoreEl) activeAvgScoreEl.textContent = activeAvgScoreVal.toFixed(0);
+    if (defaultedAvgScoreEl) defaultedAvgScoreEl.textContent = defaultedAvgScoreVal.toFixed(0);
+    if (completeAvgScoreEl) completeAvgScoreEl.textContent = completeAvgScoreVal.toFixed(0);
 
     function setTrendArrow(el, current, prev) {
       if (!el) return;

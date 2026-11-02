@@ -810,9 +810,9 @@ document.getElementById("ano").addEventListener("keydown", function (e) {
 // --- Helper short formatting function (e.g. 1.2L, 60K) ---
 function formatAmountShort(value) {
   if (value >= 100000) {
-    return (value / 100000).toFixed(value % 100000 === 0 ? 0 : 1) + 'L';
+    return Math.round(value / 100000) + 'L';
   } else if (value >= 1000) {
-    return (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1) + 'K';
+    return Math.round(value / 1000) + 'K';
   }
   return value;
 }
@@ -3418,7 +3418,7 @@ async function extractBulkImagesWithAI() {
             textArea.focus();
         }
 
-        const totalSec = ((Date.now() - startTime) / 1000).toFixed(1);
+        const totalSec = Math.round((Date.now() - startTime) / 1000);
 
         if (errEl) {
             errEl.style.display = 'block';

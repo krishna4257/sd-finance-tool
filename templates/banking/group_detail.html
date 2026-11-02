@@ -1,0 +1,3197 @@
+{% extends "banking/base.html" %}
+
+
+
+
+
+
+
+{% block title %}{{ group.group_name }} ({{ group.group_code }}) – Village Bank – Central Bank{% endblock %}
+
+
+
+
+
+
+
+{% block extra_head %}
+
+
+
+<style>
+
+
+
+  @keyframes marqueeScroll {
+
+
+
+    0% { transform: translateX(0); }
+
+
+
+    100% { transform: translateX(-50%); }
+
+
+
+  }
+
+
+
+  .ribbon-track {
+
+
+
+    display: flex;
+
+
+
+    width: max-content;
+
+
+
+    animation: marqueeScroll 20s linear infinite;
+
+
+
+  }
+
+
+
+  .ribbon-track:hover {
+
+
+
+    animation-play-state: paused;
+
+
+
+  }
+
+
+
+  .ribbon-mask {
+
+
+
+    overflow: hidden;
+
+
+
+    position: relative;
+
+
+
+    mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+
+
+
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+
+
+
+  }
+
+
+
+</style>
+
+
+
+{% endblock %}
+
+
+
+
+
+
+
+{% block content %}
+
+
+
+<div class="space-y-6">
+
+
+
+
+
+
+
+  <!-- ==================== HEADER & BANK PROFILE ==================== -->
+
+
+
+  <div class="pb-3 border-b border-slate-200/80 dark:border-slate-800/80 space-y-3">
+
+
+
+    
+
+
+
+    <!-- ROW 1: Bank Name, Bank ID, Days, Edit Button (Latest Design), and Actions -->
+
+
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+
+
+      <div class="flex items-center gap-3 flex-wrap">
+
+
+
+        <a href="/banking/groups" class="h-10 w-10 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm">
+
+
+
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+
+
+
+        </a>
+
+
+
+        
+
+
+
+        <div class="flex items-center gap-2.5 flex-wrap">
+
+
+
+          <!-- Bank Name -->
+
+
+
+          <h2 class="text-2xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+
+
+
+            {{ group.group_name }}
+
+
+
+          </h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          <!-- Days Badge -->
+
+
+
+          <span id="routeDaysBadge" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl font-mono text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+
+
+
+            <i data-lucide="calendar" class="w-3 h-3"></i>
+
+
+
+            <span id="routeDaysText">{{ group.collection_days_per_week }} Days / Wk</span>
+
+
+
+          </span>
+
+
+
+
+
+
+
+          <!-- Edit Button (Latest Design) -->
+
+
+
+          <button type="button" onclick="openEditGroupDetailModal()" title="Edit Bank Name, Code & Days"
+
+
+
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 hover:text-amber-600 transition-all shadow-xs">
+
+
+
+            <i data-lucide="edit-3" class="w-3.5 h-3.5 text-amber-500"></i>
+
+
+
+            <span>Edit</span>
+
+
+
+          </button>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Actions -->
+
+
+
+      <div class="flex flex-wrap items-center gap-2">
+
+
+
+        <!-- Deploy Capital -->
+
+
+
+        <button type="button" onclick="openDeployModal()"
+
+
+
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/20 active:scale-95 transition-all">
+
+
+
+          <i data-lucide="send" class="w-4 h-4"></i>
+
+
+
+          <span>Deploy Capital</span>
+
+
+
+        </button>
+
+
+
+
+
+
+
+        <!-- Waterfall Withdrawal (PIN Protected) -->
+
+
+
+        <button type="button" onclick="openWaterfallModal()"
+
+
+
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/20 active:scale-95 transition-all">
+
+
+
+          <i data-lucide="layers" class="w-4 h-4"></i>
+
+
+
+          <span>Waterfall Withdrawal</span>
+
+
+
+        </button>
+
+
+
+
+
+
+
+        <!-- Edit Shareholdings -->
+
+
+
+        <button type="button" onclick="openEditSharesModal()"
+
+
+
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all">
+
+
+
+          <i data-lucide="pie-chart" class="w-4 h-4 text-violet-500"></i>
+
+
+
+          <span>Edit Shares</span>
+
+
+
+        </button>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+
+
+
+
+        <!-- ROW 2: Employees Scrolling Ribbon (Dynamic: only scrolls if overflowed) -->
+
+    <div class="flex items-center gap-3 pt-1">
+
+      <div class="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+
+        <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+
+        <span>Employees:</span>
+
+      </div>
+
+      <div class="smart-ribbon flex-1 overflow-hidden" data-ribbon>
+
+        <div class="ribbon-inner flex items-center gap-2">
+
+          {% for emp in group.employees_list %}
+
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700/80 shrink-0">
+
+              <div class="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px]">
+
+                {{ emp[0] | upper }}
+
+              </div>
+
+              <span>{{ emp }}</span>
+
+            </div>
+
+          {% endfor %}
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- ROW 3: Villages Scrolling Ribbon (Dynamic: only scrolls if overflowed) -->
+
+    <div class="flex items-center gap-3">
+
+      <div class="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+
+        <i data-lucide="map-pin" class="w-4 h-4 text-sky-500"></i>
+
+        <span>Assigned Villages:</span>
+
+      </div>
+
+      <div class="smart-ribbon flex-1 overflow-hidden" data-ribbon>
+
+        <div class="ribbon-inner flex items-center gap-2">
+
+          {% for vc in group.village_codes_list %}
+
+            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/70 border border-sky-200 dark:border-sky-800/60 shrink-0">
+
+              {{ vc }}
+
+            </span>
+
+          {% endfor %}
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+
+  <!-- ==================== 5 ROUTE BANK KPIS ==================== -->
+
+
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+
+
+
+    <!-- 1. Initial Principal -->
+
+
+
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+
+
+
+      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Initial Principal</span>
+
+
+
+      <p class="money-fig text-xl font-black text-slate-900 dark:text-white mt-1">
+
+
+
+        {{ format_inr(group.initial_principal) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.initial_principal or 0)) }}
+
+
+
+      </p>
+
+
+
+      <p class="text-[10px] text-slate-400 mt-1">Starting historical capital</p>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <!-- 2. Current Active Capital -->
+
+
+
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+
+
+
+      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Active Capital</span>
+
+
+
+      <p class="money-fig text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
+
+
+
+        {{ format_inr(group.active_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.active_capital or 0)) }}
+
+
+
+      </p>
+
+
+
+      <p class="text-[10px] text-slate-400 mt-1">Operating in village market</p>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <!-- 3. Accrued 24% Interest -->
+
+
+
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+
+
+
+      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Accrued 24% Return</span>
+
+
+
+      <p class="money-fig text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+
+
+
+        {{ format_inr(group.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.accrued_interest or 0)) }}
+
+
+
+      </p>
+
+
+
+      <p class="text-[10px] text-slate-400 mt-1">Tier 2 Waterfall Claim</p>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <!-- 4. Circulating Profit (Earned Customer Interest - 24% Investor Return) -->
+
+
+
+    <div class="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+
+
+
+      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Circulating Profit</span>
+
+
+
+      <p class="money-fig text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+
+
+
+        {{ format_inr(group.circulating_profit) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.circulating_profit or 0)) }}
+
+
+
+      </p>
+
+
+
+      <div class="flex items-center gap-1 text-[10px] text-slate-400 mt-1" title="Gross customer interest: ₹{{ '{:,.0f}'.format(group.total_customer_interest or 0) }} minus 24% investor claim: ₹{{ '{:,.0f}'.format(group.accrued_interest or 0) }}">
+
+
+
+        <span>Interest: {{ format_inr(group.total_customer_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.total_customer_interest or 0)) }}</span>
+
+
+
+        <span>·</span>
+
+
+
+        <span class="text-amber-500">-24%: {{ format_inr(group.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.accrued_interest or 0)) }}</span>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <!-- 5. Linked Cashbag Holdings (Live Balance & Direct Link) -->
+
+
+
+    <a href="/cashbag?emp1={{ group.emp1_id }}{% if group.emp2_id %}&emp2={{ group.emp2_id }}{% endif %}&bank_id={{ group.id }}" 
+
+
+
+       class="block bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:border-violet-500/50 hover:shadow-md transition-all group/card cursor-pointer"
+
+
+
+       title="Click to view Cashbag Management">
+
+
+
+      <div class="flex items-center justify-between">
+
+
+
+        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cashbag Holdings</span>
+
+
+
+        <span class="inline-flex items-center gap-1 text-[10px] text-violet-500 font-semibold group-hover/card:underline">
+
+
+
+          <span>Open</span> <i data-lucide="external-link" class="w-3 h-3"></i>
+
+
+
+        </span>
+
+
+
+      </div>
+
+
+
+      <p class="money-fig text-xl font-black text-violet-600 dark:text-violet-400 mt-1">
+
+
+
+        {{ format_inr(group.cashbag_total) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.cashbag_total or 0)) }}
+
+
+
+      </p>
+
+
+
+      <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mt-1">
+
+
+
+        <span>Cash: {{ format_inr(group.cashbag_cash) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.cashbag_cash or 0)) }}</span>
+
+
+
+        <span>·</span>
+
+
+
+        <span>UPI: {{ format_inr(group.cashbag_upi) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.cashbag_upi or 0)) }}</span>
+
+
+
+      </div>
+
+
+
+    </a>
+
+
+
+    <!-- 6. Amount Withdrawn (Total Waterfall Withdrawals & Direct Link to Ledger) -->
+    <div onclick="openWithdrawalsLedgerModal()"
+         class="block bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:border-rose-500/50 hover:shadow-md transition-all group/card cursor-pointer"
+         title="Click to view Withdrawals Ledger">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amount Withdrawn</span>
+        <span class="inline-flex items-center gap-1 text-[10px] text-rose-500 font-semibold group-hover/card:underline">
+          <span>Ledger</span> <i data-lucide="external-link" class="w-3 h-3"></i>
+        </span>
+      </div>
+      <p class="money-fig text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
+        {{ format_inr(group.total_withdrawn) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.total_withdrawn or 0)) }}
+      </p>
+      <div class="flex items-center gap-1 text-[10px] text-slate-400 mt-1" title="Principal: ₹{{ '{:,.0f}'.format(group.withdrawn_principal or 0) }} · 24% Return: ₹{{ '{:,.0f}'.format(group.withdrawn_interest or 0) }} · Profit: ₹{{ '{:,.0f}'.format(group.withdrawn_profit or 0) }}">
+        <span>P: {{ format_inr(group.withdrawn_principal) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_principal or 0)) }}</span>
+        <span>·</span>
+        <span>I: {{ format_inr(group.withdrawn_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_interest or 0)) }}</span>
+        <span>·</span>
+        <span>Prf: {{ format_inr(group.withdrawn_profit) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_profit or 0)) }}</span>
+      </div>
+    </div>
+
+  </div>
+
+
+
+
+
+
+
+  <!-- ==================== INVESTOR CAPITAL ALLOCATIONS & OWNERSHIP SHARES ==================== -->
+
+
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+
+
+
+
+
+
+    <!-- Left 2 Cols: Capital Deployments Table -->
+
+
+
+    <div class="lg:col-span-2 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+
+
+
+      <div class="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+
+
+
+        <div class="flex items-center gap-2">
+
+
+
+          <i data-lucide="layers" class="w-5 h-5 text-blue-500"></i>
+
+
+
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Capital Allocations in this Route</h3>
+
+
+
+          <span class="text-xs text-slate-400">({{ allocations|length if allocations is defined else 0 }})</span>
+
+
+
+        </div>
+
+
+
+        <button type="button" onclick="openDeployModal()"
+
+
+
+          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors">
+
+
+
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+
+
+
+          <span>Deploy More</span>
+
+
+
+        </button>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <div class="overflow-x-auto">
+
+
+
+        <table class="w-full text-left border-collapse">
+
+
+
+          <thead>
+
+
+
+            <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+
+
+
+              <th class="py-3 px-4">Funding Investor</th>
+
+
+
+              <th class="py-3 px-4 text-right">Amount</th>
+
+
+
+              <th class="py-3 px-4">Allocated Date</th>
+
+
+
+              <th class="py-3 px-4 text-right">Accrued 24%</th>
+
+
+
+              <th class="py-3 px-4 text-center">Status</th>
+
+
+
+            </tr>
+
+
+
+          </thead>
+
+
+
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+
+
+
+            {% if allocations and allocations|length > 0 %}
+
+
+
+              {% for a in allocations %}
+
+
+
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors {% if a.is_reversed %}reversed-row{% endif %}">
+
+
+
+                  <td class="py-3 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+
+
+
+                    <a href="/banking/investors/{{ a.investor_id }}" class="hover:text-blue-500 flex items-center gap-1.5">
+
+
+
+                      <div class="h-6 w-6 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-[10px]">
+
+
+
+                        {{ (a.investor_name or 'I')[0] | upper }}
+
+
+
+                      </div>
+
+
+
+                      <span>{{ a.investor_name }}</span>
+
+
+
+                    </a>
+
+
+
+                  </td>
+
+
+
+                  <td class="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
+
+
+
+                    {{ format_inr(a.amount) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.amount)) }}
+
+
+
+                  </td>
+
+
+
+                  <td class="py-3 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+
+
+
+                    {{ a.allocation_date.strftime('%d-%m-%Y') if a.allocation_date.strftime is defined else a.allocation_date }}
+
+
+
+                  </td>
+
+
+
+                  <td class="py-3 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+
+
+
+                    {{ format_inr(a.accrued_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(a.accrued_interest or 0)) }}
+
+
+
+                  </td>
+
+
+
+                  <td class="py-3 px-4 text-center whitespace-nowrap">
+
+
+
+                    {% if a.is_reversed %}
+
+
+
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">[REVERSED]</span>
+
+
+
+                    {% else %}
+
+
+
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Active</span>
+
+
+
+                    {% endif %}
+
+
+
+                  </td>
+
+
+
+                </tr>
+
+
+
+              {% endfor %}
+
+
+
+            {% else %}
+
+
+
+              <tr>
+
+
+
+                <td colspan="5" class="py-6 text-center text-slate-400">No capital deployments recorded for this route bank yet.</td>
+
+
+
+              </tr>
+
+
+
+            {% endif %}
+
+
+
+          </tbody>
+
+
+
+        </table>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <!-- Right 1 Col: Ownership Shareholdings % Card -->
+
+
+
+    <div class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-4">
+
+
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+
+
+
+        <div>
+
+
+
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+
+
+
+            <i data-lucide="pie-chart" class="w-4 h-4 text-violet-500"></i>
+
+
+
+            <span>Ownership Shares</span>
+
+
+
+          </h3>
+
+
+
+          <p class="text-[11px] text-slate-400 mt-0.5">Determines Tier 3 profit split</p>
+
+
+
+        </div>
+
+
+
+        <button type="button" onclick="openEditSharesModal()"
+
+
+
+          class="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline">
+
+
+
+          Edit
+
+
+
+        </button>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Shares List -->
+
+
+
+      <div class="space-y-3">
+
+
+
+        {% if shares and shares|length > 0 %}
+
+
+
+          {% for s in shares %}
+
+
+
+            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60">
+
+
+
+              <div class="flex items-center justify-between text-xs mb-2">
+
+
+
+                <div class="flex items-center gap-2">
+
+
+
+                  <div class="w-7 h-7 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 flex items-center justify-center font-black text-[11px] shrink-0">
+
+
+
+                    {{ (s.investor_name or s.name or 'I')[0] | upper }}
+
+
+
+                  </div>
+
+
+
+                  <div>
+
+
+
+                    <span class="font-bold text-slate-900 dark:text-white block text-xs leading-snug">
+
+
+
+                      {{ s.investor_name or s.name or s.full_name }}
+
+
+
+                    </span>
+
+
+
+                    <span class="text-[10px] text-slate-400 font-mono">
+
+
+
+                      {{ s.investor_code or s.code }}
+
+
+
+                    </span>
+
+
+
+                  </div>
+
+
+
+                </div>
+
+
+
+                <div class="text-right">
+
+
+
+                  <span class="font-mono font-black text-violet-600 dark:text-violet-400 text-sm block leading-none">
+
+
+
+                    {{ '{:,.0f}%'.format(s.share_pct) }}
+
+
+
+                  </span>
+
+
+
+                  {% if s.active_capital is defined and s.active_capital > 0 %}
+
+
+
+                    <span class="text-[10px] font-mono text-slate-400 block mt-0.5">
+
+
+
+                      {{ format_inr(s.active_capital) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(s.active_capital)) }}
+
+
+
+                    </span>
+
+
+
+                  {% endif %}
+
+
+
+                </div>
+
+
+
+              </div>
+
+
+
+              <!-- Progress bar -->
+
+
+
+              <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+
+
+
+                <div class="bg-gradient-to-r from-violet-500 to-indigo-600 h-full rounded-full" style="width: {{ s.share_pct }}%"></div>
+
+
+
+              </div>
+
+
+
+            </div>
+
+
+
+          {% endfor %}
+
+
+
+        {% else %}
+
+
+
+          <p class="text-xs text-slate-400 py-3 text-center">No custom shares assigned. Uses global default %.</p>
+
+
+
+        {% endif %}
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Total Indicator -->
+
+
+
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold">
+
+
+
+        <span class="text-slate-500 dark:text-slate-400">Total Ownership:</span>
+
+
+
+        <span class="font-mono text-emerald-600 dark:text-emerald-400">100%</span>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+  </div>
+
+
+
+
+
+
+
+  <!-- ==================== WITHDRAWAL AUDIT & WATERFALL HISTORY ==================== -->
+  <div id="waterfallWithdrawalsSection" class="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+
+
+
+    <div class="p-4 md:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+
+
+
+      <div class="flex items-center gap-2">
+
+
+
+        <i data-lucide="history" class="w-5 h-5 text-amber-500"></i>
+
+
+
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Waterfall Withdrawals Audit Log</h3>
+
+
+
+        <span class="text-xs text-slate-400">({{ withdrawals|length if withdrawals is defined else 0 }} withdrawals)</span>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <div class="overflow-x-auto">
+
+
+
+      <table class="w-full text-left border-collapse">
+
+
+
+        <thead>
+
+
+
+          <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+
+
+
+            <th class="py-3 px-4">Date</th>
+
+
+
+            <th class="py-3 px-4 text-right">Total Withdrawn</th>
+
+
+
+            <th class="py-3 px-4 text-right">Tier 1 Principal</th>
+
+
+
+            <th class="py-3 px-4 text-right">Tier 2 Interest</th>
+
+
+
+            <th class="py-3 px-4 text-right">Tier 3 Profit Split</th>
+
+
+
+            <th class="py-3 px-4">Mode</th>
+
+
+
+            <th class="py-3 px-4 text-center">Auth Status</th>
+
+
+
+          </tr>
+
+
+
+        </thead>
+
+
+
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+
+
+
+          {% if withdrawals and withdrawals|length > 0 %}
+
+
+
+            {% for w in withdrawals %}
+
+
+
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors {% if w.is_reversed %}reversed-row{% endif %}">
+
+
+
+                <td class="py-3 px-4 font-medium whitespace-nowrap">
+
+
+
+                  {{ w.withdrawal_date.strftime('%d-%m-%Y') if w.withdrawal_date.strftime is defined else w.withdrawal_date }}
+
+
+
+                </td>
+
+
+
+                <td class="py-3 px-4 text-right font-mono font-black text-slate-900 dark:text-white whitespace-nowrap">
+
+
+
+                  {{ format_inr(w.total_withdrawn) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.total_withdrawn)) }}
+
+
+
+                </td>
+
+
+
+                <td class="py-3 px-4 text-right font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+
+
+
+                  {{ format_inr(w.principal_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.principal_portion or 0)) }}
+
+
+
+                </td>
+
+
+
+                <td class="py-3 px-4 text-right font-mono text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">
+
+
+
+                  {{ format_inr(w.interest_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.interest_portion or 0)) }}
+
+
+
+                </td>
+
+
+
+                <td class="py-3 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+
+
+
+                  {{ format_inr(w.profit_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.profit_portion or 0)) }}
+
+
+
+                </td>
+
+
+
+                <td class="py-3 px-4 font-mono whitespace-nowrap">{{ w.payment_mode }}</td>
+
+
+
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+
+
+
+                  {% if w.is_reversed %}
+
+
+
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">[REVERSED]</span>
+
+
+
+                  {% else %}
+
+
+
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Admin Verified</span>
+
+
+
+                  {% endif %}
+
+
+
+                </td>
+
+
+
+              </tr>
+
+
+
+            {% endfor %}
+
+
+
+          {% else %}
+
+
+
+            <tr>
+
+
+
+              <td colspan="7" class="py-6 text-center text-slate-400">No waterfall withdrawals executed for this route yet.</td>
+
+
+
+            </tr>
+
+
+
+          {% endif %}
+
+
+
+        </tbody>
+
+
+
+      </table>
+
+
+
+    </div>
+
+
+
+  </div>
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+
+<!-- Hidden JSON data for client-side waterfall preview -->
+
+
+
+<input type="hidden" id="waterfallShareholdersData" value='{{ shares_json|tojson|safe if shares_json is defined else "[]" }}'>
+
+
+
+
+
+
+
+<!-- ==================== MODAL: DEPLOY CAPITAL ==================== -->
+
+
+
+<div id="deployCapitalModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+
+
+
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+
+
+
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+
+
+
+      <div class="flex items-center gap-2.5">
+
+
+
+        <div class="h-9 w-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+
+
+
+          <i data-lucide="send" class="w-5 h-5"></i>
+
+
+
+        </div>
+
+
+
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Deploy Capital into Route</h3>
+
+
+
+      </div>
+
+
+
+      <button type="button" onclick="closeDeployModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+
+
+
+        <i data-lucide="x" class="w-5 h-5"></i>
+
+
+
+      </button>
+
+
+
+    </div>
+
+
+
+    <form id="deployCapitalForm" onsubmit="GroupBank.handleDeployCapital(event, '{{ group.id }}')" class="p-5 space-y-4">
+
+
+
+      <div>
+
+
+
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Funding Investor *</label>
+
+
+
+        <select name="investor_id" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+          <option value="">-- Choose Funding Investor --</option>
+
+
+
+          {% if investors %}
+
+
+
+            {% for inv in investors %}
+
+
+
+              <option value="{{ inv.id }}">{{ inv.full_name }} (Idle: ₹{{ '{:,.0f}'.format(inv.idle_balance or 0) }})</option>
+
+
+
+            {% endfor %}
+
+
+
+          {% endif %}
+
+
+
+        </select>
+
+
+
+      </div>
+
+
+
+      <div class="grid grid-cols-2 gap-3">
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount (₹) *</label>
+
+
+
+          <input type="number" step="0.01" min="1" name="amount" required placeholder="200000"
+
+
+
+            class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+
+
+
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+            <option value="CASH">CASH (Injects to Cashbag)</option>
+
+
+
+            <option value="UPI">UPI</option>
+
+
+
+          </select>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+      <div class="grid grid-cols-2 gap-3">
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Allocation Date *</label>
+
+
+
+          <input type="date" name="allocation_date" id="groupDeployDateInput" required
+
+
+
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Rate (% p.a.)</label>
+
+
+
+          <input type="number" step="0.1" name="interest_rate" value="24.0" readonly
+
+
+
+            class="w-full text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2.5 text-slate-500">
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+      <div class="pt-2 flex justify-end gap-2">
+
+
+
+        <button type="button" onclick="closeDeployModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+
+
+
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md">Deploy Capital</button>
+
+
+
+      </div>
+
+
+
+    </form>
+
+
+
+  </div>
+
+
+
+</div>
+
+
+
+
+
+
+
+<!-- ==================== MODAL: WATERFALL WITHDRAWAL (PIN PROTECTED) ==================== -->
+
+
+
+<div id="waterfallWithdrawModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+
+
+
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full my-6 overflow-hidden">
+
+
+
+    <!-- Header -->
+
+
+
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+
+
+
+      <div class="flex items-center gap-2.5">
+
+
+
+        <div class="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+
+
+
+          <i data-lucide="layers" class="w-5 h-5"></i>
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Execute Waterfall Withdrawal</h3>
+
+
+
+          <p class="text-xs text-amber-600 dark:text-amber-400 font-semibold">Tier 1: Principal ➔ Tier 2: Interest ➔ Tier 3: Profit Split</p>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+      <button type="button" onclick="closeWaterfallModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+
+
+
+        <i data-lucide="x" class="w-5 h-5"></i>
+
+
+
+      </button>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <form id="waterfallWithdrawForm" onsubmit="GroupBank.handleWaterfallWithdrawal(event, '{{ group.id }}')" class="p-6 space-y-5">
+
+
+
+      <!-- Input Amount & Mode -->
+
+
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+
+
+        <div class="sm:col-span-2">
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Total Withdrawal Amount (₹) *</label>
+
+
+
+          <input type="number" step="0.01" min="1" name="amount" id="waterfallWithdrawAmount" required
+
+
+
+            placeholder="e.g. 250000"
+
+
+
+            data-principal-owed="{{ group.active_capital or 0 }}"
+
+
+
+            data-interest-owed="{{ group.accrued_interest or 0 }}"
+
+
+
+            oninput="GroupBank.updateWaterfallPreview()"
+
+
+
+            class="w-full text-sm font-mono font-bold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mode *</label>
+
+
+
+          <select name="payment_mode" required class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+            <option value="CASH">CASH</option>
+
+
+
+            <option value="UPI">UPI</option>
+
+
+
+          </select>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Effective Date *</label>
+
+
+
+          <input type="date" name="withdrawal_date" id="wfWithdrawDateInput" required
+
+
+
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Narration / Notes</label>
+
+
+
+          <input type="text" name="notes" placeholder="Mid-year capital & profit draw"
+
+
+
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Live Waterfall Tier Breakdown Cards -->
+
+
+
+      <div class="grid grid-cols-3 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+
+
+
+        <!-- Tier 1 -->
+
+
+
+        <div class="text-center p-2 rounded-xl bg-white dark:bg-slate-800 shadow-2xs">
+
+
+
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tier 1: Principal</span>
+
+
+
+          <p class="money-fig text-sm font-black text-slate-900 dark:text-white mt-0.5" id="wfTier1Amount">₹0</p>
+
+
+
+          <span class="text-[10px] text-slate-400">Rem: <span id="wfRemainingPrincipal">₹0</span></span>
+
+
+
+        </div>
+
+
+
+        <!-- Tier 2 -->
+
+
+
+        <div class="text-center p-2 rounded-xl bg-white dark:bg-slate-800 shadow-2xs">
+
+
+
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-500">Tier 2: 24% Interest</span>
+
+
+
+          <p class="money-fig text-sm font-black text-amber-600 dark:text-amber-400 mt-0.5" id="wfTier2Amount">₹0</p>
+
+
+
+          <span class="text-[10px] text-slate-400">Rem: <span id="wfRemainingInterest">₹0</span></span>
+
+
+
+        </div>
+
+
+
+        <!-- Tier 3 -->
+
+
+
+        <div class="text-center p-2 rounded-xl bg-white dark:bg-slate-800 shadow-2xs">
+
+
+
+          <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Tier 3: Profit Split</span>
+
+
+
+          <p class="money-fig text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5" id="wfTier3Amount">₹0</p>
+
+
+
+          <span class="text-[10px] text-slate-400">Split by equity %</span>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Live Partner Distribution Table -->
+
+
+
+      <div>
+
+
+
+        <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Partner Distribution Breakdown</h4>
+
+
+
+        <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+
+
+
+          <table class="w-full text-left text-xs">
+
+
+
+            <thead class="bg-slate-100 dark:bg-slate-800 text-[10px] uppercase text-slate-500 font-bold">
+
+
+
+              <tr>
+
+
+
+                <th class="py-2 px-3">Partner (% Share)</th>
+
+
+
+                <th class="py-2 px-3 text-right">Principal</th>
+
+
+
+                <th class="py-2 px-3 text-right">Interest</th>
+
+
+
+                <th class="py-2 px-3 text-right">Profit</th>
+
+
+
+                <th class="py-2 px-3 text-right">Total Payout</th>
+
+
+
+              </tr>
+
+
+
+            </thead>
+
+
+
+            <tbody id="wfPartnerTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+
+
+
+              <tr><td colspan="5" class="py-3 text-center text-xs text-slate-400">Type an amount above to preview waterfall breakdown</td></tr>
+
+
+
+            </tbody>
+
+
+
+          </table>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <!-- Footer -->
+
+
+
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+
+
+
+        <button type="button" onclick="closeWaterfallModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+
+
+
+        <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/20 active:scale-95 transition-all">Authorize Waterfall</button>
+
+
+
+      </div>
+
+
+
+    </form>
+
+
+
+  </div>
+
+
+
+</div>
+
+
+
+
+
+
+
+<!-- ==================== MODAL: EDIT SHARES BREAKDOWN ==================== -->
+
+
+
+<div id="editSharesModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+
+
+
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full my-6 overflow-hidden">
+
+
+
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+
+
+
+      <div class="flex items-center gap-2.5">
+
+
+
+        <div class="h-9 w-9 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center">
+
+
+
+          <i data-lucide="pie-chart" class="w-5 h-5"></i>
+
+
+
+        </div>
+
+
+
+        <div>
+
+
+
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Route Ownership Shareholdings</h3>
+
+
+
+          <p class="text-xs text-slate-500">Total must equal exactly 100%</p>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+      <button type="button" onclick="closeEditSharesModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+
+
+
+        <i data-lucide="x" class="w-5 h-5"></i>
+
+
+
+      </button>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <form id="editSharesForm" onsubmit="GroupBank.handleSaveShares(event, '{{ group.id }}')" class="p-6 space-y-4">
+
+
+
+      <table class="w-full text-left text-xs">
+
+
+
+        <thead>
+
+
+
+          <tr class="text-[10px] uppercase text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
+
+
+
+            <th class="pb-2">Investor Partner</th>
+
+
+
+            <th class="pb-2 text-right">Ownership Share %</th>
+
+
+
+            <th class="pb-2 text-right"></th>
+
+
+
+          </tr>
+
+
+
+        </thead>
+
+
+
+        <tbody id="editSharesRows">
+
+
+
+          {% if shares and shares|length > 0 %}
+
+
+
+            {% for s in shares %}
+
+
+
+              <tr class="border-b border-slate-100 dark:border-slate-800 group-share-row"
+
+
+
+                  data-active-capital="{{ s.active_capital or 0 }}"
+
+
+
+                  data-investor-name="{{ s.investor_name or s.name }}">
+
+
+
+                <td class="py-2.5">
+
+
+
+                  <select name="investor_id[]" required class="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500">
+
+
+
+                    {% if investors %}
+
+
+
+                      {% for inv in investors %}
+
+
+
+                        <option value="{{ inv.id }}" {% if inv.id|string == s.investor_id|string %}selected{% endif %}>
+
+
+
+                          {{ inv.full_name or inv.name }} ({{ inv.investor_code or inv.code }})
+
+
+
+                        </option>
+
+
+
+                      {% endfor %}
+
+
+
+                    {% endif %}
+
+
+
+                  </select>
+
+
+
+                  {% if s.active_capital and s.active_capital > 0 %}
+
+
+
+                  <div class="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 font-medium flex items-center gap-1">
+
+
+
+                    <i data-lucide="shield-alert" class="w-3 h-3"></i> Active Capital: ₹{{ '{:,.0f}'.format(s.active_capital) }} (Cannot be removed until settled)
+
+
+
+                  </div>
+
+
+
+                  {% endif %}
+
+
+
+                </td>
+
+
+
+                <td class="py-2.5 pl-3">
+
+
+
+                  <div class="relative">
+
+
+
+                    <input type="number" step="1" min="0" name="share_pct[]" value="{{ '{:.0f}'.format(s.share_pct) if s.share_pct is defined else s.share_pct }}" required
+
+
+
+                      class="share-pct-input w-full text-xs text-right font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-7 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+
+
+
+                      oninput="GroupBank.checkSharePercentages('#editSharesRows')">
+
+
+
+                    <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">%</span>
+
+
+
+                  </div>
+
+
+
+                </td>
+
+
+
+                <td class="py-2.5 pl-2 text-right">
+
+
+
+                  <button type="button" onclick="removeShareholderRow(this)"
+
+
+
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+
+
+
+                    title="Remove Shareholder">
+
+
+
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+
+
+
+                  </button>
+
+
+
+                </td>
+
+
+
+              </tr>
+
+
+
+            {% endfor %}
+
+
+
+          {% endif %}
+
+
+
+        </tbody>
+
+
+
+      </table>
+
+
+
+
+
+
+
+      <!-- Status Bar -->
+
+
+
+      <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">
+
+
+
+        <div class="flex items-center gap-2">
+
+
+
+          <span class="text-slate-500 dark:text-slate-400">Total Share:</span>
+
+
+
+          <span id="totalSharePctDisplay" class="font-mono text-slate-900 dark:text-white">100%</span>
+
+
+
+        </div>
+
+
+
+        <span id="sharePctStatusBadge"></span>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      <div class="pt-2 flex justify-between items-center">
+
+
+
+        <button type="button" onclick="GroupBank.addShareholderRow('editSharesRows')"
+
+
+
+          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-violet-600 bg-violet-50 dark:bg-violet-950/60 hover:bg-violet-100">
+
+
+
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Partner Row
+
+
+
+        </button>
+
+
+
+        <div class="flex gap-2">
+
+
+
+          <button type="button" onclick="closeEditSharesModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+
+
+
+          <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 shadow-md">Save Shares</button>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+    </form>
+
+
+
+  </div>
+
+
+
+</div>
+
+
+
+
+<!-- ==================== WITHDRAWALS LEDGER MODAL ==================== -->
+<div id="withdrawalsLedgerModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+          <i data-lucide="hand-coins" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Withdrawals Ledger</h3>
+          <p class="text-xs text-slate-400">Total Withdrawn: <span class="font-bold text-rose-500">{{ format_inr(group.total_withdrawn) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.total_withdrawn or 0)) }}</span> (Principal: {{ format_inr(group.withdrawn_principal) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_principal or 0)) }} · 24% Return: {{ format_inr(group.withdrawn_interest) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_interest or 0)) }} · Profit: {{ format_inr(group.withdrawn_profit) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(group.withdrawn_profit or 0)) }})</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeWithdrawalsLedgerModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <div class="p-5 overflow-y-auto flex-1">
+      {% if withdrawals and withdrawals|length > 0 %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50">
+              <th class="py-2.5 px-3">Date</th>
+              <th class="py-2.5 px-3 text-right">Total Withdrawn</th>
+              <th class="py-2.5 px-3 text-right">Tier 1 Principal</th>
+              <th class="py-2.5 px-3 text-right">Tier 2 Interest</th>
+              <th class="py-2.5 px-3 text-right">Tier 3 Profit</th>
+              <th class="py-2.5 px-3">Mode</th>
+              <th class="py-2.5 px-3 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+            {% for w in withdrawals %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 {% if w.is_reversed %}opacity-50 line-through{% endif %}">
+              <td class="py-2.5 px-3 font-sans">{{ w.withdrawal_date.strftime('%d-%m-%Y') if w.withdrawal_date.strftime is defined else w.withdrawal_date }}</td>
+              <td class="py-2.5 px-3 text-right font-black text-rose-600 dark:text-rose-400">-{{ format_inr(w.total_withdrawn) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.total_withdrawn)) }}</td>
+              <td class="py-2.5 px-3 text-right text-slate-700 dark:text-slate-300">{{ format_inr(w.principal_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.principal_portion)) }}</td>
+              <td class="py-2.5 px-3 text-right text-amber-600 dark:text-amber-400">{{ format_inr(w.interest_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.interest_portion)) }}</td>
+              <td class="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400">{{ format_inr(w.profit_portion) if format_inr is defined else ('₹' ~ '{:,.0f}'.format(w.profit_portion)) }}</td>
+              <td class="py-2.5 px-3 font-sans"><span class="px-2 py-0.5 rounded text-[10px] font-bold {% if w.payment_mode == 'UPI' %}bg-sky-500/10 text-sky-500 border border-sky-500/20{% else %}bg-emerald-500/10 text-emerald-500 border border-emerald-500/20{% endif %}">{{ w.payment_mode }}</span></td>
+              <td class="py-2.5 px-3 text-center font-sans">
+                {% if w.is_reversed %}
+                <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 text-[10px] font-bold">REVERSED</span>
+                {% else %}
+                <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">COMPLETED</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-12 text-slate-400">
+        <i data-lucide="hand-coins" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+        <p class="text-sm font-semibold">No withdrawals logged yet for this Village Bank.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+      <button type="button" onclick="scrollToWaterfallWithdrawals()" class="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400">
+        <span>Go to On-Page Audit Log</span> <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+      </button>
+      <button type="button" onclick="closeWithdrawalsLedgerModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Close</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+
+
+
+
+
+{% block extra_scripts %}
+
+
+
+<script src="{{ url_for('static', filename='js/banking/group_bank.js') }}"></script>
+
+
+
+<script>
+
+
+
+  window.INVESTORS_OPTIONS_HTML = `
+
+
+
+    {% if investors %}
+
+
+
+      {% for inv in investors %}
+
+
+
+        <option value="{{ inv.id }}">{{ inv.full_name }} ({{ inv.investor_code }})</option>
+
+
+
+      {% endfor %}
+
+
+
+    {% endif %}
+
+
+
+  `;
+
+
+
+
+
+
+
+  document.addEventListener('DOMContentLoaded', function () {
+
+
+
+    const today = new Date().toISOString().split('T')[0];
+
+
+
+    const depInp = document.getElementById('groupDeployDateInput');
+
+
+
+    const wfInp = document.getElementById('wfWithdrawDateInput');
+
+
+
+    if (depInp) depInp.value = today;
+
+
+
+    if (wfInp) wfInp.value = today;
+
+
+
+
+
+
+
+    // Check share percentages
+
+
+
+    GroupBank.checkSharePercentages('#editSharesRows');
+
+
+
+  });
+
+
+
+
+
+
+
+  function openDeployModal() {
+
+
+
+    const m = document.getElementById('deployCapitalModal');
+
+
+
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+
+
+
+    if (window.lucide) lucide.createIcons();
+
+
+
+  }
+
+
+
+  function closeDeployModal() {
+
+
+
+    const m = document.getElementById('deployCapitalModal');
+
+
+
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+
+
+
+  }
+
+
+
+
+
+
+
+  function openWaterfallModal() {
+
+
+
+    const m = document.getElementById('waterfallWithdrawModal');
+
+
+
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+
+
+
+    if (window.lucide) lucide.createIcons();
+
+
+
+    GroupBank.updateWaterfallPreview();
+
+
+
+  }
+
+
+
+  function closeWaterfallModal() {
+
+
+
+    const m = document.getElementById('waterfallWithdrawModal');
+
+
+
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+
+
+
+  }
+
+
+
+
+
+
+
+  function openEditSharesModal() {
+
+
+
+    const m = document.getElementById('editSharesModal');
+
+
+
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+
+
+
+    if (window.lucide) lucide.createIcons();
+
+
+
+    GroupBank.checkSharePercentages('#editSharesRows');
+
+
+
+  }
+
+
+
+  function closeEditSharesModal() {
+
+
+
+    const m = document.getElementById('editSharesModal');
+
+
+
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+
+
+
+  }
+
+
+
+
+
+
+
+  // Edit Route Settings (Route Code & Collection Days)
+
+
+
+  function openEditGroupDetailModal() {
+
+
+
+    const m = document.getElementById('editGroupDetailModal');
+
+
+
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+
+
+
+    if (window.lucide) lucide.createIcons();
+
+
+
+  }
+
+
+
+  function closeEditGroupDetailModal() {
+
+
+
+    const m = document.getElementById('editGroupDetailModal');
+
+
+
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+
+
+
+  }
+
+
+
+  function removeShareholderRow(btn) {
+
+
+
+    const row = btn.closest('tr');
+
+
+
+    const activeCap = parseFloat(row.getAttribute('data-active-capital') || 0);
+
+
+
+    const invName = row.getAttribute('data-investor-name') || 'This investor';
+
+
+
+    if (activeCap > 0.01) {
+
+
+
+      SD_BANKING.showToast(`Cannot remove ${invName}: Active capital of ${SD_BANKING.formatINR(activeCap)} is still deployed in this route. You must settle / withdraw their capital first.`, 'error');
+
+
+
+      return;
+
+
+
+    }
+
+
+
+    row.remove();
+    GroupBank.checkSharePercentages('#editSharesRows');
+  }
+
+
+
+
+
+
+
+  async function submitEditGroupDetail(e) {
+
+
+
+    e.preventDefault();
+
+
+
+    const name = document.getElementById('editDetailGroupName').value.trim();
+
+
+
+    const code = document.getElementById('editDetailGroupCode').value.trim();
+
+
+
+    const days = parseInt(document.getElementById('editDetailGroupDays').value);
+
+
+
+
+
+
+
+    try {
+
+
+
+      const res = await SD_BANKING.bankingFetch('/banking/api/groups/{{ group.id }}/update', {
+
+
+
+        method: 'POST',
+
+
+
+        body: { group_name: name, group_code: code, collection_days_per_week: days }
+
+
+
+      });
+
+
+
+      if (res && res.success !== false) {
+
+
+
+        SD_BANKING.showToast(res.message || 'Route settings updated!', 'success');
+
+
+
+        closeEditGroupDetailModal();
+
+
+
+        setTimeout(() => window.location.reload(), 600);
+
+
+
+      } else {
+
+
+
+        throw new Error(res.error || 'Update failed');
+
+
+
+      }
+
+
+
+    } catch (err) {
+
+
+
+      SD_BANKING.showToast(err.message, 'error');
+
+
+
+    }
+
+
+
+  }
+
+
+
+</script>
+
+
+
+
+
+
+
+<!-- ==================== MODAL: EDIT ROUTE SETTINGS ==================== -->
+
+
+
+<div id="editGroupDetailModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+
+
+
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+
+
+
+    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+
+
+
+      <div class="flex items-center gap-2.5">
+
+
+
+        <div class="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+
+
+
+          <i data-lucide="edit-3" class="w-5 h-5"></i>
+
+
+
+        </div>
+
+
+
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Edit Route Settings</h3>
+
+
+
+      </div>
+
+
+
+      <button type="button" onclick="closeEditGroupDetailModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+
+
+
+        <i data-lucide="x" class="w-5 h-5"></i>
+
+
+
+      </button>
+
+
+
+    </div>
+
+
+
+    <form id="editGroupDetailForm" onsubmit="submitEditGroupDetail(event)" class="p-5 space-y-4">
+
+
+
+      <div>
+
+
+
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Bank / Route Name *</label>
+
+
+
+        <input type="text" id="editDetailGroupName" name="group_name" value="{{ group.group_name }}" required
+
+
+
+          class="w-full text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        <p class="text-[11px] text-slate-400 mt-1">Display name of this Village Bank.</p>
+
+
+
+      </div>
+
+
+
+      <div>
+
+
+
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Route Code *</label>
+
+
+
+        <input type="text" id="editDetailGroupCode" name="group_code" value="{{ group.group_code }}" required
+
+
+
+          class="w-full text-xs font-mono uppercase rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        <p class="text-[11px] text-slate-400 mt-1">Unique custom code for this route.</p>
+
+
+
+      </div>
+
+
+
+      <div>
+
+
+
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Collection Days / Week (1-7) *</label>
+
+
+
+        <input type="number" id="editDetailGroupDays" name="collection_days_per_week" value="{{ group.collection_days_per_week }}" min="1" max="7" required
+
+
+
+          class="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+
+
+
+        <p class="text-[11px] text-slate-400 mt-1">Directly powers annual office expense distribution weight.</p>
+
+
+
+      </div>
+
+
+
+      <div class="pt-2 flex justify-end gap-2">
+
+
+
+        <button type="button" onclick="closeEditGroupDetailModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+
+
+
+        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md">Save Changes</button>
+
+
+
+      </div>
+
+
+
+    </form>
+
+
+
+  </div>
+
+
+
+</div>
+
+
+
+
+<script>
+  function openWithdrawalsLedgerModal() {
+    const m = document.getElementById('withdrawalsLedgerModal');
+    if (m) {
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeWithdrawalsLedgerModal() {
+    const m = document.getElementById('withdrawalsLedgerModal');
+    if (m) {
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+  }
+
+  function scrollToWaterfallWithdrawals() {
+    closeWithdrawalsLedgerModal();
+    const el = document.getElementById('waterfallWithdrawalsSection');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.classList.add('ring-2', 'ring-rose-500', 'transition-all');
+      setTimeout(() => el.classList.remove('ring-2', 'ring-rose-500'), 2500);
+    }
+  }
+</script>
+{% endblock %}
+
+
+

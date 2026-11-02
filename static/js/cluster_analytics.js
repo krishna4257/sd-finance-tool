@@ -838,8 +838,8 @@
 
   /** Compact format: 1000 → 1K, 100000 → 1L */
   function formatCompact(n) {
-    if (n >= 100000) return (n / 100000).toFixed(n % 100000 === 0 ? 0 : 1) + 'L';
-    if (n >= 1000) return (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'K';
+    if (n >= 100000) return Math.round(n / 100000) + 'L';
+    if (n >= 1000) return Math.round(n / 1000) + 'K';
     return String(Math.round(n));
   }
 

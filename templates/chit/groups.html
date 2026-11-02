@@ -69,11 +69,11 @@
   let groupsPayload = null;
 
   function formatINR(val) {
-    return '₹' + Number(val || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    return '₹' + Math.round(Number(val || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   }
 
   function formatINRFull(val) {
-    return '₹' + Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return '₹' + Math.round(Number(val || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   }
 
   async function loadChitGroups() {

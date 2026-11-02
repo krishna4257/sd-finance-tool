@@ -232,3 +232,9 @@ apk_releases/*.tmp
 # User file uploads
 static/uploads/*
 !static/uploads/.gitkeep
+
+# Mobile Signing Keystore and Properties
+certs/
+*.jks
+key.properties
+

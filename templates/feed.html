@@ -3318,7 +3318,7 @@
                         <h4 class="queue-hub-title">Posting Queue</h4>
                         <div class="queue-hub-metric-box">
                             <div class="queue-hub-metric-label">Pending Collections</div>
-                            <div class="queue-hub-metric-val">₹{{ "{:,.2f}".format(pending_payments_total) if pending_payments_total else "0.00" }}</div>
+                            <div class="queue-hub-metric-val">₹{{ "{:,.0f}".format(pending_payments_total) if pending_payments_total else "0" }}</div>
                             <div class="queue-hub-db-stat">
                                 <span>Latest Payment in DB:</span>
                                 <strong>{{ max_payment_date_display }}</strong>
@@ -3342,7 +3342,7 @@
                         <h4 class="queue-hub-title">New Customers</h4>
                         <div class="queue-hub-metric-box">
                             <div class="queue-hub-metric-label">Pending Capital</div>
-                            <div class="queue-hub-metric-val">₹{{ "{:,.2f}".format(pending_customers_total) if pending_customers_total else "0.00" }}</div>
+                            <div class="queue-hub-metric-val">₹{{ "{:,.0f}".format(pending_customers_total) if pending_customers_total else "0" }}</div>
                             <div class="queue-hub-db-stat">
                                 <span>Highest Account in DB:</span>
                                 <strong>#{{ max_ano }}</strong>
@@ -3366,7 +3366,7 @@
                         <h4 class="queue-hub-title">Account Closures</h4>
                         <div class="queue-hub-metric-box">
                             <div class="queue-hub-metric-label">Pending Balance Dues</div>
-                            <div class="queue-hub-metric-val">₹{{ "{:,.2f}".format(pending_closures_total) if pending_closures_total else "0.00" }}</div>
+                            <div class="queue-hub-metric-val">₹{{ "{:,.0f}".format(pending_closures_total) if pending_closures_total else "0" }}</div>
                             <div class="queue-hub-db-stat">
                                 <span>Closure Requests:</span>
                                 <strong>{{ closure_count }} Accounts</strong>

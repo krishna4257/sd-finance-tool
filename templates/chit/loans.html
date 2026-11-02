@@ -613,7 +613,7 @@
 
           <td class="py-3 px-4">
             <div class="text-slate-800 dark:text-slate-200">${l.disbursal_date}</div>
-            <div class="text-[11px] text-slate-400">${l.days_elapsed} days (${(l.days_elapsed/365.25).toFixed(2)} yrs)</div>
+            <div class="text-[11px] text-slate-400">${l.days_elapsed} days (${Math.round(l.days_elapsed/365.25)} yrs)</div>
           </td>
 
           <td class="py-3 px-4 text-right">

@@ -729,7 +729,7 @@ async function fetchNotificationCounts(vid) {
         if (avgLag > 0) {
           alerts.push({
             type: "Employee Performance Lag",
-            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${avgLag.toFixed(1)} days.`,
+            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${Math.round(avgLag)} days.`,
             severity: avgLag > 14 ? "Critical" : (avgLag > 7 ? "High" : "Normal")
           });
         }
@@ -858,7 +858,7 @@ async function loadNotificationsContent() {
         if (avgLag > 0) {
           alerts.push({
             type: "Employee Performance Lag",
-            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${avgLag.toFixed(1)} days.`,
+            message: `Employee ${emp.name || 'Unknown'} (EID: ${emp.eid}) has an average collection posting lag of ${Math.round(avgLag)} days.`,
             severity: avgLag > 14 ? "Critical" : (avgLag > 7 ? "High" : "Normal")
           });
         }

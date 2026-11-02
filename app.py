@@ -3811,20 +3811,53 @@ def mobile_payments():
 
         if updated_after:
             cur.execute("""
-                SELECT *
-                FROM payment
-                WHERE vid = %s
+                SELECT 
+                    p.pid, p.cid, p.ano, p.amt, p.payment_date, p.vid, p.eid, p.created_at, p.updated_at,
+                    COALESCE(p.payment_type, 'cash') AS payment_type,
+                    COALESCE(p.cash_amount, p.amt) AS cash_amount,
+                    COALESCE(p.upi_amount, 0) AS upi_amount
+                FROM payment p
+                WHERE p.vid = %s
                   AND (
-                    created_at > %s
-                    OR updated_at > %s
+                    p.created_at > %s
+                    OR p.updated_at > %s
                   )
-            """, (vid, updated_after, updated_after))
+
+                UNION ALL
+
+                SELECT 
+                    cp.pid, cp.cid, cp.ano, cp.amt, cp.payment_date, cp.vid, cp.eid, cp.created_at, cp.created_at AS updated_at,
+                    'cash' AS payment_type,
+                    cp.amt AS cash_amount,
+                    0.0 AS upi_amount
+                FROM closed_cust_payment cp
+                LEFT JOIN closed_cust_account cca ON cp.cid = cca.cid
+                WHERE cp.vid = %s
+                  AND (
+                    cp.created_at > %s
+                    OR (cca.closed_at IS NOT NULL AND cca.closed_at > %s)
+                  )
+            """, (vid, updated_after, updated_after, vid, updated_after, updated_after))
         else:
             cur.execute("""
-                SELECT *
-                FROM payment
-                WHERE vid = %s
-            """, (vid,))
+                SELECT 
+                    p.pid, p.cid, p.ano, p.amt, p.payment_date, p.vid, p.eid, p.created_at, p.updated_at,
+                    COALESCE(p.payment_type, 'cash') AS payment_type,
+                    COALESCE(p.cash_amount, p.amt) AS cash_amount,
+                    COALESCE(p.upi_amount, 0) AS upi_amount
+                FROM payment p
+                WHERE p.vid = %s
+
+                UNION ALL
+
+                SELECT 
+                    cp.pid, cp.cid, cp.ano, cp.amt, cp.payment_date, cp.vid, cp.eid, cp.created_at, cp.created_at AS updated_at,
+                    'cash' AS payment_type,
+                    cp.amt AS cash_amount,
+                    0.0 AS upi_amount
+                FROM closed_cust_payment cp
+                WHERE cp.vid = %s
+            """, (vid, vid))
 
         columns = [desc[0] for desc in cur.description] if cur.description else []
 
@@ -11834,9 +11867,11 @@ def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range
         portfolio_size_factor = min(5.0, (active_loan_sum / 3000000.0) * 5.0)
         
         # Base Score
-        base_score = (avg_rating * 0.65) + (stability_pct * 0.15) + default_score \
-                     - (overdue_pct * 0.3) - (high_risk_pct * 0.3) \
-                     - collection_drop_penalty + customer_count_adjustment
+        base_score = (
+            (avg_rating * 0.65) + (stability_pct * 0.15) + default_score
+            - (overdue_pct * 0.3) - (high_risk_pct * 0.3)
+            - collection_drop_penalty + customer_count_adjustment
+        )
                      
         if base_score >= 75.0:
             portfolio_adjustment = portfolio_size_factor

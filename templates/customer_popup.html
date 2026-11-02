@@ -68,11 +68,11 @@
           <div class="form-group-row">
             <div class="form-group">
               <label>Paid Amount</label>
-              <span id="popPaidAmount" class="read-only-badge" data-money>0.00</span>
+              <span id="popPaidAmount" class="read-only-badge" data-money>0</span>
             </div>
             <div class="form-group">
               <label>Balance Amount</label>
-              <span id="popBalanceAmount" class="read-only-badge highlight-balance" data-money>0.00</span>
+              <span id="popBalanceAmount" class="read-only-badge highlight-balance" data-money>0</span>
             </div>
           </div>
 
@@ -173,7 +173,7 @@
           </div>
           <div class="form-group">
             <label>Amount (₹)</label>
-            <input type="number" id="popNewAMT" step="0.01" class="glass-input compact" placeholder="0.00" required>
+            <input type="number" id="popNewAMT" step="1" class="glass-input compact" placeholder="0" required>
           </div>
           <button type="button" id="popAddPaymentBtn" class="neumorphic-btn small flex-center" style="width: 35px; min-width: 35px; padding: 0;"><i class="fas fa-plus"></i></button>
         </form>
@@ -198,7 +198,7 @@
           </div>
           <div class="mini-table-footer">
             <div>Entries: <span id="popPaymentCount" class="badge-count">0</span></div>
-            <div>Total: <span id="popPaymentTotalAmt" class="badge-total" data-money>₹0.00</span></div>
+            <div>Total: <span id="popPaymentTotalAmt" class="badge-total" data-money>₹0</span></div>
           </div>
         </div>
 
@@ -239,19 +239,19 @@
             Loan & Balance Splits
           </div>
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            <div style="font-weight: 600; color: var(--text);">Original Loan: <strong id="popPopOriginalLoanVal">₹0.00</strong></div>
+            <div style="font-weight: 600; color: var(--text);">Original Loan: <strong id="popPopOriginalLoanVal">₹0</strong></div>
             <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); padding-left: 10px;">
-              <span>Principal: <strong id="popPopLoanSplitP" style="color: var(--text);">₹0.00</strong></span>
-              <span>Interest: <strong id="popPopLoanSplitI" style="color: var(--text);">₹0.00</strong></span>
-              <span>Rusum: <strong id="popPopLoanSplitR" style="color: var(--text);">₹0.00</strong></span>
+              <span>Principal: <strong id="popPopLoanSplitP" style="color: var(--text);">₹0</strong></span>
+              <span>Interest: <strong id="popPopLoanSplitI" style="color: var(--text);">₹0</strong></span>
+              <span>Rusum: <strong id="popPopLoanSplitR" style="color: var(--text);">₹0</strong></span>
             </div>
           </div>
           <div style="border-top: 1px dashed var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
-            <div style="font-weight: 600; color: var(--text);">Remaining Balance: <strong id="popPopRemainingBalVal">₹0.00</strong></div>
+            <div style="font-weight: 600; color: var(--text);">Remaining Balance: <strong id="popPopRemainingBalVal">₹0</strong></div>
             <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); padding-left: 10px;">
-              <span>Principal: <strong id="popPopBalanceSplitP" style="color: var(--text);">₹0.00</strong></span>
-              <span>Interest: <strong id="popPopBalanceSplitI" style="color: var(--text);">₹0.00</strong></span>
-              <span>Rusum: <strong id="popPopBalanceSplitR" style="color: var(--text);">₹0.00</strong></span>
+              <span>Principal: <strong id="popPopBalanceSplitP" style="color: var(--text);">₹0</strong></span>
+              <span>Interest: <strong id="popPopBalanceSplitI" style="color: var(--text);">₹0</strong></span>
+              <span>Rusum: <strong id="popPopBalanceSplitR" style="color: var(--text);">₹0</strong></span>
             </div>
           </div>
         </div>

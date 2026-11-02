@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify, render_template, session, redirec
 from db import get_pg_connection
 import chit_calc_engine as ce
 from chit_calc_engine import round_curr
+from interest_calc_engine import calculate_days_30_360, calculate_accrued_interest_30_360
 
 logger = logging.getLogger(__name__)
 
@@ -419,39 +420,35 @@ def chit_global_search():
 # -------------------------------------------------------------
 
 def calculate_loan_compound_interest(principal, annual_rate, disbursal_date, as_of_date=None, repaid_principal=0.0, repaid_interest=0.0):
+    """Calculates member loan interest and payoff using the unified 30/360 interest engine."""
     if as_of_date is None:
         as_of_date = date.today()
-    if isinstance(disbursal_date, str):
-        try: disbursal_date = date.fromisoformat(disbursal_date)
-        except Exception: disbursal_date = date.today()
-    if isinstance(as_of_date, str):
-        try: as_of_date = date.fromisoformat(as_of_date)
-        except Exception: as_of_date = date.today()
-
-    days_elapsed = max(0, (as_of_date - disbursal_date).days)
-    t_years = days_elapsed / 365.25
-    r = float(annual_rate or 0) / 100.0
-
     p_orig = float(principal or 0)
     p_rep = float(repaid_principal or 0)
     i_rep = float(repaid_interest or 0)
-
     p_rem = max(0.0, p_orig - p_rep)
-    # Annual Compounding Formula: A = P * (1 + r)^t
-    gross_amount = p_rem * (math.pow(1.0 + r, t_years) if r > 0 else 1.0)
-    gross_interest = max(0.0, gross_amount - p_rem)
-    net_interest = max(0.0, gross_interest - i_rep)
-    total_payoff = p_rem + net_interest
+    rate = float(annual_rate or 0)
+
+    res = calculate_accrued_interest_30_360(
+        principal=p_rem,
+        annual_rate=rate,
+        start_date=disbursal_date,
+        as_of_date=as_of_date,
+        repaid_interest=i_rep,
+    )
+
+    days_elapsed = res["days_elapsed"]
+    t_years = round(days_elapsed / 360.0, 3)
 
     return {
         'days_elapsed': days_elapsed,
-        'years_elapsed': round(t_years, 3),
+        'years_elapsed': t_years,
         'original_principal': round_curr(p_orig),
         'repaid_principal': round_curr(p_rep),
         'remaining_principal': round_curr(p_rem),
         'repaid_interest': round_curr(i_rep),
-        'accrued_interest': round_curr(net_interest),
-        'total_payoff': round_curr(total_payoff)
+        'accrued_interest': round_curr(res["net_unpaid_interest"]),
+        'total_payoff': round_curr(res["current_payoff_balance"])
     }
 
 @chit_bp.route('/api/loans/eligible-members', methods=['GET'])
@@ -4369,7 +4366,7 @@ def handle_month_payout(chit_id, month_index):
                         sched_id, f"Auto-settled from Chit Group '{g_name}' Month {month_index} Payout"
                     ))
 
-                    full_notes += f" | Loan Settled: -₹{actual_deduction:,.2f} deducted (Net Disbursed: ₹{calc_amt_rec - actual_deduction:,.2f})"
+                    full_notes += f" | Loan Settled: -₹{actual_deduction:,.0f} deducted (Net Disbursed: ₹{calc_amt_rec - actual_deduction:,.0f})"
                     loan_settlement_info = {
                         'loan_id': str(l_id),
                         'deducted_amount': actual_deduction,
@@ -4428,35 +4425,43 @@ def delete_month_payout(chit_id, month_index):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT s.lifted_by_membership_id, g.chit_total_value, g.duration_months, g.start_month_year, g.commission_percent, g.is_month1_company_month
+            SELECT s.id, s.lifted_by_membership_id, g.chit_total_value, g.duration_months, 
+                   g.start_month_year, g.commission_percent, g.is_month1_company_month,
+                   s.payout_status, s.payout_date
             FROM chit_schedules s
             JOIN chit_groups g ON s.chit_group_id = g.id
             WHERE s.chit_group_id = %s AND s.month_index = %s;
         """, (chit_id, month_index))
         res = cur.fetchone()
-        if not res or not res[0]:
+        if not res:
+            return jsonify({'error': 'Month schedule not found'}), 404
+
+        sched_id, ms_id, g_val, g_dur, g_start, g_comm, g_isco, p_stat, p_date = res
+        if not ms_id and not p_date and p_stat in (None, 'pending'):
             return jsonify({'error': 'No payout recorded for this month'}), 404
 
-        ms_id, g_val, g_dur, g_start, g_comm, g_isco = res
-
-        cur.execute("SELECT member_id, ticket_number, share_units FROM chit_memberships WHERE id = %s;", (ms_id,))
-        ms_info = cur.fetchone()
-        if ms_info:
-            m_id, t_num, lifted_shares = ms_info
-            lifted_shares = float(lifted_shares or 1.0)
-
+        # 1. Revert any linked loan auto-settlements from this payout
+        cur.execute("""
+            SELECT id, loan_id, principal_amount, interest_amount
+            FROM chit_loan_repayments
+            WHERE source_schedule_id = %s;
+        """, (sched_id,))
+        loan_repays = cur.fetchall()
+        for r_id, l_id, p_amt, i_amt in loan_repays:
             cur.execute("""
-                SELECT id FROM chit_memberships 
-                WHERE chit_group_id = %s AND member_id = %s AND ticket_number = %s AND has_lifted = FALSE AND id != %s
-                LIMIT 1;
-            """, (chit_id, m_id, t_num, ms_id))
-            sib = cur.fetchone()
-            if sib:
-                cur.execute("UPDATE chit_memberships SET share_units = share_units + %s WHERE id = %s;", (lifted_shares, sib[0]))
-                cur.execute("DELETE FROM chit_memberships WHERE id = %s;", (ms_id,))
-            else:
-                cur.execute("UPDATE chit_memberships SET has_lifted = FALSE, lifted_month_index = NULL WHERE id = %s;", (ms_id,))
+                UPDATE chit_loans
+                SET total_repaid_principal = GREATEST(0, COALESCE(total_repaid_principal, 0) - %s),
+                    total_repaid_interest = GREATEST(0, COALESCE(total_repaid_interest, 0) - %s),
+                    status = 'active',
+                    settled_at = NULL,
+                    settlement_type = NULL,
+                    settled_from_schedule_id = NULL,
+                    updated_at = NOW()
+                WHERE id = %s;
+            """, (float(p_amt or 0), float(i_amt or 0), l_id))
+            cur.execute("DELETE FROM chit_loan_repayments WHERE id = %s;", (r_id,))
 
+        # 2. Reset the schedule first (clears foreign key references so no constraint violations can occur)
         base_sched = ce.generate_chit_schedule(float(g_val), int(g_dur or 20), g_start, float(g_comm or 3.0), bool(g_isco))
         m_base = base_sched[month_index - 1]
         base_amt = float(m_base['amount_received'])
@@ -4465,21 +4470,98 @@ def delete_month_payout(chit_id, month_index):
         cur.execute("""
             UPDATE chit_schedules
             SET lifted_by_membership_id = NULL,
+                winning_membership_id = CASE WHEN winning_membership_id = %s THEN NULL ELSE winning_membership_id END,
                 payout_date = NULL,
                 payout_status = 'pending',
                 amount_received = %s,
                 chit_loss = %s,
                 notes = NULL
             WHERE chit_group_id = %s AND month_index = %s;
-        """, (base_amt, base_loss, chit_id, month_index))
+        """, (ms_id, base_amt, base_loss, chit_id, month_index))
 
+        # 3. Handle membership and ticket recombining if a membership was attached
+        if ms_id:
+            cur.execute("""
+                SELECT member_id, ticket_number, share_units, account_number, created_at
+                FROM chit_memberships WHERE id = %s;
+            """, (ms_id,))
+            ms_info = cur.fetchone()
+            if ms_info:
+                m_id, t_num, lifted_shares, acc_no, ms_created = ms_info
+                lifted_shares = float(lifted_shares or 1.0)
+
+                # Find unlifted siblings for the same member and ticket
+                cur.execute("""
+                    SELECT id, share_units, created_at
+                    FROM chit_memberships 
+                    WHERE chit_group_id = %s AND member_id = %s AND ticket_number = %s AND has_lifted = FALSE AND id != %s
+                    ORDER BY created_at ASC;
+                """, (chit_id, m_id, t_num, ms_id))
+                sibs = cur.fetchall()
+
+                if sibs:
+                    # A split ticket existed. We need to recombine all shares back into ONE primary membership.
+                    # Check payment counts to guarantee we keep the membership that holds historical payments!
+                    cur.execute("SELECT COUNT(*) FROM chit_payments WHERE membership_id = %s;", (ms_id,))
+                    ms_payments = cur.fetchone()[0]
+
+                    keeper_id = ms_id
+                    for s_id, s_shares, s_created in sibs:
+                        cur.execute("SELECT COUNT(*) FROM chit_payments WHERE membership_id = %s;", (s_id,))
+                        s_payments = cur.fetchone()[0]
+                        if s_payments > 0 and ms_payments == 0:
+                            keeper_id = s_id
+
+                    total_combined_shares = lifted_shares + sum(float(s[1] or 0.0) for s in sibs)
+                    discard_ids = [ms_id] if keeper_id != ms_id else []
+                    discard_ids.extend([s[0] for s in sibs if s[0] != keeper_id])
+
+                    for d_id in discard_ids:
+                        # Remap any payments from discard to keeper
+                        cur.execute("""
+                            UPDATE chit_payments p
+                            SET membership_id = %s,
+                                installment_id = ki.id
+                            FROM chit_installments di
+                            JOIN chit_installments ki ON ki.membership_id = %s AND ki.month_index = di.month_index
+                            WHERE p.membership_id = %s AND p.installment_id = di.id;
+                        """, (keeper_id, keeper_id, d_id))
+                        cur.execute("UPDATE chit_payments SET membership_id = %s WHERE membership_id = %s;", (keeper_id, d_id))
+                        cur.execute("UPDATE chit_payment_requests SET membership_id = %s WHERE membership_id = %s;", (keeper_id, d_id))
+                        cur.execute("UPDATE chit_credit_transfers SET from_membership_id = %s WHERE from_membership_id = %s;", (keeper_id, d_id))
+                        cur.execute("UPDATE chit_credit_transfers SET to_membership_id = %s WHERE to_membership_id = %s;", (keeper_id, d_id))
+
+                        # Remove discard installments and secondary membership
+                        cur.execute("DELETE FROM chit_installments WHERE membership_id = %s;", (d_id,))
+                        cur.execute("DELETE FROM chit_memberships WHERE id = %s;", (d_id,))
+
+                    # Update the keeper membership to full combined shares and unlifted
+                    cur.execute("""
+                        UPDATE chit_memberships
+                        SET share_units = %s,
+                            has_lifted = FALSE,
+                            lifted_month_index = NULL
+                        WHERE id = %s;
+                    """, (total_combined_shares, keeper_id))
+                else:
+                    cur.execute("""
+                        UPDATE chit_memberships
+                        SET has_lifted = FALSE,
+                            lifted_month_index = NULL
+                        WHERE id = %s;
+                    """, (ms_id,))
+
+                # 4. Rebalance installments and recalculate dues for this member
+                rescale_and_rebalance_member_installments(cur, m_id, chit_id)
+
+        # 5. Audit Log
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
             VALUES (%s, %s, 'PAYOUT_DELETED', 'CHIT_SCHEDULE', %s, %s);
         """, (
             get_current_actor(),
             get_current_actor_role(),
-            str(ms_id),
+            str(ms_id) if ms_id else str(sched_id),
             json.dumps({'month': month_index, 'action': 'Payout cancelled and reset'})
         ))
 
@@ -6510,7 +6592,7 @@ def get_member_folio(member_id):
                 'title': f"Loan Disbursed ({lr[5].upper()})",
                 'amount': float(lr[1] or 0),
                 'group_name': 'Member Loan',
-                'details': f"₹{float(lr[1]):,.0f} @ {lr[2]}% p.a. · Current payoff: ₹{calc['total_payoff']:,.2f}",
+                'details': f"₹{float(lr[1]):,.0f} @ {lr[2]}% p.a. · Current payoff: ₹{calc['total_payoff']:,.0f}",
                 'time_str': format_time_ago(d_dt),
                 'actor': get_current_actor(),
                 'date': lr[4]
