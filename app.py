@@ -7558,6 +7558,12 @@ def submit_post_payment():
                 payment_type = "cash"
             cash_amount = Decimal(str(row.get("cash_amount", amt if payment_type == "cash" else 0)))
             upi_amount = Decimal(str(row.get("upi_amount", amt if payment_type == "upi" else 0)))
+            if (cash_amount + upi_amount) != amt:
+                if upi_amount > 0 and upi_amount <= amt:
+                    cash_amount = amt - upi_amount
+                else:
+                    cash_amount = amt
+                    upi_amount = Decimal("0.00")
 
             # 🔹 Insert payment (pid auto-generated)
             cur.execute("""
@@ -8675,11 +8681,12 @@ def retrieve_customer_account_pg():
         cur.execute("""
             INSERT INTO payment (
                 pid, ano, payment_date, amt,
-                created_at, eid, cid, vid
+                created_at, eid, cid, vid, cash_amount, upi_amount
             ) OVERRIDING SYSTEM VALUE
             SELECT
                 pid, ano, payment_date, amt,
-                created_at, eid, cid, vid
+                created_at, eid, cid, vid,
+                COALESCE(amt, 0.00), 0.00
             FROM closed_cust_payment
             WHERE cid = %s
         """, (cid,))
@@ -11236,9 +11243,24 @@ def accept_payment_batch():
                 })
                 continue
 
+            # Check 5: Future date guardrail
+            if payment_date and payment_date > (date.today() + timedelta(days=1)):
+                failed_items.append({
+                    "feed_payment_id": f_id,
+                    "ano": ano_int,
+                    "reason": f"Account #{ano_int}: Payment date ({format_date_display(str(payment_date))}) cannot be in the future."
+                })
+                continue
+
             payment_type = p.get("payment_type", "cash")
             cash_amount = Decimal(str(p.get("cash_amount", 0)))
             upi_amount = Decimal(str(p.get("upi_amount", 0)))
+            if (cash_amount + upi_amount) != amt:
+                if upi_amount > 0 and upi_amount <= amt:
+                    cash_amount = amt - upi_amount
+                else:
+                    cash_amount = amt
+                    upi_amount = Decimal("0.00")
 
             insert_values.append((
                 cid,
