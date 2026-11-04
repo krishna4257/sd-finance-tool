@@ -5510,10 +5510,13 @@ def get_dashboard_totals(vid):
             "sum_amt": 0.0,
             "sum_pamt": 0.0,
             "sum_bamt": 0.0,
+            "sum_interest_discount": 0.0,
         }
     conn = get_pg_connection()
     cur = conn.cursor()
 
+    row = (0, 0, 0, 0)
+    sum_interest_discount = 0.0
     if vid:
         cur.execute("""
             SELECT
@@ -5524,8 +5527,16 @@ def get_dashboard_totals(vid):
             FROM customer c
             WHERE c.vid = %s
         """, (vid,))
+        row = cur.fetchone() or (0, 0, 0, 0)
 
-    row = cur.fetchone()
+        cur.execute("""
+            SELECT COALESCE(SUM(interest_discount), 0)
+            FROM v_all_customers
+            WHERE vid = %s
+        """, (vid,))
+        row_disc = cur.fetchone()
+        sum_interest_discount = float(row_disc[0] or 0) if row_disc else 0.0
+
     cur.close()
     conn.close()
 
@@ -5537,6 +5548,7 @@ def get_dashboard_totals(vid):
         "sum_amt": float(row[1]),
         "sum_pamt": float(row[2]),
         "sum_bamt": float(row[3]),
+        "sum_interest_discount": sum_interest_discount,
     }
 
 # ----------------------------------------------------
@@ -13190,22 +13202,22 @@ def api_dashboard_analytics(vid):
         # Fetch customers across all tiers via unified view
         if view == "active":
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier, COALESCE(interest_discount, 0.00)
                 FROM v_all_customers
-                WHERE vid = %s AND (record_tier = 'active' OR balance_amount > 0)
+                WHERE vid = %s AND (record_tier = 'active' OR balance_amount > 0 OR COALESCE(interest_discount, 0) > 0)
             """, (vid,))
         else:
             cur.execute("""
-                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier
+                SELECT cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, record_tier, COALESCE(interest_discount, 0.00)
                 FROM v_all_customers
                 WHERE vid = %s
             """, (vid,))
         all_cust_rows = cur.fetchall()
         
-        # Partition into active (8 fields without closed_at) and closed/historic (9 fields with closed_at)
-        active_rows = [(r[0], r[1], r[3], r[4], r[5], r[6], r[7], r[8]) for r in all_cust_rows if r[9] == 'active']
-        closed_rows = [r[:9] for r in all_cust_rows if r[9] == 'closed']
-        historic_rows = [r[:9] for r in all_cust_rows if r[9] == 'historic']
+        # Partition into active and closed/historic
+        active_rows = [(r[0], r[1], r[3], r[4], r[5], r[6], r[7], r[8], float(r[10] or 0)) for r in all_cust_rows if r[9] == 'active']
+        closed_rows = [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], float(r[10] or 0)) for r in all_cust_rows if r[9] == 'closed']
+        historic_rows = [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], float(r[10] or 0)) for r in all_cust_rows if r[9] == 'historic']
 
         # Gather all customer IDs to fetch their payments
         cids = [r[0] for r in all_cust_rows]
@@ -13263,13 +13275,20 @@ def api_dashboard_analytics(vid):
                 closed_loan_i = 0.0
                 closed_loan_r = 0.0
 
+                disc_total = 0.0
+                disc_accounts = 0
+
                 # Process currently active customers
-                for cid, start_date, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount in active_rows:
+                for cid, start_date, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, disc_val in active_rows:
                     if not start_date:
                         continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
                     if start_dt > dt:
                         continue
+
+                    if disc_val > 0:
+                        disc_total += disc_val
+                        disc_accounts += 1
 
                     pmts = payments_by_cid.get(cid, [])
                     paid_at_T = sum(p["amt"] for p in pmts if p["date"] <= dt)
@@ -13296,7 +13315,7 @@ def api_dashboard_analytics(vid):
                     active_bal_r += r_rem
 
                 # Process currently closed and historic customers
-                for cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount in closed_rows + historic_rows:
+                for cid, start_date, closed_at, total_amount, balance_amount, paid_amount, base_amount, cutting_amount, interest_amount, disc_val in closed_rows + historic_rows:
                     if not start_date:
                         continue
                     start_dt = start_date.date() if isinstance(start_date, datetime) else start_date
@@ -13305,6 +13324,10 @@ def api_dashboard_analytics(vid):
 
                     closed_dt = closed_at.date() if isinstance(closed_at, datetime) else closed_at
                     is_active_at_T = (closed_dt is None or dt < closed_dt)
+
+                    if disc_val > 0 and (closed_dt is None or closed_dt <= dt):
+                        disc_total += disc_val
+                        disc_accounts += 1
 
                     pmts = payments_by_cid.get(cid, [])
                     paid_at_T = sum(p["amt"] for p in pmts if p["date"] <= dt)
@@ -13387,6 +13410,12 @@ def api_dashboard_analytics(vid):
                                 "r": active_bal_r + defaulted_bal_r
                             }
                         }
+                    },
+                    "interest_discount": {
+                        "total": round(disc_total, 2),
+                        "accounts": disc_accounts,
+                        "avg": round(disc_total / disc_accounts, 2) if disc_accounts > 0 else 0.0,
+                        "pct_of_interest": round((disc_total / (active_loan_i + defaulted_loan_i + closed_loan_i)) * 100.0, 2) if (active_loan_i + defaulted_loan_i + closed_loan_i) > 0 else 0.0
                     }
                 })
             return h_list
@@ -13444,6 +13473,10 @@ def api_dashboard_analytics(vid):
                 "active": get_trend(current["balance"]["active"], previous["balance"]["active"]),
                 "defaulted": get_trend(current["balance"]["defaulted"], previous["balance"]["defaulted"]),
                 "total": get_trend(current["balance"]["total"], previous["balance"]["total"])
+            },
+            "interest_discount": {
+                "total": get_trend(current["interest_discount"]["total"], previous["interest_discount"]["total"]),
+                "accounts": get_trend(current["interest_discount"]["accounts"], previous["interest_discount"]["accounts"])
             }
         }
 
@@ -14522,6 +14555,274 @@ def api_cashbag_breakdown():
 
                 days[day_key]["customers"].append({
                     "pid": pid,
+                    "ano": ano,
+                    "name": name,
+                    "village_code": v_code,
+                    "amount": val
+                })
+
+            tree_list = []
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
+                weeks_list = []
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
+                    days_list = []
+                    for d_data in sorted_days:
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "villages": d_data.get("villages", []),
+                            "customers": d_data["customers"]
+                        })
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+                tree_list.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+            return jsonify(success=True, tree=tree_list)
+
+        elif breakdown_type == 'capital_deployed':
+            bank_id = request.args.get("bank_id", type=str)
+            rows = []
+            if bank_id:
+                cur.execute("""
+                    SELECT gca.id::text, gca.amount, gca.payment_mode, gca.allocation_date,
+                           i.investor_code, i.full_name, vg.group_code, vg.group_name
+                    FROM group_capital_allocations gca
+                    JOIN investors i ON gca.investor_id = i.id
+                    JOIN village_groups vg ON gca.group_id = vg.id
+                    WHERE gca.group_id = %s
+                    ORDER BY gca.allocation_date DESC, gca.created_at DESC
+                """, (bank_id,))
+                rows = cur.fetchall()
+
+            if not rows:
+                if emp2:
+                    vg_filter = "(vg.emp1_id = %s AND vg.emp2_id = %s) OR (vg.emp1_id = %s AND vg.emp2_id = %s)"
+                    vg_params = (emp1, emp2, emp2, emp1)
+                else:
+                    vg_filter = "vg.emp1_id = %s AND (vg.emp2_id IS NULL OR vg.emp2_id = %s)"
+                    vg_params = (emp1, emp1)
+
+                cur.execute(f"""
+                    SELECT gca.id::text, gca.amount, gca.payment_mode, gca.allocation_date,
+                           i.investor_code, i.full_name, vg.group_code, vg.group_name
+                    FROM group_capital_allocations gca
+                    JOIN investors i ON gca.investor_id = i.id
+                    JOIN village_groups vg ON gca.group_id = vg.id
+                    WHERE {vg_filter}
+                    ORDER BY gca.allocation_date DESC, gca.created_at DESC
+                """, vg_params)
+                rows = cur.fetchall()
+
+            if not rows:
+                cb_cond = f"({pair_filter} OR group_id = %s)" if bank_id else pair_filter
+                cb_p = pair_params_single + (bank_id,) if bank_id else pair_params_single
+                cur.execute(f"""
+                    SELECT ct.id::text, ct.amount, ct.txn_type, ct.created_at,
+                           ct.notes, ct.created_by, vg.group_code, vg.group_name
+                    FROM cashbag_transactions ct
+                    LEFT JOIN village_groups vg ON ct.group_id = vg.id
+                    WHERE {cb_cond} AND ct.txn IN ('CAPITAL_DEPLOYED', 'OFFICE_CASH') AND (ct.notes ILIKE 'Capital Deployed%%' OR ct.txn = 'CAPITAL_DEPLOYED')
+                    ORDER BY ct.created_at DESC, ct.id DESC
+                """, cb_p)
+                cb_rows = cur.fetchall()
+                import re
+                for cid, amt, pmode, c_at, notes, c_by, grp_code, grp_name in cb_rows:
+                    m = re.search(r"Capital Deployed\s*-\s*(.*?)\s*\((INV-[^\)]+)\)", notes or "")
+                    inv_name = m.group(1).strip() if m else "Investor"
+                    inv_code = m.group(2).strip() if m else "INV-001"
+                    d = c_at.date() if isinstance(c_at, datetime) else c_at
+                    rows.append((cid, amt, pmode, d, inv_code, inv_name, grp_code or "ROUTE", grp_name or "Group"))
+
+            grouped = {}
+            for tid, amount_db, txn_type, alloc_date, inv_code, inv_name, grp_code, grp_name in rows:
+                if not alloc_date:
+                    continue
+                amt = float(amount_db or 0)
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(alloc_date, end_day)
+
+                if month_key not in grouped:
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
+                grouped[month_key]["total_amount"] += amt
+
+                weeks = grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += amt
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "investors": [], "transactions": []}
+                days[day_key]["total_amount"] += amt
+
+                badge_str = f"{inv_code} (₹{amt:,.0f})"
+                if badge_str not in days[day_key]["investors"]:
+                    days[day_key]["investors"].append(badge_str)
+
+                days[day_key]["transactions"].append({
+                    "id": tid,
+                    "investor_code": inv_code,
+                    "investor_name": inv_name,
+                    "amount": amt,
+                    "txn_type": txn_type or "CASH",
+                    "group_code": grp_code or "ROUTE",
+                    "group_name": grp_name or "Group"
+                })
+
+            tree_list = []
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
+                weeks_list = []
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
+                    days_list = []
+                    for d_data in sorted_days:
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "investors": d_data["investors"],
+                            "transactions": d_data["transactions"]
+                        })
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+                tree_list.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+            return jsonify(success=True, tree=tree_list)
+
+        elif breakdown_type in ('capital_withdrawn', 'withdrawn', 'amount_withdrawn'):
+            bank_id = request.args.get("bank_id", type=str)
+            cb_cond = f"({pair_filter} OR group_id = %s)" if bank_id else pair_filter
+            cb_p = pair_params_single + (bank_id,) if bank_id else pair_params_single
+
+            cur.execute(f"""
+                SELECT id, txn, txn_sub, txn_type, amount, notes, created_by, created_at
+                FROM cashbag_transactions
+                WHERE {cb_cond} AND (txn IN ('CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%')
+                ORDER BY created_at DESC, id DESC
+            """, cb_p)
+            rows = cur.fetchall()
+
+            grouped = {}
+            for tid, txn, txn_sub, txn_type, amount_db, notes, created_by, created_at in rows:
+                amt = float(amount_db or 0)
+                if not created_at:
+                    continue
+
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(created_at, end_day)
+
+                if month_key not in grouped:
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
+                grouped[month_key]["total_amount"] += amt
+
+                weeks = grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += amt
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "transactions": []}
+                days[day_key]["total_amount"] += amt
+
+                days[day_key]["transactions"].append({
+                    "id": tid,
+                    "txn": txn,
+                    "txn_sub": txn_sub or "PRINCIPAL",
+                    "txn_type": txn_type,
+                    "amount": amt,
+                    "notes": notes,
+                    "created_by": created_by
+                })
+
+            tree_list = []
+            sorted_months = sorted(grouped.values(), key=lambda m: m["month_sort"], reverse=True)
+            for m_data in sorted_months:
+                sorted_weeks = sorted(m_data["weeks"].values(), key=lambda w: w["week_sort"], reverse=True)
+                weeks_list = []
+                for w_data in sorted_weeks:
+                    sorted_days = sorted(w_data["days"].values(), key=lambda d: d["day_sort"], reverse=True)
+                    days_list = []
+                    for d_data in sorted_days:
+                        days_list.append({
+                            "day_date": d_data["day_date"],
+                            "total_amount": d_data["total_amount"],
+                            "transactions": d_data["transactions"]
+                        })
+                    weeks_list.append({
+                        "week_date": w_data["week_date"],
+                        "week_label": w_data.get("week_label", w_data["week_date"]),
+                        "total_amount": w_data["total_amount"],
+                        "days": days_list
+                    })
+                tree_list.append({
+                    "month_name": m_data["month_name"],
+                    "total_amount": m_data["total_amount"],
+                    "weeks": weeks_list
+                })
+            return jsonify(success=True, tree=tree_list)
+
+        elif breakdown_type == 'interest_discount':
+            if not vids:
+                return jsonify(success=True, tree=[])
+
+            cur.execute("""
+                SELECT c.cid, c.ano, c.name, c.interest_discount, c.closed_at, c.start_date, v.village_code, v.village_name
+                FROM v_all_customers c
+                JOIN village v ON c.vid = v.vid
+                WHERE c.vid = ANY(%s) AND COALESCE(c.interest_discount, 0) > 0
+                ORDER BY c.closed_at DESC, c.cid DESC
+            """, (vids,))
+            disc_rows = cur.fetchall()
+
+            grouped = {}
+            for cid, ano, name, interest_discount, closed_at, start_date, v_code, v_name in disc_rows:
+                dt_val = closed_at or start_date
+                if not dt_val:
+                    continue
+
+                val = float(interest_discount or 0)
+                if val <= 0.0:
+                    continue
+
+                month_key, month_sort, week_key, week_label, week_sort, day_key, day_str, day_sort = get_breakdown_timeline(dt_val, end_day)
+
+                if month_key not in grouped:
+                    grouped[month_key] = {"month_name": month_key, "month_sort": month_sort, "total_amount": 0.0, "weeks": {}}
+                grouped[month_key]["total_amount"] += val
+
+                weeks = grouped[month_key]["weeks"]
+                if week_key not in weeks:
+                    weeks[week_key] = {"week_date": week_label, "week_label": week_label, "week_key": week_key, "week_sort": week_sort, "total_amount": 0.0, "days": {}}
+                weeks[week_key]["total_amount"] += val
+
+                days = weeks[week_key]["days"]
+                if day_key not in days:
+                    days[day_key] = {"day_date": day_str, "day_key": day_key, "day_sort": day_sort, "total_amount": 0.0, "villages": [], "customers": []}
+                days[day_key]["total_amount"] += val
+
+                v_label = v_code if not v_name else f"{v_code} ({v_name})"
+                if v_label not in days[day_key]["villages"]:
+                    days[day_key]["villages"].append(v_label)
+
+                days[day_key]["customers"].append({
+                    "cid": cid,
                     "ano": ano,
                     "name": name,
                     "village_code": v_code,
@@ -15982,6 +16283,7 @@ def dashboard():
          sum_amt=totals["sum_amt"],
          sum_pamt=totals["sum_pamt"],
          sum_bamt=totals["sum_bamt"],
+         sum_interest_discount=totals.get("sum_interest_discount", 0.0),
     )
 
 @app.route("/reselect", methods=["POST"])
@@ -16078,6 +16380,10 @@ def cashbag():
     # ── Scope: employee pair from query params ──
     emp1 = request.args.get("emp1", type=int)
     emp2 = request.args.get("emp2", type=int)  # may be None if solo employee
+    limit_val = request.args.get("limit", default=250, type=int)
+    if not limit_val or limit_val <= 0:
+        limit_val = 250
+    bank_id = request.args.get("bank_id", type=str)
 
     if not emp1:
         flash("Please open Cash Bag from a village group tile.", "warning")
@@ -16087,6 +16393,87 @@ def cashbag():
     cur = conn.cursor()
 
     try:
+
+        # Resolve current_bank
+        current_bank = None
+        if bank_id:
+            cur.execute("""
+                SELECT id, group_code, group_name, emp1_id, emp2_id
+                FROM village_groups
+                WHERE id = %s
+            """, (bank_id,))
+            brow = cur.fetchone()
+            if brow:
+                current_bank = {
+                    "id": str(brow[0]),
+                    "group_code": brow[1],
+                    "group_name": brow[2],
+                    "emp1_id": brow[3],
+                    "emp2_id": brow[4]
+                }
+
+        if not current_bank:
+            if emp2:
+                cur.execute("""
+                    SELECT id, group_code, group_name, emp1_id, emp2_id
+                    FROM village_groups
+                    WHERE (emp1_id = %s AND emp2_id = %s) OR (emp1_id = %s AND emp2_id = %s)
+                    ORDER BY created_at DESC LIMIT 1
+                """, (emp1, emp2, emp2, emp1))
+            else:
+                cur.execute("""
+                    SELECT id, group_code, group_name, emp1_id, emp2_id
+                    FROM village_groups
+                    WHERE emp1_id = %s AND (emp2_id IS NULL OR emp2_id = %s)
+                    ORDER BY created_at DESC LIMIT 1
+                """, (emp1, emp1))
+            brow = cur.fetchone()
+            if brow:
+                current_bank = {
+                    "id": str(brow[0]),
+                    "group_code": brow[1],
+                    "group_name": brow[2],
+                    "emp1_id": brow[3],
+                    "emp2_id": brow[4]
+                }
+
+        # Fetch group_banks
+        if emp2:
+            cur.execute("""
+                SELECT id, group_code, group_name
+                FROM village_groups
+                WHERE (emp1_id = %s AND emp2_id = %s) OR (emp1_id = %s AND emp2_id = %s)
+                ORDER BY group_name
+            """, (emp1, emp2, emp2, emp1))
+        else:
+            cur.execute("""
+                SELECT id, group_code, group_name
+                FROM village_groups
+                WHERE emp1_id = %s AND (emp2_id IS NULL OR emp2_id = %s)
+                ORDER BY group_name
+            """, (emp1, emp1))
+        group_banks = [{"id": str(r[0]), "group_code": r[1], "group_name": r[2]} for r in cur.fetchall()]
+
+        # Fetch group_cashbags
+        if emp2:
+            cur.execute("""
+                SELECT id, name, village_codes
+                FROM village_cashbags
+                WHERE emp1 = %s AND emp2 = %s
+                ORDER BY name
+            """, (emp1, emp2))
+        else:
+            cur.execute("""
+                SELECT id, name, village_codes
+                FROM village_cashbags
+                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = %s)
+                ORDER BY name
+            """, (emp1, emp1))
+        group_cashbags = [{
+            "id": str(r[0]),
+            "name": r[1],
+            "village_codes": r[2] or []
+        } for r in cur.fetchall()]
 
         # ------------------------------------------------
         # BUILD emp pair WHERE clause helper
@@ -16221,19 +16608,19 @@ def cashbag():
         loan_commission_cash = 0.0
         loan_commission_upi = 0.0
         interest_total = 0.0
+        base_amount_total = 0.0
+        outstanding_balance_total = 0.0
+        active_balance_total = 0.0
         if vids:
             cur.execute("""
                 SELECT 
-                    COALESCE(SUM(CASE 
-                        WHEN c.base_amount > 0 THEN c.base_amount 
-                        ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) 
-                    END), 0) AS loans_disbursed,
+                    COALESCE(SUM(c.total_amount), 0) AS loans_disbursed,
                     COALESCE(SUM(CASE 
                         WHEN LOWER(c.payment_type) = 'upi' THEN 0
-                        ELSE (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                        ELSE c.total_amount
                     END), 0) AS loans_disbursed_cash,
                     COALESCE(SUM(CASE 
-                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.base_amount > 0 THEN c.base_amount ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) END)
+                        WHEN LOWER(c.payment_type) = 'upi' THEN c.total_amount
                         ELSE 0
                     END), 0) AS loans_disbursed_upi,
                     
@@ -16253,7 +16640,15 @@ def cashbag():
                     COALESCE(SUM(CASE 
                         WHEN c.interest_amount > 0 THEN c.interest_amount 
                         ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
-                    END), 0) AS interest_total
+                    END), 0) AS interest_total,
+
+                    COALESCE(SUM(CASE 
+                        WHEN c.base_amount > 0 THEN c.base_amount 
+                        ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) 
+                    END), 0) AS base_amount_total,
+
+                    COALESCE(SUM(c.balance_amount), 0) AS outstanding_balance_total,
+                    COALESCE(SUM(CASE WHEN c.status = 'active' THEN c.balance_amount ELSE 0 END), 0) AS active_balance_total
                 FROM v_all_customers c
                 JOIN village v ON c.vid = v.vid
                 WHERE c.vid = ANY(%s) AND c.status != 'deleted'
@@ -16266,20 +16661,70 @@ def cashbag():
             loan_commission_cash = float(row_loans[4] or 0)
             loan_commission_upi = float(row_loans[5] or 0)
             interest_total = float(row_loans[6] or 0)
+            base_amount_total = float(row_loans[7] or 0)
+            outstanding_balance_total = float(row_loans[8] or 0)
+            active_balance_total = float(row_loans[9] or 0)
+
+        # Capital deployed and Withdrawn
+        cb_group_filter = f"({pair_filter} OR group_id = %s)" if bank_id else pair_filter
+        cb_group_params = pair_params_single + (bank_id,) if bank_id else pair_params_single
+        cur.execute(f"""
+            SELECT 
+                COALESCE(SUM(CASE WHEN txn IN ('CAPITAL_DEPLOYED', 'OFFICE_CASH') AND (notes ILIKE 'Capital Deployed%%' OR txn = 'CAPITAL_DEPLOYED') THEN amount ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN txn IN ('CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' THEN amount ELSE 0 END), 0)
+            FROM cashbag_transactions
+            WHERE {cb_group_filter}
+        """, cb_group_params)
+        row_caps = cur.fetchone()
+        capital_deployed = float(row_caps[0] or 0)
+        total_withdrawn = float(row_caps[1] or 0)
+
+        if current_bank:
+            cur.execute("""
+                SELECT COALESCE(SUM(amount), 0)
+                FROM group_capital_allocations
+                WHERE group_id = %s
+            """, (current_bank["id"],))
+            cap_gca = float(cur.fetchone()[0] or 0)
+            if cap_gca > capital_deployed:
+                capital_deployed = cap_gca
+
+            cur.execute("""
+                SELECT COALESCE(SUM(total_withdrawn), 0)
+                FROM group_withdrawal_logs
+                WHERE group_id = %s
+            """, (current_bank["id"],))
+            wdr_gwl = float(cur.fetchone()[0] or 0)
+            if wdr_gwl > total_withdrawn:
+                total_withdrawn = wdr_gwl
+
+        # Interest discount total
+        interest_discount_total = 0.0
+        if vids:
+            cur.execute("""
+                SELECT COALESCE(SUM(interest_discount), 0)
+                FROM v_all_customers
+                WHERE vid = ANY(%s) AND status != 'deleted'
+            """, (vids,))
+            row_disc = cur.fetchone()
+            interest_discount_total = float(row_disc[0] or 0) if row_disc else 0.0
 
         # ------------------------------------------------
         # FINAL CASHBAG TOTALS
         # ------------------------------------------------
         cashbag_total_cash = (
-            office_cash_cash
+            capital_deployed
+            + office_cash_cash
             + installments_cash
             + loan_commission_cash
+            + interest_total
             + adjustments_add_cash
             + profit_cash
             - loans_disbursed_cash
             - expenses_cash
             - adjustments_minus_cash
             - loss_cash
+            - total_withdrawn
         )
         cashbag_total_upi = (
             office_cash_upi
@@ -16309,7 +16754,7 @@ def cashbag():
                     created_by,
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
                 FROM (
-                    -- Manual entries (Office Cash, Expense, Adjustment)
+                    -- Manual entries (Office Cash, Expense, Adjustment, Capital Deployed, Withdrawal)
                     SELECT 
                         id::text AS id,
                         txn,
@@ -16320,8 +16765,8 @@ def cashbag():
                         created_by,
                         created_at
                     FROM cashbag_transactions
-                    WHERE {pair_filter}
-                      AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS')
+                    WHERE {cb_group_filter}
+                      AND (txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS', 'CAPITAL_DEPLOYED', 'CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' OR notes ILIKE 'Capital Deployed%%')
 
                     UNION ALL
 
@@ -16386,12 +16831,9 @@ def cashbag():
                     WHERE p.vid = ANY(%s)
                 ) AS combined
                 ORDER BY combined.created_at DESC, id DESC
-                LIMIT 250
+                LIMIT %s
             """
-            if emp2:
-                params = (emp1, emp2, vids, vids, vids)
-            else:
-                params = (emp1, vids, vids, vids)
+            params = cb_group_params + (vids, vids, vids, limit_val)
             cur.execute(query, params)
         else:
             query = f"""
@@ -16405,12 +16847,12 @@ def cashbag():
                     created_by,
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
                 FROM cashbag_transactions
-                WHERE {pair_filter}
-                  AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS')
+                WHERE {cb_group_filter}
+                  AND (txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS', 'CAPITAL_DEPLOYED', 'CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' OR notes ILIKE 'Capital Deployed%%')
                 ORDER BY created_at DESC, id DESC
-                LIMIT 250
+                LIMIT %s
             """
-            cur.execute(query, pair_params_single)
+            cur.execute(query, cb_group_params + (limit_val,))
 
         rows = cur.fetchall()
         transactions = []
@@ -16449,7 +16891,18 @@ def cashbag():
             adjustments_minus=adjustments_minus,
             profit_loss_net=profit_loss_net,
 
-            transactions=transactions
+            transactions=transactions,
+            limit_val=limit_val,
+            current_bank=current_bank,
+            group_banks=group_banks,
+            group_cashbags=group_cashbags,
+            capital_deployed=capital_deployed,
+            total_withdrawn=total_withdrawn,
+            capital_withdrawn=total_withdrawn,
+            interest_discount_total=interest_discount_total,
+            base_amount_total=base_amount_total,
+            outstanding_balance_total=outstanding_balance_total,
+            active_balance_total=active_balance_total
         )
 
     except Exception as e:

@@ -37,8 +37,9 @@ def _load_key_properties():
                     props[k.strip()] = v.strip()
 
     # Fallbacks / overrides
-    props.setdefault("storePassword", "Jaya@3579@1")
-    props.setdefault("keyPassword", "Jaya@3579@1")
+    keystore_pw = os.environ.get("APK_KEYSTORE_PASSWORD", "")
+    props.setdefault("storePassword", keystore_pw)
+    props.setdefault("keyPassword", keystore_pw)
     props.setdefault("keyAlias", "sd_finance")
     props.setdefault("storeFile", str(KEYSTORE_PATH))
 
