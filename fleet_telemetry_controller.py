@@ -522,7 +522,7 @@ def register_fleet_telemetry_routes(app, csrf):
                         is_charging = %s,
                         last_active = NOW(),
                         gps_status = 'active'
-                    WHERE user_id = %s;
+                    WHERE user_id = %s AND (device_id = %s OR is_active = TRUE);
                 """, (
                     latest_pt[2],  # lat
                     latest_pt[3],  # lng
@@ -531,7 +531,8 @@ def register_fleet_telemetry_routes(app, csrf):
                     latest_pt[4],  # acc
                     latest_pt[7],  # bat
                     latest_pt[8],  # chg
-                    user_id
+                    user_id,
+                    device_id[:64]
                 ))
 
             conn.commit()
