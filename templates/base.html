@@ -161,7 +161,7 @@
     {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'admin_control', 'mobile_app_page'] %}
     <!-- ── LANDING PAGE SIDEBAR ── -->
     {% if session.level in ['admin', 'mgmt'] %}
-    <a href="/village"  class="nav-link {% if request.endpoint == 'village_page' %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Village</a>
+    <a href="/village"  class="nav-link {% if request.endpoint in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'admin_control', 'mobile_app_page'] %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Village</a>
     <a href="/employee" class="nav-link {% if request.endpoint in ['employee_page', 'employee_detail_page'] %}active{% endif %}"><i class="fas fa-user-tie"></i> Employee</a>
     {% endif %}
     {% if session.level == 'admin' %}
@@ -180,25 +180,23 @@
 
     <div class="nav-section-label">GENERAL</div>
     {% block general_sidebar %}
-    {% if request.endpoint == 'village_page' %}
-    <a href="/banking/dashboard" class="nav-link {% if 'banking' in request.path %}active{% endif %}"><i class="fas fa-landmark"></i> Central Bank</a>
-    <a href="/chit/dashboard" class="nav-link {% if 'chit' in request.path %}active{% endif %}"><i class="fas fa-coins"></i> Chit Fund</a>
-    {% else %}
-      {% if session.get('vid') and session.get('eid') %}
-      <a href="/cashbag?emp1={{ session.eid }}{% if session.eid2 %}&emp2={{ session.eid2 }}{% endif %}{% if session.village_bank_id %}&bank_id={{ session.village_bank_id }}{% endif %}" class="nav-link {% if request.path == '/cashbag' %}active{% endif %}">
+    {% if session.get('vid') and session.get('eid') and request.endpoint not in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'admin_control', 'mobile_app_page'] %}
+    <a href="/cashbag?emp1={{ session.eid }}{% if session.eid2 %}&emp2={{ session.eid2 }}{% endif %}{% if session.village_bank_id %}&bank_id={{ session.village_bank_id }}{% endif %}" class="nav-link {% if request.path == '/cashbag' %}active{% endif %}">
         <i class="fas fa-wallet"></i> Cashbag
-      </a>
-      {% endif %}
-      {% if session.get('village_bank_id') %}
-      <a href="/banking/groups/{{ session.village_bank_id }}" class="nav-link {% if '/banking/groups/' in request.path %}active{% endif %}">
-        <i class="fas fa-university"></i> {{ session.village_bank_name or 'Village Bank' }}
-      </a>
-      {% endif %}
+    </a>
     {% endif %}
+    {% if session.get('village_bank_id') and request.endpoint not in ['landing', 'village_page', 'employee_page', 'employee_detail_page', 'admin_control', 'mobile_app_page'] %}
+    <a href="/banking/groups/{{ session.village_bank_id }}" class="nav-link {% if '/banking/groups/' in request.path %}active{% endif %}">
+        <i class="fas fa-university"></i> {{ session.village_bank_name or 'Village Bank' }}
+    </a>
+    {% endif %}
+
+    <a href="/village" class="nav-link {% if request.endpoint in ['landing', 'village_page'] %}active{% endif %}"><i class="fas fa-map-marker-alt"></i> Villages</a>
+    <a href="/chit/dashboard" class="nav-link {% if 'chit' in request.path %}active{% endif %}"><i class="fas fa-coins"></i> Chit Fund</a>
+    <a href="/banking/dashboard" class="nav-link {% if 'banking' in request.path %}active{% endif %}"><i class="fas fa-landmark"></i> Central Bank</a>
     {% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
     <a href="/mobile_app" class="nav-link {% if request.endpoint == 'mobile_app_page' %}active{% endif %}"><i class="fas fa-mobile-screen-button"></i> Mobile App</a>
     {% endif %}
-    <a href="/village" class="nav-link"><i class="fas fa-home"></i> Home</a>
     {% endblock %}
 
   </aside>

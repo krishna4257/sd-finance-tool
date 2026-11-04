@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- ── Leaflet 1.9.4 & CartoDB Maps for Real-time Fleet Telemetry ── -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <div class="mobile-app-container">
 
   <!-- ── Top Header & Telemetry Bar ── -->
@@ -48,21 +52,143 @@
 
   <!-- ── Navigation Tabs ── -->
   <div class="hub-tabs-nav">
-    <button class="hub-tab-btn active" id="btnTabOta" onclick="switchHubTab('ota')">
-      <i class="fas fa-cloud-arrow-up"></i>
-      <span>OTA Releases & Pipeline</span>
-    </button>
-    <button class="hub-tab-btn" id="btnTabUsers" onclick="switchHubTab('users')">
+    <button class="hub-tab-btn active" id="btnTabUsers" onclick="switchHubTab('users')">
       <i class="fas fa-users-gear"></i>
       <span>App Users & Fleet Telemetry</span>
       <span class="tab-pill-count" id="tabUsersCount">0</span>
     </button>
+    <button class="hub-tab-btn" id="btnTabOta" onclick="switchHubTab('ota')">
+      <i class="fas fa-cloud-arrow-up"></i>
+      <span>OTA Releases & Pipeline</span>
+    </button>
   </div>
 
   <!-- ============================================================== -->
-  <!-- TAB 1: OTA RELEASES & PIPELINE                                 -->
+  <!-- TAB 1: APP USERS, REAL-TIME TELEMETRY & HARDWARE FLEET         -->
   <!-- ============================================================== -->
-  <div id="tabOta" class="hub-tab-pane active">
+  <div id="tabUsers" class="hub-tab-pane active">
+
+    <!-- Filter & Search Toolbar with View Switcher -->
+    <div class="fleet-toolbar">
+      <!-- Search Input -->
+      <div class="fleet-search-box">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="fleetSearchInput" placeholder="Search agent name, username, phone, device model, or hardware UUID..." oninput="handleFleetSearch(this.value)">
+        <button id="fleetSearchClear" class="clear-search-btn" onclick="clearFleetSearch()" style="display: none;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- View Switcher (Tiles / Table) -->
+      <div class="view-mode-toggle">
+        <button class="view-toggle-btn active" id="btnViewTile" onclick="switchFleetView('tile')" title="Tile / Card View (Default)">
+          <i class="fas fa-th-large"></i> <span>Tiles</span>
+        </button>
+        <button class="view-toggle-btn" id="btnViewTable" onclick="switchFleetView('table')" title="Table List View">
+          <i class="fas fa-list"></i> <span>Table</span>
+        </button>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="filter-pills-group">
+        <button class="filter-pill active" data-filter="all" onclick="setFleetFilter('all', this)">
+          All Agents <span class="pill-count" id="pillAll">0</span>
+        </button>
+        <button class="filter-pill" data-filter="online" onclick="setFleetFilter('online', this)">
+          <span class="radar-dot green sm"></span> Online Now <span class="pill-count" id="pillOnline">0</span>
+        </button>
+        <button class="filter-pill" data-filter="active_today" onclick="setFleetFilter('active_today', this)">
+          <i class="fas fa-bolt" style="color: #0284c7; font-size: 11px;"></i> Active Today <span class="pill-count" id="pillActiveToday">0</span>
+        </button>
+        <button class="filter-pill" data-filter="locked" onclick="setFleetFilter('locked', this)">
+          <i class="fas fa-lock" style="color: var(--danger); font-size: 11px;"></i> Locked <span class="pill-count" id="pillLocked">0</span>
+        </button>
+        <button class="filter-pill" data-filter="pending" onclick="setFleetFilter('pending', this)">
+          <i class="fas fa-clock" style="color: #d97706; font-size: 11px;"></i> Pending Bind <span class="pill-count" id="pillPending">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── 1. TILE VIEW (DEFAULT) ── -->
+    <div id="fleetTileContainer" class="fleet-tiles-grid">
+      <!-- Dynamic employee tiles render here -->
+      <div class="fleet-loading-tile">
+        <i class="fas fa-spinner fa-spin fa-2x mb-3 text-primary"></i>
+        <div>Connecting to mobile telemetry fleet...</div>
+      </div>
+    </div>
+
+    <!-- ── 2. TABLE VIEW (ALTERNATIVE) ── -->
+    <div id="fleetTableContainer" class="hub-card" style="display: none;">
+      <div class="table-responsive">
+        <table class="hub-table" id="fleetTable">
+          <thead>
+            <tr>
+              <th>Agent / Employee</th>
+              <th>Role / Level</th>
+              <th>Live Status & Activity</th>
+              <th>Registered Mobile Hardware</th>
+              <th>Assigned Territory</th>
+              <th class="text-end">Hardware & Security Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fleetTableBody">
+            <tr>
+              <td colspan="6" class="text-center py-5 text-muted">
+                <i class="fas fa-spinner fa-spin me-2 fa-2x"></i>
+                <div class="mt-2">Connecting to mobile telemetry...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ── Hover Diagnostic Popover (Floating Container) ── -->
+<div id="fleetHoverPopover" class="fleet-hover-popover" style="display: none;">
+  <div class="popover-arrow"></div>
+  <div class="popover-head">
+    <div class="popover-avatar" id="popoverAvatar">JD</div>
+    <div>
+      <div class="popover-name" id="popoverName">Agent Name</div>
+      <div class="popover-username" id="popoverUsername">@username</div>
+    </div>
+    <div class="popover-status-badge" id="popoverStatusBadge">
+      <span class="radar-dot green sm"></span> Online
+    </div>
+  </div>
+  <div class="popover-body">
+    <div class="popover-row">
+      <span class="p-label"><i class="fas fa-clock me-1 text-muted"></i> Last Seen</span>
+      <span class="p-val" id="popoverLastSeen">-</span>
+    </div>
+    <div class="popover-row">
+      <span class="p-label"><i class="fas fa-mobile-screen me-1 text-muted"></i> Active Device</span>
+      <span class="p-val font-weight-bold" id="popoverDeviceModel">-</span>
+    </div>
+    <div class="popover-row">
+      <span class="p-label"><i class="fas fa-fingerprint me-1 text-muted"></i> Hardware UUID</span>
+      <span class="p-val monospace-text" id="popoverUuid">-</span>
+    </div>
+    <div class="popover-row">
+      <span class="p-label"><i class="fas fa-map-marker-alt me-1 text-muted"></i> Territory</span>
+      <span class="p-val" id="popoverVillages">-</span>
+    </div>
+    <div class="popover-row">
+      <span class="p-label"><i class="fas fa-shield-alt me-1 text-muted"></i> Credentials</span>
+      <span class="p-val" id="popoverCredentials">-</span>
+    </div>
+  </div>
+</div>
+
+  <!-- ============================================================== -->
+  <!-- TAB 2: OTA RELEASES & PIPELINE                                 -->
+  <!-- ============================================================== -->
+  <div id="tabOta" class="hub-tab-pane">
 
     <!-- Upload & Deployment Split Layout -->
     <div class="ota-grid">
@@ -272,128 +398,6 @@
   </div>
 
 
-  <!-- ============================================================== -->
-  <!-- TAB 2: APP USERS, REAL-TIME TELEMETRY & HARDWARE FLEET         -->
-  <!-- ============================================================== -->
-  <div id="tabUsers" class="hub-tab-pane">
-
-    <!-- Filter & Search Toolbar with View Switcher -->
-    <div class="fleet-toolbar">
-      <!-- Search Input -->
-      <div class="fleet-search-box">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" id="fleetSearchInput" placeholder="Search agent name, username, phone, device model, or hardware UUID..." oninput="handleFleetSearch(this.value)">
-        <button id="fleetSearchClear" class="clear-search-btn" onclick="clearFleetSearch()" style="display: none;">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <!-- View Switcher (Tiles / Table) -->
-      <div class="view-mode-toggle">
-        <button class="view-toggle-btn active" id="btnViewTile" onclick="switchFleetView('tile')" title="Tile / Card View (Default)">
-          <i class="fas fa-th-large"></i> <span>Tiles</span>
-        </button>
-        <button class="view-toggle-btn" id="btnViewTable" onclick="switchFleetView('table')" title="Table List View">
-          <i class="fas fa-list"></i> <span>Table</span>
-        </button>
-      </div>
-
-      <!-- Filter Pills -->
-      <div class="filter-pills-group">
-        <button class="filter-pill active" data-filter="all" onclick="setFleetFilter('all', this)">
-          All Agents <span class="pill-count" id="pillAll">0</span>
-        </button>
-        <button class="filter-pill" data-filter="online" onclick="setFleetFilter('online', this)">
-          <span class="radar-dot green sm"></span> Online Now <span class="pill-count" id="pillOnline">0</span>
-        </button>
-        <button class="filter-pill" data-filter="active_today" onclick="setFleetFilter('active_today', this)">
-          <i class="fas fa-bolt" style="color: #0284c7; font-size: 11px;"></i> Active Today <span class="pill-count" id="pillActiveToday">0</span>
-        </button>
-        <button class="filter-pill" data-filter="locked" onclick="setFleetFilter('locked', this)">
-          <i class="fas fa-lock" style="color: var(--danger); font-size: 11px;"></i> Locked <span class="pill-count" id="pillLocked">0</span>
-        </button>
-        <button class="filter-pill" data-filter="pending" onclick="setFleetFilter('pending', this)">
-          <i class="fas fa-clock" style="color: #d97706; font-size: 11px;"></i> Pending Bind <span class="pill-count" id="pillPending">0</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- ── 1. TILE VIEW (DEFAULT) ── -->
-    <div id="fleetTileContainer" class="fleet-tiles-grid">
-      <!-- Dynamic employee tiles render here -->
-      <div class="fleet-loading-tile">
-        <i class="fas fa-spinner fa-spin fa-2x mb-3 text-primary"></i>
-        <div>Connecting to mobile telemetry fleet...</div>
-      </div>
-    </div>
-
-    <!-- ── 2. TABLE VIEW (ALTERNATIVE) ── -->
-    <div id="fleetTableContainer" class="hub-card" style="display: none;">
-      <div class="table-responsive">
-        <table class="hub-table" id="fleetTable">
-          <thead>
-            <tr>
-              <th>Agent / Employee</th>
-              <th>Role / Level</th>
-              <th>Live Status & Activity</th>
-              <th>Registered Mobile Hardware</th>
-              <th>Assigned Territory</th>
-              <th class="text-end">Hardware & Security Actions</th>
-            </tr>
-          </thead>
-          <tbody id="fleetTableBody">
-            <tr>
-              <td colspan="6" class="text-center py-5 text-muted">
-                <i class="fas fa-spinner fa-spin me-2 fa-2x"></i>
-                <div class="mt-2">Connecting to mobile telemetry...</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
-
-</div>
-
-<!-- ── Hover Diagnostic Popover (Floating Container) ── -->
-<div id="fleetHoverPopover" class="fleet-hover-popover" style="display: none;">
-  <div class="popover-arrow"></div>
-  <div class="popover-head">
-    <div class="popover-avatar" id="popoverAvatar">JD</div>
-    <div>
-      <div class="popover-name" id="popoverName">Agent Name</div>
-      <div class="popover-username" id="popoverUsername">@username</div>
-    </div>
-    <div class="popover-status-badge" id="popoverStatusBadge">
-      <span class="radar-dot green sm"></span> Online
-    </div>
-  </div>
-  <div class="popover-body">
-    <div class="popover-row">
-      <span class="p-label"><i class="fas fa-clock me-1 text-muted"></i> Last Seen</span>
-      <span class="p-val" id="popoverLastSeen">-</span>
-    </div>
-    <div class="popover-row">
-      <span class="p-label"><i class="fas fa-mobile-screen me-1 text-muted"></i> Active Device</span>
-      <span class="p-val font-weight-bold" id="popoverDeviceModel">-</span>
-    </div>
-    <div class="popover-row">
-      <span class="p-label"><i class="fas fa-fingerprint me-1 text-muted"></i> Hardware UUID</span>
-      <span class="p-val monospace-text" id="popoverUuid">-</span>
-    </div>
-    <div class="popover-row">
-      <span class="p-label"><i class="fas fa-map-marker-alt me-1 text-muted"></i> Territory</span>
-      <span class="p-val" id="popoverVillages">-</span>
-    </div>
-    <div class="popover-row">
-      <span class="p-label"><i class="fas fa-shield-alt me-1 text-muted"></i> Credentials</span>
-      <span class="p-val" id="popoverCredentials">-</span>
-    </div>
-  </div>
-</div>
-
 <!-- ── Confirmation Micro-Modal ── -->
 <div id="actionConfirmModal" class="hub-modal-backdrop" style="display: none;">
   <div class="hub-modal-card">
@@ -410,6 +414,275 @@
 </div>
 
 <!-- ── Toast Notification Container ── -->
+
+
+<!-- ── UNIFIED DEVICE & FLEET TELEMETRY INSPECTOR MODAL ── -->
+<div id="userDeviceInspectorModal" class="hub-modal-backdrop" style="display: none;">
+  <div class="hub-modal-card device-inspector-modal-card">
+    
+    <!-- Modal Header -->
+    <div class="inspector-modal-header">
+      <div class="inspector-user-info">
+        <div class="tile-avatar-wrap" id="inspAvatarWrap">
+          <div class="tile-avatar" id="inspAvatar">KA</div>
+          <span class="tile-status-dot radar-dot sm green" id="inspStatusDot"></span>
+        </div>
+        <div>
+          <div class="insp-user-name" id="inspName">User Name</div>
+          <div class="insp-user-handle" id="inspHandle">@handle • Phone • Role</div>
+        </div>
+      </div>
+      <div class="inspector-header-actions">
+        <span class="live-heartbeat-pill" id="inspLivePill">
+          <span class="radar-dot green sm"></span>
+          <span id="inspLiveText">Live • Auto-sync</span>
+        </span>
+        <button type="button" class="btn-modal-close" onclick="closeUserDeviceInspector()" title="Close Inspector">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal Body: Left Sidebar + Right Main Map & Telemetry HUD -->
+    <div class="inspector-modal-body">
+      
+      <!-- LEFT SIDEBAR -->
+      <div class="inspector-left-bar">
+        <div class="left-bar-section-title">
+          <i class="fas fa-mobile-screen-button me-1"></i> Registered Hardware (<span id="inspDeviceCount">0</span>)
+        </div>
+
+        <!-- Devices List Container -->
+        <div class="inspector-devices-list" id="inspDevicesList">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <!-- Account Security Actions -->
+        <div class="inspector-user-quick-actions">
+          <div class="quick-action-title">Account Security</div>
+          <div class="quick-action-buttons">
+            <button type="button" class="btn-sidebar-sec btn-sec-logout" id="btnInspLogout" onclick="handleInspectorLogout()" title="Force logout this user across all mobile sessions">
+              <i class="fas fa-right-from-bracket me-1"></i> Logout All
+            </button>
+            <button type="button" class="btn-sidebar-sec btn-sec-lock" id="btnInspLock" onclick="handleInspectorLock()" title="Lock or unlock user credentials">
+              <i class="fas fa-lock me-1"></i> <span id="btnInspLockText">Lock Account</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT MAIN PANEL -->
+      <div class="inspector-main-panel">
+        
+        <!-- View Mode Switcher -->
+        <div class="inspector-view-switch">
+          <div class="view-switch-tabs">
+            <button type="button" class="insp-tab-btn active" id="btnInspModeLive" onclick="switchInspectorMode('live')">
+              <i class="fas fa-crosshairs me-1"></i> Real-Time Live Location
+            </button>
+            <button type="button" class="insp-tab-btn" id="btnInspModeHistory" onclick="switchInspectorMode('history')">
+              <i class="fas fa-route me-1"></i> Journey Route & History
+            </button>
+          </div>
+          <!-- Date Picker for History -->
+          <div class="insp-date-picker-wrap" id="inspDatePickerWrap" style="display: none;">
+            <i class="fas fa-calendar-day me-1 text-muted"></i>
+            <input type="date" id="inspHistoryDate" class="hub-input-date" onchange="loadInspectorHistoryForDate(this.value)">
+          </div>
+        </div>
+
+        <!-- Real-Time Telemetry HUD Overlay -->
+        <div class="inspector-telemetry-hud" id="inspTelemetryHud">
+          <div class="hud-item">
+            <span class="hud-label">Selected Device</span>
+            <span class="hud-val" id="hudDeviceModel">--</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Battery Level</span>
+            <span class="hud-val" id="hudBattery">--%</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Current Speed</span>
+            <span class="hud-val" id="hudSpeed">0 km/h</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">GPS Status</span>
+            <span class="hud-val" id="hudGps">Active Lock</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Last Ping</span>
+            <span class="hud-val" id="hudLastPing">Connecting...</span>
+          </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="inspector-map-wrap">
+          <div id="inspectorLeafletMap" class="inspector-leaflet-map"></div>
+
+          <!-- History Playback Scrubber (visible when in history mode) -->
+          <div class="insp-playback-bar" id="inspPlaybackBar" style="display: none;">
+            <button type="button" class="btn-play-toggle" id="btnInspPlayToggle" onclick="toggleInspectorPlayback()">
+              <i class="fas fa-play" id="iconInspPlay"></i>
+            </button>
+            <input type="range" id="inspScrubber" min="0" max="100" value="0" oninput="handleInspectorScrub(this.value)" style="flex: 1; accent-color: var(--primary);">
+            <span class="scrubber-timestamp" id="inspScrubberTime" style="font-family: monospace; font-size: 0.8rem; min-width: 65px;">--:--</span>
+            <div class="playback-speed-group">
+              <button type="button" class="btn-speed active" onclick="setInspectorSpeed(1, this)">1x</button>
+              <button type="button" class="btn-speed" onclick="setInspectorSpeed(2, this)">2x</button>
+              <button type="button" class="btn-speed" onclick="setInspectorSpeed(4, this)">4x</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 1. LIVE LOCATION TRACKING MODAL ── -->
+<div id="liveLocationModal" class="hub-modal-backdrop" style="display: none;">
+  <div class="hub-modal-card live-map-modal-card">
+    <div class="live-map-modal-header">
+      <div class="live-agent-info">
+        <div class="tile-avatar-wrap" id="liveModalAvatarWrap">
+          <div class="tile-avatar" id="liveModalAvatar">JD</div>
+          <span class="tile-status-dot radar-dot sm green" id="liveModalRadarDot"></span>
+        </div>
+        <div>
+          <div class="live-agent-name" id="liveModalAgentName">Agent Name</div>
+          <div class="live-agent-sub" id="liveModalSub">@username • Mobile Telemetry</div>
+        </div>
+      </div>
+      <div class="live-header-actions">
+        <span class="live-pulse-badge" id="liveModalPulseBadge"><span class="radar-dot green sm"></span> LIVE TELEMETRY</span>
+        <button type="button" class="btn-modal-close" onclick="closeLiveLocationModal()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    
+    <!-- Map Container -->
+    <div class="live-map-wrapper">
+      <div id="liveLocationMap" class="live-leaflet-map"></div>
+      
+      <!-- Live Floating HUD -->
+      <div class="live-map-hud">
+        <div class="hud-item">
+          <i class="fas fa-gauge-high text-primary"></i>
+          <div>
+            <strong id="liveHudSpeed">0 km/h</strong>
+            <small>Current Speed</small>
+          </div>
+        </div>
+        <div class="hud-item">
+          <i class="fas fa-battery-half text-success" id="liveHudBatteryIcon"></i>
+          <div>
+            <strong id="liveHudBattery">--%</strong>
+            <small id="liveHudCharging">Discharging</small>
+          </div>
+        </div>
+        <div class="hud-item">
+          <i class="fas fa-bullseye text-info"></i>
+          <div>
+            <strong id="liveHudAccuracy">±-- m</strong>
+            <small>GPS Accuracy</small>
+          </div>
+        </div>
+        <div class="hud-item">
+          <i class="fas fa-clock text-warning"></i>
+          <div>
+            <strong id="liveHudLastPing">Syncing...</strong>
+            <small id="liveHudCoords">-- , --</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="live-map-footer">
+      <span class="live-footer-note"><i class="fas fa-rotate fa-spin me-1 text-primary"></i> 30s AJAX short-polling • 0% persistent thread load</span>
+      <button type="button" class="btn-modal-cancel" onclick="closeLiveLocationModal()">Close Live View</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2. LOCATION HISTORY & TIMELINE MODAL (Google Maps Timeline UI) ── -->
+<div id="locationHistoryModal" class="hub-modal-backdrop" style="display: none;">
+  <div class="hub-modal-card history-modal-card">
+    <div class="history-modal-header">
+      <div class="history-agent-header">
+        <div class="tile-avatar-wrap" id="histModalAvatarWrap">
+          <div class="tile-avatar" id="histModalAvatar">JD</div>
+        </div>
+        <div>
+          <div class="history-title" id="histModalTitle">Location Journey & Timeline</div>
+          <div class="history-subtitle" id="histModalSubtitle">Ramesh Babu • Door-to-Door Route Audit</div>
+        </div>
+      </div>
+      <!-- Date Selector -->
+      <div class="history-date-picker-wrap">
+        <label for="histDatePicker"><i class="fas fa-calendar-day me-1"></i> Date:</label>
+        <input type="date" id="histDatePicker" class="hub-input-date" onchange="loadHistoryForDate()">
+        <button type="button" class="btn-date-quick" onclick="setHistoryDate('today')">Today</button>
+        <button type="button" class="btn-date-quick" onclick="setHistoryDate('yesterday')">Yesterday</button>
+        <button type="button" class="btn-modal-close" onclick="closeLocationHistoryModal()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+
+    <!-- Split Screen Content -->
+    <div class="history-split-body">
+      <!-- Left Panel: Chronological Timeline Cards -->
+      <div class="history-timeline-panel" id="histTimelinePanel">
+        <div class="history-summary-box" id="histSummaryBox">
+          <div class="h-stat-tile">
+            <span class="h-stat-num" id="hStatDist">0.0 km</span>
+            <span class="h-stat-label">Total Distance</span>
+          </div>
+          <div class="h-stat-tile">
+            <span class="h-stat-num" id="hStatTravel">0h 0m</span>
+            <span class="h-stat-label">Travel Time</span>
+          </div>
+          <div class="h-stat-tile">
+            <span class="h-stat-num" id="hStatStops">0</span>
+            <span class="h-stat-label">Village Stops</span>
+          </div>
+          <div class="h-stat-tile">
+            <span class="h-stat-num" id="hStatBat">--%</span>
+            <span class="h-stat-label">Battery Delta</span>
+          </div>
+        </div>
+
+        <div class="timeline-items-container" id="histTimelineItems">
+          <div class="text-center py-4 text-muted">
+            <i class="fas fa-spinner fa-spin fa-2x mb-2 text-primary"></i>
+            <div>Loading journey history...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Leaflet Route Map & Playback Scrubber -->
+      <div class="history-map-panel">
+        <div id="historyLocationMap" class="history-leaflet-map"></div>
+
+        <!-- Interactive Playback Scrubber Bar -->
+        <div class="history-playback-bar">
+          <button type="button" class="btn-play-toggle" id="btnPlayRoute" onclick="toggleRoutePlayback()">
+            <i class="fas fa-play" id="playIcon"></i>
+          </button>
+          <div class="playback-speed-group">
+            <button type="button" class="btn-speed active" onclick="setPlaybackSpeed(1, this)">1x</button>
+            <button type="button" class="btn-speed" onclick="setPlaybackSpeed(3, this)">3x</button>
+            <button type="button" class="btn-speed" onclick="setPlaybackSpeed(5, this)">5x</button>
+          </div>
+          <div class="playback-scrubber-track">
+            <input type="range" id="routeScrubber" min="0" max="100" value="0" step="1" oninput="onScrubberInput(this.value)">
+          </div>
+          <div class="playback-time-badge" id="scrubberTimeBadge">--:--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="hubToastContainer" class="hub-toast-container"></div>
 
 <!-- ============================================================== -->
@@ -1891,6 +2164,964 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.78rem;
   }
+
+  /* ── FLEET TELEMETRY & LIVE TRACKING STYLES (PHASE 3) ── */
+
+  /* ── LEAFLET MAP & TILE STYLING ── */
+  .leaflet-container {
+    background-color: #0f172a !important;
+    font-family: inherit !important;
+  }
+  .leaflet-control-layers {
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 10px !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+    padding: 6px 12px !important;
+    font-size: 0.8rem !important;
+  }
+  .leaflet-control-layers-base label {
+    margin: 4px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+  }
+  .leaflet-control-zoom {
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  }
+  .leaflet-control-zoom a {
+    background: rgba(15, 23, 42, 0.85) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    transition: all 0.2s ease !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+  }
+  .leaflet-control-attribution {
+    background: rgba(15, 23, 42, 0.7) !important;
+    color: #94a3b8 !important;
+    font-size: 0.68rem !important;
+    padding: 2px 8px !important;
+    border-radius: 4px 0 0 0 !important;
+  }
+  .leaflet-control-attribution a {
+    color: #38bdf8 !important;
+    text-decoration: none !important;
+  }
+
+  
+  /* Tile Telemetry Strip */
+  .tile-telemetry-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg, #f8fafc);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-light, #e2e8f0);
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+  }
+  [data-theme="dark"] .tile-telemetry-strip {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .telemetry-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.72rem;
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border, #cbd5e1);
+    color: var(--text, #1e293b);
+  }
+  [data-theme="dark"] .telemetry-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text, #e2e8f0);
+  }
+  .telemetry-pill.pill-online { color: #10b981; border-color: rgba(16, 185, 129, 0.3); }
+  .telemetry-pill.pill-motion { color: var(--primary, #0284c7); border-color: rgba(2, 132, 199, 0.3); }
+  .telemetry-pill.pill-battery-ok { color: #10b981; }
+  .telemetry-pill.pill-battery-low { color: #f59e0b; }
+  .telemetry-pill.pill-battery-crit { color: #ef4444; }
+
+  /* Tile Action Buttons (Live & History) */
+  .btn-tile-action.btn-live-loc {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.25);
+    font-weight: 700;
+  }
+  .btn-tile-action.btn-live-loc:hover {
+    background: #10b981;
+    color: #ffffff;
+    border-color: #10b981;
+  }
+  .btn-tile-action.btn-hist-loc {
+    background: rgba(2, 132, 199, 0.1);
+    color: var(--primary, #0284c7);
+    border-color: rgba(2, 132, 199, 0.25);
+    font-weight: 700;
+  }
+  .btn-tile-action.btn-hist-loc:hover {
+    background: var(--primary, #0284c7);
+    color: #ffffff;
+    border-color: var(--primary, #0284c7);
+  }
+
+  /* ── LIVE MAP MODAL ── */
+  .live-map-modal-card {
+    max-width: 960px;
+    width: 95%;
+    height: 85vh;
+    max-height: 720px;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  }
+  .live-map-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: var(--card-bg, #ffffff);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    z-index: 10;
+  }
+  [data-theme="dark"] .live-map-modal-header {
+    background: #161b26;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .live-agent-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .live-agent-name {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: var(--text, #0f172a);
+  }
+  .live-agent-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #64748b);
+  }
+  .live-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .live-pulse-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .btn-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    color: var(--text-secondary, #64748b);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+  .btn-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--danger, #ef4444);
+  }
+  .live-map-wrapper {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    min-height: 380px;
+  }
+  .live-leaflet-map {
+    width: 100%;
+    height: 100%;
+    background: #1a1d27;
+  }
+  .live-map-hud {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    color: #ffffff;
+  }
+  .hud-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hud-item i {
+    font-size: 1.2rem;
+  }
+  .hud-item strong {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .hud-item small {
+    display: block;
+    font-size: 0.7rem;
+    color: #94a3b8;
+  }
+  .live-map-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    background: var(--card-bg, #ffffff);
+    border-top: 1px solid var(--border, #e2e8f0);
+    font-size: 0.8rem;
+  }
+  [data-theme="dark"] .live-map-footer {
+    background: #161b26;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .live-footer-note {
+    color: var(--text-secondary, #64748b);
+    font-size: 0.75rem;
+  }
+
+  /* ── LOCATION HISTORY MODAL ── */
+  .history-modal-card {
+    max-width: 1200px;
+    width: 96%;
+    height: 88vh;
+    max-height: 820px;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  }
+  .history-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: var(--card-bg, #ffffff);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    z-index: 10;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  [data-theme="dark"] .history-modal-header {
+    background: #161b26;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .history-agent-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .history-title {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: var(--text, #0f172a);
+  }
+  .history-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #64748b);
+  }
+  .history-date-picker-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--text, #1e293b);
+  }
+  .hub-input-date {
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #cbd5e1);
+    background: var(--bg, #f8fafc);
+    color: var(--text, #1e293b);
+    font-weight: 600;
+    font-size: 0.82rem;
+  }
+  [data-theme="dark"] .hub-input-date {
+    background: #0f172a;
+    border-color: rgba(255,255,255,0.15);
+    color: #e2e8f0;
+  }
+  .btn-date-quick {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #cbd5e1);
+    background: transparent;
+    color: var(--text-secondary, #64748b);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-date-quick:hover {
+    background: var(--primary, #0284c7);
+    color: #ffffff;
+    border-color: var(--primary, #0284c7);
+  }
+
+  /* History Split Body */
+  .history-split-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .history-timeline-panel {
+    width: 380px;
+    min-width: 320px;
+    background: var(--bg, #f8fafc);
+    border-right: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  [data-theme="dark"] .history-timeline-panel {
+    background: #0b0e14;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .history-summary-box {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 12px;
+    background: var(--card-bg, #ffffff);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+  }
+  [data-theme="dark"] .history-summary-box {
+    background: #161b26;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .h-stat-tile {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bg, #f8fafc);
+    border: 1px solid var(--border-light, #e2e8f0);
+    text-align: center;
+  }
+  [data-theme="dark"] .h-stat-tile {
+    background: rgba(255,255,255,0.03);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .h-stat-num {
+    display: block;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--primary, #0284c7);
+  }
+  .h-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-secondary, #64748b);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Timeline Items */
+  .timeline-items-container {
+    padding: 14px 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .timeline-card {
+    position: relative;
+    padding: 10px 12px 10px 24px;
+    margin-bottom: 10px;
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-light, #e2e8f0);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    transition: transform 0.15s ease;
+  }
+  [data-theme="dark"] .timeline-card {
+    background: #161b26;
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .timeline-card:hover {
+    transform: translateX(3px);
+  }
+  .timeline-card::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 14px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .timeline-card.card-trip {
+    border-left: 3px solid var(--primary, #0284c7);
+  }
+  .timeline-card.card-trip::before {
+    background: var(--primary, #0284c7);
+  }
+  .timeline-card.card-stop {
+    border-left: 3px solid #ef4444;
+  }
+  .timeline-card.card-stop::before {
+    background: #ef4444;
+  }
+  .t-card-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text, #0f172a);
+  }
+  .t-card-details {
+    color: var(--text-secondary, #64748b);
+    font-size: 0.72rem;
+  }
+
+  /* History Map Panel */
+  .history-map-panel {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .history-leaflet-map {
+    width: 100%;
+    flex: 1;
+    background: #1a1d27;
+  }
+
+  /* Playback Scrubber Bar */
+  .history-playback-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    z-index: 1000;
+  }
+  .btn-play-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary, #0284c7);
+    color: #ffffff;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.15s ease;
+  }
+  .btn-play-toggle:hover {
+    transform: scale(1.08);
+    background: #0369a1;
+  }
+  .playback-speed-group {
+    display: flex;
+    gap: 4px;
+  }
+  .btn-speed {
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-speed.active {
+    background: var(--primary, #0284c7);
+    color: #ffffff;
+    border-color: var(--primary, #0284c7);
+  }
+  .playback-scrubber-track {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .playback-scrubber-track input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+    accent-color: var(--primary, #0284c7);
+  }
+  .playback-time-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #38bdf8;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  /* Custom Vehicle & Stop Markers */
+  .live-vehicle-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #0284c7;
+    color: #ffffff;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    transition: transform 0.2s ease-out;
+  }
+  .stop-marker-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: #ef4444;
+    color: #ffffff;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    font-weight: 800;
+    font-size: 0.72rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+
+
+  /* ── Redesigned Clean Fleet Tiles ── */
+  .emp-fleet-tile {
+    cursor: pointer;
+  }
+  .tile-hardware-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border-light, #e2e8f0);
+    border-radius: 12px;
+  }
+  [data-theme="dark"] .tile-hardware-summary {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .hw-summary-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+  }
+  .hw-device-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .dev-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .dev-chip.chip-active {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.08);
+    color: #10b981;
+  }
+  [data-theme="dark"] .dev-chip.chip-active {
+    color: #34d399;
+  }
+  .dev-chip.chip-inactive {
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #94a3b8;
+  }
+  .tile-inspect-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light, #e2e8f0);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .emp-fleet-tile:hover .tile-inspect-footer {
+    color: var(--primary);
+  }
+
+  /* ── Full Device & Telemetry Inspector Modal ── */
+  .device-inspector-modal-card {
+    max-width: 1240px;
+    width: 96%;
+    height: 90vh;
+    max-height: 850px;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5);
+  }
+  .inspector-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 22px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 20;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .inspector-user-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .insp-user-name {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+  .insp-user-handle {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .inspector-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .live-heartbeat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+  }
+  .inspector-modal-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .inspector-left-bar {
+    width: 390px;
+    min-width: 330px;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .left-bar-section-title {
+    padding: 14px 16px 8px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+  }
+  .inspector-devices-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .device-card-item {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .device-card-item:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+  .device-card-item.selected {
+    border-color: var(--primary);
+    background: rgba(2, 132, 199, 0.06);
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
+  }
+  .dev-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .dev-model-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 230px;
+  }
+  .badge-status {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+  }
+  .badge-status.status-online {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .badge-status.status-active {
+    background: rgba(2, 132, 199, 0.15);
+    color: #0284c7;
+    border: 1px solid rgba(2, 132, 199, 0.3);
+  }
+  .badge-status.status-inactive {
+    background: rgba(148, 163, 184, 0.12);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .dev-uuid-row {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+  }
+  .dev-telemetry-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .dev-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--bg);
+    border: 1px solid var(--border-light, #e2e8f0);
+    color: var(--text);
+  }
+  [data-theme="dark"] .dev-pill {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .dev-last-active-row {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+  }
+  .dev-action-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light, #e2e8f0);
+  }
+  .btn-dev-action {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-dev-action:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .btn-dev-action.btn-dev-reset:hover {
+    background: #ef4444;
+    color: #fff;
+    border-color: #ef4444;
+  }
+  .inspector-user-quick-actions {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .quick-action-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .quick-action-buttons {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-sidebar-sec {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-sidebar-sec:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: #ef4444;
+  }
+
+  /* Right Panel: Map & Switcher */
+  .inspector-main-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background: #0f172a;
+  }
+  .inspector-view-switch {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  .view-switch-tabs {
+    display: flex;
+    gap: 6px;
+  }
+  .insp-tab-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .insp-tab-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .inspector-telemetry-hud {
+    display: flex;
+    gap: 16px;
+    padding: 8px 16px;
+    background: rgba(15, 23, 42, 0.92);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+    overflow-x: auto;
+  }
+  .hud-item {
+    display: flex;
+    flex-direction: column;
+  }
+  .hud-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .hud-val {
+    font-size: 0.85rem;
+    color: #f8fafc;
+    font-weight: 700;
+    font-family: monospace;
+  }
+  .inspector-map-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .inspector-leaflet-map {
+    width: 100%;
+    flex: 1;
+    background: #0f172a;
+  }
+  .insp-playback-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: rgba(15, 23, 42, 0.94);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    z-index: 1000;
+  }
+
 </style>
 
 <!-- ============================================================== -->
@@ -2306,6 +3537,15 @@
       }
 
       renderFleetView();
+
+      // Check if URL specifies auto-open user & device inspector
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlUserId = urlParams.get('user_id');
+      const urlDevId = urlParams.get('device_id');
+      if (urlUserId && !window._hasAutoOpenedInspector) {
+        window._hasAutoOpenedInspector = true;
+        setTimeout(() => openUserDeviceInspector(parseInt(urlUserId, 10), urlDevId), 300);
+      }
     })
     .catch(err => {
       console.error('Fleet fetch error:', err);
@@ -2357,7 +3597,7 @@
     }
   }
 
-  // ── Render 1: Employee Tile View (Default) ──
+  // ── Render 1: Clean Employee Tile View (Click to Inspect Devices & Telemetry) ──
   function renderFleetTiles() {
     const container = document.getElementById('fleetTileContainer');
     container.innerHTML = '';
@@ -2376,6 +3616,8 @@
     filtered.forEach(u => {
       const tile = document.createElement('div');
       tile.className = `emp-fleet-tile ${!u.credentials_active ? 'tile-locked' : ''}`;
+      tile.title = "Click to inspect devices & live telemetry";
+      tile.onclick = () => openUserDeviceInspector(u.id);
 
       // Presence classes & icons
       let presenceClass = 'offline';
@@ -2412,40 +3654,20 @@
       else if (u.employee_level === 's') { roleClass = 'senior'; roleTitle = 'Senior'; }
       else if (u.employee_level === 'm') { roleClass = 'manager'; roleTitle = 'Manager'; }
 
-      // Villages chips
-      const vChips = (u.villages && u.villages.length > 0) ?
-        u.villages.slice(0, 4).map(v => `<span class="village-pill-tag">${v.name}</span>`).join('') +
-        (u.villages.length > 4 ? `<span class="village-pill-tag">+${u.villages.length - 4}</span>` : '') :
-        '<span class="text-muted" style="font-size: 0.75rem;">No villages assigned</span>';
-
-      // Hardware info
-      let hwContent = '';
-      if (u.is_pending) {
-        hwContent = `
-          <div class="hw-top-row" style="color: #d97706;">
-            <i class="fas fa-clock"></i> <span>Pending Hardware Bind</span>
-          </div>
-          <div class="hw-uuid-row">
-            <span>Hardware unlinked • Will register on next login</span>
-          </div>
-        `;
-      } else if (u.has_device) {
-        hwContent = `
-          <div class="hw-top-row">
-            <i class="fas fa-mobile-screen text-primary"></i>
-            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${u.device_model}</span>
-          </div>
-          <div class="hw-uuid-row monospace-text" title="${u.device_id}">
-            <span>UUID: ${u.device_id.substring(0, 16)}…</span>
-            <button class="copy-tiny-btn" onclick="copyToClipboard('${u.device_id}', this)" title="Copy UUID"><i class="far fa-copy"></i></button>
-          </div>
-        `;
+      // Registered Devices Summary
+      const devs = (u.devices && u.devices.length > 0) ? u.devices : [];
+      let deviceChipsHtml = '';
+      if (devs.length === 0) {
+        deviceChipsHtml = '<span class="dev-chip text-muted"><i class="fas fa-mobile-alt"></i> No Hardware Bound</span>';
       } else {
-        hwContent = `
-          <div class="hw-top-row text-muted">
-            <i class="fas fa-mobile-screen"></i> <span>No Hardware Registered</span>
-          </div>
-        `;
+        deviceChipsHtml = devs.map(d => {
+          const isAct = d.is_active;
+          const isPend = d.is_pending;
+          let chipClass = isAct ? 'chip-active' : 'chip-inactive';
+          let chipIcon = isPend ? 'fa-clock text-warning' : (isAct ? 'fa-mobile-screen' : 'fa-mobile-alt text-muted');
+          let modelName = isPend ? 'Pending Bind' : d.device_model;
+          return `<span class="dev-chip ${chipClass}"><i class="fas ${chipIcon}"></i> ${modelName}</span>`;
+        }).join('');
       }
 
       const initials = (u.employee_name || u.username).substring(0, 2).toUpperCase();
@@ -2464,8 +3686,8 @@
           <span class="role-pill ${roleClass}">${roleTitle}</span>
         </div>
 
-        <!-- Middle 1: Presence Status Banner -->
-        <div class="tile-presence-banner ${presenceClass}" onmouseenter="showFleetPopover(event, ${u.id})" onmouseleave="hideFleetPopover()">
+        <!-- Middle 1: Presence Status Banner (Last activity section) -->
+        <div class="tile-presence-banner ${presenceClass}">
           <div class="tile-presence-left">
             <i class="fas ${presenceIcon}"></i>
             <span>${statusLabel}</span>
@@ -2473,28 +3695,21 @@
           <span class="radar-dot sm ${dotColor}"></span>
         </div>
 
-        <!-- Middle 2: Hardware Device Box -->
-        <div class="tile-hardware-box">
-          ${hwContent}
+        <!-- Middle 2: Hardware Devices Summary -->
+        <div class="tile-hardware-summary">
+          <div class="hw-summary-label">
+            <i class="fas fa-mobile-screen text-primary me-1"></i>
+            <span>${devs.length} ${devs.length === 1 ? 'Device' : 'Devices'} Registered</span>
+          </div>
+          <div class="hw-device-chips">
+            ${deviceChipsHtml}
+          </div>
         </div>
 
-        <!-- Middle 3: Assigned Territory -->
-        <div class="tile-territory-box">
-          <div class="territory-label">Assigned Territory</div>
-          <div class="territory-chips">${vChips}</div>
-        </div>
-
-        <!-- Footer: Action Buttons (For each employee) -->
-        <div class="tile-actions-footer">
-          <button class="btn-tile-action btn-reset-device" onclick="confirmResetDevice(${u.id}, '${u.username}')" title="Release phone hardware lock so employee can bind new phone upon next login">
-            <i class="fas fa-rotate"></i> <span>Reset Lock</span>
-          </button>
-          <button class="btn-tile-action btn-force-logout" onclick="confirmForceLogout(${u.id}, '${u.username}')" title="Immediately revoke mobile token and boot from app">
-            <i class="fas fa-right-from-bracket"></i> <span>Logout</span>
-          </button>
-          <button class="btn-tile-action btn-toggle-lock ${!u.credentials_active ? 'is-locked' : ''}" onclick="toggleUserLock(${u.id}, '${u.username}', ${u.credentials_active})" title="${u.credentials_active ? 'Lock account credentials' : 'Unlock account credentials'}">
-            <i class="fas fa-${u.credentials_active ? 'unlock' : 'lock'}"></i> <span>${u.credentials_active ? 'Active' : 'Locked'}</span>
-          </button>
+        <!-- Footer: Click Indicator -->
+        <div class="tile-inspect-footer">
+          <span><i class="fas fa-sliders text-primary me-1"></i> View Devices & Telemetry</span>
+          <i class="fas fa-chevron-right text-muted"></i>
         </div>
       `;
 
@@ -2522,6 +3737,13 @@
 
     filtered.forEach(u => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.title = 'Click to inspect devices & live telemetry';
+      tr.onclick = (e) => {
+        if (!e.target.closest('button')) {
+          openUserDeviceInspector(u.id);
+        }
+      };
 
       let presenceClass = 'offline';
       let dotColor = 'gray';
@@ -2575,6 +3797,7 @@
       }
 
       const initials = (u.employee_name || u.username).substring(0, 2).toUpperCase();
+      const safeName = (u.employee_name || u.username).replace(/'/g, "\\'");
 
       tr.innerHTML = `
         <td>
@@ -2600,6 +3823,8 @@
         <td><div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 220px;">${vChips}</div></td>
         <td class="text-end">
           <div style="display: inline-flex; gap: 6px;">
+            <button class="btn-tile-action btn-live-loc" onclick="openLiveLocationModal(${u.id}, '${safeName}')" title="Live GPS Tracking"><i class="fas fa-crosshairs"></i></button>
+            <button class="btn-tile-action btn-hist-loc" onclick="openLocationHistoryModal(${u.id}, '${safeName}')" title="Location History"><i class="fas fa-route"></i></button>
             <button class="btn-tile-action btn-reset-device" onclick="confirmResetDevice(${u.id}, '${u.username}')" title="Reset Lock">
               <i class="fas fa-rotate"></i>
             </button>
@@ -2681,11 +3906,17 @@
     activeActionModalCallback = null;
   }
 
-  // ── Action 1: Reset Device Binding ──
-  function confirmResetDevice(userId, username) {
+  // ── Action 1: Reset Device Binding (Supports specific device or all devices) ──
+  function confirmResetDevice(userId, username, deviceId, deviceModel) {
+    const isSingle = deviceId && deviceId !== 'ALL' && deviceId !== 'PENDING';
+    const title = isSingle ? `Reset Device: ${deviceModel || 'Phone'}?` : `Reset All Hardware Locks?`;
+    const desc = isSingle
+      ? `Are you sure you want to release the hardware binding for ${deviceModel || 'this device'} (@${username})? The employee will be able to bind a new phone on their next login.`
+      : `Are you sure you want to release all hardware bindings for @${username}? The employee will be able to register their replacement phone upon next login.`;
+
     openActionModal(
-      'Reset Device Hardware Lock?',
-      `Are you sure you want to release the hardware binding for @${username}? The employee will be able to register their replacement phone upon their next login.`,
+      title,
+      desc,
       'fas fa-rotate text-info',
       'Reset Hardware Binding',
       '#0284c7',
@@ -2693,15 +3924,18 @@
         csrfFetch('/api/users/reset_device', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: userId })
+          body: JSON.stringify({ id: userId, device_id: isSingle ? deviceId : null })
         })
         .then(r => r.json())
         .then(res => {
-          if (res.success) {
-            showToast(`Hardware lock reset for @${username}`, 'success');
+          if (res.success || res.ok) {
+            showToast(`Hardware lock reset for ${deviceModel || username}`, 'success');
             loadFleetUsers();
+            if (typeof activeInspectorUserId !== 'undefined' && activeInspectorUserId === userId) {
+              setTimeout(() => openUserDeviceInspector(userId), 600);
+            }
           } else {
-            showToast(res.error || 'Failed to reset device lock', 'error');
+            showToast(res.error || res.msg || 'Failed to reset device lock', 'error');
           }
         })
         .catch(err => {
@@ -2790,6 +4024,1120 @@
       }
     }, 30000);
   });
+
+  // ==========================================================================
+  // ── FLEET TELEMETRY & LIVE TRACKING JAVASCRIPT ENGINE (PHASE 3) ───────────
+  // ==========================================================================
+
+  let liveMap = null;
+  let liveMarker = null;
+  let liveAccuracyCircle = null;
+  let activeLiveUserId = null;
+  let livePollTimer = null;
+  let lastLiveCoords = null;
+
+  let historyMap = null;
+  let historyPolyline = null;
+  let historyMarkers = [];
+  let activeHistoryUserId = null;
+  let currentHistoryPoints = [];
+  let playbackTimer = null;
+  let playbackIndex = 0;
+  let playbackSpeed = 1;
+  let playbackMarker = null;
+
+  // Factory for Google Maps (Road + Satellite Hybrid) and OpenStreetMap base layers
+  function createBaseTileLayers() {
+    const googleRoads = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps'
+    });
+
+    const googleHybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps Satellite'
+    });
+
+    const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      subdomains: ['a', 'b', 'c'],
+      attribution: '&copy; OpenStreetMap'
+    });
+
+    return {
+      defaultLayer: googleRoads,
+      baseMaps: {
+        "Google Map": googleRoads,
+        "Satellite Hybrid": googleHybrid,
+        "OpenStreetMap": osmStandard
+      }
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1. Live Location Modal Operations
+  // ──────────────────────────────────────────────────────────────────────────
+  function openLiveLocationModal(userId, agentName) {
+    activeLiveUserId = userId;
+    const modal = document.getElementById('liveLocationModal');
+    modal.style.display = 'flex';
+
+    const user = allFleetUsers.find(u => u.id === userId);
+    const uname = user ? user.username : 'user';
+    const initials = (agentName || uname).substring(0, 2).toUpperCase();
+
+    document.getElementById('liveModalAvatar').textContent = initials;
+    document.getElementById('liveModalAgentName').textContent = agentName || uname;
+    document.getElementById('liveModalSub').textContent = `@${uname} • ${user ? user.device_model : 'Mobile Device'}`;
+
+    // Reset HUD
+    document.getElementById('liveHudSpeed').textContent = '0 km/h';
+    document.getElementById('liveHudBattery').textContent = '--%';
+    document.getElementById('liveHudAccuracy').textContent = '±-- m';
+    document.getElementById('liveHudLastPing').textContent = 'Connecting...';
+    document.getElementById('liveHudCoords').textContent = '-- , --';
+
+    initLiveMap();
+    pollLiveLocation();
+
+    // 30-Second lightweight AJAX poll
+    if (livePollTimer) clearInterval(livePollTimer);
+    livePollTimer = setInterval(pollLiveLocation, 30000);
+  }
+
+  function closeLiveLocationModal() {
+    if (livePollTimer) {
+      clearInterval(livePollTimer);
+      livePollTimer = null;
+    }
+    activeLiveUserId = null;
+    lastLiveCoords = null;
+    const modal = document.getElementById('liveLocationModal');
+    modal.style.display = 'none';
+  }
+
+  function initLiveMap() {
+    setTimeout(() => {
+      const mapContainer = document.getElementById('liveLocationMap');
+      if (!liveMap) {
+        const { defaultLayer, baseMaps } = createBaseTileLayers();
+        liveMap = L.map(mapContainer, {
+          zoomControl: true,
+          attributionControl: true,
+          layers: [defaultLayer]
+        }).setView([14.6812, 77.6006], 14);
+
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(liveMap);
+      } else {
+        liveMap.invalidateSize();
+      }
+    }, 150);
+  }
+
+  function pollLiveLocation() {
+    if (!activeLiveUserId) return;
+
+    fetch(`/api/admin/fleet/status?user_id=${activeLiveUserId}`)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success || !res.fleet || res.fleet.length === 0) {
+          document.getElementById('liveHudLastPing').textContent = 'No signal recorded';
+          return;
+        }
+
+        const agent = res.fleet[0];
+        updateLiveDashboardUI(agent);
+
+        if (agent.latitude && agent.longitude) {
+          updateLiveMarkerPosition(agent.latitude, agent.longitude, agent.heading, agent.speed, agent.accuracy);
+        } else {
+          document.getElementById('liveHudLastPing').textContent = 'No GPS lock recorded yet';
+        }
+      })
+      .catch(err => {
+        console.warn('Live location poll error:', err);
+      });
+  }
+
+  function updateLiveDashboardUI(agent) {
+    document.getElementById('liveHudSpeed').textContent = `${Math.round(agent.speed || 0)} km/h`;
+    document.getElementById('liveHudBattery').textContent = agent.battery_pct != null ? `${agent.battery_pct}%` : '--%';
+    document.getElementById('liveHudCharging').textContent = agent.is_charging ? '⚡ Fast Charging' : 'Discharging';
+
+    const batIcon = document.getElementById('liveHudBatteryIcon');
+    if (agent.is_charging) {
+      batIcon.className = 'fas fa-bolt text-warning';
+    } else if (agent.battery_pct <= 20) {
+      batIcon.className = 'fas fa-battery-quarter text-danger';
+    } else {
+      batIcon.className = 'fas fa-battery-full text-success';
+    }
+
+    document.getElementById('liveHudAccuracy').textContent = agent.accuracy ? `±${Math.round(agent.accuracy)} m` : '±5 m';
+    document.getElementById('liveHudLastPing').textContent = `Last active: ${agent.last_active || 'Just now'}`;
+    document.getElementById('liveHudCoords').textContent = `${agent.latitude ? agent.latitude.toFixed(4) : '--'}, ${agent.longitude ? agent.longitude.toFixed(4) : '--'}`;
+  }
+
+  function updateLiveMarkerPosition(targetLat, targetLng, heading, speed, accuracy) {
+    if (!liveMap) return;
+
+    const targetLatLng = L.latLng(targetLat, targetLng);
+
+    // Custom Directional Vehicle Icon
+    const rot = Math.round(heading || 0);
+    const vehicleIconHtml = `
+      <div class="live-vehicle-marker" style="transform: rotate(${rot}deg);">
+        <i class="fas fa-location-arrow" style="font-size: 14px;"></i>
+      </div>
+    `;
+    const customIcon = L.divIcon({
+      className: 'live-marker-wrapper',
+      html: vehicleIconHtml,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+
+    if (!liveMarker) {
+      liveMarker = L.marker(targetLatLng, { icon: customIcon }).addTo(liveMap);
+      liveAccuracyCircle = L.circle(targetLatLng, {
+        radius: accuracy || 25,
+        color: '#0284c7',
+        fillColor: '#0284c7',
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(liveMap);
+
+      liveMap.setView(targetLatLng, 15);
+      lastLiveCoords = targetLatLng;
+    } else {
+      // Smooth linear interpolation (gliding) between coordinates over 1000ms
+      const startLatLng = lastLiveCoords || liveMarker.getLatLng();
+      const startTime = performance.now();
+      const duration = 1000;
+
+      function animateGliding(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(1.0, elapsed / duration);
+        // Easing function: easeOutQuad
+        const ease = 1 - (1 - progress) * (1 - progress);
+
+        const curLat = startLatLng.lat + (targetLatLng.lat - startLatLng.lat) * ease;
+        const curLng = startLatLng.lng + (targetLatLng.lng - startLatLng.lng) * ease;
+        const interpLatLng = L.latLng(curLat, curLng);
+
+        liveMarker.setLatLng(interpLatLng);
+        liveMarker.setIcon(customIcon);
+        if (liveAccuracyCircle) {
+          liveAccuracyCircle.setLatLng(interpLatLng);
+          if (accuracy) liveAccuracyCircle.setRadius(accuracy);
+        }
+
+        if (progress < 1.0) {
+          requestAnimationFrame(animateGliding);
+        } else {
+          lastLiveCoords = targetLatLng;
+        }
+      }
+
+      requestAnimationFrame(animateGliding);
+      liveMap.panTo(targetLatLng, { animate: true, duration: 1.0 });
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 2. Location History & Timeline Operations (Google Maps Timeline UI)
+  // ──────────────────────────────────────────────────────────────────────────
+  function openLocationHistoryModal(userId, agentName) {
+    activeHistoryUserId = userId;
+    const modal = document.getElementById('locationHistoryModal');
+    modal.style.display = 'flex';
+
+    const user = allFleetUsers.find(u => u.id === userId);
+    const uname = user ? user.username : 'user';
+    const initials = (agentName || uname).substring(0, 2).toUpperCase();
+
+    document.getElementById('histModalAvatar').textContent = initials;
+    document.getElementById('histModalTitle').textContent = `Location History: ${agentName || uname}`;
+    document.getElementById('histModalSubtitle').textContent = `@${uname} • Door-to-Door Route Audit`;
+
+    // Default to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('histDatePicker').value = today;
+
+    initHistoryMap();
+    loadHistoryForDate();
+  }
+
+  function closeLocationHistoryModal() {
+    stopRoutePlayback();
+    activeHistoryUserId = null;
+    currentHistoryPoints = [];
+    const modal = document.getElementById('locationHistoryModal');
+    modal.style.display = 'none';
+  }
+
+  function setHistoryDate(preset) {
+    const d = new Date();
+    if (preset === 'yesterday') {
+      d.setDate(d.getDate() - 1);
+    }
+    document.getElementById('histDatePicker').value = d.toISOString().split('T')[0];
+    loadHistoryForDate();
+  }
+
+  function initHistoryMap() {
+    setTimeout(() => {
+      const mapContainer = document.getElementById('historyLocationMap');
+      if (!historyMap) {
+        const { defaultLayer, baseMaps } = createBaseTileLayers();
+        historyMap = L.map(mapContainer, {
+          zoomControl: true,
+          attributionControl: true,
+          layers: [defaultLayer]
+        }).setView([14.6812, 77.6006], 13);
+
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(historyMap);
+      } else {
+        historyMap.invalidateSize();
+      }
+    }, 150);
+  }
+
+  function loadHistoryForDate() {
+    if (!activeHistoryUserId) return;
+    const dateVal = document.getElementById('histDatePicker').value;
+    if (!dateVal) return;
+
+    stopRoutePlayback();
+    const itemsContainer = document.getElementById('histTimelineItems');
+    itemsContainer.innerHTML = `
+      <div class="text-center py-5 text-muted">
+        <i class="fas fa-spinner fa-spin fa-2x mb-2 text-primary"></i>
+        <div>Processing simplified route geometry...</div>
+      </div>
+    `;
+
+    fetch(`/api/admin/fleet/history/${activeHistoryUserId}?date=${dateVal}`)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || 'Failed to load route history', 'error');
+          itemsContainer.innerHTML = `<div class="text-center py-4 text-danger">Error loading route history</div>`;
+          return;
+        }
+
+        renderHistoryData(res);
+      })
+      .catch(err => {
+        console.error('History fetch error:', err);
+        itemsContainer.innerHTML = `<div class="text-center py-4 text-danger">Network error connecting to telemetry service</div>`;
+      });
+  }
+
+  function renderHistoryData(data) {
+    const summary = data.summary || {};
+    document.getElementById('hStatDist').textContent = `${summary.total_distance_km || 0.0} km`;
+    const travelH = Math.floor((summary.travel_minutes || 0) / 60);
+    const travelM = (summary.travel_minutes || 0) % 60;
+    document.getElementById('hStatTravel').textContent = `${travelH}h ${travelM}m`;
+    document.getElementById('hStatStops').textContent = summary.stop_count || (data.stops || []).length;
+
+    let batDelta = '--%';
+    if (summary.battery_start != null && summary.battery_end != null) {
+      const delta = summary.battery_start - summary.battery_end;
+      batDelta = `-${delta}% (${summary.battery_start}% → ${summary.battery_end}%)`;
+    }
+    document.getElementById('hStatBat').textContent = batDelta;
+
+    // Render Timeline Items
+    const itemsContainer = document.getElementById('histTimelineItems');
+    itemsContainer.innerHTML = '';
+
+    if (!data.points || data.points.length === 0) {
+      itemsContainer.innerHTML = `
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-map-location-dot fa-2x mb-2 text-secondary"></i>
+          <div>No location breadcrumbs recorded for this date.</div>
+          <small class="text-muted">Agent may have been off-duty or stationary without motion.</small>
+        </div>
+      `;
+      clearHistoryMapLayers();
+      return;
+    }
+
+    // Start of Day Card
+    const startCard = document.createElement('div');
+    startCard.className = 'timeline-card';
+    startCard.style.borderLeftColor = '#10b981';
+    startCard.innerHTML = `
+      <div class="t-card-header">
+        <span style="color: #10b981;"><i class="fas fa-play-circle me-1"></i> Start of Day</span>
+        <span>${summary.start_time || '08:00 AM'}</span>
+      </div>
+      <div class="t-card-details">First telemetry ping verified • Battery: ${summary.battery_start || '--'}%</div>
+    `;
+    itemsContainer.appendChild(startCard);
+
+    // Trips and Stops Chronological Display
+    const trips = data.trips || [];
+    const stops = data.stops || [];
+
+    trips.forEach((t, i) => {
+      const tripCard = document.createElement('div');
+      tripCard.className = 'timeline-card card-trip';
+      tripCard.innerHTML = `
+        <div class="t-card-header">
+          <span style="color: var(--primary);"><i class="fas fa-motorcycle me-1"></i> Trip #${t.trip_number}</span>
+          <span>${t.start_formatted} → ${t.end_formatted}</span>
+        </div>
+        <div class="t-card-details">
+          <strong>${t.distance_km} km</strong> • ${t.duration_minutes} mins • Avg ${t.avg_speed_kmh} km/h
+        </div>
+      `;
+      itemsContainer.appendChild(tripCard);
+
+      if (stops[i]) {
+        const s = stops[i];
+        const stopCard = document.createElement('div');
+        stopCard.className = 'timeline-card card-stop';
+        stopCard.innerHTML = `
+          <div class="t-card-header">
+            <span style="color: #ef4444;"><i class="fas fa-location-dot me-1"></i> Stop #${i + 1}: ${s.village_name}</span>
+            <span>${s.duration_minutes} mins</span>
+          </div>
+          <div class="t-card-details">
+            Arrival: ${s.arrival_formatted} • Departed: ${s.departure_formatted}
+            ${s.village_distance_km ? `(${s.village_distance_km} km from center)` : ''}
+          </div>
+        `;
+        itemsContainer.appendChild(stopCard);
+      }
+    });
+
+    // End of Day Card
+    const endCard = document.createElement('div');
+    endCard.className = 'timeline-card';
+    endCard.style.borderLeftColor = '#64748b';
+    endCard.innerHTML = `
+      <div class="t-card-header">
+        <span style="color: var(--text);"><i class="fas fa-flag-checkered me-1"></i> End of Recorded Route</span>
+        <span>${summary.last_time || '--:--'}</span>
+      </div>
+      <div class="t-card-details">Final ping recorded • Battery: ${summary.battery_end || '--'}%</div>
+    `;
+    itemsContainer.appendChild(endCard);
+
+    // Render Leaflet Polyline & Markers
+    renderHistoryMapPolyline(data.points, stops);
+  }
+
+  function clearHistoryMapLayers() {
+    if (historyPolyline && historyMap) {
+      historyMap.removeLayer(historyPolyline);
+      historyPolyline = null;
+    }
+    if (playbackMarker && historyMap) {
+      historyMap.removeLayer(playbackMarker);
+      playbackMarker = null;
+    }
+    historyMarkers.forEach(m => historyMap.removeLayer(m));
+    historyMarkers = [];
+  }
+
+  function renderHistoryMapPolyline(points, stops) {
+    if (!historyMap || !points || points.length === 0) return;
+    clearHistoryMapLayers();
+
+    currentHistoryPoints = points;
+    const latLngs = points.map(p => [p[0], p[1]]);
+
+    // Styled route polyline
+    historyPolyline = L.polyline(latLngs, {
+      color: '#0284c7',
+      weight: 5,
+      opacity: 0.85,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(historyMap);
+
+    // Start Pin (Green)
+    const startPin = L.circleMarker(latLngs[0], {
+      radius: 7,
+      color: '#10b981',
+      fillColor: '#10b981',
+      fillOpacity: 1,
+      weight: 2
+    }).bindPopup('<strong>Start of Journey</strong>').addTo(historyMap);
+    historyMarkers.push(startPin);
+
+    // End Pin (Blue/Dark)
+    const endPin = L.circleMarker(latLngs[latLngs.length - 1], {
+      radius: 7,
+      color: '#0284c7',
+      fillColor: '#0284c7',
+      fillOpacity: 1,
+      weight: 2
+    }).bindPopup('<strong>End of Route</strong>').addTo(historyMap);
+    historyMarkers.push(endPin);
+
+    // Stop Pins (Red with Number)
+    (stops || []).forEach((s, idx) => {
+      const stopIcon = L.divIcon({
+        className: 'stop-pin-wrapper',
+        html: `<div class="stop-marker-pin">${idx + 1}</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      const stopMarker = L.marker([s.latitude, s.longitude], { icon: stopIcon })
+        .bindPopup(`<strong>Stop #${idx + 1}: ${s.village_name}</strong><br>Duration: ${s.duration_minutes} mins<br>${s.arrival_formatted} - ${s.departure_formatted}`)
+        .addTo(historyMap);
+      historyMarkers.push(stopMarker);
+    });
+
+    historyMap.fitBounds(historyPolyline.getBounds(), { padding: [40, 40] });
+
+    // Initialize playback scrubber
+    document.getElementById('routeScrubber').value = 0;
+    document.getElementById('routeScrubber').max = Math.max(1, points.length - 1);
+    document.getElementById('scrubberTimeBadge').textContent = points[0][4] || '--:--';
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. Interactive Route Playback Scrubber
+  // ──────────────────────────────────────────────────────────────────────────
+  function toggleRoutePlayback() {
+    if (playbackTimer) {
+      stopRoutePlayback();
+    } else {
+      startRoutePlayback();
+    }
+  }
+
+  function startRoutePlayback() {
+    if (!currentHistoryPoints || currentHistoryPoints.length === 0) return;
+
+    const playBtn = document.getElementById('playIcon');
+    playBtn.className = 'fas fa-pause';
+
+    if (playbackIndex >= currentHistoryPoints.length - 1) {
+      playbackIndex = 0;
+    }
+
+    const intervalMs = Math.max(80, Math.floor(400 / playbackSpeed));
+    playbackTimer = setInterval(() => {
+      playbackIndex++;
+      if (playbackIndex >= currentHistoryPoints.length) {
+        stopRoutePlayback();
+        return;
+      }
+      updateScrubberPosition(playbackIndex);
+    }, intervalMs);
+  }
+
+  function stopRoutePlayback() {
+    if (playbackTimer) {
+      clearInterval(playbackTimer);
+      playbackTimer = null;
+    }
+    const playBtn = document.getElementById('playIcon');
+    if (playBtn) playBtn.className = 'fas fa-play';
+  }
+
+  function onScrubberInput(val) {
+    stopRoutePlayback();
+    playbackIndex = parseInt(val, 10);
+    updateScrubberPosition(playbackIndex);
+  }
+
+  function setPlaybackSpeed(speed, btn) {
+    playbackSpeed = speed;
+    document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (playbackTimer) {
+      stopRoutePlayback();
+      startRoutePlayback();
+    }
+  }
+
+  function updateScrubberPosition(index) {
+    if (!currentHistoryPoints || !currentHistoryPoints[index]) return;
+    const pt = currentHistoryPoints[index];
+    const latLng = [pt[0], pt[1]];
+
+    document.getElementById('routeScrubber').value = index;
+    document.getElementById('scrubberTimeBadge').textContent = pt[4] || '--:--';
+
+    // Vehicle Playback Icon
+    const rot = Math.round(pt[3] || 0);
+    const playbackIcon = L.divIcon({
+      className: 'playback-vehicle-wrapper',
+      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #f59e0b;"><i class="fas fa-motorcycle" style="font-size: 13px;"></i></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    if (!playbackMarker && historyMap) {
+      playbackMarker = L.marker(latLng, { icon: playbackIcon }).addTo(historyMap);
+    } else if (playbackMarker) {
+      playbackMarker.setLatLng(latLng);
+      playbackMarker.setIcon(playbackIcon);
+    }
+  }
+
+
+  // ==========================================================================
+  // UNIFIED DEVICE & TELEMETRY INSPECTOR ENGINE (MULTI-DEVICE LIVE MAP & HUD)
+  // ==========================================================================
+  let activeInspectorUserId = null;
+  let activeInspectorDeviceId = null;
+  let activeInspectorUser = null;
+  let inspectorMap = null;
+  let inspectorMarker = null;
+  let inspectorAccuracyCircle = null;
+  let inspectorLiveTimer = null;
+  let inspectorMode = 'live'; // 'live' or 'history'
+  let inspectorHistoryPoints = [];
+  let inspectorHistoryPolyline = null;
+  let inspectorHistoryMarkers = [];
+  let inspectorPlaybackTimer = null;
+  let inspectorPlaybackIndex = 0;
+  let inspectorPlaybackSpeed = 1;
+  let inspectorPlaybackMarker = null;
+  let inspectorLastCoords = null;
+
+  function openUserDeviceInspector(userId, preferredDeviceId) {
+    activeInspectorUserId = userId;
+    const user = allFleetUsers.find(u => u.id === userId);
+    if (!user) {
+      showToast('Agent details not found', 'error');
+      return;
+    }
+    activeInspectorUser = user;
+
+    const modal = document.getElementById('userDeviceInspectorModal');
+    modal.style.display = 'flex';
+
+    // Populate user profile info in modal header
+    const initials = (user.employee_name || user.username).substring(0, 2).toUpperCase();
+    document.getElementById('inspAvatar').textContent = initials;
+    document.getElementById('inspName').textContent = user.employee_name || user.username;
+    
+    let roleClass = 'junior';
+    let roleTitle = 'Junior';
+    if (user.employee_level === 'admin') { roleClass = 'admin'; roleTitle = 'Admin'; }
+    else if (user.employee_level === 's') { roleClass = 'senior'; roleTitle = 'Senior'; }
+    else if (user.employee_level === 'm') { roleClass = 'manager'; roleTitle = 'Manager'; }
+
+    document.getElementById('inspHandle').innerHTML = `@${user.username} • ${user.phone} • <span class="role-pill ${roleClass}">${roleTitle}</span>`;
+    
+    let dotColor = 'gray';
+    if (user.presence === 'online') dotColor = 'green';
+    else if (user.presence === 'active_today') dotColor = 'cyan';
+    else if (user.presence === 'locked') dotColor = 'red';
+    else if (user.presence === 'pending') dotColor = 'amber';
+    document.getElementById('inspStatusDot').className = `tile-status-dot radar-dot sm ${dotColor}`;
+
+    // Update Lock button text
+    const lockBtnText = document.getElementById('btnInspLockText');
+    if (lockBtnText) {
+      lockBtnText.textContent = user.credentials_active ? 'Lock Account' : 'Unlock Account';
+    }
+
+    // Determine initial active device
+    const devices = user.devices && user.devices.length > 0 ? user.devices : [];
+    document.getElementById('inspDeviceCount').textContent = devices.filter(d => !d.is_pending).length;
+
+    let targetDevId = preferredDeviceId;
+    if (!targetDevId) {
+      const activePhysical = devices.find(d => d.is_active && !d.is_pending);
+      if (activePhysical) {
+        targetDevId = activePhysical.device_id;
+      } else if (devices.length > 0) {
+        targetDevId = devices[0].device_id;
+      }
+    }
+    activeInspectorDeviceId = targetDevId;
+
+    // Render Devices List in Left Sidebar
+    renderInspectorDevicesList(devices, activeInspectorDeviceId);
+
+    // Initialize Map
+    initInspectorMap();
+
+    // Default to Live Mode
+    switchInspectorMode('live');
+  }
+
+  function renderInspectorDevicesList(devices, selectedDevId) {
+    const container = document.getElementById('inspDevicesList');
+    container.innerHTML = '';
+
+    if (!devices || devices.length === 0) {
+      container.innerHTML = `
+        <div style="padding: 24px 12px; text-align: center; color: var(--text-secondary);">
+          <i class="fas fa-mobile-alt fa-2x mb-2 text-muted"></i>
+          <div style="font-weight: 600;">No Devices Bound</div>
+          <small class="text-muted">Agent will register their phone upon first login.</small>
+        </div>
+      `;
+      return;
+    }
+
+    devices.forEach(d => {
+      const isSelected = (d.device_id === selectedDevId);
+      const isPend = d.is_pending;
+      const isAct = d.is_active;
+
+      let statusBadge = isPend ? '<span class="badge-status status-inactive">Pending</span>' :
+                        (isAct ? (d.presence === 'online' ? '<span class="badge-status status-online"><i class="fas fa-circle-dot me-1"></i> Online</span>' : '<span class="badge-status status-active">Active</span>') :
+                        '<span class="badge-status status-inactive">Inactive</span>');
+
+      // Telemetry Badges
+      let batPct = d.latest_battery_pct != null ? d.latest_battery_pct : null;
+      let batClass = 'pill-battery-ok';
+      let batIcon = 'fa-battery-full';
+      if (d.is_charging) {
+        batIcon = 'fa-bolt text-warning';
+      } else if (batPct != null) {
+        if (batPct <= 20) { batClass = 'pill-battery-crit'; batIcon = 'fa-battery-quarter'; }
+        else if (batPct <= 45) { batClass = 'pill-battery-low'; batIcon = 'fa-battery-half'; }
+      }
+      let batHtml = batPct != null ? `<span class="dev-pill ${batClass}"><i class="fas ${batIcon}"></i> ${batPct}%</span>` : `<span class="dev-pill text-muted"><i class="fas fa-battery-empty"></i> --%</span>`;
+
+      let spd = d.latest_speed || 0.0;
+      let motionHtml = (spd >= 3.0)
+        ? `<span class="dev-pill pill-motion"><i class="fas fa-motorcycle text-primary"></i> ${Math.round(spd)} km/h</span>`
+        : `<span class="dev-pill text-muted"><i class="fas fa-pause"></i> Still</span>`;
+
+      let gpsHtml = (d.gps_status === 'active')
+        ? `<span class="dev-pill pill-online"><i class="fas fa-satellite-dish"></i> GPS Lock</span>`
+        : `<span class="dev-pill text-danger"><i class="fas fa-satellite"></i> No GPS</span>`;
+
+      const card = document.createElement('div');
+      card.className = `device-card-item ${isSelected ? 'selected' : ''}`;
+      card.onclick = () => selectInspectorDevice(d.device_id);
+
+      card.innerHTML = `
+        <div class="dev-card-head">
+          <div class="dev-model-title" title="${d.device_model}">
+            <i class="fas fa-mobile-screen ${isAct ? 'text-primary' : 'text-muted'} me-1"></i>
+            <strong>${d.device_model}</strong>
+          </div>
+          ${statusBadge}
+        </div>
+        <div class="dev-uuid-row monospace-text" title="${d.device_id}">
+          ${isPend ? 'Hardware unlinked • Will bind on next login' : 'UUID: ' + d.device_id.substring(0, 16) + '…'}
+        </div>
+        <div class="dev-telemetry-row">
+          ${batHtml}
+          ${motionHtml}
+          ${gpsHtml}
+        </div>
+        <div class="dev-last-active-row">
+          <i class="far fa-clock me-1"></i> ${d.relative_last_active}
+        </div>
+        <div class="dev-action-row">
+          <button type="button" class="btn-dev-action" onclick="event.stopPropagation(); triggerDeviceLive('${d.device_id}')" title="Track Live">
+            <i class="fas fa-crosshairs me-1"></i> Live
+          </button>
+          <button type="button" class="btn-dev-action" onclick="event.stopPropagation(); triggerDeviceHistory('${d.device_id}')" title="View History">
+            <i class="fas fa-route me-1"></i> History
+          </button>
+          <button type="button" class="btn-dev-action btn-dev-reset" onclick="event.stopPropagation(); confirmResetDeviceSpecific(${activeInspectorUser.id}, '${activeInspectorUser.username}', '${d.device_id}', '${d.device_model}')" title="Reset Binding">
+            <i class="fas fa-rotate me-1"></i> Reset
+          </button>
+        </div>
+      `;
+
+      container.appendChild(card);
+    });
+  }
+
+  function selectInspectorDevice(deviceId) {
+    activeInspectorDeviceId = deviceId;
+    if (activeInspectorUser && activeInspectorUser.devices) {
+      renderInspectorDevicesList(activeInspectorUser.devices, activeInspectorDeviceId);
+    }
+
+    if (inspectorMode === 'live') {
+      pollInspectorDeviceLive();
+    } else {
+      const dateVal = document.getElementById('inspHistoryDate').value;
+      loadInspectorHistoryForDate(dateVal);
+    }
+  }
+
+  function triggerDeviceLive(deviceId) {
+    activeInspectorDeviceId = deviceId;
+    switchInspectorMode('live');
+  }
+
+  function triggerDeviceHistory(deviceId) {
+    activeInspectorDeviceId = deviceId;
+    switchInspectorMode('history');
+  }
+
+  function confirmResetDeviceSpecific(userId, username, deviceId, deviceModel) {
+    confirmResetDevice(userId, username, deviceId, deviceModel);
+  }
+
+  function handleInspectorLogout() {
+    if (!activeInspectorUser) return;
+    confirmForceLogout(activeInspectorUser.id, activeInspectorUser.username);
+  }
+
+  function handleInspectorLock() {
+    if (!activeInspectorUser) return;
+    toggleUserLock(activeInspectorUser.id, activeInspectorUser.username, activeInspectorUser.credentials_active);
+    setTimeout(() => {
+      activeInspectorUser.credentials_active = !activeInspectorUser.credentials_active;
+      const lockBtnText = document.getElementById('btnInspLockText');
+      if (lockBtnText) {
+        lockBtnText.textContent = activeInspectorUser.credentials_active ? 'Lock Account' : 'Unlock Account';
+      }
+    }, 500);
+  }
+
+  function switchInspectorMode(mode) {
+    inspectorMode = mode;
+    const btnLive = document.getElementById('btnInspModeLive');
+    const btnHist = document.getElementById('btnInspModeHistory');
+    const datePickerWrap = document.getElementById('inspDatePickerWrap');
+    const playbackBar = document.getElementById('inspPlaybackBar');
+
+    if (mode === 'live') {
+      btnLive.classList.add('active');
+      btnHist.classList.remove('active');
+      datePickerWrap.style.display = 'none';
+      playbackBar.style.display = 'none';
+
+      clearInspectorHistoryMap();
+      stopInspectorPlayback();
+
+      // Start 10-second non-destructive polling
+      pollInspectorDeviceLive();
+      if (inspectorLiveTimer) clearInterval(inspectorLiveTimer);
+      inspectorLiveTimer = setInterval(pollInspectorDeviceLive, 10000);
+    } else {
+      btnLive.classList.remove('active');
+      btnHist.classList.add('active');
+      datePickerWrap.style.display = 'flex';
+      playbackBar.style.display = 'flex';
+
+      if (inspectorLiveTimer) {
+        clearInterval(inspectorLiveTimer);
+        inspectorLiveTimer = null;
+      }
+      if (inspectorMarker && inspectorMap) {
+        inspectorMap.removeLayer(inspectorMarker);
+        inspectorMarker = null;
+      }
+      if (inspectorAccuracyCircle && inspectorMap) {
+        inspectorMap.removeLayer(inspectorAccuracyCircle);
+        inspectorAccuracyCircle = null;
+      }
+
+      // Default to today
+      const dateInput = document.getElementById('inspHistoryDate');
+      if (!dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+      }
+      loadInspectorHistoryForDate(dateInput.value);
+    }
+  }
+
+  function initInspectorMap() {
+    setTimeout(() => {
+      const container = document.getElementById('inspectorLeafletMap');
+      if (!inspectorMap) {
+        const { defaultLayer, baseMaps } = createBaseTileLayers();
+        inspectorMap = L.map(container, {
+          zoomControl: true,
+          attributionControl: true,
+          layers: [defaultLayer]
+        }).setView([14.6812, 77.6006], 14);
+
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(inspectorMap);
+      } else {
+        inspectorMap.invalidateSize();
+      }
+    }, 150);
+  }
+
+  function pollInspectorDeviceLive() {
+    if (!activeInspectorUserId) return;
+
+    let url = `/api/admin/fleet/status?user_id=${activeInspectorUserId}`;
+    if (activeInspectorDeviceId && activeInspectorDeviceId !== 'PENDING') {
+      url += `&device_id=${encodeURIComponent(activeInspectorDeviceId)}`;
+    }
+
+    fetch(url)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success || !res.fleet || res.fleet.length === 0) {
+          document.getElementById('hudLastPing').textContent = 'No signal recorded';
+          return;
+        }
+
+        let agent = res.fleet.find(d => d.device_id === activeInspectorDeviceId) || res.fleet[0];
+        updateInspectorLiveHUD(agent);
+
+        if (agent.latitude && agent.longitude) {
+          updateInspectorMarker(agent.latitude, agent.longitude, agent.heading, agent.speed, agent.accuracy);
+        } else {
+          document.getElementById('hudLastPing').textContent = 'Waiting for GPS lock...';
+        }
+      })
+      .catch(err => {
+        console.warn('Inspector live poll error:', err);
+      });
+  }
+
+  function updateInspectorLiveHUD(agent) {
+    document.getElementById('hudDeviceModel').textContent = agent.device_model || 'Mobile Device';
+    document.getElementById('hudBattery').textContent = agent.battery_pct != null ? `${agent.battery_pct}%${agent.is_charging ? ' ⚡' : ''}` : '--%';
+    document.getElementById('hudSpeed').textContent = `${Math.round(agent.speed || 0)} km/h`;
+    document.getElementById('hudGps').textContent = agent.gps_status === 'active' ? 'Active Lock' : 'No GPS';
+    document.getElementById('hudLastPing').textContent = agent.last_active || 'Just now';
+  }
+
+  function updateInspectorMarker(targetLat, targetLng, heading, speed, accuracy) {
+    if (!inspectorMap) return;
+
+    const targetLatLng = L.latLng(targetLat, targetLng);
+    const rot = Math.round(heading || 0);
+    const customIcon = L.divIcon({
+      className: 'live-marker-wrapper',
+      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg);"><i class="fas fa-location-arrow" style="font-size: 14px;"></i></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+
+    if (!inspectorMarker) {
+      inspectorMarker = L.marker(targetLatLng, { icon: customIcon }).addTo(inspectorMap);
+      inspectorAccuracyCircle = L.circle(targetLatLng, {
+        radius: accuracy || 25,
+        color: '#0284c7',
+        fillColor: '#0284c7',
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(inspectorMap);
+
+      inspectorMap.setView(targetLatLng, 15);
+      inspectorLastCoords = targetLatLng;
+    } else {
+      const startLatLng = inspectorLastCoords || inspectorMarker.getLatLng();
+      const startTime = performance.now();
+      const duration = 1000;
+
+      function animateGliding(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(1.0, elapsed / duration);
+        const ease = 1 - (1 - progress) * (1 - progress);
+
+        const curLat = startLatLng.lat + (targetLatLng.lat - startLatLng.lat) * ease;
+        const curLng = startLatLng.lng + (targetLatLng.lng - startLatLng.lng) * ease;
+        const interpLatLng = L.latLng(curLat, curLng);
+
+        inspectorMarker.setLatLng(interpLatLng);
+        inspectorMarker.setIcon(customIcon);
+        if (inspectorAccuracyCircle) {
+          inspectorAccuracyCircle.setLatLng(interpLatLng);
+          if (accuracy) inspectorAccuracyCircle.setRadius(accuracy);
+        }
+
+        if (progress < 1.0) {
+          requestAnimationFrame(animateGliding);
+        } else {
+          inspectorLastCoords = targetLatLng;
+        }
+      }
+
+      requestAnimationFrame(animateGliding);
+      inspectorMap.panTo(targetLatLng, { animate: true, duration: 1.0 });
+    }
+  }
+
+  function loadInspectorHistoryForDate(dateStr) {
+    if (!activeInspectorUserId || !dateStr) return;
+    stopInspectorPlayback();
+
+    let url = `/api/admin/fleet/history/${activeInspectorUserId}?date=${dateStr}`;
+    if (activeInspectorDeviceId && activeInspectorDeviceId !== 'PENDING') {
+      url += `&device_id=${encodeURIComponent(activeInspectorDeviceId)}`;
+    }
+
+    fetch(url)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || 'Failed to load route history', 'error');
+          return;
+        }
+        renderInspectorHistoryMap(res.points || [], res.stops || []);
+      })
+      .catch(err => {
+        console.error('History load error:', err);
+      });
+  }
+
+  function clearInspectorHistoryMap() {
+    if (inspectorHistoryPolyline && inspectorMap) {
+      inspectorMap.removeLayer(inspectorHistoryPolyline);
+      inspectorHistoryPolyline = null;
+    }
+    if (inspectorPlaybackMarker && inspectorMap) {
+      inspectorMap.removeLayer(inspectorPlaybackMarker);
+      inspectorPlaybackMarker = null;
+    }
+    inspectorHistoryMarkers.forEach(m => inspectorMap.removeLayer(m));
+    inspectorHistoryMarkers = [];
+  }
+
+  function renderInspectorHistoryMap(points, stops) {
+    if (!inspectorMap) return;
+    clearInspectorHistoryMap();
+
+    inspectorHistoryPoints = points;
+    if (!points || points.length === 0) {
+      document.getElementById('hudLastPing').textContent = 'No route points on this date';
+      return;
+    }
+
+    const latLngs = points.map(p => [p[0], p[1]]);
+    inspectorHistoryPolyline = L.polyline(latLngs, {
+      color: '#0284c7',
+      weight: 5,
+      opacity: 0.85,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
+
+    const startPin = L.circleMarker(latLngs[0], {
+      radius: 7, color: '#10b981', fillColor: '#10b981', fillOpacity: 1, weight: 2
+    }).bindPopup('<strong>Start of Route</strong>').addTo(inspectorMap);
+    inspectorHistoryMarkers.push(startPin);
+
+    const endPin = L.circleMarker(latLngs[latLngs.length - 1], {
+      radius: 7, color: '#0284c7', fillColor: '#0284c7', fillOpacity: 1, weight: 2
+    }).bindPopup('<strong>End of Route</strong>').addTo(inspectorMap);
+    inspectorHistoryMarkers.push(endPin);
+
+    (stops || []).forEach((s, idx) => {
+      const stopIcon = L.divIcon({
+        className: 'stop-pin-wrapper',
+        html: `<div class="stop-marker-pin">${idx + 1}</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      const m = L.marker([s.latitude, s.longitude], { icon: stopIcon })
+        .bindPopup(`<strong>Stop #${idx + 1}: ${s.village_name}</strong><br>Duration: ${s.duration_minutes} mins`)
+        .addTo(inspectorMap);
+      inspectorHistoryMarkers.push(m);
+    });
+
+    inspectorMap.fitBounds(inspectorHistoryPolyline.getBounds(), { padding: [40, 40] });
+
+    // Scrubber setup
+    document.getElementById('inspScrubber').value = 0;
+    document.getElementById('inspScrubber').max = Math.max(1, points.length - 1);
+    document.getElementById('inspScrubberTime').textContent = points[0][4] || '--:--';
+  }
+
+  function toggleInspectorPlayback() {
+    if (inspectorPlaybackTimer) {
+      stopInspectorPlayback();
+    } else {
+      startInspectorPlayback();
+    }
+  }
+
+  function startInspectorPlayback() {
+    if (!inspectorHistoryPoints || inspectorHistoryPoints.length === 0) return;
+    const icon = document.getElementById('iconInspPlay');
+    if (icon) icon.className = 'fas fa-pause';
+
+    if (inspectorPlaybackIndex >= inspectorHistoryPoints.length - 1) {
+      inspectorPlaybackIndex = 0;
+    }
+
+    const intervalMs = Math.max(80, Math.floor(400 / inspectorPlaybackSpeed));
+    inspectorPlaybackTimer = setInterval(() => {
+      inspectorPlaybackIndex++;
+      if (inspectorPlaybackIndex >= inspectorHistoryPoints.length) {
+        stopInspectorPlayback();
+        return;
+      }
+      updateInspectorScrubberPosition(inspectorPlaybackIndex);
+    }, intervalMs);
+  }
+
+  function stopInspectorPlayback() {
+    if (inspectorPlaybackTimer) {
+      clearInterval(inspectorPlaybackTimer);
+      inspectorPlaybackTimer = null;
+    }
+    const icon = document.getElementById('iconInspPlay');
+    if (icon) icon.className = 'fas fa-play';
+  }
+
+  function handleInspectorScrub(val) {
+    stopInspectorPlayback();
+    inspectorPlaybackIndex = parseInt(val, 10);
+    updateInspectorScrubberPosition(inspectorPlaybackIndex);
+  }
+
+  function setInspectorSpeed(speed, btn) {
+    inspectorPlaybackSpeed = speed;
+    btn.parentElement.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (inspectorPlaybackTimer) {
+      stopInspectorPlayback();
+      startInspectorPlayback();
+    }
+  }
+
+  function updateInspectorScrubberPosition(index) {
+    if (!inspectorHistoryPoints || !inspectorHistoryPoints[index]) return;
+    const pt = inspectorHistoryPoints[index];
+    const latLng = [pt[0], pt[1]];
+
+    document.getElementById('inspScrubber').value = index;
+    document.getElementById('inspScrubberTime').textContent = pt[4] || '--:--';
+
+    const rot = Math.round(pt[3] || 0);
+    const playbackIcon = L.divIcon({
+      className: 'playback-vehicle-wrapper',
+      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #f59e0b;"><i class="fas fa-motorcycle" style="font-size: 13px;"></i></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    if (!inspectorPlaybackMarker && inspectorMap) {
+      inspectorPlaybackMarker = L.marker(latLng, { icon: playbackIcon }).addTo(inspectorMap);
+    } else if (inspectorPlaybackMarker) {
+      inspectorPlaybackMarker.setLatLng(latLng);
+      inspectorPlaybackMarker.setIcon(playbackIcon);
+    }
+  }
+
+  function closeUserDeviceInspector() {
+    if (inspectorLiveTimer) {
+      clearInterval(inspectorLiveTimer);
+      inspectorLiveTimer = null;
+    }
+    stopInspectorPlayback();
+    activeInspectorUserId = null;
+    activeInspectorDeviceId = null;
+    activeInspectorUser = null;
+    inspectorLastCoords = null;
+    const modal = document.getElementById('userDeviceInspectorModal');
+    modal.style.display = 'none';
+  }
+
 </script>
 
 {% endblock %}

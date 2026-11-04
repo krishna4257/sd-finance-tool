@@ -267,7 +267,7 @@ def broadcast_submission_event(vid, event_data):
 
 
 def ensure_user_devices_table(cur):
-    """Ensure user_devices table has device_model column and unique index on (user_id, device_id)."""
+    """Ensure user_devices table has device_model and real-time telemetry columns."""
     cur.execute("""
         CREATE TABLE IF NOT EXISTS user_devices (
             id SERIAL PRIMARY KEY,
@@ -280,11 +280,84 @@ def ensure_user_devices_table(cur):
         )
     """)
     cur.execute("""
-        ALTER TABLE user_devices ADD COLUMN IF NOT EXISTS device_model TEXT
+        ALTER TABLE user_devices 
+            ADD COLUMN IF NOT EXISTS device_model TEXT,
+            ADD COLUMN IF NOT EXISTS latest_latitude DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS latest_longitude DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS latest_speed REAL DEFAULT 0.0,
+            ADD COLUMN IF NOT EXISTS latest_heading REAL DEFAULT 0.0,
+            ADD COLUMN IF NOT EXISTS latest_accuracy REAL,
+            ADD COLUMN IF NOT EXISTS latest_battery_pct SMALLINT,
+            ADD COLUMN IF NOT EXISTS is_charging BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS gps_status VARCHAR(20) DEFAULT 'active';
     """)
     cur.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_user_devices_user_device 
         ON user_devices (user_id, device_id)
+    """)
+    # Auto-deduplicate active devices for the same user and model (keep only most recently active)
+    try:
+        cur.execute("""
+            UPDATE user_devices
+            SET is_active = FALSE
+            WHERE id IN (
+                SELECT id
+                FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY user_id, COALESCE(device_model, 'unknown')
+                               ORDER BY last_active DESC NULLS LAST, id DESC
+                           ) as rn
+                    FROM user_devices
+                    WHERE is_active = TRUE AND device_id != 'PENDING'
+                ) sub
+                WHERE rn > 1
+            );
+        """)
+    except Exception:
+        pass
+
+
+def ensure_location_tables(cur):
+    """Ensure user_locations and user_daily_trips tables exist with proper B-Tree indexes."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_locations (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_id VARCHAR(64) NOT NULL,
+            latitude DOUBLE PRECISION NOT NULL,
+            longitude DOUBLE PRECISION NOT NULL,
+            accuracy REAL,
+            speed REAL DEFAULT 0.0,
+            heading REAL DEFAULT 0.0,
+            battery_pct SMALLINT,
+            is_charging BOOLEAN DEFAULT FALSE,
+            activity_type VARCHAR(20) DEFAULT 'unknown',
+            recorded_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_locations_user_recorded 
+        ON user_locations (user_id, recorded_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_user_locations_recorded_at 
+        ON user_locations (recorded_at);
+
+        CREATE TABLE IF NOT EXISTS user_daily_trips (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            trip_date DATE NOT NULL,
+            total_distance_km NUMERIC(8, 2) DEFAULT 0.00,
+            travel_minutes INTEGER DEFAULT 0,
+            stop_minutes INTEGER DEFAULT 0,
+            stop_count INTEGER DEFAULT 0,
+            first_ping_at TIMESTAMPTZ,
+            last_ping_at TIMESTAMPTZ,
+            battery_start_pct SMALLINT,
+            battery_end_pct SMALLINT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (user_id, trip_date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_daily_trips_user_date 
+        ON user_daily_trips (user_id, trip_date DESC);
     """)
 
 
@@ -881,6 +954,14 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 # ChitBase Blueprint Registration
 from chit_controller import chit_bp
 app.register_blueprint(chit_bp)
+
+# Central Banking Blueprint Registration
+from banking_controller import banking_bp
+app.register_blueprint(banking_bp)
+
+# Fleet Telemetry & Mobile Hub Registration
+from fleet_telemetry_controller import register_fleet_telemetry_routes
+register_fleet_telemetry_routes(app, csrf)
 
 # Custom mobile rate limit key function
 def mobile_rate_limit_key():
@@ -1481,6 +1562,65 @@ def api_villages_by_employee():
         {"vid": r[0], "name": r[1]}
         for r in rows
     ])
+
+@app.route("/api/village/cashbags", methods=["GET"])
+@login_required
+def api_village_cashbags():
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, emp1, emp2, name, village_codes, week_ending_day FROM village_cashbags ORDER BY emp1, name")
+        result = [{
+            "id": str(r[0]),
+            "emp1": r[1],
+            "emp2": r[2],
+            "name": r[3],
+            "village_codes": r[4] or [],
+            "week_ending_day": r[5] or 3
+        } for r in cur.fetchall()]
+        return jsonify({"success": True, "cashbags": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route("/api/village/cashbags/save", methods=["POST"])
+@login_required
+def api_village_cashbags_save():
+    data = request.get_json(silent=True) or {}
+    emp1 = data.get("emp1")
+    emp2 = data.get("emp2")
+    cashbags = data.get("cashbags", [])
+    if not emp1:
+        return jsonify({"success": False, "error": "emp1 is required"}), 400
+    
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        if emp2 and str(emp2).lower() not in ("none", "null"):
+            cur.execute("DELETE FROM village_cashbags WHERE emp1 = %s AND emp2 = %s;", (emp1, emp2))
+        else:
+            cur.execute("DELETE FROM village_cashbags WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = %s);", (emp1, emp1))
+        
+        for cb in cashbags:
+            name = cb.get("name") or "Main Cashbag"
+            vcodes = cb.get("village_codes") or []
+            wday = cb.get("week_ending_day") or 3
+            actual_emp2 = emp2 if emp2 and str(emp2).lower() not in ("none", "null") else None
+            cur.execute("""
+                INSERT INTO village_cashbags (emp1, emp2, name, village_codes, week_ending_day)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (emp1, actual_emp2, name, vcodes, wday))
+        conn.commit()
+        return jsonify({"success": True, "message": "Cashbags updated successfully"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 # ------------------------------
 # GET CONTEXT API (missing)
 # ------------------------------
@@ -3082,6 +3222,15 @@ def mobile_login():
 
         if device_id and device_id != 'PENDING':
             ensure_user_devices_table(cur)
+            # If this user already has an active record for the same device_model with an older UUID,
+            # retire the older record so reinstalling or clearing app data does not create duplicate entries.
+            if device_model and device_model != "Mobile Device":
+                cur.execute("""
+                    UPDATE user_devices
+                    SET is_active = FALSE
+                    WHERE user_id = %s AND device_model = %s AND device_id != %s AND is_active = TRUE
+                """, (user_id, device_model, device_id))
+
             # Record/Upsert this device for the user account (including admins)
             cur.execute("""
                 INSERT INTO user_devices (user_id, device_id, device_model, is_active, last_active, created_at)
@@ -3092,6 +3241,13 @@ def mobile_login():
                     device_model = COALESCE(EXCLUDED.device_model, user_devices.device_model),
                     is_active = TRUE
             """, (user_id, device_id, device_model))
+
+            # Deactivate any open PENDING slot since a physical device is now bound
+            cur.execute("""
+                UPDATE user_devices
+                SET is_active = FALSE
+                WHERE user_id = %s AND device_id = 'PENDING' AND is_active = TRUE
+            """, (user_id,))
             conn.commit()
 
         if level and level.strip().lower() in ("j", "m", "s"):
@@ -11932,6 +12088,20 @@ def village_page():
             
         data.append(row_dict)
 
+    all_cashbags = []
+    try:
+        cur.execute("SELECT id, emp1, emp2, name, village_codes, week_ending_day FROM village_cashbags ORDER BY emp1, name")
+        all_cashbags = [{
+            "id": str(r[0]),
+            "emp1": r[1],
+            "emp2": r[2],
+            "name": r[3],
+            "village_codes": r[4] or [],
+            "week_ending_day": r[5] or 3
+        } for r in cur.fetchall()]
+    except Exception:
+        all_cashbags = []
+
     cur.close()
     conn.close()
 
@@ -11946,7 +12116,8 @@ def village_page():
         data=data,
         total_villages=len(data),
         total_employees=total_employees,
-        selected_vid=session.get("vid")
+        selected_vid=session.get("vid"),
+        all_cashbags=all_cashbags
     )
 
 def calculate_village_health_history(vid, cur, view, sub_view, dates, time_range="weekly"):
@@ -14872,26 +15043,75 @@ def employee_detail_page(eid):
             }
             user_id = user["id"]
 
-        # 3. Fetch registered devices (if user exists)
+        # 3. Fetch registered devices with telemetry (if user exists)
         devices = []
+        inactive_devices = []
         if user_id:
             ensure_user_devices_table(cur)
+            # Fetch active registered devices deduplicated by model (most recent first)
             cur.execute("""
-                SELECT id, device_id, device_model, last_active, is_active
+                SELECT DISTINCT ON (COALESCE(device_model, 'unknown'))
+                    id, device_id, device_model, last_active, is_active,
+                    latest_latitude, latest_longitude, latest_speed, latest_battery_pct, is_charging, gps_status
                 FROM user_devices
-                WHERE user_id = %s
-                ORDER BY last_active DESC NULLS LAST, id DESC
+                WHERE user_id = %s AND is_active = TRUE AND device_id != 'PENDING'
+                ORDER BY COALESCE(device_model, 'unknown'), last_active DESC NULLS LAST, id DESC
             """, (user_id,))
             for r in cur.fetchall():
-                is_pending = (r[1] == 'PENDING')
-                formatted_last_active = "Never" if (is_pending or not r[3]) else r[3].strftime("%d-%m-%Y %I:%M %p")
+                formatted_last_active = "Never" if not r[3] else r[3].strftime("%d-%m-%Y %I:%M %p")
                 devices.append({
                     "id": r[0],
-                    "device_id": "Pending Bind" if is_pending else r[1],
+                    "device_id": r[1],
                     "raw_device_id": r[1],
                     "device_model": r[2] or "Mobile Device",
                     "last_active": formatted_last_active,
-                    "is_active": r[4]
+                    "is_active": r[4],
+                    "latest_latitude": r[5],
+                    "latest_longitude": r[6],
+                    "latest_speed": r[7] or 0.0,
+                    "latest_battery_pct": r[8],
+                    "is_charging": r[9] or False,
+                    "gps_status": r[10] or "active"
+                })
+
+            # If user has no active physical devices, check for PENDING binding slot
+            if not devices:
+                cur.execute("""
+                    SELECT id, last_active FROM user_devices
+                    WHERE user_id = %s AND device_id = 'PENDING' AND is_active = TRUE
+                """, (user_id,))
+                pend_row = cur.fetchone()
+                if pend_row:
+                    devices.append({
+                        "id": pend_row[0],
+                        "device_id": "Pending Bind",
+                        "raw_device_id": "PENDING",
+                        "device_model": "Pending Hardware Bind",
+                        "last_active": "Awaiting initial app login",
+                        "is_active": True,
+                        "latest_latitude": None,
+                        "latest_longitude": None,
+                        "latest_speed": 0.0,
+                        "latest_battery_pct": None,
+                        "is_charging": False,
+                        "gps_status": "pending"
+                    })
+
+            # Fetch inactive/retired devices for history (deduplicated by model)
+            cur.execute("""
+                SELECT DISTINCT ON (COALESCE(device_model, 'unknown'))
+                    id, device_id, device_model, last_active
+                FROM user_devices
+                WHERE user_id = %s AND is_active = FALSE AND device_id != 'PENDING'
+                ORDER BY COALESCE(device_model, 'unknown'), last_active DESC NULLS LAST, id DESC
+            """, (user_id,))
+            for r in cur.fetchall():
+                formatted_last_active = "Never" if not r[3] else r[3].strftime("%d-%m-%Y %I:%M %p")
+                inactive_devices.append({
+                    "id": r[0],
+                    "device_id": r[1],
+                    "device_model": r[2] or "Mobile Device",
+                    "last_active": formatted_last_active
                 })
 
         # 4. Fetch assigned villages
@@ -14925,6 +15145,7 @@ def employee_detail_page(eid):
             emp=emp,
             user=user,
             devices=devices,
+            inactive_devices=inactive_devices,
             assigned_villages=assigned_villages,
             all_villages=all_villages,
             user_level=user_level,
@@ -15317,12 +15538,13 @@ def list_users():
 
         ensure_user_devices_table(cur)
 
-        # Batch fetch devices ordered by last_active
+        # Batch fetch devices ordered by last_active, deduplicated by device_model
         cur.execute("""
-            SELECT user_id, device_id, device_model, last_active, is_active
+            SELECT DISTINCT ON (user_id, COALESCE(device_model, 'unknown'))
+                user_id, device_id, device_model, last_active, is_active
             FROM user_devices
-            WHERE user_id = ANY(%s)
-            ORDER BY last_active DESC NULLS LAST, id DESC
+            WHERE user_id = ANY(%s) AND is_active = TRUE AND device_id != 'PENDING'
+            ORDER BY user_id, COALESCE(device_model, 'unknown'), last_active DESC NULLS LAST, id DESC
         """, (user_ids,))
 
         for uid, device_id, device_model, last_active, is_active in cur.fetchall():
@@ -15537,34 +15759,56 @@ def delete_user():
 @admin_required
 def reset_user_device():
     if session.get("level") not in ("admin", "superadmin"):
-        return jsonify(ok=False, msg="Access denied: Admin role required"), 403
+        return jsonify(ok=False, success=False, error="Access denied: Admin role required", msg="Access denied: Admin role required"), 403
 
-    data = request.get_json()
-    user_id = data.get("id") if data else None
+    data = request.get_json() or {}
+    user_id = data.get("id") or data.get("user_id")
+    device_id = (data.get("device_id") or "").strip()
 
     if not user_id:
-        return jsonify(ok=False, msg="Missing user id")
+        return jsonify(ok=False, success=False, error="Missing user id", msg="Missing user id")
 
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
         ensure_user_devices_table(cur)
-        # Deactivate existing physical devices so they cannot be reused without re-binding
-        cur.execute("UPDATE user_devices SET is_active = FALSE WHERE user_id = %s AND device_id != 'PENDING'", (user_id,))
-        # Ensure a PENDING device record exists and is active
-        cur.execute("""
-            INSERT INTO user_devices (user_id, device_id, is_active, last_active)
-            VALUES (%s, 'PENDING', TRUE, NULL)
-            ON CONFLICT (user_id, device_id)
-            DO UPDATE SET is_active = TRUE, last_active = NULL
-        """, (user_id,))
+
+        if device_id and device_id.upper() != "ALL":
+            # Deactivate only this specific device
+            cur.execute(
+                "UPDATE user_devices SET is_active = FALSE WHERE user_id = %s AND device_id = %s",
+                (user_id, device_id)
+            )
+            # If all physical devices are now deactivated, ensure an active PENDING slot exists
+            cur.execute(
+                "SELECT COUNT(*) FROM user_devices WHERE user_id = %s AND is_active = TRUE AND device_id != 'PENDING'",
+                (user_id,)
+            )
+            active_cnt = cur.fetchone()[0]
+            if active_cnt == 0:
+                cur.execute("""
+                    INSERT INTO user_devices (user_id, device_id, is_active, last_active)
+                    VALUES (%s, 'PENDING', TRUE, NULL)
+                    ON CONFLICT (user_id, device_id)
+                    DO UPDATE SET is_active = TRUE, last_active = NULL
+                """, (user_id,))
+        else:
+            # Deactivate all existing physical devices so they cannot be reused without re-binding
+            cur.execute("UPDATE user_devices SET is_active = FALSE WHERE user_id = %s AND device_id != 'PENDING'", (user_id,))
+            # Ensure an active PENDING device record exists
+            cur.execute("""
+                INSERT INTO user_devices (user_id, device_id, is_active, last_active)
+                VALUES (%s, 'PENDING', TRUE, NULL)
+                ON CONFLICT (user_id, device_id)
+                DO UPDATE SET is_active = TRUE, last_active = NULL
+            """, (user_id,))
 
         conn.commit()
-        return jsonify(ok=True)
+        return jsonify(ok=True, success=True, message="Device reset successfully")
 
     except Exception as e:
         conn.rollback()
-        return jsonify(ok=False, msg=str(e))
+        return jsonify(ok=False, success=False, error=str(e), msg=str(e))
 
     finally:
         cur.close()
@@ -16601,33 +16845,36 @@ def mobile_app_version():
         device_active = True
         if token_data.get("level") and token_data.get("level").strip().lower() in ("j", "m", "s"):
             if device_id:
+                # 1. Check if this exact device is already registered for this user
                 cur.execute(
-                    "SELECT device_id, is_active FROM user_devices WHERE user_id = %s",
-                    (token_data.get("user_id"),)
+                    "SELECT is_active FROM user_devices WHERE user_id = %s AND device_id = %s",
+                    (token_data.get("user_id"), device_id)
                 )
-                dev_row = cur.fetchone()
-                if not dev_row:
-                    device_active = False  # Not registered
-                else:
-                    saved_device_id, dev_is_active = dev_row
-                    if not dev_is_active:
-                        device_active = False
-                    elif saved_device_id == 'PENDING':
-                        # First check-in, bind this device
-                        cur.execute(
-                            "UPDATE user_devices SET device_id = %s, last_active = NOW() WHERE user_id = %s AND device_id = 'PENDING'",
-                            (device_id, token_data.get("user_id"))
-                        )
-                        conn.commit()
-                    elif saved_device_id != device_id:
-                        device_active = False  # Device mismatch!
+                dev_match = cur.fetchone()
+                if dev_match:
+                    if not dev_match[0]:
+                        device_active = False  # Deactivated device
                     else:
-                        # Device matches, update last active
                         cur.execute(
                             "UPDATE user_devices SET last_active = NOW() WHERE user_id = %s AND device_id = %s",
                             (token_data.get("user_id"), device_id)
                         )
                         conn.commit()
+                else:
+                    # 2. Check if user has an open PENDING binding slot
+                    cur.execute(
+                        "SELECT id FROM user_devices WHERE user_id = %s AND device_id = 'PENDING' AND is_active = TRUE",
+                        (token_data.get("user_id"),)
+                    )
+                    pending_row = cur.fetchone()
+                    if pending_row:
+                        cur.execute(
+                            "UPDATE user_devices SET device_id = %s, last_active = NOW() WHERE id = %s",
+                            (device_id, pending_row[0])
+                        )
+                        conn.commit()
+                    else:
+                        device_active = False  # Unregistered device and no pending slot
             else:
                 device_active = False  # device_id is required
 

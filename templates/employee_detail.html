@@ -982,7 +982,7 @@
           <i class="fas fa-mobile-alt" style="color: #38bdf8;"></i> Registered Mobile Hardware
         </h3>
         {% if user %}
-        <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}')">
+        <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}', 'ALL')">
           <i class="fas fa-undo me-1"></i> Reset Device Lock
         </button>
         {% endif %}
@@ -995,28 +995,51 @@
 
       {% if devices %}
       {% for dev in devices %}
-      <div class="device-row-card">
-        <div class="device-info-left">
-          <div class="device-icon-box">
+      <div class="device-row-card" style="margin-bottom: 14px; padding: 14px 18px; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="device-info-left" style="display: flex; align-items: center; gap: 14px;">
+          <div class="device-icon-box" style="width: 44px; height: 44px; border-radius: 10px; background: rgba(56, 189, 248, 0.1); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
             <i class="fas fa-mobile-screen"></i>
           </div>
           <div>
-            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">{{ dev.device_model }}</div>
+            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+              <span>{{ dev.device_model }}</span>
+              <span class="badge-pill status-{{ 'active' if dev.is_active else 'inactive' }}" style="font-size: 0.7rem;">
+                {{ 'Active' if dev.is_active else 'Inactive' }}
+              </span>
+            </div>
             <div style="font-size: 0.8rem; color: var(--text-secondary); font-family: monospace; margin-top: 2px;">
               UUID: {{ dev.device_id }}
             </div>
-            <div style="font-size: 0.775rem; color: #94a3b8; margin-top: 2px;">
-              Last Active: <strong>{{ dev.last_active }}</strong>
+            <div style="font-size: 0.775rem; color: #94a3b8; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+              <span>Last Active: <strong>{{ dev.last_active }}</strong></span>
+              {% if dev.latest_battery_pct is not none %}
+              <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); font-size: 0.72rem;">
+                <i class="fas {% if dev.is_charging %}fa-bolt text-warning{% elif dev.latest_battery_pct <= 20 %}fa-battery-quarter text-danger{% else %}fa-battery-full text-success{% endif %}"></i>
+                {{ dev.latest_battery_pct }}%
+              </span>
+              {% endif %}
+              {% if dev.latest_speed is not none %}
+              <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); font-size: 0.72rem;">
+                <i class="fas {% if dev.latest_speed >= 3.0 %}fa-motorcycle text-primary{% else %}fa-pause text-muted{% endif %}"></i>
+                {% if dev.latest_speed >= 3.0 %}{{ dev.latest_speed|round|int }} km/h{% else %}Still{% endif %}
+              </span>
+              {% endif %}
+              <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); font-size: 0.72rem;">
+                <i class="fas fa-satellite-dish {% if dev.gps_status == 'active' %}text-success{% else %}text-danger{% endif %}"></i>
+                {{ 'GPS Lock' if dev.gps_status == 'active' else 'No GPS' }}
+              </span>
             </div>
           </div>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <span class="badge-pill status-{{ 'active' if dev.is_active else 'inactive' }}">
-            {{ 'Active' if dev.is_active else 'Inactive' }}
-          </span>
+        <div style="display: flex; align-items: center; gap: 8px;">
           {% if user %}
-          <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}')">
+          {% if dev.latest_latitude and dev.latest_longitude %}
+          <a href="/mobile_app?user_id={{ user.id }}&device_id={{ dev.raw_device_id }}" class="neumorphic-btn ultrasmall" title="View device location on live fleet map" target="_blank" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-location-dot text-primary"></i> View Location
+          </a>
+          {% endif %}
+          <button class="neumorphic-btn ultrasmall danger-btn" onclick="resetEmployeeDevice('{{ user.id }}', '{{ dev.raw_device_id }}', '{{ dev.device_model }}')">
             Reset Device
           </button>
           {% endif %}
@@ -1031,6 +1054,29 @@
           When this employee installs the app and logs in with their credentials, their hardware fingerprint will appear here.
         </div>
       </div>
+      {% endif %}
+
+      {% if inactive_devices %}
+      <details style="margin-top: 20px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; background: rgba(0,0,0,0.15);">
+        <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+          <span><i class="fas fa-history me-1 text-muted"></i> Deactivated / Retired Device History ({{ inactive_devices|length }})</span>
+          <span style="font-size: 0.75rem; color: #64748b;">Click to view past hardware</span>
+        </summary>
+        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+          {% for dev in inactive_devices %}
+          <div style="font-size: 0.8rem; color: #94a3b8; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <i class="fas fa-mobile-alt me-1 text-muted"></i> <strong>{{ dev.device_model }}</strong>
+              <span style="font-family: monospace; font-size: 0.72rem; color: #64748b; margin-left: 6px;">UUID: {{ dev.device_id }}</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #ef4444;">
+              <span class="badge-pill status-inactive" style="font-size: 0.65rem; margin-right: 6px;">Inactive</span>
+              Last: {{ dev.last_active }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>

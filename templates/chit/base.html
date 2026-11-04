@@ -748,13 +748,40 @@
         <span>Reports</span>
       </a>
 
-      <!-- Back to Main SD Finance App -->
+      <!-- GENERAL SECTION FOR CROSS-PLATFORM NAVIGATION -->
       <div class="pt-3 mt-3 border-t border-slate-800/40">
-        <a href="/village"
-          class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-500 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
-          <i data-lucide="arrow-left" class="w-4 h-4 stroke-[1.8]"></i>
-          <span>SD Finance Home</span>
-        </a>
+        <div class="px-3 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">GENERAL</div>
+        <div class="space-y-0.5 mt-1">
+          <!-- 1. Villages -->
+          <a href="/village"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="map-pin" class="w-4 h-4 stroke-[1.8] text-rose-400"></i>
+            <span>Villages</span>
+          </a>
+
+          <!-- 2. Chit Fund (Active) -->
+          <a href="/chit/dashboard"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-bold text-white bg-slate-800/80 border border-slate-700/40 shadow-xs transition-all duration-200">
+            <i data-lucide="coins" class="w-4 h-4 stroke-[1.8] text-amber-400"></i>
+            <span>Chit Fund</span>
+          </a>
+
+          <!-- 3. Central Bank -->
+          <a href="/banking/dashboard"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="landmark" class="w-4 h-4 stroke-[1.8] text-amber-500"></i>
+            <span>Central Bank</span>
+          </a>
+
+          <!-- 4. Mobile App -->
+          {% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
+          <a href="/mobile_app"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="smartphone" class="w-4 h-4 stroke-[1.8] text-indigo-400"></i>
+            <span>Mobile App</span>
+          </a>
+          {% endif %}
+        </div>
       </div>
     </nav>
 

@@ -257,8 +257,12 @@ document.addEventListener("DOMContentLoaded", function () {
   renderVillages();
 
   /* ── Device Management ── */
-  window.resetEmployeeDevice = async function (userId) {
-    if (!confirm("Are you sure you want to reset this device lock? The employee will need to bind their new device upon next login.")) {
+  window.resetEmployeeDevice = async function (userId, deviceId, deviceModel) {
+    const isSingle = deviceId && deviceId !== "ALL" && deviceId !== "PENDING";
+    const msg = isSingle
+      ? `Are you sure you want to reset hardware lock for ${deviceModel || 'this device'}? The employee will be able to bind a new phone on their next login.`
+      : "Are you sure you want to reset all device hardware locks for this employee? They will need to bind their new device upon next login.";
+    if (!confirm(msg)) {
       return;
     }
     try {
@@ -269,18 +273,18 @@ document.addEventListener("DOMContentLoaded", function () {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken
         },
-        body: JSON.stringify({ id: userId })
+        body: JSON.stringify({ id: userId, device_id: isSingle ? deviceId : null })
       });
       const data = await res.json();
-      if (data.ok) {
+      if (data.ok || data.success) {
         if (typeof showToast === "function") {
-          showToast("Device lock reset successfully! Re-binding pending.", "success");
+          showToast(data.message || "Device lock reset successfully! Re-binding pending.", "success");
         } else {
-          alert("Device lock reset successfully! Re-binding pending.");
+          alert(data.message || "Device lock reset successfully! Re-binding pending.");
         }
         setTimeout(() => location.reload(), 1200);
       } else {
-        alert(data.msg || "Failed to reset device");
+        alert(data.error || data.msg || "Failed to reset device");
       }
     } catch (err) {
       alert("Reset failed: " + err.message);
