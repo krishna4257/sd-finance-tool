@@ -7866,14 +7866,33 @@ def api_customer_save_payments():
             pdt_str = p.get("payment_date")
             pdt = parse_date_input(pdt_str)
 
+            # Calculate payment split and payment_type
+            payment_type = (p.get("payment_type") or "cash").lower()
+            try:
+                cash_amount = Decimal(str(p.get("cash_amount", amt if payment_type == "cash" else 0)))
+            except Exception:
+                cash_amount = amt if payment_type == "cash" else Decimal("0.00")
+            try:
+                upi_amount = Decimal(str(p.get("upi_amount", amt if payment_type == "upi" else 0)))
+            except Exception:
+                upi_amount = amt if payment_type == "upi" else Decimal("0.00")
+
+            if (cash_amount + upi_amount) != amt:
+                if upi_amount > 0 and upi_amount <= amt:
+                    cash_amount = amt - upi_amount
+                else:
+                    cash_amount = amt
+                    upi_amount = Decimal("0.00")
+                    payment_type = "cash"
+
             if pid and pid in existing_pids:
                 # UPDATE
                 if table_payment == "payment":
                     cur.execute(f"""
                         UPDATE {table_payment}
-                        SET amt = %s, payment_date = %s, updated_at = NOW()
+                        SET amt = %s, payment_date = %s, payment_type = %s, cash_amount = %s, upi_amount = %s, updated_at = NOW()
                         WHERE pid = %s AND cid = %s
-                    """, (amt, pdt, pid, cid))
+                    """, (amt, pdt, payment_type, cash_amount, upi_amount, pid, cid))
                 else:
                     cur.execute(f"""
                         UPDATE {table_payment}
@@ -7883,11 +7902,18 @@ def api_customer_save_payments():
                 incoming_pids.add(pid)
             else:
                 # INSERT
-                cur.execute(f"""
-                    INSERT INTO {table_payment} (cid, vid, eid, ano, amt, payment_date)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING pid
-                """, (cid, vid, eid, ano, amt, pdt))
+                if table_payment == "payment":
+                    cur.execute(f"""
+                        INSERT INTO {table_payment} (cid, vid, eid, ano, amt, payment_date, payment_type, cash_amount, upi_amount)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING pid
+                    """, (cid, vid, eid, ano, amt, pdt, payment_type, cash_amount, upi_amount))
+                else:
+                    cur.execute(f"""
+                        INSERT INTO {table_payment} (cid, vid, eid, ano, amt, payment_date)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING pid
+                    """, (cid, vid, eid, ano, amt, pdt))
                 res_pid = cur.fetchone()
                 if res_pid and res_pid[0]:
                     incoming_pids.add(res_pid[0])
