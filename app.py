@@ -8776,6 +8776,14 @@ def close_customer_account_pg():
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
 
+        # Update customer_loan_link lineage tier to closed
+        cur.execute("""
+            UPDATE customer_loan_link
+            SET record_tier = 'closed',
+                status = %s
+            WHERE cid = %s
+        """, (final_status, cid))
+
         audit_log(
             action="close_customer_account",
             entity_type="customer",
@@ -8862,6 +8870,14 @@ def retrieve_customer_account_pg():
         # 3ï¸âƒ£ Delete from closed tables
         cur.execute("DELETE FROM closed_cust_payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM closed_cust_account WHERE cid = %s", (cid,))
+
+        # Update customer_loan_link lineage tier to active
+        cur.execute("""
+            UPDATE customer_loan_link
+            SET record_tier = 'active',
+                status = 'open'
+            WHERE cid = %s
+        """, (cid,))
 
         # 4ï¸âƒ£ Unfreeze rating columns in customer table
         cur.execute("""
@@ -9783,6 +9799,14 @@ def accept_closure_request(feed_id):
         # Delete from active tables
         cur.execute("DELETE FROM payment WHERE cid = %s", (cid,))
         cur.execute("DELETE FROM customer WHERE cid = %s", (cid,))
+
+        # Update customer_loan_link lineage tier to closed
+        cur.execute("""
+            UPDATE customer_loan_link
+            SET record_tier = 'closed',
+                status = %s
+            WHERE cid = %s
+        """, (final_status, cid))
 
         # Mark all pending closure requests for this customer in this village as accepted
         cur.execute("""

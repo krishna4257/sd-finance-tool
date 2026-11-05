@@ -491,7 +491,7 @@ CREATE OR REPLACE VIEW v_all_payments AS
     p.updated_at,
     'active'::text AS record_tier
    FROM payment p
-     LEFT JOIN customer_loan_link cll ON p.cid = cll.cid
+     LEFT JOIN customer_loan_link cll ON p.cid = cll.cid AND cll.record_tier = 'active'
 UNION ALL
  SELECT cll.ucid,
     ccp.pid,
@@ -508,7 +508,7 @@ UNION ALL
     NULL::timestamp with time zone AS updated_at,
     'closed'::text AS record_tier
    FROM closed_cust_payment ccp
-     LEFT JOIN customer_loan_link cll ON ccp.cid = cll.cid
+     LEFT JOIN customer_loan_link cll ON ccp.cid = cll.cid AND cll.record_tier = 'closed'
 UNION ALL
  SELECT cll.ucid,
     hpd.pid,
@@ -525,7 +525,7 @@ UNION ALL
     NULL::timestamp with time zone AS updated_at,
     'historic'::text AS record_tier
    FROM historic_payment_data hpd
-     LEFT JOIN customer_loan_link cll ON hpd.cid = cll.cid;
+     LEFT JOIN customer_loan_link cll ON hpd.cid = cll.cid AND cll.record_tier = 'historic';
 
 -- 5.2 v_all_customers: Unified customer view across active, closed, and historic
 CREATE OR REPLACE VIEW v_all_customers AS
@@ -566,7 +566,7 @@ CREATE OR REPLACE VIEW v_all_customers AS
     c.interest_discount,
     'active'::text AS record_tier
    FROM customer c
-     LEFT JOIN customer_loan_link cll ON c.cid = cll.cid
+     LEFT JOIN customer_loan_link cll ON c.cid = cll.cid AND cll.record_tier = 'active'
 UNION ALL
  SELECT cll.ucid,
     cll.cycle_number,
@@ -605,7 +605,7 @@ UNION ALL
     cc.interest_discount,
     'closed'::text AS record_tier
    FROM closed_cust_account cc
-     LEFT JOIN customer_loan_link cll ON cc.cid = cll.cid
+     LEFT JOIN customer_loan_link cll ON cc.cid = cll.cid AND cll.record_tier = 'closed'
 UNION ALL
  SELECT cll.ucid,
     COALESCE(cll.cycle_number, 1) AS cycle_number,
@@ -644,7 +644,7 @@ UNION ALL
     hc.interest_discount,
     'historic'::text AS record_tier
    FROM historic_customer_data hc
-     LEFT JOIN customer_loan_link cll ON hc.cid = cll.cid;
+     LEFT JOIN customer_loan_link cll ON hc.cid = cll.cid AND cll.record_tier = 'historic';
 
 -- ============================================================================
 -- 6. PERFORMANCE & AUDIT INDEXES
