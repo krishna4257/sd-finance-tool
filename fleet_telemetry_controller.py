@@ -129,9 +129,9 @@ def register_fleet_telemetry_routes(app, csrf):
 
             user_ids = [r[0] for r in user_rows]
 
-            # 2. Batch fetch active devices ordered by last_active, deduplicated by device_model
+            # 2. Batch fetch active or locked devices ordered by last_active, keyed by unique physical device_id
             cur.execute("""
-                SELECT DISTINCT ON (user_id, COALESCE(device_model, 'unknown'))
+                SELECT DISTINCT ON (user_id, device_id)
                     user_id, 
                     device_id, 
                     device_model, 
@@ -144,10 +144,11 @@ def register_fleet_telemetry_routes(app, csrf):
                     latest_accuracy,
                     latest_battery_pct,
                     is_charging,
-                    gps_status
+                    gps_status,
+                    COALESCE(is_locked, FALSE) as is_locked
                 FROM user_devices
-                WHERE user_id = ANY(%s) AND is_active = TRUE AND device_id != 'PENDING'
-                ORDER BY user_id, COALESCE(device_model, 'unknown'), last_active DESC NULLS LAST, id DESC;
+                WHERE user_id = ANY(%s) AND (is_active = TRUE OR is_locked = TRUE) AND device_id != 'PENDING'
+                ORDER BY user_id, device_id, last_active DESC NULLS LAST, id DESC;
             """, (user_ids,))
 
             devices_by_user = {}
@@ -165,7 +166,8 @@ def register_fleet_telemetry_routes(app, csrf):
                     "latest_accuracy": row[9],
                     "latest_battery_pct": row[10],
                     "is_charging": row[11] or False,
-                    "gps_status": row[12] or "active"
+                    "gps_status": row[12] or "active",
+                    "is_locked": bool(row[13]) if len(row) > 13 else False
                 })
 
             # Check PENDING binding slot for users who do NOT yet have an active physical device
@@ -237,10 +239,11 @@ def register_fleet_telemetry_routes(app, csrf):
                     dev_is_pending = (dev_id == "PENDING")
                     dev_model = d["device_model"] or ("Pending Hardware Bind" if dev_is_pending else "Mobile Device")
                     dev_is_active = d["is_active"]
+                    dev_is_locked = d.get("is_locked", False)
 
                     if not dev_is_pending:
                         has_physical_device = True
-                        if dev_is_active:
+                        if dev_is_active and not dev_is_locked:
                             total_devices_count += 1
                     else:
                         has_pending_device = True
@@ -251,7 +254,11 @@ def register_fleet_telemetry_routes(app, csrf):
                     d_presence = "offline"
                     d_seconds_ago = None
 
-                    if not dev_is_active:
+                    if dev_is_locked:
+                        d_presence = "locked"
+                        d_relative_str = "Device Locked by Admin"
+                        d_formatted_last_act = "Locked Hardware"
+                    elif not dev_is_active:
                         d_presence = "inactive"
                         d_relative_str = "Device Inactive / Reset"
                         d_formatted_last_act = "Deactivated"
@@ -295,6 +302,7 @@ def register_fleet_telemetry_routes(app, csrf):
                         "device_id": dev_id,
                         "device_model": dev_model,
                         "is_active": dev_is_active,
+                        "is_locked": dev_is_locked,
                         "is_pending": dev_is_pending,
                         "last_active": d_formatted_last_act,
                         "relative_last_active": d_relative_str,
@@ -432,6 +440,39 @@ def register_fleet_telemetry_routes(app, csrf):
         device_id = body.get("device_id") or "UNKNOWN_DEVICE"
         locations = body.get("locations") or []
 
+        # Instant Security Enforcement: Check if user or device is locked / revoked
+        conn_sec = get_pg_connection()
+        try:
+            with conn_sec.cursor() as cur_sec:
+                cur_sec.execute("""
+                    SELECT u.is_active, ud.is_active, COALESCE(ud.is_locked, FALSE)
+                    FROM users u
+                    LEFT JOIN user_devices ud ON ud.user_id = u.id AND ud.device_id = %s
+                    WHERE u.id = %s;
+                """, (device_id, user_id))
+                sec_row = cur_sec.fetchone()
+                if not sec_row or not sec_row[0]: # user account locked
+                    return jsonify({
+                        "success": False,
+                        "error": "Account credentials locked by administrator.",
+                        "action": "wipe_and_lock"
+                    }), 403
+                if sec_row[1] is not None:
+                    if sec_row[2]: # device is_locked
+                        return jsonify({
+                            "success": False,
+                            "error": "This device has been locked by the administrator.",
+                            "action": "wipe_and_lock"
+                        }), 403
+                    if not sec_row[1]: # device deactivated / logged out
+                        return jsonify({
+                            "success": False,
+                            "error": "Session revoked. Please re-authenticate.",
+                            "action": "wipe_and_lock"
+                        }), 403
+        finally:
+            conn_sec.close()
+
         if not locations:
             return jsonify({"success": True, "inserted": 0, "msg": "No coordinates supplied"}), 200
 
@@ -522,7 +563,7 @@ def register_fleet_telemetry_routes(app, csrf):
                         is_charging = %s,
                         last_active = NOW(),
                         gps_status = 'active'
-                    WHERE user_id = %s AND (device_id = %s OR is_active = TRUE);
+                    WHERE user_id = %s AND device_id = %s;
                 """, (
                     latest_pt[2],  # lat
                     latest_pt[3],  # lng
@@ -754,6 +795,57 @@ def register_fleet_telemetry_routes(app, csrf):
 
             total_stop_minutes = sum(s["duration_minutes"] for s in stops)
 
+            # Build unified chronological timeline for Google Maps Timeline UI
+            timeline = []
+            driving_km = 0.0
+            driving_mins = 0
+            motorcycle_km = 0.0
+            motorcycle_mins = 0
+
+            for t in trips:
+                is_car = (t.get("avg_speed_kmh", 0) > 35.0)
+                mode = "driving" if is_car else "motorcycling"
+                t["mode"] = mode
+                if is_car:
+                    driving_km += t["distance_km"]
+                    driving_mins += t["duration_minutes"]
+                else:
+                    motorcycle_km += t["distance_km"]
+                    motorcycle_mins += t["duration_minutes"]
+
+                timeline.append({
+                    "type": "trip",
+                    "mode": mode,
+                    "title": "Driving" if is_car else "Motorcycling",
+                    "distance_km": t["distance_km"],
+                    "duration_minutes": t["duration_minutes"],
+                    "time_range": f"{t['start_formatted']} – {t['end_formatted']}",
+                    "icon": "car" if is_car else "motorcycle",
+                    "avg_speed": t.get("avg_speed_kmh", 0.0)
+                })
+
+            for idx, s in enumerate(stops):
+                place_name = s.get("village_name") or f"Location Visit #{idx + 1}"
+                sub = f"Stayed {s['duration_minutes']} min"
+                if s.get("village_distance_km") is not None:
+                    sub += f" • {s['village_distance_km']} km to village center"
+                
+                icons = ["store", "bag-shopping", "building", "house", "shop"]
+                icon = icons[idx % len(icons)]
+
+                timeline.append({
+                    "type": "stop",
+                    "stop_index": idx + 1,
+                    "title": place_name,
+                    "subtitle": sub,
+                    "arrival": s["arrival_formatted"],
+                    "departure": s["departure_formatted"],
+                    "duration_minutes": s["duration_minutes"],
+                    "latitude": s["latitude"],
+                    "longitude": s["longitude"],
+                    "icon": icon
+                })
+
             # Export simplified polyline as lightweight [lat, lng, speed, heading, time_str, bat]
             export_points = [
                 [
@@ -782,11 +874,17 @@ def register_fleet_telemetry_routes(app, csrf):
                     "travel_minutes": total_travel_minutes,
                     "stop_minutes": total_stop_minutes,
                     "stop_count": len(stops),
+                    "driving_km": round(driving_km, 1),
+                    "driving_minutes": driving_mins,
+                    "motorcycle_km": round(motorcycle_km, 1),
+                    "motorcycle_minutes": motorcycle_mins,
+                    "visits_count": len(stops),
                     "start_time": points_for_rdp[0][4].strftime("%I:%M %p"),
                     "last_time": points_for_rdp[-1][4].strftime("%I:%M %p"),
                     "battery_start": points_for_rdp[0][5],
                     "battery_end": points_for_rdp[-1][5]
-                }
+                },
+                "timeline": timeline
             }), 200
 
         except Exception as e:
@@ -825,6 +923,53 @@ def register_fleet_telemetry_routes(app, csrf):
             """, (user_id,))
             conn.commit()
             return jsonify({"success": True, "message": "User session revoked and device logged out."}), 200
+        except Exception as e:
+            conn.rollback()
+            return jsonify({"success": False, "error": str(e)}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+    @app.route("/api/admin/mobile_users/lock_device", methods=["POST"])
+    def admin_mobile_users_lock_device():
+        """Locks or unlocks an individual physical device by hardware device_id."""
+        if not is_admin():
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+
+        data = request.get_json(silent=True) or {}
+        user_id = data.get("user_id")
+        device_id = data.get("device_id")
+        should_lock = bool(data.get("is_locked", True))
+
+        if not user_id or not device_id:
+            return jsonify({"success": False, "error": "user_id and device_id are required"}), 400
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                ALTER TABLE user_devices ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
+            """)
+            if should_lock:
+                cur.execute("""
+                    UPDATE user_devices 
+                    SET is_locked = TRUE, is_active = FALSE 
+                    WHERE user_id = %s AND device_id = %s;
+                """, (user_id, device_id))
+            else:
+                cur.execute("""
+                    UPDATE user_devices 
+                    SET is_locked = FALSE, is_active = TRUE 
+                    WHERE user_id = %s AND device_id = %s;
+                """, (user_id, device_id))
+
+            conn.commit()
+            action_str = "locked" if should_lock else "unlocked"
+            return jsonify({
+                "success": True,
+                "message": f"Hardware device {action_str} successfully. {'Login prohibited for this device.' if should_lock else 'Device can now be used.'}",
+                "is_locked": should_lock
+            }), 200
         except Exception as e:
             conn.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
@@ -881,7 +1026,7 @@ def register_fleet_telemetry_routes(app, csrf):
             return jsonify({"success": False, "error": "No apk_file in request"}), 400
 
         file = request.files["apk_file"]
-        if not file or not file.filename.endswith(".apk"):
+        if not file or not file.filename or not file.filename.endswith(".apk"):
             return jsonify({"success": False, "error": "Invalid APK file"}), 400
 
         # Save temporarily to inspect metadata
@@ -922,7 +1067,7 @@ def register_fleet_telemetry_routes(app, csrf):
         download_url = url_for("app_portal", _external=True)
         img = qrcode.make(download_url)
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, "PNG")
         buf.seek(0)
 
         return send_file(buf, mimetype="image/png")

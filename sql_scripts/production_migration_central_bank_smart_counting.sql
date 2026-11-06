@@ -393,6 +393,9 @@ CREATE TABLE IF NOT EXISTS account_closure_feed (
 -- 4. FLEET TELEMETRY & HARDWARE SECURITY
 -- ============================================================================
 
+-- 4.0 users: Real-time session revocation timestamp
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_revoked_at TIMESTAMPTZ;
+
 -- 4.1 user_devices: Multi-device registry & live telemetry state
 CREATE TABLE IF NOT EXISTS user_devices (
     id SERIAL PRIMARY KEY,
@@ -413,7 +416,8 @@ ALTER TABLE user_devices
     ADD COLUMN IF NOT EXISTS latest_accuracy REAL,
     ADD COLUMN IF NOT EXISTS latest_battery_pct SMALLINT,
     ADD COLUMN IF NOT EXISTS is_charging BOOLEAN DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS gps_status VARCHAR(20) DEFAULT 'active';
+    ADD COLUMN IF NOT EXISTS gps_status VARCHAR(20) DEFAULT 'active',
+    ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_devices_user_device 
     ON user_devices (user_id, device_id);
@@ -705,6 +709,15 @@ WHERE id IN (
     ) sub
     WHERE rn > 1
 );
+
+-- ============================================================================
+-- 8. CHIT MEMBERSHIPS PAYOUT COLUMNS (MULTI-RECIPIENT PAYOUT ISOLATION)
+-- ============================================================================
+ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS payout_date DATE;
+ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS payout_status VARCHAR(50);
+ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS payout_notes TEXT;
+ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS payout_amount NUMERIC(14, 2);
+ALTER TABLE chit_memberships ADD COLUMN IF NOT EXISTS chit_loss NUMERIC(14, 2);
 
 COMMIT;
 -- ============================================================================

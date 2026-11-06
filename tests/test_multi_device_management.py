@@ -201,5 +201,118 @@ class TestMultiDeviceManagement(unittest.TestCase):
         calls = [str(call) for call in mock_cur.execute.call_args_list]
         self.assertTrue(any('device_id = %s' in c for c in calls))
 
+
+    @patch('fleet_telemetry_controller.get_pg_connection')
+    def test_lock_individual_device_endpoint(self, mock_get_conn):
+        """Verify /api/admin/mobile_users/lock_device locks specific physical hardware."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_get_conn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cur
+
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['level'] = 'admin'
+            sess['role'] = 'admin'
+
+        response = self.client.post(
+            '/api/admin/mobile_users/lock_device',
+            data=json.dumps({'user_id': 5, 'device_id': 'SAMSUNG_SM_F966U1', 'is_locked': True}),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get('success'))
+        self.assertTrue(data.get('is_locked'))
+
+        # Verify SQL updated is_locked=TRUE and is_active=FALSE
+        calls = [str(call) for call in mock_cur.execute.call_args_list]
+        self.assertTrue(any('is_locked = TRUE' in c for c in calls))
+
+    @patch('app.get_pg_connection')
+    def test_mobile_login_rejected_when_device_locked(self, mock_get_conn):
+        """Verify /api/mobile/login immediately blocks locked hardware with 403 wipe_and_lock."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_get_conn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cur
+
+        from werkzeug.security import generate_password_hash
+        # user row: (id, password_hash, is_active, level)
+        mock_cur.fetchone.side_effect = [
+            (5, generate_password_hash('pass123'), True, 'j'), # user lookup
+            (10,), # eid
+            (True, False) # is_locked=True for this device
+        ]
+
+        response = self.client.post(
+            '/api/mobile/login',
+            data=json.dumps({
+                'username': 'agent_chinna',
+                'password': 'pass123',
+                'device_id': 'LOCKED_DEVICE_UUID',
+                'device_model': 'Locked Mobile'
+            }),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn('locked', data.get('error', '').lower())
+        self.assertEqual(data.get('action'), 'wipe_and_lock')
+
+    @patch('fleet_telemetry_controller.get_pg_connection')
+    @patch('fleet_telemetry_controller.execute_values')
+    def test_location_batch_scopes_to_device_id_only(self, mock_exec_vals, mock_get_conn):
+        """Verify POST /api/mobile/location/batch strictly updates only the reporting device_id."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_get_conn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cur
+        mock_cur.__enter__.return_value = mock_cur
+
+        # Security check returns active user & device
+        mock_cur.fetchone.return_value = (True, True, False) # user_active=True, dev_active=True, dev_locked=False
+
+        # Generate valid mobile token
+        from app import generate_mobile_token
+        token = generate_mobile_token(5, 10)
+
+        payload = {
+            "device_id": "ONEPLUS_GM1911",
+            "locations": [
+                {
+                    "latitude": 14.681,
+                    "longitude": 77.600,
+                    "accuracy": 4.0,
+                    "speed": 12.5,
+                    "heading": 85.0,
+                    "battery_pct": 78,
+                    "is_charging": False,
+                    "activity_type": "in_vehicle",
+                    "recorded_at": "2026-11-05T08:30:00Z"
+                }
+            ]
+        }
+
+        response = self.client.post(
+            '/api/mobile/location/batch',
+            data=json.dumps(payload),
+            headers={"X-Mobile-Token": token},
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"))
+
+        # Verify SQL update in user_devices strictly has WHERE user_id = %s AND device_id = %s;
+        calls = [str(call) for call in mock_cur.execute.call_args_list if 'UPDATE user_devices' in str(call)]
+        self.assertTrue(len(calls) > 0)
+        self.assertTrue(any('WHERE user_id = %s AND device_id = %s;' in c for c in calls))
+        self.assertFalse(any('OR is_active = TRUE' in c for c in calls))
+
 if __name__ == '__main__':
     unittest.main()
+

@@ -79,7 +79,14 @@ def run_migration():
                 ON user_daily_trips (user_id, trip_date DESC);
             """)
 
-            # 3. user_devices telemetry column enhancements
+            # 3. users table session_revoked_at enhancement
+            print("[MIGRATION] Enhancing users with session_revoked_at...")
+            cur.execute("""
+                ALTER TABLE users 
+                    ADD COLUMN IF NOT EXISTS session_revoked_at TIMESTAMPTZ;
+            """)
+
+            # 4. user_devices telemetry column enhancements
             print("[MIGRATION] Enhancing user_devices with telemetry columns...")
             cur.execute("""
                 ALTER TABLE user_devices 
@@ -90,7 +97,8 @@ def run_migration():
                     ADD COLUMN IF NOT EXISTS latest_accuracy REAL,
                     ADD COLUMN IF NOT EXISTS latest_battery_pct SMALLINT,
                     ADD COLUMN IF NOT EXISTS is_charging BOOLEAN DEFAULT FALSE,
-                    ADD COLUMN IF NOT EXISTS gps_status VARCHAR(20) DEFAULT 'active';
+                    ADD COLUMN IF NOT EXISTS gps_status VARCHAR(20) DEFAULT 'active',
+                    ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
             """)
 
             conn.commit()

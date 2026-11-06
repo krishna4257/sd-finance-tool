@@ -308,7 +308,7 @@ def verify_apk_signature(apk_path: str) -> dict:
     return result
 
 
-def sign_apk(input_apk_path: str, output_apk_path: str = None) -> dict:
+def sign_apk(input_apk_path: str, output_apk_path: str | None = None) -> dict:
     """
     Digitally sign an APK with the official sd-finance-key.jks.
     Executes zipalign (if available) followed by apksigner.

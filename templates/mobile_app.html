@@ -259,6 +259,45 @@
             </label>
           </div>
 
+          <!-- Rollout Audience & Distribution Card -->
+          <div class="ota-target-card">
+            <div class="ota-target-header">
+              <div>
+                <div class="target-card-title"><i class="fas fa-users-viewfinder text-primary me-2"></i> Rollout Audience & Distribution</div>
+                <div class="target-card-desc">Choose whether this update broadcasts globally to all field agents or only to selected test pilot employees.</div>
+              </div>
+              <div class="target-scope-toggle-group">
+                <button type="button" class="btn-target-scope active" id="btnScopeAll" onclick="setRolloutScope('all')">
+                  <i class="fas fa-globe me-1"></i> All Employees
+                </button>
+                <button type="button" class="btn-target-scope" id="btnScopeTargeted" onclick="setRolloutScope('targeted')">
+                  <i class="fas fa-user-check me-1"></i> Selected Employees
+                </button>
+              </div>
+            </div>
+
+            <!-- Collapsible Employee Selector Box -->
+            <div id="targetEmployeePickerBox" class="target-employee-picker-box" style="display: none;">
+              <div class="picker-toolbar">
+                <div class="picker-search-wrap">
+                  <i class="fas fa-search picker-search-icon"></i>
+                  <input type="text" id="targetEmployeeSearch" class="picker-search-input" placeholder="Search employees by name, role, EID..." oninput="filterTargetEmployees(this.value)">
+                </div>
+                <div class="picker-actions">
+                  <button type="button" class="btn-picker-tool" onclick="selectAllTargetEmployees(true)">Select All</button>
+                  <button type="button" class="btn-picker-tool" onclick="selectAllTargetEmployees(false)">Clear</button>
+                  <span class="picker-counter-badge" id="targetCountBadge">0 selected</span>
+                </div>
+              </div>
+              <div class="target-employee-list-grid" id="targetEmployeeListGrid">
+                <div class="text-center py-3 text-muted" style="grid-column: 1 / -1; font-size: 0.82rem;">
+                  <i class="fas fa-spinner fa-spin me-1"></i> Loading employee fleet...
+                </div>
+              </div>
+            </div>
+          </div>
+
+
           <!-- Release Notes -->
           <div class="form-group">
             <div class="label-with-tags">
@@ -332,6 +371,17 @@
           <!-- Metadata table -->
           <div class="release-specs-table">
             <div class="spec-row">
+              <span class="s-label"><i class="fas fa-users-viewfinder me-1"></i> Rollout Audience</span>
+              <span class="s-val" id="currentRolloutScopeBadge">
+                <span class="badge-target-all"><i class="fas fa-globe me-1"></i> All Employees (Global)</span>
+              </span>
+            </div>
+            <div class="spec-row" id="currentTargetEmployeesRow" style="display: none;">
+              <span class="s-label"><i class="fas fa-user-check me-1"></i> Pilot Agents</span>
+              <div class="s-val" id="currentTargetEmployeesList" style="font-size: 0.76rem; max-height: 56px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px;">
+              </div>
+            </div>
+            <div class="spec-row">
               <span class="s-label"><i class="fas fa-calendar-alt me-1"></i> Released At</span>
               <span class="s-val" id="currentReleasedAt">{{ version_data.released_at if version_data and version_data.released_at else '-' }}</span>
             </div>
@@ -363,6 +413,11 @@
               </p>
             </div>
           </div>
+          <div style="margin-top: 14px; text-align: center;">
+            <button type="button" class="btn-edit-target-action" onclick="openEditTargetAudienceModal()">
+              <i class="fas fa-user-gear me-1"></i> Edit Rollout Target Audience
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -378,6 +433,7 @@
           <thead>
             <tr>
               <th>Release Package</th>
+              <th style="width: 140px;">Audience</th>
               <th>File Size</th>
               <th>Build Date</th>
               <th>Digital Signature</th>
@@ -386,7 +442,7 @@
           </thead>
           <tbody id="releasesTableBody">
             <tr>
-              <td colspan="5" class="text-center py-4 text-muted">
+              <td colspan="6" class="text-center py-4 text-muted">
                 <i class="fas fa-spinner fa-spin me-2"></i> Loading releases archive...
               </td>
             </tr>
@@ -398,30 +454,14 @@
   </div>
 
 
-<!-- ── Confirmation Micro-Modal ── -->
-<div id="actionConfirmModal" class="hub-modal-backdrop" style="display: none;">
-  <div class="hub-modal-card">
-    <div class="modal-icon-circle" id="modalIconBox">
-      <i class="fas fa-exclamation-triangle"></i>
-    </div>
-    <h3 class="modal-title" id="modalTitle">Confirm Action</h3>
-    <p class="modal-desc" id="modalDesc">Are you sure you want to proceed?</p>
-    <div class="modal-buttons">
-      <button type="button" class="btn-modal-cancel" onclick="closeActionModal()">Cancel</button>
-      <button type="button" class="btn-modal-confirm" id="btnModalConfirm">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Toast Notification Container ── -->
-
-
 <!-- ── UNIFIED DEVICE & FLEET TELEMETRY INSPECTOR MODAL ── -->
 <div id="userDeviceInspectorModal" class="hub-modal-backdrop" style="display: none;">
   <div class="hub-modal-card device-inspector-modal-card">
     
-    <!-- Modal Header -->
+    <!-- Modal Top Bar: Single Clean Row (User Info + Device Dropdown + Journey Route Toggle + Status + Close) -->
     <div class="inspector-modal-header">
+      
+      <!-- 1. Left: User Profile Avatar & Identity -->
       <div class="inspector-user-info">
         <div class="tile-avatar-wrap" id="inspAvatarWrap">
           <div class="tile-avatar" id="inspAvatar">KA</div>
@@ -432,6 +472,29 @@
           <div class="insp-user-handle" id="inspHandle">@handle • Phone • Role</div>
         </div>
       </div>
+
+      <!-- 2. Inline Beside User Details: Device Dropdown + Journey Route & History Toggle -->
+      <div class="inspector-header-controls">
+        <!-- Device Dropdown Selector -->
+        <div class="insp-device-dropdown-wrap">
+          <i class="fas fa-mobile-screen-button insp-dropdown-icon"></i>
+          <select id="inspDeviceSelect" class="insp-device-select" onchange="onInspectorDeviceSelectChange(this.value)" title="Select active mobile hardware">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+
+        <!-- Mode Buttons: Live vs Journey Route -->
+        <div class="insp-mode-toggle-group">
+          <button type="button" class="btn-insp-mode active" id="btnInspModeLive" onclick="switchInspectorMode('live')" title="Live Real-Time Telemetry">
+            <i class="fas fa-crosshairs me-1"></i> Real-Time Live Location
+          </button>
+          <button type="button" class="btn-insp-mode" id="btnInspModeHistory" onclick="switchInspectorMode('history')" title="Journey Route Timeline">
+            <i class="fas fa-route me-1"></i> Journey Route & History
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Far Right: Live Status Pill & Close Button -->
       <div class="inspector-header-actions">
         <span class="live-heartbeat-pill" id="inspLivePill">
           <span class="radar-dot green sm"></span>
@@ -443,55 +506,158 @@
       </div>
     </div>
 
-    <!-- Modal Body: Left Sidebar + Right Main Map & Telemetry HUD -->
+    <!-- Modal Body: Left Panel (Device Details / Timeline) + Right Main Map -->
     <div class="inspector-modal-body">
       
-      <!-- LEFT SIDEBAR -->
+      <!-- LEFT PANEL -->
       <div class="inspector-left-bar">
-        <div class="left-bar-section-title">
-          <i class="fas fa-mobile-screen-button me-1"></i> Registered Hardware (<span id="inspDeviceCount">0</span>)
-        </div>
-
-        <!-- Devices List Container -->
-        <div class="inspector-devices-list" id="inspDevicesList">
-          <!-- Populated by JavaScript -->
-        </div>
-
-        <!-- Account Security Actions -->
-        <div class="inspector-user-quick-actions">
-          <div class="quick-action-title">Account Security</div>
-          <div class="quick-action-buttons">
-            <button type="button" class="btn-sidebar-sec btn-sec-logout" id="btnInspLogout" onclick="handleInspectorLogout()" title="Force logout this user across all mobile sessions">
-              <i class="fas fa-right-from-bracket me-1"></i> Logout All
-            </button>
-            <button type="button" class="btn-sidebar-sec btn-sec-lock" id="btnInspLock" onclick="handleInspectorLock()" title="Lock or unlock user credentials">
-              <i class="fas fa-lock me-1"></i> <span id="btnInspLockText">Lock Account</span>
-            </button>
+        
+        <!-- ── SUB-VIEW A: SELECTED DEVICE SPECS (Live Mode) ── -->
+        <div id="inspDeviceDetailsView" class="inspector-sidebar-view">
+          
+          <!-- Selected Device Overview Card -->
+          <div class="insp-sidebar-section">
+            <div class="insp-section-subtitle">Selected Hardware Device</div>
+            <div class="insp-device-hero-card">
+              <div class="device-hero-top">
+                <div class="device-hero-icon-wrap" id="heroDeviceIconWrap">
+                  <i class="fas fa-mobile-screen" id="heroDeviceIcon"></i>
+                </div>
+                <div class="device-hero-meta">
+                  <div class="device-hero-name" id="heroDeviceModel">Device Model</div>
+                  <div class="device-hero-os" id="heroDeviceOs">Android Hardware</div>
+                </div>
+                <span class="badge-status status-online" id="heroDeviceStatus">Online</span>
+              </div>
+            </div>
           </div>
+
+          <!-- IMEI / Hardware Identifier Card -->
+          <div class="insp-sidebar-section">
+            <div class="insp-section-subtitle">IMEI / Hardware Identifier</div>
+            <div class="insp-imei-card">
+              <div class="imei-value-text monospace-text" id="inspImeiValue" title="Hardware UUID / IMEI">--</div>
+              <button type="button" class="btn-copy-imei" onclick="copyImeiToClipboard()" title="Copy IMEI / Device ID">
+                <i class="far fa-copy" id="copyImeiIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Telemetry Specs Grid -->
+          <div class="insp-sidebar-section">
+            <div class="insp-section-subtitle">Live Telemetry Specs</div>
+            <div class="insp-telemetry-grid">
+              <div class="telemetry-box">
+                <span class="telemetry-box-label"><i class="fas fa-battery-half text-success me-1"></i> Battery</span>
+                <span class="telemetry-box-val" id="specBattery">--%</span>
+              </div>
+              <div class="telemetry-box">
+                <span class="telemetry-box-label"><i class="fas fa-gauge-high text-info me-1"></i> Speed</span>
+                <span class="telemetry-box-val" id="specSpeed">0 km/h</span>
+              </div>
+              <div class="telemetry-box">
+                <span class="telemetry-box-label"><i class="fas fa-satellite-dish text-primary me-1"></i> GPS Lock</span>
+                <span class="telemetry-box-val" id="specGps">Active Lock</span>
+              </div>
+              <div class="telemetry-box">
+                <span class="telemetry-box-label"><i class="far fa-clock text-secondary me-1"></i> Last Ping</span>
+                <span class="telemetry-box-val" id="specLastPing">Connecting...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Device Hardware Governance Controls -->
+          <div class="insp-sidebar-section">
+            <div class="insp-section-subtitle">Hardware Governance</div>
+            <div class="insp-device-actions-grid">
+              <button type="button" class="btn-dev-action-pill btn-action-live" onclick="switchInspectorMode('live')" title="Focus Live Map on this Device">
+                <i class="fas fa-crosshairs me-1 text-primary"></i> Live Location
+              </button>
+              <button type="button" class="btn-dev-action-pill btn-action-hist" onclick="switchInspectorMode('history')" title="View Journey Route Timeline">
+                <i class="fas fa-route me-1 text-warning"></i> History
+              </button>
+              <button type="button" class="btn-dev-action-pill btn-action-lock" id="btnLockSelectedDevice" onclick="toggleSelectedDeviceLock()" title="Lock this specific physical hardware">
+                <i class="fas fa-lock me-1"></i> <span id="btnLockDeviceText">Lock Device</span>
+              </button>
+              <button type="button" class="btn-dev-action-pill btn-action-reset" onclick="resetSelectedDeviceBinding()" title="Reset device hardware binding">
+                <i class="fas fa-rotate me-1 text-muted"></i> Reset Binding
+              </button>
+            </div>
+          </div>
+
+          <!-- Account Security Footer (Logout All & Lock Account) -->
+          <div class="insp-account-security-footer">
+            <div class="quick-action-title">Account Security</div>
+            <div class="quick-action-buttons">
+              <button type="button" class="btn-sidebar-sec btn-sec-logout" id="btnInspLogout" onclick="handleInspectorLogout()" title="Force logout all mobile devices and remove saved biometric locks">
+                <i class="fas fa-right-from-bracket me-1"></i> Logout All
+              </button>
+              <button type="button" class="btn-sidebar-sec btn-sec-lock" id="btnInspLock" onclick="handleInspectorLock()" title="Lock or unlock user account credentials">
+                <i class="fas fa-user-lock me-1"></i> <span id="btnInspLockText">Lock Account</span>
+              </button>
+            </div>
+          </div>
+
         </div>
+
+        <!-- ── SUB-VIEW B: GOOGLE MAPS TIMELINE BAR (History Mode) ── -->
+        <div id="inspTimelineView" class="inspector-sidebar-view" style="display: none;">
+          
+          <!-- Timeline Header Block -->
+          <div class="timeline-header-block">
+            <div class="timeline-top-bar">
+              <button type="button" class="btn-timeline-back" onclick="switchInspectorMode('live')" title="Back to Device Info">
+                <i class="fas fa-chevron-left me-1"></i> Device Info
+              </button>
+              <h3 class="timeline-heading-title">Timeline</h3>
+            </div>
+
+            <!-- Date Selector Navigator: < Tue, 3 Nov 2026 > -->
+            <div class="timeline-date-navigator">
+              <button type="button" class="btn-nav-day" onclick="navigateTimelineDay(-1)" title="Previous Day">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <div class="timeline-date-display" onclick="openTimelineDatePicker()" title="Select specific date">
+                <i class="far fa-calendar-alt text-primary me-2"></i>
+                <span id="timelineDateLabel">Today</span>
+                <i class="fas fa-caret-down ms-1 text-muted"></i>
+                <input type="date" id="timelineHiddenDateInput" class="timeline-hidden-date-picker" onchange="onTimelineDatePicked(this.value)">
+              </div>
+              <button type="button" class="btn-nav-day" onclick="navigateTimelineDay(1)" title="Next Day">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+
+            <!-- Summary Strip: Driving | Motorcycling | Visits (Image 2 style) -->
+            <div class="timeline-summary-strip" id="timelineSummaryStrip">
+              <div class="timeline-sum-chip" id="sumDrivingChip" title="Driving distance & time">
+                <i class="fas fa-car text-info"></i>
+                <span id="sumDrivingText">0 km • 0 min</span>
+              </div>
+              <div class="timeline-sum-chip" id="sumMotorcycleChip" title="Motorcycling distance & time">
+                <i class="fas fa-motorcycle text-warning"></i>
+                <span id="sumMotorcycleText">0 km • 0 min</span>
+              </div>
+              <div class="timeline-sum-chip" id="sumVisitsChip" title="Total locations visited">
+                <i class="fas fa-location-dot text-rose"></i>
+                <span id="sumVisitsText">0 visits</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vertical Connected Timeline Stream Container -->
+          <div class="timeline-stream-container" id="timelineStreamContainer">
+            <!-- Populated dynamically by renderGoogleTimelineStream() -->
+          </div>
+
+        </div>
+
       </div>
 
-      <!-- RIGHT MAIN PANEL -->
+      <!-- RIGHT MAIN PANEL: MAP & HUD -->
       <div class="inspector-main-panel">
         
-        <!-- View Mode Switcher -->
-        <div class="inspector-view-switch">
-          <div class="view-switch-tabs">
-            <button type="button" class="insp-tab-btn active" id="btnInspModeLive" onclick="switchInspectorMode('live')">
-              <i class="fas fa-crosshairs me-1"></i> Real-Time Live Location
-            </button>
-            <button type="button" class="insp-tab-btn" id="btnInspModeHistory" onclick="switchInspectorMode('history')">
-              <i class="fas fa-route me-1"></i> Journey Route & History
-            </button>
-          </div>
-          <!-- Date Picker for History -->
-          <div class="insp-date-picker-wrap" id="inspDatePickerWrap" style="display: none;">
-            <i class="fas fa-calendar-day me-1 text-muted"></i>
-            <input type="date" id="inspHistoryDate" class="hub-input-date" onchange="loadInspectorHistoryForDate(this.value)">
-          </div>
-        </div>
-
-        <!-- Real-Time Telemetry HUD Overlay -->
+        <!-- Real-Time Telemetry HUD Overlay (Live Mode Only) -->
         <div class="inspector-telemetry-hud" id="inspTelemetryHud">
           <div class="hud-item">
             <span class="hud-label">Selected Device</span>
@@ -519,12 +685,12 @@
         <div class="inspector-map-wrap">
           <div id="inspectorLeafletMap" class="inspector-leaflet-map"></div>
 
-          <!-- History Playback Scrubber (visible when in history mode) -->
+          <!-- Google Maps Journey Playback Scrubber (History Mode) -->
           <div class="insp-playback-bar" id="inspPlaybackBar" style="display: none;">
-            <button type="button" class="btn-play-toggle" id="btnInspPlayToggle" onclick="toggleInspectorPlayback()">
+            <button type="button" class="btn-play-toggle" id="btnInspPlayToggle" onclick="toggleInspectorPlayback()" title="Play / Pause Journey">
               <i class="fas fa-play" id="iconInspPlay"></i>
             </button>
-            <input type="range" id="inspScrubber" min="0" max="100" value="0" oninput="handleInspectorScrub(this.value)" style="flex: 1; accent-color: var(--primary);">
+            <input type="range" id="inspScrubber" min="0" max="100" value="0" oninput="handleInspectorScrub(this.value)" style="flex: 1; accent-color: #00d2ff;">
             <span class="scrubber-timestamp" id="inspScrubberTime" style="font-family: monospace; font-size: 0.8rem; min-width: 65px;">--:--</span>
             <div class="playback-speed-group">
               <button type="button" class="btn-speed active" onclick="setInspectorSpeed(1, this)">1x</button>
@@ -679,6 +845,80 @@
           <div class="playback-time-badge" id="scrubberTimeBadge">--:--</div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Edit Rollout Target Audience Modal (For Live Production Release) ── -->
+<div id="editTargetAudienceModal" class="hub-modal-backdrop" style="display: none;">
+  <div class="hub-modal-card" style="max-width: 620px; text-align: left;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="modal-icon-circle" style="margin: 0; width: 44px; height: 44px; font-size: 1.2rem; background: var(--primary-light); color: var(--primary);">
+          <i class="fas fa-users-gear"></i>
+        </div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.15rem;">Live Release Rollout Audience</h3>
+          <p class="modal-desc" style="margin: 0; font-size: 0.8rem;">Change targeting for active release without re-uploading APK.</p>
+        </div>
+      </div>
+      <button type="button" class="btn-clear-file" onclick="closeEditTargetAudienceModal()" title="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Target Scope Radio/Buttons -->
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 0.82rem; font-weight: 700; color: var(--text); margin-bottom: 6px;">Audience Scope</label>
+      <div class="target-scope-toggle-group" style="width: 100%; display: flex;">
+        <button type="button" class="btn-target-scope active" id="btnEditScopeAll" onclick="setEditRolloutScope('all')" style="flex: 1; text-align: center;">
+          <i class="fas fa-globe me-1"></i> All Employees (Global)
+        </button>
+        <button type="button" class="btn-target-scope" id="btnEditScopeTargeted" onclick="setEditRolloutScope('targeted')" style="flex: 1; text-align: center;">
+          <i class="fas fa-user-check me-1"></i> Selected Employees (Pilot)
+        </button>
+      </div>
+    </div>
+
+    <!-- Targeted Employee Picker in Edit Modal -->
+    <div id="editTargetEmployeePickerBox" class="target-employee-picker-box" style="display: none; border-top: none; padding-top: 0; margin-top: 0;">
+      <div class="picker-toolbar">
+        <div class="picker-search-wrap">
+          <i class="fas fa-search picker-search-icon"></i>
+          <input type="text" id="editTargetEmployeeSearch" class="picker-search-input" placeholder="Search employees by name, role, EID..." oninput="filterEditTargetEmployees(this.value)">
+        </div>
+        <div class="picker-actions">
+          <button type="button" class="btn-picker-tool" onclick="selectAllEditTargetEmployees(true)">Select All</button>
+          <button type="button" class="btn-picker-tool" onclick="selectAllEditTargetEmployees(false)">Clear</button>
+          <span class="picker-counter-badge" id="editTargetCountBadge">0 selected</span>
+        </div>
+      </div>
+      <div class="target-employee-list-grid" id="editTargetEmployeeListGrid" style="max-height: 220px;">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+    <div class="modal-buttons" style="margin-top: 20px;">
+      <button type="button" class="btn-modal-cancel" onclick="closeEditTargetAudienceModal()">Cancel</button>
+      <button type="button" class="btn-modal-confirm" style="background: var(--primary);" id="btnSaveTargetAudience" onclick="saveTargetAudienceChanges()">
+        <i class="fas fa-check me-1"></i> Save & Apply Targeting
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirmation Micro-Modal (Top Stacking Order: z-index 99999) ── -->
+<div id="actionConfirmModal" class="hub-modal-backdrop" style="display: none;">
+  <div class="hub-modal-card">
+    <div class="modal-icon-circle" id="modalIconBox">
+      <i class="fas fa-exclamation-triangle"></i>
+    </div>
+    <h3 class="modal-title" id="modalTitle">Confirm Action</h3>
+    <p class="modal-desc" id="modalDesc">Are you sure you want to proceed?</p>
+    <div class="modal-buttons">
+      <button type="button" class="btn-modal-cancel" onclick="closeActionModal()">Cancel</button>
+      <button type="button" class="btn-modal-confirm" id="btnModalConfirm">Confirm</button>
     </div>
   </div>
 </div>
@@ -2046,6 +2286,289 @@
     animation: fadeInModal 0.2s ease-out;
   }
 
+  /* ── Modal Stacking Hierarchy (Guarantees confirm popups render in front) ── */
+  #userDeviceInspectorModal {
+    z-index: 5000 !important;
+  }
+  #liveLocationModal,
+  #locationHistoryModal {
+    z-index: 6000 !important;
+  }
+  #editTargetAudienceModal {
+    z-index: 7000 !important;
+  }
+  #actionConfirmModal {
+    z-index: 99999 !important;
+  }
+  #actionConfirmModal .hub-modal-card {
+    z-index: 100000 !important;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+  #hubToastContainer {
+    z-index: 100005 !important;
+  }
+
+  /* ── Rollout Target Card & Audience Selector ── */
+  .ota-target-card {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+  }
+
+  .ota-target-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .target-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .target-card-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .target-scope-toggle-group {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 4px;
+  }
+
+  .btn-target-scope {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .btn-target-scope.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  .target-employee-picker-box {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+
+  .picker-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .picker-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .picker-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .picker-search-input {
+    width: 100%;
+    padding: 7px 10px 7px 30px;
+    font-size: 0.82rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .picker-search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-light);
+  }
+
+  .picker-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-picker-tool {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-picker-tool:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .picker-counter-badge {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 12px;
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+
+  .target-employee-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px 2px;
+  }
+
+  .target-emp-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .target-emp-card:hover {
+    border-color: var(--primary);
+    background: var(--surface-elevated, #f8fafc);
+  }
+
+  .target-emp-card.selected {
+    border-color: var(--primary);
+    background: rgba(14, 165, 233, 0.08);
+  }
+
+  .target-emp-checkbox {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .target-emp-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 800;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .target-emp-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .target-emp-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .target-emp-sub {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .btn-edit-target-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-edit-target-action:hover {
+    background: var(--primary-light);
+    border-color: var(--primary);
+  }
+
+  .badge-target-pilot {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .badge-target-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+
+
   .hub-modal-card {
     background: var(--surface);
     color: var(--text);
@@ -2796,47 +3319,128 @@
   }
 
   /* ── Full Device & Telemetry Inspector Modal ── */
+    /* ── REDESIGNED DEVICE INSPECTOR MODAL & GOOGLE MAPS TIMELINE ── */
   .device-inspector-modal-card {
-    max-width: 1240px;
+    max-width: 1280px;
     width: 96%;
     height: 90vh;
-    max-height: 850px;
+    max-height: 880px;
     display: flex;
     flex-direction: column;
     padding: 0;
     overflow: hidden;
-    border-radius: 18px;
-    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5);
+    border-radius: 20px;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.6);
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
+
+  /* Single-Line Top Bar */
   .inspector-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 22px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    background: #1e293b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 20;
-    flex-wrap: wrap;
-    gap: 12px;
+    gap: 16px;
   }
   .inspector-user-info {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    flex-shrink: 0;
   }
   .insp-user-name {
     font-weight: 800;
-    font-size: 1.1rem;
-    color: var(--text);
+    font-size: 1.05rem;
+    color: #f8fafc;
+    letter-spacing: -0.2px;
   }
   .insp-user-handle {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+    font-size: 0.78rem;
+    color: #94a3b8;
   }
+
+  /* Inline Top Controls: Device Selector & Mode Buttons */
+  .inspector-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+  .insp-device-dropdown-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .insp-dropdown-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--primary, #0284c7);
+    font-size: 0.85rem;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .insp-device-select {
+    padding: 8px 16px 8px 34px;
+    border-radius: 24px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    min-width: 260px;
+    max-width: 380px;
+  }
+  .insp-device-select:hover {
+    border-color: var(--primary, #0284c7);
+    background: rgba(15, 23, 42, 1);
+  }
+  .insp-device-select:focus {
+    border-color: #00d2ff;
+    box-shadow: 0 0 0 2px rgba(0, 210, 255, 0.25);
+  }
+  .insp-mode-toggle-group {
+    display: flex;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 3px;
+    gap: 4px;
+  }
+  .btn-insp-mode {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+  }
+  .btn-insp-mode:hover {
+    color: #f8fafc;
+  }
+  .btn-insp-mode.active {
+    background: var(--primary, #0284c7);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+  }
+
   .inspector-header-actions {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
   }
   .live-heartbeat-pill {
     display: inline-flex;
@@ -2844,199 +3448,427 @@
     gap: 6px;
     font-size: 0.75rem;
     font-weight: 700;
-    padding: 4px 10px;
+    padding: 4px 12px;
     border-radius: 20px;
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.3);
     color: #10b981;
   }
+
+  /* Modal Body */
   .inspector-modal-body {
     display: flex;
     flex: 1;
     overflow: hidden;
     position: relative;
   }
+
+  /* Left Panel */
   .inspector-left-bar {
     width: 390px;
-    min-width: 330px;
-    background: var(--bg);
-    border-right: 1px solid var(--border);
+    min-width: 350px;
+    background: #0f172a;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
-  .left-bar-section-title {
-    padding: 14px 16px 8px;
-    font-size: 0.78rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-  }
-  .inspector-devices-list {
+  .inspector-sidebar-view {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     overflow-y: auto;
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
   }
-  .device-card-item {
-    background: var(--surface);
-    border: 1.5px solid var(--border);
+
+  /* Sidebar Sections */
+  .insp-sidebar-section {
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .insp-section-subtitle {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  /* Device Hero Card */
+  .insp-device-hero-card {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     padding: 12px 14px;
+  }
+  .device-hero-top {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  .device-card-item:hover {
-    border-color: var(--primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  }
-  .device-card-item.selected {
-    border-color: var(--primary);
-    background: rgba(2, 132, 199, 0.06);
-    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
-  }
-  .dev-card-head {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 12px;
   }
-  .dev-model-title {
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: var(--text);
+  .device-hero-icon-wrap {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(2, 132, 199, 0.15);
+    border: 1px solid rgba(2, 132, 199, 0.3);
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .device-hero-meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .device-hero-name {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #f8fafc;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 230px;
   }
-  .badge-status {
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 12px;
-    text-transform: uppercase;
-  }
-  .badge-status.status-online {
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.3);
-  }
-  .badge-status.status-active {
-    background: rgba(2, 132, 199, 0.15);
-    color: #0284c7;
-    border: 1px solid rgba(2, 132, 199, 0.3);
-  }
-  .badge-status.status-inactive {
-    background: rgba(148, 163, 184, 0.12);
+  .device-hero-os {
+    font-size: 0.72rem;
     color: #94a3b8;
-    border: 1px solid rgba(148, 163, 184, 0.2);
   }
-  .dev-uuid-row {
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-  }
-  .dev-telemetry-row {
+
+  /* IMEI / Identifier Card */
+  .insp-imei-card {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .dev-pill {
-    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 7px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: var(--bg);
-    border: 1px solid var(--border-light, #e2e8f0);
-    color: var(--text);
+    justify-content: space-between;
+    gap: 8px;
   }
-  [data-theme="dark"] .dev-pill {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
+  .imei-value-text {
+    font-size: 0.76rem;
+    color: #38bdf8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
   }
-  .dev-last-active-row {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-  }
-  .dev-action-row {
-    display: flex;
-    gap: 6px;
-    margin-top: 4px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-light, #e2e8f0);
-  }
-  .btn-dev-action {
-    flex: 1;
+  .btn-copy-imei {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #94a3b8;
     padding: 5px 8px;
-    border-radius: 6px;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-copy-imei:hover {
+    color: #ffffff;
+    border-color: var(--primary, #0284c7);
+    background: rgba(2, 132, 199, 0.15);
+  }
+
+  /* Telemetry Grid */
+  .insp-telemetry-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .telemetry-box {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .telemetry-box-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #94a3b8;
+  }
+  .telemetry-box-val {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #f8fafc;
+    font-family: monospace;
+  }
+
+  /* Device Action Buttons */
+  .insp-device-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .btn-dev-action-pill {
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.74rem;
     font-weight: 700;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #1e293b;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    transition: all 0.15s ease;
   }
-  .btn-dev-action:hover {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
+  .btn-dev-action-pill:hover {
+    background: rgba(2, 132, 199, 0.15);
+    border-color: var(--primary, #0284c7);
+    color: #ffffff;
   }
-  .btn-dev-action.btn-dev-reset:hover {
-    background: #ef4444;
-    color: #fff;
+  .btn-action-lock {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+  }
+  .btn-action-lock:hover {
+    background: rgba(239, 68, 68, 0.15);
     border-color: #ef4444;
+    color: #ffffff;
   }
-  .inspector-user-quick-actions {
-    padding: 12px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
+
+  /* Account Security Footer */
+  .insp-account-security-footer {
+    margin-top: auto;
+    padding: 14px 18px;
+    background: #141f32;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
   .quick-action-title {
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.68rem;
+    font-weight: 800;
     text-transform: uppercase;
-    color: var(--text-secondary);
+    letter-spacing: 0.6px;
+    color: #64748b;
     margin-bottom: 8px;
   }
   .quick-action-buttons {
     display: flex;
-    gap: 8px;
+    gap: 10px;
   }
   .btn-sidebar-sec {
     flex: 1;
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #1e293b;
+    color: #e2e8f0;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-  .btn-sidebar-sec:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
+  .btn-sec-logout:hover {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: #f59e0b;
+    color: #fbbf24;
+  }
+  .btn-sec-lock:hover {
+    background: rgba(239, 68, 68, 0.15);
     border-color: #ef4444;
+    color: #f87171;
   }
 
-  /* Right Panel: Map & Switcher */
+  /* ── GOOGLE MAPS TIMELINE PANEL (IMAGE 2 REPLICA) ── */
+  .timeline-header-block {
+    padding: 14px 16px 12px;
+    background: #1e293b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .timeline-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .btn-timeline-back {
+    background: transparent;
+    border: none;
+    color: #38bdf8;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+  }
+  .btn-timeline-back:hover {
+    color: #7dd3fc;
+  }
+  .timeline-heading-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+    letter-spacing: -0.2px;
+  }
+
+  /* Date Navigator: < Tue, 3 Nov 2026 > */
+  .timeline-date-navigator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 4px;
+  }
+  .btn-nav-day {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+  }
+  .btn-nav-day:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .timeline-date-display {
+    position: relative;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    padding: 4px 10px;
+  }
+  .timeline-hidden-date-picker {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+  }
+
+  /* Summary Strip (Image 2 style) */
+  .timeline-summary-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 4px 0;
+    gap: 8px;
+  }
+  .timeline-sum-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  /* Vertical Connected Timeline Stream */
+  .timeline-stream-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px 24px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .timeline-empty-notice {
+    padding: 36px 16px;
+    text-align: center;
+    color: #64748b;
+  }
+
+  .timeline-node {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    padding-bottom: 22px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  /* Vertical Track Line connecting timeline nodes */
+  .timeline-node::before {
+    content: '';
+    position: absolute;
+    left: 17px;
+    top: 36px;
+    bottom: 0;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .timeline-node:last-child::before {
+    display: none;
+  }
+
+  .timeline-node-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 2;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .timeline-node:hover .timeline-node-icon {
+    transform: scale(1.1);
+  }
+
+  /* Stop Node Icon (Google Maps Blue Visit Badge) */
+  .node-visit .timeline-node-icon {
+    background: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.2);
+    font-size: 0.9rem;
+  }
+
+  /* Travel Node Icon (Dark Slate with Vehicle Icon) */
+  .node-travel .timeline-node-icon {
+    background: #1e293b;
+    color: #38bdf8;
+    border: 2px solid rgba(56, 189, 248, 0.4);
+    font-size: 0.82rem;
+  }
+
+  .timeline-node-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .timeline-node-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 2px;
+    line-height: 1.25;
+  }
+  .timeline-node-sub {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    margin-bottom: 2px;
+    line-height: 1.3;
+  }
+  .timeline-node-time {
+    font-size: 0.72rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  /* Main Map Panel & Google Maps Cyan Route */
   .inspector-main-panel {
     flex: 1;
     display: flex;
@@ -3044,35 +3876,6 @@
     overflow: hidden;
     position: relative;
     background: #0f172a;
-  }
-  .inspector-view-switch {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    z-index: 10;
-  }
-  .view-switch-tabs {
-    display: flex;
-    gap: 6px;
-  }
-  .insp-tab-btn {
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .insp-tab-btn.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
   }
   .inspector-telemetry-hud {
     display: flex;
@@ -3116,10 +3919,26 @@
     align-items: center;
     gap: 12px;
     padding: 10px 18px;
-    background: rgba(15, 23, 42, 0.94);
+    background: rgba(15, 23, 42, 0.95);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     color: #fff;
     z-index: 1000;
+  }
+
+  /* Google Maps Timeline Pins */
+  .stop-marker-pin {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #0284c7;
+    color: #ffffff;
+    border: 2px solid #ffffff;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
   }
 
 </style>
@@ -3318,6 +4137,266 @@
     ta.focus();
   }
 
+  
+  // ──────────────────────────────────────────────────────────────────────────
+  // TARGETED OTA ROLLOUT MANAGEMENT & LIVE AUDIENCE CONTROLS
+  // ──────────────────────────────────────────────────────────────────────────
+  let otaRolloutScope = 'all'; // 'all' or 'targeted'
+  let selectedTargetUserIds = new Set();
+  let activeReleaseVersionData = null;
+
+  // Edit Modal State for Live Release
+  let editRolloutScope = 'all';
+  let editSelectedTargetUserIds = new Set();
+
+  function setRolloutScope(scope) {
+    otaRolloutScope = scope;
+    const btnAll = document.getElementById('btnScopeAll');
+    const btnTargeted = document.getElementById('btnScopeTargeted');
+    const pickerBox = document.getElementById('targetEmployeePickerBox');
+
+    if (scope === 'targeted') {
+      if (btnTargeted) btnTargeted.classList.add('active');
+      if (btnAll) btnAll.classList.remove('active');
+      if (pickerBox) pickerBox.style.display = 'block';
+      renderTargetEmployeePicker();
+    } else {
+      if (btnAll) btnAll.classList.add('active');
+      if (btnTargeted) btnTargeted.classList.remove('active');
+      if (pickerBox) pickerBox.style.display = 'none';
+    }
+  }
+
+  function filterTargetEmployees(query) {
+    renderTargetEmployeePicker(query);
+  }
+
+  function renderTargetEmployeePicker(query = '') {
+    const grid = document.getElementById('targetEmployeeListGrid');
+    const counterBadge = document.getElementById('targetCountBadge');
+    if (!grid) return;
+
+    if (!allFleetUsers || allFleetUsers.length === 0) {
+      grid.innerHTML = '<div class="text-center py-3 text-muted" style="grid-column: 1 / -1; font-size: 0.82rem;"><i class="fas fa-spinner fa-spin me-1"></i> Loading employee fleet...</div>';
+      return;
+    }
+
+    const q = (query || '').toLowerCase().trim();
+    const filtered = allFleetUsers.filter(u => {
+      if (!q) return true;
+      const name = (u.employee_name || '').toLowerCase();
+      const user = (u.username || '').toLowerCase();
+      const eid = (u.employee_id || '').toString().toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      return name.includes(q) || user.includes(q) || eid.includes(q) || phone.includes(q);
+    });
+
+    if (counterBadge) {
+      counterBadge.textContent = `${selectedTargetUserIds.size} of ${allFleetUsers.length} selected`;
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="text-center py-3 text-muted" style="grid-column: 1 / -1; font-size: 0.82rem;">No matching employees found</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map(u => {
+      const isSelected = selectedTargetUserIds.has(u.id);
+      const initials = (u.employee_name || u.username).substring(0, 2).toUpperCase();
+      const roleStr = u.employee_level === 'admin' ? 'Admin' : (u.employee_level === 's' ? 'Senior' : 'Junior');
+      const devName = u.device_model || (u.devices && u.devices.length > 0 ? u.devices[0].device_model : 'Pending Bind');
+
+      return `
+        <div class="target-emp-card ${isSelected ? 'selected' : ''}" onclick="toggleTargetUserSelect(${u.id})">
+          <input type="checkbox" class="target-emp-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleTargetUserSelect(${u.id})">
+          <div class="target-emp-avatar">${initials}</div>
+          <div class="target-emp-info">
+            <div class="target-emp-name" title="${u.employee_name || u.username}">${u.employee_name || u.username}</div>
+            <div class="target-emp-sub">@${u.username} • ${roleStr} • ${devName}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function toggleTargetUserSelect(userId) {
+    if (selectedTargetUserIds.has(userId)) {
+      selectedTargetUserIds.delete(userId);
+    } else {
+      selectedTargetUserIds.add(userId);
+    }
+    const searchVal = document.getElementById('targetEmployeeSearch')?.value || '';
+    renderTargetEmployeePicker(searchVal);
+  }
+
+  function selectAllTargetEmployees(selectAll) {
+    if (selectAll) {
+      (allFleetUsers || []).forEach(u => selectedTargetUserIds.add(u.id));
+    } else {
+      selectedTargetUserIds.clear();
+    }
+    const searchVal = document.getElementById('targetEmployeeSearch')?.value || '';
+    renderTargetEmployeePicker(searchVal);
+  }
+
+  // ── Edit Live Release Target Audience Modal ──
+  function openEditTargetAudienceModal() {
+    const modal = document.getElementById('editTargetAudienceModal');
+    if (!modal) return;
+
+    const curScope = activeReleaseVersionData?.target_scope || 'all';
+    editRolloutScope = curScope;
+    editSelectedTargetUserIds = new Set();
+
+    if (activeReleaseVersionData?.target_employee_ids && Array.isArray(activeReleaseVersionData.target_employee_ids)) {
+      const idSet = new Set(activeReleaseVersionData.target_employee_ids.map(x => String(x)));
+      (allFleetUsers || []).forEach(u => {
+        if (idSet.has(String(u.id)) || (u.employee_id && idSet.has(String(u.employee_id)))) {
+          editSelectedTargetUserIds.add(u.id);
+        }
+      });
+    }
+
+    setEditRolloutScope(curScope);
+    modal.style.display = 'flex';
+  }
+
+  function closeEditTargetAudienceModal() {
+    const modal = document.getElementById('editTargetAudienceModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function setEditRolloutScope(scope) {
+    editRolloutScope = scope;
+    const btnAll = document.getElementById('btnEditScopeAll');
+    const btnTargeted = document.getElementById('btnEditScopeTargeted');
+    const pickerBox = document.getElementById('editTargetEmployeePickerBox');
+
+    if (scope === 'targeted') {
+      if (btnTargeted) btnTargeted.classList.add('active');
+      if (btnAll) btnAll.classList.remove('active');
+      if (pickerBox) pickerBox.style.display = 'block';
+      renderEditTargetEmployeePicker();
+    } else {
+      if (btnAll) btnAll.classList.add('active');
+      if (btnTargeted) btnTargeted.classList.remove('active');
+      if (pickerBox) pickerBox.style.display = 'none';
+    }
+  }
+
+  function filterEditTargetEmployees(query) {
+    renderEditTargetEmployeePicker(query);
+  }
+
+  function renderEditTargetEmployeePicker(query = '') {
+    const grid = document.getElementById('editTargetEmployeeListGrid');
+    const counterBadge = document.getElementById('editTargetCountBadge');
+    if (!grid) return;
+
+    const q = (query || '').toLowerCase().trim();
+    const filtered = (allFleetUsers || []).filter(u => {
+      if (!q) return true;
+      const name = (u.employee_name || '').toLowerCase();
+      const user = (u.username || '').toLowerCase();
+      const eid = (u.employee_id || '').toString().toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      return name.includes(q) || user.includes(q) || eid.includes(q) || phone.includes(q);
+    });
+
+    if (counterBadge) {
+      counterBadge.textContent = `${editSelectedTargetUserIds.size} of ${(allFleetUsers || []).length} selected`;
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="text-center py-3 text-muted" style="grid-column: 1 / -1; font-size: 0.82rem;">No matching employees found</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map(u => {
+      const isSelected = editSelectedTargetUserIds.has(u.id);
+      const initials = (u.employee_name || u.username).substring(0, 2).toUpperCase();
+      const roleStr = u.employee_level === 'admin' ? 'Admin' : (u.employee_level === 's' ? 'Senior' : 'Junior');
+      const devName = u.device_model || (u.devices && u.devices.length > 0 ? u.devices[0].device_model : 'Pending Bind');
+
+      return `
+        <div class="target-emp-card ${isSelected ? 'selected' : ''}" onclick="toggleEditTargetUserSelect(${u.id})">
+          <input type="checkbox" class="target-emp-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleEditTargetUserSelect(${u.id})">
+          <div class="target-emp-avatar">${initials}</div>
+          <div class="target-emp-info">
+            <div class="target-emp-name" title="${u.employee_name || u.username}">${u.employee_name || u.username}</div>
+            <div class="target-emp-sub">@${u.username} • ${roleStr} • ${devName}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function toggleEditTargetUserSelect(userId) {
+    if (editSelectedTargetUserIds.has(userId)) {
+      editSelectedTargetUserIds.delete(userId);
+    } else {
+      editSelectedTargetUserIds.add(userId);
+    }
+    const searchVal = document.getElementById('editTargetEmployeeSearch')?.value || '';
+    renderEditTargetEmployeePicker(searchVal);
+  }
+
+  function selectAllEditTargetEmployees(selectAll) {
+    if (selectAll) {
+      (allFleetUsers || []).forEach(u => editSelectedTargetUserIds.add(u.id));
+    } else {
+      editSelectedTargetUserIds.clear();
+    }
+    const searchVal = document.getElementById('editTargetEmployeeSearch')?.value || '';
+    renderEditTargetEmployeePicker(searchVal);
+  }
+
+  function saveTargetAudienceChanges() {
+    if (editRolloutScope === 'targeted' && editSelectedTargetUserIds.size === 0) {
+      showToast('Please select at least one employee for targeted rollout.', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btnSaveTargetAudience');
+    if (btn) btn.disabled = true;
+
+    const targetedUsers = (allFleetUsers || []).filter(u => editSelectedTargetUserIds.has(u.id));
+    const targetIds = [];
+    const targetNames = [];
+    if (editRolloutScope === 'targeted') {
+      targetedUsers.forEach(u => {
+        targetIds.push(u.id);
+        if (u.employee_id) targetIds.push(u.employee_id);
+        targetNames.push(`${u.employee_name || u.username} (@${u.username})`);
+      });
+    }
+
+    csrfFetch('/api/admin/app/update_target', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_scope: editRolloutScope,
+        target_employee_ids: targetIds,
+        target_employee_names: targetNames
+      })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (btn) btn.disabled = false;
+      if (res.success) {
+        showToast(res.message || 'Target audience updated successfully!', 'success');
+        closeEditTargetAudienceModal();
+        loadReleasesArchive();
+      } else {
+        showToast(res.error || 'Failed to update target audience', 'error');
+      }
+    })
+    .catch(err => {
+      if (btn) btn.disabled = false;
+      showToast('Network error while updating target audience', 'error');
+    });
+  }
+
   // ── Publish Release Handler ──
   function handlePublishRelease(e) {
     e.preventDefault();
@@ -3334,6 +4413,11 @@
 
     if (!version || !versionCode) {
       showToast('Version name and version code are required.', 'error');
+      return;
+    }
+
+    if (otaRolloutScope === 'targeted' && selectedTargetUserIds.size === 0) {
+      showToast('Please select at least one employee for targeted rollout.', 'warning');
       return;
     }
 
@@ -3359,6 +4443,23 @@
     formData.append('min_version_code', minVersionCode);
     formData.append('force_update', forceUpdate);
     formData.append('release_notes', releaseNotes);
+
+    formData.append('target_scope', otaRolloutScope);
+    if (otaRolloutScope === 'targeted') {
+      const targetedUsers = (allFleetUsers || []).filter(u => selectedTargetUserIds.has(u.id));
+      const targetIds = [];
+      const targetNames = [];
+      targetedUsers.forEach(u => {
+        targetIds.push(u.id);
+        if (u.employee_id) targetIds.push(u.employee_id);
+        targetNames.push(`${u.employee_name || u.username} (@${u.username})`);
+      });
+      formData.append('target_employee_ids', JSON.stringify(targetIds));
+      formData.append('target_employee_names', JSON.stringify(targetNames));
+    } else {
+      formData.append('target_employee_ids', '[]');
+      formData.append('target_employee_names', '[]');
+    }
 
     const t1 = setTimeout(() => {
       fill.style.width = '60%';
@@ -3461,7 +4562,7 @@
       const currentVer = data.current_version?.latest_version || '';
 
       if (!data.apk_files || data.apk_files.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No release APKs found in repository.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No release APKs found in repository.</td></tr>';
         badge.textContent = '0 Builds';
         return;
       }
@@ -3469,13 +4570,48 @@
       badge.textContent = `${data.apk_files.length} Builds Available`;
       tbody.innerHTML = '';
 
+      // Update Live Release Card with Rollout Target
+      if (data.current_version) {
+        activeReleaseVersionData = data.current_version;
+        const curScope = data.current_version.target_scope || 'all';
+        const targetNames = data.current_version.target_employee_names || [];
+        const scopeBadge = document.getElementById('currentRolloutScopeBadge');
+        const targetRow = document.getElementById('currentTargetEmployeesRow');
+        const targetList = document.getElementById('currentTargetEmployeesList');
+
+        if (scopeBadge) {
+          if (curScope === 'targeted') {
+            scopeBadge.innerHTML = `<span class="badge-target-pilot"><i class="fas fa-users-viewfinder me-1"></i> Targeted Pilot (${targetNames.length} Agents)</span>`;
+          } else {
+            scopeBadge.innerHTML = `<span class="badge-target-all"><i class="fas fa-globe me-1"></i> All Employees (Global)</span>`;
+          }
+        }
+
+        if (targetRow && targetList) {
+          if (curScope === 'targeted' && targetNames.length > 0) {
+            targetRow.style.display = 'flex';
+            targetList.innerHTML = targetNames.map(name => `<span class="badge-status" style="background: var(--input-bg); border: 1px solid var(--border); font-size: 0.72rem; padding: 2px 6px;">${name}</span>`).join('');
+          } else {
+            targetRow.style.display = 'none';
+            targetList.innerHTML = '';
+          }
+        }
+      }
+
       data.apk_files.forEach(apk => {
         const tr = document.createElement('tr');
         const isCurrent = apk.filename.includes(currentVer);
+        const curScope = (isCurrent && data.current_version?.target_scope) ? data.current_version.target_scope : 'all';
+        const targetCount = (isCurrent && data.current_version?.target_employee_names) ? data.current_version.target_employee_names.length : 0;
+        const audienceBadge = (curScope === 'targeted')
+          ? `<span class="badge-target-pilot"><i class="fas fa-users-viewfinder me-1"></i> Targeted (${targetCount})</span>`
+          : `<span class="badge-target-all"><i class="fas fa-globe me-1"></i> Global</span>`;
 
         const modDate = apk.modified_at ? new Date(apk.modified_at).toLocaleDateString('en-IN', {
           day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '-';
+
+        const sizeDisplay = apk.size_mb || (apk.size_bytes ? (apk.size_bytes / (1024 * 1024)).toFixed(1) : '115');
 
         tr.innerHTML = `
           <td>
@@ -3485,7 +4621,8 @@
               ${isCurrent ? '<span class="badge-force-yes" style="background: var(--primary-light); color: var(--primary);">LIVE OTA</span>' : ''}
             </div>
           </td>
-          <td><strong>${apk.size_mb} MB</strong></td>
+          <td>${audienceBadge}</td>
+          <td><strong>${sizeDisplay} MB</strong></td>
           <td style="color: var(--text-secondary); font-size: 0.8rem;">${modDate}</td>
           <td>
             <span class="signature-status-pill verified">
@@ -3518,6 +4655,14 @@
 
       allFleetUsers = data.users || [];
       const summary = data.summary || {};
+
+      // Re-render target employee pickers if visible
+      if (document.getElementById('targetEmployeePickerBox')?.style.display !== 'none') {
+        renderTargetEmployeePicker(document.getElementById('targetEmployeeSearch')?.value || '');
+      }
+      if (document.getElementById('editTargetEmployeePickerBox')?.style.display !== 'none') {
+        renderEditTargetEmployeePicker(document.getElementById('editTargetEmployeeSearch')?.value || '');
+      }
 
       // Update counters
       document.getElementById('statOnline').textContent = summary.online_now || 0;
@@ -3964,6 +5109,9 @@
           if (res.success) {
             showToast(res.message || `Session revoked for @${username}`, 'success');
             loadFleetUsers();
+            if (typeof activeInspectorUserId !== 'undefined' && activeInspectorUserId === userId) {
+              setTimeout(() => openUserDeviceInspector(userId), 600);
+            }
           } else {
             showToast(res.error || 'Failed to force logout', 'error');
           }
@@ -3997,6 +5145,9 @@
           if (res.success) {
             showToast(res.message, 'success');
             loadFleetUsers();
+            if (typeof activeInspectorUserId !== 'undefined' && activeInspectorUserId === userId) {
+              setTimeout(() => openUserDeviceInspector(userId), 600);
+            }
           } else {
             showToast(res.error || 'Failed to update user status', 'error');
           }
@@ -4587,25 +5738,29 @@
   }
 
 
-  // ==========================================================================
-  // UNIFIED DEVICE & TELEMETRY INSPECTOR ENGINE (MULTI-DEVICE LIVE MAP & HUD)
-  // ==========================================================================
+
+    // ──────────────────────────────────────────────────────────────────────────
+  // USER DEVICE & TELEMETRY INSPECTOR CONTROLLER (REDESIGNED)
+  // ──────────────────────────────────────────────────────────────────────────
   let activeInspectorUserId = null;
-  let activeInspectorDeviceId = null;
   let activeInspectorUser = null;
+  let activeInspectorDeviceId = null;
   let inspectorMap = null;
   let inspectorMarker = null;
   let inspectorAccuracyCircle = null;
+  let inspectorLastCoords = null;
   let inspectorLiveTimer = null;
   let inspectorMode = 'live'; // 'live' or 'history'
+
   let inspectorHistoryPoints = [];
   let inspectorHistoryPolyline = null;
+  let inspectorHistoryPolylineGlow = null;
   let inspectorHistoryMarkers = [];
-  let inspectorPlaybackTimer = null;
+  let inspectorPlaybackMarker = null;
   let inspectorPlaybackIndex = 0;
   let inspectorPlaybackSpeed = 1;
-  let inspectorPlaybackMarker = null;
-  let inspectorLastCoords = null;
+  let inspectorPlaybackTimer = null;
+  let activeTimelineDateStr = new Date().toISOString().split('T')[0];
 
   function openUserDeviceInspector(userId, preferredDeviceId) {
     activeInspectorUserId = userId;
@@ -4623,7 +5778,7 @@
     const initials = (user.employee_name || user.username).substring(0, 2).toUpperCase();
     document.getElementById('inspAvatar').textContent = initials;
     document.getElementById('inspName').textContent = user.employee_name || user.username;
-    
+
     let roleClass = 'junior';
     let roleTitle = 'Junior';
     if (user.employee_level === 'admin') { roleClass = 'admin'; roleTitle = 'Admin'; }
@@ -4631,7 +5786,7 @@
     else if (user.employee_level === 'm') { roleClass = 'manager'; roleTitle = 'Manager'; }
 
     document.getElementById('inspHandle').innerHTML = `@${user.username} • ${user.phone} • <span class="role-pill ${roleClass}">${roleTitle}</span>`;
-    
+
     let dotColor = 'gray';
     if (user.presence === 'online') dotColor = 'green';
     else if (user.presence === 'active_today') dotColor = 'cyan';
@@ -4639,19 +5794,17 @@
     else if (user.presence === 'pending') dotColor = 'amber';
     document.getElementById('inspStatusDot').className = `tile-status-dot radar-dot sm ${dotColor}`;
 
-    // Update Lock button text
+    // Update Lock Account button text
     const lockBtnText = document.getElementById('btnInspLockText');
     if (lockBtnText) {
       lockBtnText.textContent = user.credentials_active ? 'Lock Account' : 'Unlock Account';
     }
 
-    // Determine initial active device
+    // Determine target device and populate Top Bar dropdown
     const devices = user.devices && user.devices.length > 0 ? user.devices : [];
-    document.getElementById('inspDeviceCount').textContent = devices.filter(d => !d.is_pending).length;
-
     let targetDevId = preferredDeviceId;
     if (!targetDevId) {
-      const activePhysical = devices.find(d => d.is_active && !d.is_pending);
+      const activePhysical = devices.find(d => d.is_active && !d.is_pending && !d.is_locked);
       if (activePhysical) {
         targetDevId = activePhysical.device_id;
       } else if (devices.length > 0) {
@@ -4660,8 +5813,11 @@
     }
     activeInspectorDeviceId = targetDevId;
 
-    // Render Devices List in Left Sidebar
-    renderInspectorDevicesList(devices, activeInspectorDeviceId);
+    // Render device dropdown in Top Bar
+    renderInspectorDeviceSelect(devices, activeInspectorDeviceId);
+
+    // Update Left Sidebar with Selected Device Details
+    updateInspectorSelectedDeviceUI();
 
     // Initialize Map
     initInspectorMap();
@@ -4670,113 +5826,213 @@
     switchInspectorMode('live');
   }
 
-  function renderInspectorDevicesList(devices, selectedDevId) {
-    const container = document.getElementById('inspDevicesList');
-    container.innerHTML = '';
+  function renderInspectorDeviceSelect(devices, selectedDevId) {
+    const select = document.getElementById('inspDeviceSelect');
+    select.innerHTML = '';
 
     if (!devices || devices.length === 0) {
-      container.innerHTML = `
-        <div style="padding: 24px 12px; text-align: center; color: var(--text-secondary);">
-          <i class="fas fa-mobile-alt fa-2x mb-2 text-muted"></i>
-          <div style="font-weight: 600;">No Devices Bound</div>
-          <small class="text-muted">Agent will register their phone upon first login.</small>
-        </div>
-      `;
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No Hardware Bound';
+      select.appendChild(opt);
       return;
     }
 
     devices.forEach(d => {
-      const isSelected = (d.device_id === selectedDevId);
-      const isPend = d.is_pending;
-      const isAct = d.is_active;
-
-      let statusBadge = isPend ? '<span class="badge-status status-inactive">Pending</span>' :
-                        (isAct ? (d.presence === 'online' ? '<span class="badge-status status-online"><i class="fas fa-circle-dot me-1"></i> Online</span>' : '<span class="badge-status status-active">Active</span>') :
-                        '<span class="badge-status status-inactive">Inactive</span>');
-
-      // Telemetry Badges
-      let batPct = d.latest_battery_pct != null ? d.latest_battery_pct : null;
-      let batClass = 'pill-battery-ok';
-      let batIcon = 'fa-battery-full';
-      if (d.is_charging) {
-        batIcon = 'fa-bolt text-warning';
-      } else if (batPct != null) {
-        if (batPct <= 20) { batClass = 'pill-battery-crit'; batIcon = 'fa-battery-quarter'; }
-        else if (batPct <= 45) { batClass = 'pill-battery-low'; batIcon = 'fa-battery-half'; }
+      const opt = document.createElement('option');
+      opt.value = d.device_id;
+      let label = d.device_model || 'Mobile Device';
+      if (d.is_pending) {
+        label += ' (Pending Bind)';
+      } else if (d.is_locked) {
+        label += ' 🔒 [LOCKED]';
+      } else if (d.presence === 'online') {
+        label += ' • [Online]';
+      } else if (d.presence === 'active_today') {
+        label += ' • [Active Today]';
+      } else {
+        label += ' • [Offline]';
       }
-      let batHtml = batPct != null ? `<span class="dev-pill ${batClass}"><i class="fas ${batIcon}"></i> ${batPct}%</span>` : `<span class="dev-pill text-muted"><i class="fas fa-battery-empty"></i> --%</span>`;
-
-      let spd = d.latest_speed || 0.0;
-      let motionHtml = (spd >= 3.0)
-        ? `<span class="dev-pill pill-motion"><i class="fas fa-motorcycle text-primary"></i> ${Math.round(spd)} km/h</span>`
-        : `<span class="dev-pill text-muted"><i class="fas fa-pause"></i> Still</span>`;
-
-      let gpsHtml = (d.gps_status === 'active')
-        ? `<span class="dev-pill pill-online"><i class="fas fa-satellite-dish"></i> GPS Lock</span>`
-        : `<span class="dev-pill text-danger"><i class="fas fa-satellite"></i> No GPS</span>`;
-
-      const card = document.createElement('div');
-      card.className = `device-card-item ${isSelected ? 'selected' : ''}`;
-      card.onclick = () => selectInspectorDevice(d.device_id);
-
-      card.innerHTML = `
-        <div class="dev-card-head">
-          <div class="dev-model-title" title="${d.device_model}">
-            <i class="fas fa-mobile-screen ${isAct ? 'text-primary' : 'text-muted'} me-1"></i>
-            <strong>${d.device_model}</strong>
-          </div>
-          ${statusBadge}
-        </div>
-        <div class="dev-uuid-row monospace-text" title="${d.device_id}">
-          ${isPend ? 'Hardware unlinked • Will bind on next login' : 'UUID: ' + d.device_id.substring(0, 16) + '…'}
-        </div>
-        <div class="dev-telemetry-row">
-          ${batHtml}
-          ${motionHtml}
-          ${gpsHtml}
-        </div>
-        <div class="dev-last-active-row">
-          <i class="far fa-clock me-1"></i> ${d.relative_last_active}
-        </div>
-        <div class="dev-action-row">
-          <button type="button" class="btn-dev-action" onclick="event.stopPropagation(); triggerDeviceLive('${d.device_id}')" title="Track Live">
-            <i class="fas fa-crosshairs me-1"></i> Live
-          </button>
-          <button type="button" class="btn-dev-action" onclick="event.stopPropagation(); triggerDeviceHistory('${d.device_id}')" title="View History">
-            <i class="fas fa-route me-1"></i> History
-          </button>
-          <button type="button" class="btn-dev-action btn-dev-reset" onclick="event.stopPropagation(); confirmResetDeviceSpecific(${activeInspectorUser.id}, '${activeInspectorUser.username}', '${d.device_id}', '${d.device_model}')" title="Reset Binding">
-            <i class="fas fa-rotate me-1"></i> Reset
-          </button>
-        </div>
-      `;
-
-      container.appendChild(card);
+      opt.textContent = label;
+      if (d.device_id === selectedDevId) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
     });
   }
 
-  function selectInspectorDevice(deviceId) {
+  function onInspectorDeviceSelectChange(deviceId) {
     activeInspectorDeviceId = deviceId;
-    if (activeInspectorUser && activeInspectorUser.devices) {
-      renderInspectorDevicesList(activeInspectorUser.devices, activeInspectorDeviceId);
-    }
+    updateInspectorSelectedDeviceUI();
 
     if (inspectorMode === 'live') {
       pollInspectorDeviceLive();
     } else {
-      const dateVal = document.getElementById('inspHistoryDate').value;
-      loadInspectorHistoryForDate(dateVal);
+      loadInspectorHistoryForDate(activeTimelineDateStr);
     }
   }
 
-  function triggerDeviceLive(deviceId) {
-    activeInspectorDeviceId = deviceId;
-    switchInspectorMode('live');
+  function updateInspectorSelectedDeviceUI() {
+    if (!activeInspectorUser) return;
+    const devices = activeInspectorUser.devices || [];
+    const dev = devices.find(d => d.device_id === activeInspectorDeviceId) || devices[0];
+
+    if (!dev) {
+      document.getElementById('heroDeviceModel').textContent = 'No Hardware Bound';
+      document.getElementById('heroDeviceOs').textContent = 'Pending first agent login';
+      document.getElementById('heroDeviceStatus').className = 'badge-status status-inactive';
+      document.getElementById('heroDeviceStatus').textContent = 'Pending';
+      document.getElementById('inspImeiValue').textContent = 'PENDING';
+      document.getElementById('specBattery').textContent = '--%';
+      document.getElementById('specSpeed').textContent = '0 km/h';
+      document.getElementById('specGps').textContent = 'No GPS';
+      document.getElementById('specLastPing').textContent = 'Never';
+      return;
+    }
+
+    // Hero Card
+    document.getElementById('heroDeviceModel').textContent = dev.device_model || 'Mobile Device';
+    document.getElementById('heroDeviceOs').textContent = dev.is_pending ? 'Pending hardware registration' : 'Active Hardware Binding';
+    
+    let statusClass = 'status-inactive';
+    let statusText = 'Offline';
+    if (dev.is_locked) {
+      statusClass = 'status-inactive';
+      statusText = 'Locked';
+    } else if (dev.is_pending) {
+      statusClass = 'status-inactive';
+      statusText = 'Pending';
+    } else if (dev.presence === 'online') {
+      statusClass = 'status-online';
+      statusText = 'Online';
+    } else if (dev.presence === 'active_today') {
+      statusClass = 'status-active';
+      statusText = 'Active Today';
+    }
+    const statusBadge = document.getElementById('heroDeviceStatus');
+    statusBadge.className = `badge-status ${statusClass}`;
+    statusBadge.textContent = statusText;
+
+    // IMEI / Identifier
+    document.getElementById('inspImeiValue').textContent = dev.device_id || '--';
+
+    // Live Telemetry Specs (Sidebar & HUD)
+    let batStr = '--%';
+    if (dev.latest_battery_pct != null) {
+      batStr = `${dev.latest_battery_pct}%${dev.is_charging ? ' ⚡' : ''}`;
+    }
+    document.getElementById('specBattery').textContent = batStr;
+    document.getElementById('specSpeed').textContent = `${Math.round(dev.latest_speed || 0)} km/h`;
+    document.getElementById('specGps').textContent = (dev.gps_status === 'active') ? 'Active Lock' : 'No GPS';
+    document.getElementById('specLastPing').textContent = dev.relative_last_active || dev.last_active || 'Never';
+
+    // Instant update to Live HUD cards strictly for this device
+    const hudBat = document.getElementById('hudBattery');
+    if (hudBat) hudBat.textContent = batStr;
+    const hudSpd = document.getElementById('hudSpeed');
+    if (hudSpd) hudSpd.textContent = `${Math.round(dev.latest_speed || 0)} km/h`;
+    const hudGps = document.getElementById('hudGps');
+    if (hudGps) hudGps.textContent = (dev.gps_status === 'active') ? 'Active Lock' : 'No GPS';
+    const hudPing = document.getElementById('hudLastPing');
+    if (hudPing) hudPing.textContent = dev.relative_last_active || dev.last_active || 'Never';
+    const hudMod = document.getElementById('hudDeviceModel');
+    if (hudMod) hudMod.textContent = dev.device_model || 'Mobile Device';
+
+    // Position marker on map if coordinates exist for this device
+    if (dev.latest_latitude && dev.latest_longitude) {
+      updateInspectorMarker(dev.latest_latitude, dev.latest_longitude, dev.latest_heading, dev.latest_speed, dev.latest_accuracy);
+    }
+
+    // Lock Device Button State
+    const lockDevText = document.getElementById('btnLockDeviceText');
+    const lockDevBtn = document.getElementById('btnLockSelectedDevice');
+    if (lockDevText && lockDevBtn) {
+      if (dev.is_locked) {
+        lockDevText.textContent = 'Unlock Device';
+        lockDevBtn.classList.add('btn-action-unlock');
+        lockDevBtn.classList.remove('btn-action-lock');
+      } else {
+        lockDevText.textContent = 'Lock Device';
+        lockDevBtn.classList.add('btn-action-lock');
+        lockDevBtn.classList.remove('btn-action-unlock');
+      }
+    }
   }
 
-  function triggerDeviceHistory(deviceId) {
-    activeInspectorDeviceId = deviceId;
-    switchInspectorMode('history');
+  function copyImeiToClipboard() {
+    const imei = document.getElementById('inspImeiValue').textContent;
+    if (!imei || imei === '--' || imei === 'PENDING') return;
+    navigator.clipboard.writeText(imei).then(() => {
+      const icon = document.getElementById('copyImeiIcon');
+      if (icon) icon.className = 'fas fa-check text-success';
+      showToast('IMEI / Device ID copied to clipboard', 'success');
+      setTimeout(() => {
+        if (icon) icon.className = 'far fa-copy';
+      }, 2000);
+    });
+  }
+
+  function toggleSelectedDeviceLock() {
+    if (!activeInspectorUser || !activeInspectorDeviceId || activeInspectorDeviceId === 'PENDING') {
+      showToast('No physical hardware selected to lock', 'warning');
+      return;
+    }
+    const devices = activeInspectorUser.devices || [];
+    const dev = devices.find(d => d.device_id === activeInspectorDeviceId);
+    if (!dev) return;
+
+    const willLock = !dev.is_locked;
+    const actionLabel = willLock ? 'Lock' : 'Unlock';
+    const confirmPrompt = willLock
+      ? `Are you sure you want to lock hardware "${dev.device_model}" (IMEI: ${dev.device_id})? This phone will be immediately prohibited from logging into this account!`
+      : `Are you sure you want to unlock hardware "${dev.device_model}"?`;
+
+    openActionModal(
+      `${actionLabel} Hardware Device?`,
+      confirmPrompt,
+      willLock ? 'fas fa-lock text-danger' : 'fas fa-unlock text-success',
+      willLock ? 'Lock Device Immediately' : 'Unlock Device',
+      willLock ? 'var(--danger)' : '#10b981',
+      () => {
+        csrfFetch('/api/admin/mobile_users/lock_device', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: activeInspectorUser.id,
+            device_id: activeInspectorDeviceId,
+            is_locked: willLock
+          })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            dev.is_locked = willLock;
+            if (willLock) dev.is_active = false;
+            showToast(res.message || `Device ${actionLabel}ed successfully`, 'success');
+            updateInspectorSelectedDeviceUI();
+            renderInspectorDeviceSelect(devices, activeInspectorDeviceId);
+            loadFleetUsers();
+          } else {
+            showToast(res.error || 'Failed to update device lock', 'error');
+          }
+        })
+        .catch(err => {
+          showToast('Network error while toggling device lock', 'error');
+        });
+      }
+    );
+  }
+
+  function resetSelectedDeviceBinding() {
+    if (!activeInspectorUser || !activeInspectorDeviceId) return;
+    const devices = activeInspectorUser.devices || [];
+    const dev = devices.find(d => d.device_id === activeInspectorDeviceId);
+    confirmResetDeviceSpecific(
+      activeInspectorUser.id,
+      activeInspectorUser.username,
+      activeInspectorDeviceId,
+      dev ? dev.device_model : 'This device'
+    );
   }
 
   function confirmResetDeviceSpecific(userId, username, deviceId, deviceModel) {
@@ -4800,17 +6056,24 @@
     }, 500);
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // VIEW MODE SWITCHER: Live Location vs Journey Route & History
+  // ──────────────────────────────────────────────────────────────────────────
   function switchInspectorMode(mode) {
     inspectorMode = mode;
     const btnLive = document.getElementById('btnInspModeLive');
     const btnHist = document.getElementById('btnInspModeHistory');
-    const datePickerWrap = document.getElementById('inspDatePickerWrap');
+    const viewDetails = document.getElementById('inspDeviceDetailsView');
+    const viewTimeline = document.getElementById('inspTimelineView');
+    const telemetryHud = document.getElementById('inspTelemetryHud');
     const playbackBar = document.getElementById('inspPlaybackBar');
 
     if (mode === 'live') {
       btnLive.classList.add('active');
       btnHist.classList.remove('active');
-      datePickerWrap.style.display = 'none';
+      viewDetails.style.display = 'flex';
+      viewTimeline.style.display = 'none';
+      telemetryHud.style.display = 'flex';
       playbackBar.style.display = 'none';
 
       clearInspectorHistoryMap();
@@ -4823,7 +6086,9 @@
     } else {
       btnLive.classList.remove('active');
       btnHist.classList.add('active');
-      datePickerWrap.style.display = 'flex';
+      viewDetails.style.display = 'none';
+      viewTimeline.style.display = 'flex';
+      telemetryHud.style.display = 'none';
       playbackBar.style.display = 'flex';
 
       if (inspectorLiveTimer) {
@@ -4839,13 +6104,141 @@
         inspectorAccuracyCircle = null;
       }
 
-      // Default to today
-      const dateInput = document.getElementById('inspHistoryDate');
-      if (!dateInput.value) {
-        dateInput.value = new Date().toISOString().split('T')[0];
-      }
-      loadInspectorHistoryForDate(dateInput.value);
+      loadInspectorHistoryForDate(activeTimelineDateStr);
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // GOOGLE MAPS TIMELINE CONTROLLER & DATE NAVIGATOR
+  // ──────────────────────────────────────────────────────────────────────────
+  function navigateTimelineDay(deltaDays) {
+    const curDate = new Date(activeTimelineDateStr);
+    curDate.setDate(curDate.getDate() + deltaDays);
+    activeTimelineDateStr = curDate.toISOString().split('T')[0];
+    loadInspectorHistoryForDate(activeTimelineDateStr);
+  }
+
+  function openTimelineDatePicker() {
+    const input = document.getElementById('timelineHiddenDateInput');
+    if (input) {
+      input.value = activeTimelineDateStr;
+      input.showPicker ? input.showPicker() : input.click();
+    }
+  }
+
+  function onTimelineDatePicked(val) {
+    if (!val) return;
+    activeTimelineDateStr = val;
+    loadInspectorHistoryForDate(activeTimelineDateStr);
+  }
+
+  function formatTimelineDisplayDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+
+  function loadInspectorHistoryForDate(dateStr) {
+    if (!activeInspectorUserId || !dateStr) return;
+    stopInspectorPlayback();
+    activeTimelineDateStr = dateStr;
+
+    // Update Date Header Label
+    document.getElementById('timelineDateLabel').textContent = formatTimelineDisplayDate(dateStr);
+
+    let url = `/api/admin/fleet/history/${activeInspectorUserId}?date=${dateStr}`;
+    if (activeInspectorDeviceId && activeInspectorDeviceId !== 'PENDING') {
+      url += `&device_id=${encodeURIComponent(activeInspectorDeviceId)}`;
+    }
+
+    fetch(url)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) {
+          showToast(res.error || 'Failed to load route history', 'error');
+          return;
+        }
+        renderGoogleTimelineStream(res);
+        renderInspectorHistoryMap(res.points || [], res.stops || [], res.trips || []);
+      })
+      .catch(err => {
+        console.error('History load error:', err);
+      });
+  }
+
+  function renderGoogleTimelineStream(res) {
+    const container = document.getElementById('timelineStreamContainer');
+    container.innerHTML = '';
+
+    const summary = res.summary || {};
+    // Update Summary Strip (Image 2 style)
+    document.getElementById('sumDrivingText').textContent = `${summary.driving_km || 0} km • ${summary.driving_minutes || 0} min`;
+    document.getElementById('sumMotorcycleText').textContent = `${summary.motorcycle_km || 0} km • ${summary.motorcycle_minutes || 0} min`;
+    document.getElementById('sumVisitsText').textContent = `${summary.visits_count || (res.stops ? res.stops.length : 0)} visits`;
+
+    const timeline = res.timeline || [];
+    if (!timeline || timeline.length === 0) {
+      container.innerHTML = `
+        <div class="timeline-empty-notice">
+          <i class="fas fa-route fa-2x mb-2" style="opacity: 0.35;"></i>
+          <div style="font-weight: 700; color: #94a3b8;">No Route Recorded</div>
+          <small>No vehicle telemetry breadcrumbs found for this date.</small>
+          <div style="margin-top: 14px;">
+            <button type="button" class="btn-dev-action-pill" onclick="navigateTimelineDay(-1)">
+              <i class="fas fa-chevron-left me-1"></i> Try Previous Day
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    timeline.forEach((item, idx) => {
+      const node = document.createElement('div');
+      
+      if (item.type === 'stop') {
+        node.className = 'timeline-node node-visit';
+        node.onclick = () => focusTimelineStop(item.latitude, item.longitude, item.title, item.subtitle);
+
+        node.innerHTML = `
+          <div class="timeline-node-icon">
+            <i class="fas fa-${item.icon || 'store'}"></i>
+          </div>
+          <div class="timeline-node-body">
+            <div class="timeline-node-title">${item.title}</div>
+            <div class="timeline-node-sub">${item.subtitle}</div>
+            <div class="timeline-node-time">Left at ${item.departure || item.arrival || '--:--'}</div>
+          </div>
+        `;
+      } else {
+        node.className = 'timeline-node node-travel';
+        const isCar = (item.mode === 'driving');
+        const iconName = isCar ? 'car' : 'motorcycle';
+
+        node.innerHTML = `
+          <div class="timeline-node-icon">
+            <i class="fas fa-${iconName}"></i>
+          </div>
+          <div class="timeline-node-body">
+            <div class="timeline-node-title">${item.title || (isCar ? 'Driving' : 'Motorcycling')}</div>
+            <div class="timeline-node-sub">${item.distance_km} km • ${item.duration_minutes} min</div>
+            <div class="timeline-node-time">${item.time_range || '--:--'}</div>
+          </div>
+        `;
+      }
+
+      container.appendChild(node);
+    });
+  }
+
+  function focusTimelineStop(lat, lng, title, subtitle) {
+    if (!inspectorMap || !lat || !lng) return;
+    inspectorMap.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+    L.popup()
+      .setLatLng([lat, lng])
+      .setContent(`<div style="font-family: inherit;"><strong>${title}</strong><br><small style="color: #64748b;">${subtitle}</small></div>`)
+      .openOn(inspectorMap);
   }
 
   function initInspectorMap() {
@@ -4882,7 +6275,15 @@
           return;
         }
 
-        let agent = res.fleet.find(d => d.device_id === activeInspectorDeviceId) || res.fleet[0];
+        let agent = res.fleet.find(d => d.device_id === activeInspectorDeviceId);
+        if (activeInspectorDeviceId && activeInspectorDeviceId !== 'PENDING' && !agent) {
+          // Device has not reported live GPS yet; do not mix with other devices
+          document.getElementById('hudLastPing').textContent = 'No signal recorded for this device';
+          return;
+        }
+        if (!agent) {
+          agent = res.fleet[0];
+        }
         updateInspectorLiveHUD(agent);
 
         if (agent.latitude && agent.longitude) {
@@ -4897,11 +6298,23 @@
   }
 
   function updateInspectorLiveHUD(agent) {
+    if (!agent) return;
     document.getElementById('hudDeviceModel').textContent = agent.device_model || 'Mobile Device';
-    document.getElementById('hudBattery').textContent = agent.battery_pct != null ? `${agent.battery_pct}%${agent.is_charging ? ' ⚡' : ''}` : '--%';
+    const batText = agent.battery_pct != null ? `${agent.battery_pct}%${agent.is_charging ? ' ⚡' : ''}` : '--%';
+    document.getElementById('hudBattery').textContent = batText;
     document.getElementById('hudSpeed').textContent = `${Math.round(agent.speed || 0)} km/h`;
     document.getElementById('hudGps').textContent = agent.gps_status === 'active' ? 'Active Lock' : 'No GPS';
     document.getElementById('hudLastPing').textContent = agent.last_active || 'Just now';
+
+    // Also keep left sidebar specs in sync for this device
+    const specBat = document.getElementById('specBattery');
+    if (specBat) specBat.textContent = batText;
+    const specSpd = document.getElementById('specSpeed');
+    if (specSpd) specSpd.textContent = `${Math.round(agent.speed || 0)} km/h`;
+    const specGps = document.getElementById('specGps');
+    if (specGps) specGps.textContent = agent.gps_status === 'active' ? 'Active Lock' : 'No GPS';
+    const specPing = document.getElementById('specLastPing');
+    if (specPing) specPing.textContent = agent.last_active || 'Just now';
   }
 
   function updateInspectorMarker(targetLat, targetLng, heading, speed, accuracy) {
@@ -4920,8 +6333,8 @@
       inspectorMarker = L.marker(targetLatLng, { icon: customIcon }).addTo(inspectorMap);
       inspectorAccuracyCircle = L.circle(targetLatLng, {
         radius: accuracy || 25,
-        color: '#0284c7',
-        fillColor: '#0284c7',
+        color: '#00d2ff',
+        fillColor: '#00d2ff',
         fillOpacity: 0.15,
         weight: 1
       }).addTo(inspectorMap);
@@ -4961,33 +6374,14 @@
     }
   }
 
-  function loadInspectorHistoryForDate(dateStr) {
-    if (!activeInspectorUserId || !dateStr) return;
-    stopInspectorPlayback();
-
-    let url = `/api/admin/fleet/history/${activeInspectorUserId}?date=${dateStr}`;
-    if (activeInspectorDeviceId && activeInspectorDeviceId !== 'PENDING') {
-      url += `&device_id=${encodeURIComponent(activeInspectorDeviceId)}`;
-    }
-
-    fetch(url)
-      .then(r => r.json())
-      .then(res => {
-        if (!res.success) {
-          showToast(res.error || 'Failed to load route history', 'error');
-          return;
-        }
-        renderInspectorHistoryMap(res.points || [], res.stops || []);
-      })
-      .catch(err => {
-        console.error('History load error:', err);
-      });
-  }
-
   function clearInspectorHistoryMap() {
     if (inspectorHistoryPolyline && inspectorMap) {
       inspectorMap.removeLayer(inspectorHistoryPolyline);
       inspectorHistoryPolyline = null;
+    }
+    if (inspectorHistoryPolylineGlow && inspectorMap) {
+      inspectorMap.removeLayer(inspectorHistoryPolylineGlow);
+      inspectorHistoryPolylineGlow = null;
     }
     if (inspectorPlaybackMarker && inspectorMap) {
       inspectorMap.removeLayer(inspectorPlaybackMarker);
@@ -4997,44 +6391,45 @@
     inspectorHistoryMarkers = [];
   }
 
-  function renderInspectorHistoryMap(points, stops) {
+  function renderInspectorHistoryMap(points, stops, trips) {
     if (!inspectorMap) return;
     clearInspectorHistoryMap();
 
     inspectorHistoryPoints = points;
     if (!points || points.length === 0) {
-      document.getElementById('hudLastPing').textContent = 'No route points on this date';
       return;
     }
 
     const latLngs = points.map(p => [p[0], p[1]]);
-    inspectorHistoryPolyline = L.polyline(latLngs, {
-      color: '#0284c7',
-      weight: 5,
-      opacity: 0.85,
+
+    // Outer glow casing for Google Maps Timeline effect
+    inspectorHistoryPolylineGlow = L.polyline(latLngs, {
+      color: '#005b82',
+      weight: 8,
+      opacity: 0.5,
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(inspectorMap);
 
-    const startPin = L.circleMarker(latLngs[0], {
-      radius: 7, color: '#10b981', fillColor: '#10b981', fillOpacity: 1, weight: 2
-    }).bindPopup('<strong>Start of Route</strong>').addTo(inspectorMap);
-    inspectorHistoryMarkers.push(startPin);
+    // Inner bright cyan path (Google Maps Timeline Cyan #00d2ff)
+    inspectorHistoryPolyline = L.polyline(latLngs, {
+      color: '#00d2ff',
+      weight: 5,
+      opacity: 0.95,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
 
-    const endPin = L.circleMarker(latLngs[latLngs.length - 1], {
-      radius: 7, color: '#0284c7', fillColor: '#0284c7', fillOpacity: 1, weight: 2
-    }).bindPopup('<strong>End of Route</strong>').addTo(inspectorMap);
-    inspectorHistoryMarkers.push(endPin);
-
+    // Stops markers on map
     (stops || []).forEach((s, idx) => {
       const stopIcon = L.divIcon({
         className: 'stop-pin-wrapper',
         html: `<div class="stop-marker-pin">${idx + 1}</div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
       });
       const m = L.marker([s.latitude, s.longitude], { icon: stopIcon })
-        .bindPopup(`<strong>Stop #${idx + 1}: ${s.village_name}</strong><br>Duration: ${s.duration_minutes} mins`)
+        .bindPopup(`<strong>Stop #${idx + 1}: ${s.village_name || 'Village Route'}</strong><br>Duration: ${s.duration_minutes} mins`)
         .addTo(inspectorMap);
       inspectorHistoryMarkers.push(m);
     });
@@ -5111,7 +6506,7 @@
     const rot = Math.round(pt[3] || 0);
     const playbackIcon = L.divIcon({
       className: 'playback-vehicle-wrapper',
-      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #f59e0b;"><i class="fas fa-motorcycle" style="font-size: 13px;"></i></div>`,
+      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #00d2ff; color: #000;"><i class="fas fa-motorcycle" style="font-size: 14px;"></i></div>`,
       iconSize: [32, 32],
       iconAnchor: [16, 16]
     });

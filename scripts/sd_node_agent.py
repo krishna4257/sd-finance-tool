@@ -135,7 +135,7 @@ def get_cpu_info(win_data=None):
     cpu_percent = 0.0
 
     try:
-        load = os.getloadavg()
+        load = getattr(os, 'getloadavg')()
         load_avg = f"{load[0]:.2f}, {load[1]:.2f}, {load[2]:.2f}"
         cpu_percent = min(100.0, round((load[0] / cpu_cores) * 100.0, 1))
     except (AttributeError, OSError):

@@ -139,7 +139,7 @@ cur.execute("SELECT latest_latitude, latest_longitude, latest_speed, latest_batt
 dev_row = cur.fetchone()
 cur.close()
 conn.close()
-check("user_devices live snapshot updated", dev_row is not None and abs(dev_row[0] - simulated_batch[-1]["latitude"]) < 0.0001, f"Lat: {dev_row[0]}, Spd: {dev_row[2]} km/h, Bat: {dev_row[3]}%")
+check("user_devices live snapshot updated", dev_row is not None and abs(dev_row[0] - simulated_batch[-1]["latitude"]) < 0.0001, f"Lat: {dev_row[0] if dev_row else 0}, Spd: {dev_row[2] if dev_row else 0} km/h, Bat: {dev_row[3] if dev_row else 0}%")
 
 # ── CHECK 4: Admin Live Fleet Status API ──
 with client.session_transaction() as sess:

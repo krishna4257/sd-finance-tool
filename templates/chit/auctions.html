@@ -15,7 +15,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="p-4 md:p-8 max-w-3xl mx-auto w-full space-y-5 pt-3 pb-24">
+<div class="p-4 sm:p-6 md:p-8 w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6 pt-3 pb-24">
 
   <!-- ==================== ROW 1: HEADER & COUNTER ==================== -->
   <div class="flex items-start justify-between gap-4">
@@ -39,24 +39,30 @@
     </div>
   </div>
 
-  <!-- ==================== ROW 2: CHIT GROUP SELECTOR TABS ==================== -->
-  <div class="flex items-center justify-center gap-2">
+  <!-- ==================== ROW 2: CHIT GROUP SELECTOR TABS (EXPANDED FULL-WIDTH & SMOOTH WHEEL SCROLL) ==================== -->
+  <div class="flex items-center gap-2 w-full">
     <button type="button" id="btnPrevChitGroup" onclick="navigateChitGroup(-1)" aria-label="Previous chit group"
-            class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0">
-      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
+            class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0 shadow-2xs">
+      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[2]"></i>
     </button>
 
-    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full min-w-0" id="chitGroupPillsContainer">
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1.5 scroll-smooth flex-1 min-w-0" id="chitGroupPillsContainer">
       <!-- Rendered via JS -->
     </div>
 
     <button type="button" id="btnNextChitGroup" onclick="navigateChitGroup(1)" aria-label="Next chit group"
-            class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0">
-      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
+            class="h-8 w-8 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0 shadow-2xs">
+      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2]"></i>
     </button>
 
     <!-- Chit Groups Dropdown Menu Trigger & Panel -->
-    <div class="relative shrink-0" id="chitGroupDropdownWrapper">
+    <div class="relative shrink-0 flex items-center gap-1.5" id="chitGroupDropdownWrapper">
+      <button type="button" id="btnPayoutChitOrderSettings" onclick="openChitOrderModal()" 
+              title="Rearrange Schemes / Order Settings" aria-label="Rearrange Schemes / Order Settings"
+              class="h-7 w-7 rounded-full flex items-center justify-center border border-slate-200/90 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:bg-slate-50 dark:hover:bg-white/[0.05] shadow-2xs hover:shadow-xs active:scale-95 transition-all text-xs cursor-pointer focus:outline-none">
+        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 stroke-[2]"></i>
+      </button>
+
       <button type="button" id="btnChitGroupDropdown" onclick="toggleChitGroupDropdown(event)" 
               title="All chit schemes" aria-label="Select chit scheme from dropdown"
               class="h-7 w-7 rounded-full flex items-center justify-center border border-slate-200/90 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:bg-slate-50 dark:hover:bg-white/[0.05] shadow-2xs hover:shadow-xs active:scale-95 transition-all text-xs cursor-pointer focus:outline-none">
@@ -109,20 +115,20 @@
     </button>
   </div>
 
-  <!-- ==================== ROW 3: MONTH TIMELINE SLIDER ==================== -->
-  <div class="flex items-center justify-center gap-2">
+  <!-- ==================== ROW 3: MONTH TIMELINE SLIDER (EXPANDED FULL-WIDTH & SMOOTH WHEEL SCROLL) ==================== -->
+  <div class="flex items-center gap-2 w-full">
     <button type="button" id="btnPrevMonth" onclick="navigateTimeline(-1)" 
-            class="h-7 w-7 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0">
-      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[1.8]"></i>
+            class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors text-xs shrink-0 shadow-2xs">
+      <i data-lucide="chevron-left" class="w-4 h-4 stroke-[2]"></i>
     </button>
     
-    <div id="monthTimelineContainer" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth max-w-full min-w-0">
+    <div id="monthTimelineContainer" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1.5 scroll-smooth flex-1 min-w-0">
       <!-- Rendered via JS -->
     </div>
 
     <button type="button" id="btnNextMonth" onclick="navigateTimeline(1)" 
-            class="h-7 w-7 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0">
-      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[1.8]"></i>
+            class="h-8 w-8 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors text-xs shrink-0 shadow-2xs">
+      <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2]"></i>
     </button>
 
     <!-- Month Timeline Dropdown Menu Trigger & Panel -->
@@ -413,6 +419,42 @@
     <div class="pt-2 text-right">
       <button type="button" onclick="closeScheduleChartModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-white/[0.05] transition-colors">
         Close Chart
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Payout Picker Modal -->
+<div id="deletePayoutPickerModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="bg-white dark:bg-chitDark-surface rounded-3xl border border-slate-200 dark:border-slate-700/50 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
+      <div>
+        <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+          <span id="deletePickerTitle">Delete Month Payout</span>
+        </h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500 font-medium" id="deletePickerSubtitle">
+          Select which subscriber's payout to delete or remove all
+        </p>
+      </div>
+      <button type="button" onclick="closeDeletePayoutPickerModal()" class="h-8 w-8 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="p-6 space-y-4 overflow-y-auto flex-1">
+      <div id="deletePickerRecipientsList" class="space-y-3">
+        <!-- Rendered recipient options dynamically -->
+      </div>
+    </div>
+
+    <div class="px-6 py-4 bg-slate-50 dark:bg-chitDark-elevated border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between gap-3">
+      <button type="button" onclick="closeDeletePayoutPickerModal()" class="h-10 px-4 rounded-xl text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold text-xs">
+        Cancel
+      </button>
+      <button type="button" id="btnDeleteAllMonthPayouts" onclick="confirmDeleteAllPayoutsInMonth()" class="h-10 px-4 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 font-extrabold text-xs inline-flex items-center gap-1.5 transition-colors">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        <span>Delete All Payouts in This Month</span>
       </button>
     </div>
   </div>
@@ -724,21 +766,15 @@
   }
 
   function sortChitsBySavedOrder(groups) {
-    try {
-      const saved = JSON.parse(localStorage.getItem('sd_finance_chit_order') || '[]');
-      if (Array.isArray(saved) && saved.length > 0) {
-        groups.sort((a, b) => {
-          const idxA = saved.indexOf(a.id);
-          const idxB = saved.indexOf(b.id);
-          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          if (idxA !== -1) return -1;
-          if (idxB !== -1) return 1;
-          return 0;
-        });
-      }
-    } catch (e) {}
-    return groups;
+    return window.sortChitsBySavedOrder ? window.sortChitsBySavedOrder(groups) : groups;
   }
+
+  window.addEventListener('chitOrderUpdated', () => {
+    if (summaryData && summaryData.all_groups) {
+      summaryData.all_groups = sortChitsBySavedOrder(summaryData.all_groups);
+      renderChitGroupPills(summaryData.all_groups);
+    }
+  });
 
   function navigateChitGroup(delta) {
     const groups = (summaryData && summaryData.all_groups) ? summaryData.all_groups : [];
@@ -1226,18 +1262,25 @@
       let recipientsHtml = '';
       recipients.forEach(r => {
         const initial = (r.name || 'U').charAt(0).toUpperCase();
+        const amt = r.payout_amount != null ? r.payout_amount : (curMonth.amount_received * (r.share_units || 1));
+        const loss = r.chit_loss != null ? r.chit_loss : (curMonth.chit_loss * (r.share_units || 1));
+        const dt = r.payout_date || curMonth.payout_date || '—';
+        const notes = r.notes || curMonth.notes || 'Cash';
+        const recStatus = (r.payout_status || curMonth.payout_status || 'paid').toLowerCase();
+        const isRecUnpaid = recStatus === 'unpaid';
+
         recipientsHtml += `
           <div class="bg-slate-50 dark:bg-chitDark-elevated rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/50 space-y-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="h-11 w-11 rounded-2xl ${isUnpaid ? 'bg-amber-500' : 'bg-emerald-600'} text-white font-extrabold text-base flex items-center justify-center shadow-2xs shrink-0">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="h-11 w-11 rounded-2xl ${isRecUnpaid ? 'bg-amber-500' : 'bg-emerald-600'} text-white font-extrabold text-base flex items-center justify-center shadow-2xs shrink-0">
                   ${initial}
                 </div>
-                <div>
+                <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="px-2 py-0.5 rounded-lg bg-slate-900 dark:bg-slate-700 text-white font-extrabold text-xs">A/C #${r.account_number || r.ticket_number}</span>
                     ${r.customer_id ? `<span class="px-2 py-0.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-xs">#${r.customer_id}</span>` : ''}
-                    <h4 class="font-extrabold text-base text-slate-900 dark:text-slate-100 leading-tight">${r.name}</h4>
+                    <h4 class="font-extrabold text-base text-slate-900 dark:text-slate-100 leading-tight truncate">${r.name}</h4>
                   </div>
                   <p class="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5">
                     Ticket #${r.ticket_number} · ${r.share_units}x share · ${r.phone || 'No phone'}
@@ -1245,11 +1288,20 @@
                 </div>
               </div>
 
-              <div class="text-right">
-                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">DISBURSED AMOUNT</p>
-                <p class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100 money-fig">
-                  ${formatINR(curMonth.amount_received * (r.share_units || 1))}
-                </p>
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">DISBURSED AMOUNT</p>
+                  <p class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100 money-fig">
+                    ${formatINR(amt)}
+                  </p>
+                </div>
+                ${r.membership_id ? `
+                  <button type="button" onclick="handleDeleteIndividualPayout(${curMonth.month_index}, '${r.membership_id}', '${(r.name || 'Subscriber').replace(/'/g, "\\'")}', ${amt})"
+                          class="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center justify-center transition-colors shadow-2xs"
+                          title="Delete this subscriber's payout">
+                    <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8]"></i>
+                  </button>
+                ` : ''}
               </div>
             </div>
 
@@ -1257,16 +1309,16 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50 text-xs">
               <div>
                 <p class="text-slate-400 dark:text-slate-500 font-medium">Chit Loss Deducted:</p>
-                <p class="font-extrabold text-rose-600 dark:text-rose-500 money-fig mt-0.5">${formatINR(curMonth.chit_loss * (r.share_units || 1))}</p>
+                <p class="font-extrabold text-rose-600 dark:text-rose-500 money-fig mt-0.5">${formatINR(loss)}</p>
               </div>
               <div>
                 <p class="text-slate-400 dark:text-slate-500 font-medium">Date Disbursed:</p>
-                <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">${curMonth.payout_date || '—'}</p>
+                <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">${dt}</p>
               </div>
               <div class="col-span-2 sm:col-span-1 flex items-center justify-between">
                 <div>
                   <p class="text-slate-400 dark:text-slate-500 font-medium">Method / Notes:</p>
-                  <p class="font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">${curMonth.notes || 'Cash'}</p>
+                  <p class="font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">${notes}</p>
                 </div>
               </div>
             </div>
@@ -1302,8 +1354,8 @@
           </div>
         </div>
 
-        <!-- Recipients list -->
-        <div class="space-y-4">
+        <!-- Recipients list (Side-by-side grid when multiple recipients on desktop) -->
+        <div class="grid grid-cols-1 ${recipients.length > 1 ? 'md:grid-cols-2' : ''} gap-4">
           ${recipientsHtml}
         </div>
 
@@ -1611,13 +1663,117 @@
     }
   }
 
-  // 12. Delete Payout
-  async function handleDeletePayout(monthIndex) {
-    if (!confirm(`Are you sure you want to delete the payout for Month ${monthIndex}? This will cancel the disbursement and make the subscriber ticket eligible again.`)) {
+  // 12. Delete Payout & Multi-Recipient Picker
+  let activeDeleteMonthIndex = null;
+  let activeDeleteMonthRecipients = [];
+
+  function openDeletePayoutPickerModal(monthIndex, recipients) {
+    activeDeleteMonthIndex = monthIndex;
+    activeDeleteMonthRecipients = recipients;
+    document.getElementById('deletePickerTitle').textContent = `Delete Month ${monthIndex} Payout`;
+    document.getElementById('deletePickerSubtitle').textContent = `${recipients.length} subscribers received payouts in Month ${monthIndex}. Choose which one to delete or delete all:`;
+
+    const curMonth = (summaryData?.months || []).find(m => m.month_index === monthIndex);
+    const list = document.getElementById('deletePickerRecipientsList');
+    list.innerHTML = '';
+
+    recipients.forEach(r => {
+      const amt = r.payout_amount != null ? r.payout_amount : ((curMonth?.amount_received || 0) * (r.share_units || 1));
+      const card = document.createElement('div');
+      card.className = 'p-3.5 rounded-2xl bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 flex items-center justify-between gap-3 shadow-2xs';
+      card.innerHTML = `
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded-md bg-slate-900 dark:bg-slate-700 text-white font-extrabold text-[11px]">A/C #${r.account_number || r.ticket_number}</span>
+            <p class="font-extrabold text-sm text-slate-900 dark:text-slate-100 truncate">${r.name}</p>
+          </div>
+          <p class="text-xs text-slate-400 dark:text-slate-500 font-medium mt-1">
+            Ticket #${r.ticket_number} · ${r.share_units}x share · Disbursed: <span class="font-extrabold text-emerald-600 dark:text-emerald-400 money-fig">${formatINR(amt)}</span>
+          </p>
+        </div>
+        <button type="button" onclick="handleDeleteIndividualPayout(${monthIndex}, '${r.membership_id}', '${(r.name || 'Subscriber').replace(/'/g, "\\'")}', ${amt})"
+                class="shrink-0 h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 font-extrabold text-xs inline-flex items-center gap-1.5 transition-colors">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Delete This</span>
+        </button>
+      `;
+      list.appendChild(card);
+    });
+
+    document.getElementById('deletePayoutPickerModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeDeletePayoutPickerModal() {
+    document.getElementById('deletePayoutPickerModal').classList.add('hidden');
+    activeDeleteMonthIndex = null;
+    activeDeleteMonthRecipients = [];
+  }
+
+  async function handleDeleteIndividualPayout(monthIndex, membershipId, memberName, amount) {
+    const amtStr = amount ? ` (₹${formatINR(amount)})` : '';
+    if (!confirm(`Are you sure you want to delete the payout for ${memberName}${amtStr} in Month ${monthIndex}?\n\nThis will cancel the disbursement and make the subscriber ticket eligible again.`)) {
       return;
     }
     try {
-      const res = await fetch(`/chit/api/chitgroups/${activeChitId}/month/${monthIndex}/payout`, {
+      const res = await fetch(`/chit/api/chitgroups/${activeChitId}/month/${monthIndex}/payout?membership_id=${encodeURIComponent(membershipId)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete payout');
+
+      closeDeletePayoutPickerModal();
+      showToast(`Month ${monthIndex} payout for ${memberName} deleted successfully`);
+      await loadPayoutsSummary(activeChitId);
+    } catch (err) {
+      showToast(err.message || 'Error deleting payout');
+    }
+  }
+
+  async function confirmDeleteAllPayoutsInMonth() {
+    const mIdx = activeDeleteMonthIndex;
+    if (!mIdx) return;
+    if (!confirm(`Are you sure you want to delete ALL payouts for Month ${mIdx}?\n\nThis will cancel all disbursements in this month and make all subscribers' tickets eligible again.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${activeChitId}/month/${mIdx}/payout`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete payouts');
+
+      closeDeletePayoutPickerModal();
+      showToast(`All payouts for Month ${mIdx} deleted successfully`);
+      await loadPayoutsSummary(activeChitId);
+    } catch (err) {
+      showToast(err.message || 'Error deleting payouts');
+    }
+  }
+
+  async function handleDeletePayout(monthIndex) {
+    const curMonth = (summaryData?.months || []).find(m => m.month_index === monthIndex);
+    const recipients = (curMonth?.recipients && curMonth.recipients.length > 0) ? curMonth.recipients : (curMonth?.recipient ? [curMonth.recipient] : []);
+
+    if (recipients.length > 1) {
+      openDeletePayoutPickerModal(monthIndex, recipients);
+      return;
+    }
+
+    // Single recipient or direct deletion
+    const rec = recipients[0] || {};
+    const recName = rec.name ? ` for ${rec.name}` : '';
+    const amt = rec.payout_amount != null ? rec.payout_amount : ((curMonth?.amount_received || 0) * (rec.share_units || 1));
+    const recAmt = amt ? ` (₹${formatINR(amt)})` : '';
+
+    if (!confirm(`Are you sure you want to delete the payout${recName}${recAmt} for Month ${monthIndex}?\n\nThis will cancel the disbursement and make the subscriber ticket eligible again.`)) {
+      return;
+    }
+    try {
+      const url = rec.membership_id 
+        ? `/chit/api/chitgroups/${activeChitId}/month/${monthIndex}/payout?membership_id=${encodeURIComponent(rec.membership_id)}`
+        : `/chit/api/chitgroups/${activeChitId}/month/${monthIndex}/payout`;
+      const res = await fetch(url, {
         method: 'DELETE'
       });
       const data = await res.json();

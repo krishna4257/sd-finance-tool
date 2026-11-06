@@ -3,22 +3,36 @@
 {% block title %}Members Directory – Siva Durga Chit Fund{% endblock %}
 
 {% block content %}
-<div class="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+<div class="p-4 sm:p-6 md:p-8 w-full max-w-7xl 2xl:max-w-[1700px] mx-auto space-y-6 pt-3 pb-24">
 
-  <!-- Search & Add Bar -->
-  <div class="flex items-center gap-3">
-    <div class="flex-1 relative">
-      <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
-      <input type="text" id="memberSearchInput" oninput="filterMembers()" placeholder="Search subscriber by name, phone, Aadhaar..." 
-             class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-elevated rounded-2xl border border-slate-200 dark:border-slate-700/50 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-500/50 dark:focus:shadow-[0_0_15px_rgba(245,158,11,0.2)] shadow-sm transition-all">
+  <!-- Search & Add Bar with View Switcher -->
+  <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+    <div class="flex-1 relative min-w-[200px]">
+      <i data-lucide="search" class="w-4 h-4 stroke-[1.8] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"></i>
+      <input type="text" id="memberSearchInput" oninput="filterMembers()" placeholder="Search subscriber by name, phone, Aadhaar, account #..." 
+             class="w-full h-11 pl-9 pr-4 bg-white dark:bg-chitDark-elevated rounded-2xl border border-slate-200 dark:border-slate-700/50 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500/40 shadow-2xs transition-all">
     </div>
 
-    <button type="button" onclick="openDirectoryLinkModal()" class="px-3.5 h-11 rounded-2xl bg-white dark:bg-chitDark-elevated text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-chitDark-surface transition-colors shadow-xs inline-flex items-center gap-1.5 active:scale-95">
+    <!-- View Switcher (Tiles Default vs Table) -->
+    <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-chitDark-elevated rounded-2xl border border-slate-200 dark:border-slate-700/50 shrink-0">
+      <button type="button" onclick="setMembersView('grid')" id="btnViewGrid" title="Tile Grid View (6+ per row)"
+              class="h-9 px-3 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs flex items-center gap-1.5">
+        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+        <span>Tiles</span>
+      </button>
+      <button type="button" onclick="setMembersView('table')" id="btnViewTable" title="Table View"
+              class="h-9 px-3 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1.5">
+        <i data-lucide="list" class="w-3.5 h-3.5"></i>
+        <span>Table</span>
+      </button>
+    </div>
+
+    <button type="button" onclick="openDirectoryLinkModal()" class="px-3.5 h-11 rounded-2xl bg-white dark:bg-chitDark-elevated text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-chitDark-surface transition-colors shadow-2xs inline-flex items-center gap-1.5 active:scale-95 shrink-0">
       <i data-lucide="link" class="w-4 h-4 stroke-[1.8] text-indigo-500"></i>
       <span>Link Accounts</span>
     </button>
 
-    <a href="/chit/members/new" class="px-4 h-11 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shadow-sm inline-flex items-center gap-2">
+    <a href="/chit/members/new" class="px-4 h-11 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shadow-sm inline-flex items-center gap-2 shrink-0">
       <i data-lucide="user-plus" class="w-4 h-4 stroke-[1.8]"></i>
       <span>Add Member</span>
     </a>
@@ -31,8 +45,13 @@
     <span class="text-[11px] text-slate-400 dark:text-slate-500">Click any subscriber to open full passbook & lift history</span>
   </div>
 
-  <!-- Members Table -->
-  <div class="cb-card card-shine bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm overflow-hidden rounded-2xl">
+  <!-- Members Tile Grid View (Default: 6+ per row on wide screens) -->
+  <div id="membersGridContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+    <p class="col-span-full text-xs text-slate-400 dark:text-slate-500 py-10 text-center">Loading subscribers...</p>
+  </div>
+
+  <!-- Members Table (Hidden by default, togglable) -->
+  <div id="membersTableWrapper" class="hidden cb-card card-shine bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/40 shadow-sm overflow-hidden rounded-2xl">
     <div class="grid grid-cols-12 px-6 py-3.5 border-b border-slate-100 dark:border-slate-700/40 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/70 dark:bg-chitDark-elevated items-center">
       <div class="col-span-2 flex items-center gap-2">
         <input type="checkbox" id="selectAllMembersCheck" onchange="toggleSelectAllMembers(this)" class="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-400 cursor-pointer" title="Select all for linking">
@@ -233,10 +252,132 @@
       const data = await res.json();
       allMembers = data;
       document.getElementById('membersCountDisplay').textContent = data.length;
-      renderTable(data);
+      setMembersView(currentMembersView);
     } catch (e) {
       tbody.innerHTML = '<p class="text-xs text-rose-500 dark:text-rose-400 py-6 text-center">Failed to load members</p>';
     }
+  }
+
+  let currentMembersView = localStorage.getItem('sd_members_view') || 'grid';
+
+  function setMembersView(viewMode) {
+    currentMembersView = viewMode;
+    try { localStorage.setItem('sd_members_view', viewMode); } catch (e) {}
+
+    const btnGrid = document.getElementById('btnViewGrid');
+    const btnTable = document.getElementById('btnViewTable');
+    const gridEl = document.getElementById('membersGridContainer');
+    const tableEl = document.getElementById('membersTableWrapper');
+
+    if (viewMode === 'grid') {
+      btnGrid.className = 'h-9 px-3 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs flex items-center gap-1.5';
+      btnTable.className = 'h-9 px-3 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1.5';
+      gridEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+    } else {
+      btnTable.className = 'h-9 px-3 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs flex items-center gap-1.5';
+      btnGrid.className = 'h-9 px-3 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1.5';
+      tableEl.classList.remove('hidden');
+      gridEl.classList.add('hidden');
+    }
+
+    renderAllViews(getCurrentlyFilteredMembers());
+  }
+
+  function renderAllViews(members) {
+    renderGrid(members);
+    renderTable(members);
+  }
+
+  function renderGrid(members) {
+    const container = document.getElementById('membersGridContainer');
+    if (!container) return;
+    if (members.length === 0) {
+      container.innerHTML = '<div class="col-span-full py-12 text-center text-xs text-slate-400 dark:text-slate-500">No subscribers found matching your search</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    members.forEach(m => {
+      const isChecked = selectedMemberIds.has(String(m.id));
+      const initial = (m.name || 'U').charAt(0).toUpperCase();
+      const isClear = Number(m.total_dues || 0) <= 0.01;
+
+      const card = document.createElement('div');
+      card.className = 'bg-white dark:bg-chitDark-surface border border-slate-200/90 dark:border-slate-700/50 rounded-2xl p-4 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer select-none card-shine flex flex-col justify-between space-y-3 group';
+      card.onclick = () => {
+        window.location.href = `/chit/members/${m.id}`;
+      };
+
+      card.innerHTML = `
+        <!-- Top: Avatar + Customer ID + Select Checkbox -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="h-9 w-9 rounded-xl ${isClear ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/30' : 'bg-amber-50 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/30'} flex items-center justify-center font-black text-sm shrink-0 shadow-2xs">
+              ${initial}
+            </div>
+            <div class="min-w-0">
+              <span class="inline-block px-2 py-0.5 rounded-md bg-slate-900 text-white font-mono font-bold text-[10px] tracking-wide">
+                #${m.customer_id || '—'}
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+            ${m.is_defaulted ? `
+              <span class="h-2 w-2 rounded-full bg-rose-500 animate-pulse" title="${m.defaulted_reason || 'Defaulted'}"></span>
+            ` : ''}
+            ${m.linked_count && m.linked_count > 1 ? `
+              <button type="button" onclick="event.stopPropagation(); openDirectoryLinkModal('${m.id}')" class="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 inline-flex items-center gap-1 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors shadow-2xs" title="${m.linked_count} accounts linked. Click to manage family links.">
+                <i data-lucide="link" class="w-2.5 h-2.5"></i>
+                <span>${m.linked_count}</span>
+              </button>
+            ` : ''}
+            <input type="checkbox" class="member-row-check w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-400 cursor-pointer" data-id="${m.id}" ${isChecked ? 'checked' : ''} onchange="onMemberCheckChange(event, '${m.id}')">
+          </div>
+        </div>
+
+        <!-- Middle: Name Ribbon (Auto-scrolls on hover if long) -->
+        <div class="space-y-1">
+          <div class="name-ribbon-wrap" title="${m.name}">
+            <h4 class="name-ribbon-text font-extrabold text-[13px] text-slate-900 dark:text-slate-100 leading-tight">
+              ${m.name}
+            </h4>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+            <span class="truncate">${m.phone || 'No phone'}</span>
+            ${m.phone ? `
+              <a href="https://wa.me/91${m.phone.replace(/\D/g, '')}" target="_blank" onclick="event.stopPropagation()" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:scale-110 transition-transform p-0.5" title="WhatsApp Message">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+              </a>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Bottom: Chits & Dues Summary -->
+        <div class="pt-2 border-t border-slate-100 dark:border-slate-700/40 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="font-bold text-slate-500 dark:text-slate-400">
+              ${m.groups_count || 0} Chit${(m.groups_count || 0) === 1 ? '' : 's'} · ${m.total_shares || 0}x
+            </span>
+            ${m.payout_shares > 0 ? `
+              <span class="px-1.5 py-0.2 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-400 text-[10px] font-extrabold">
+                ${m.payout_shares}x Lifted
+              </span>
+            ` : ''}
+          </div>
+
+          <div class="flex items-center justify-between text-xs pt-0.5">
+            <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Dues</span>
+            <span class="font-extrabold money-fig ${m.total_dues > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}">
+              ${formatINR(m.total_dues)}
+            </span>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(card);
+    });
   }
 
   function renderTable(members) {
@@ -324,7 +465,7 @@
 
   function filterMembers() {
     const filtered = getCurrentlyFilteredMembers();
-    renderTable(filtered);
+    renderAllViews(filtered);
   }
 
   function getCurrentlyFilteredMembers() {

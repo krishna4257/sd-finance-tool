@@ -151,7 +151,7 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
         trip_points_acc.append(pt)
 
     # Final trailing cluster check
-    if current_stop_start and cluster_points:
+    if current_stop_start and cluster_points and current_cluster_anchor:
         final_time = cluster_points[-1][4]
         duration_mins = max(0, int((final_time - current_stop_start).total_seconds() // 60))
         if duration_mins >= min_stop_minutes:

@@ -3203,7 +3203,7 @@ def mobile_login():
         user_id,password_hash,is_active,level = user
 
         if not is_active:
-            return {"error":"inactive"},403
+            return {"error": "Account credentials locked by administrator. Login prohibited.", "action": "wipe_and_lock"}, 403
 
         if not check_password_hash(password_hash,password):
             return {"error":"invalid"},401
@@ -3222,6 +3222,17 @@ def mobile_login():
 
         if device_id and device_id != 'PENDING':
             ensure_user_devices_table(cur)
+            # Check if this physical hardware is locked by administrator
+            cur.execute("""
+                SELECT is_locked, is_active FROM user_devices 
+                WHERE user_id = %s AND device_id = %s
+            """, (user_id, device_id))
+            chk_lock = cur.fetchone()
+            if chk_lock and chk_lock[0]: # is_locked == True
+                return {
+                    "error": "This device has been locked by the administrator. Login prohibited.",
+                    "action": "wipe_and_lock"
+                }, 403
             # If this user already has an active record for the same device_model with an older UUID,
             # retire the older record so reinstalling or clearing app data does not create duplicate entries.
             if device_model and device_model != "Mobile Device":
@@ -3233,13 +3244,13 @@ def mobile_login():
 
             # Record/Upsert this device for the user account (including admins)
             cur.execute("""
-                INSERT INTO user_devices (user_id, device_id, device_model, is_active, last_active, created_at)
-                VALUES (%s, %s, %s, TRUE, NOW(), NOW())
+                INSERT INTO user_devices (user_id, device_id, device_model, is_active, is_locked, last_active, created_at)
+                VALUES (%s, %s, %s, TRUE, FALSE, NOW(), NOW())
                 ON CONFLICT (user_id, device_id)
                 DO UPDATE SET
                     last_active = NOW(),
                     device_model = COALESCE(EXCLUDED.device_model, user_devices.device_model),
-                    is_active = TRUE
+                    is_active = CASE WHEN user_devices.is_locked THEN FALSE ELSE TRUE END
             """, (user_id, device_id, device_model))
 
             # Deactivate any open PENDING slot since a physical device is now bound
@@ -5414,6 +5425,8 @@ def mobile_parent_customer_info():
 @csrf.exempt
 @app.route("/api/mobile/reset_database", methods=["POST"])
 def reset_database():
+    conn = None
+    cur = None
     try:
         token = request.headers.get("X-Mobile-Token")
         if not token:
@@ -5485,7 +5498,8 @@ def reset_database():
 
     except Exception as e:
         try:
-            conn.rollback()
+            if conn:
+                conn.rollback()
         except:
             pass
         return {"error": str(e)}, 500
@@ -5689,6 +5703,7 @@ def _get_default_telemetry():
 def get_fleet_telemetry(cur=None):
     global _telemetry_cache
     close_conn = False
+    conn = None
     if cur is None:
         try:
             conn = get_pg_connection()
@@ -5782,6 +5797,7 @@ def get_fleet_telemetry(cur=None):
     finally:
         if close_conn and cur:
             cur.close()
+        if close_conn and conn:
             conn.close()
 
 @app.route("/admin_control")
@@ -6127,7 +6143,7 @@ def api_check_aadhaar():
             LEFT JOIN village v ON v.vid = c.vid
             WHERE REPLACE(REPLACE(COALESCE(c.aadhaar_number, ''), ' ', ''), '-', '') = %s
         """
-        params = [clean_aadhaar]
+        params: list = [clean_aadhaar]
         if exclude_ano and exclude_vid:
             query += " AND NOT (c.ano = %s AND c.vid = %s)"
             params.extend([int(exclude_ano), int(exclude_vid)])
@@ -9267,7 +9283,7 @@ def feed():
             # Resolved village_name
             row_dict["village_name"] = (
                 row_dict.get("village_name")
-                or customer_payload.get("village_name")
+                or (customer_payload.get("village_name") if customer_payload else None)
                 or village_map.get(row_dict.get("vid"))
                 or session.get("village_name")
                 or (f"Village {row_dict.get('vid')}" if row_dict.get('vid') else "Village")
@@ -10227,7 +10243,8 @@ def accept_customer(feed_id):
         return {"success": False, "error": "Feed not found"}, 404
     
     local_uuid = row[0]
-    data = row[1]     # type: ignore # JSON payload
+    raw_payload = row[1]
+    data: dict = json.loads(raw_payload) if isinstance(raw_payload, str) else (raw_payload if isinstance(raw_payload, dict) else {})
     feed_status = row[2]
 
     if feed_status != "pending":
@@ -10365,8 +10382,10 @@ def accept_customer(feed_id):
 
     # Auto-approve and link all pending customer documents for this new customer
     try:
-        vid_int = int(data.get("vid")) if data.get("vid") is not None else None
-        ano_int = int(data.get("ano")) if data.get("ano") is not None else None
+        v_val = data.get("vid")
+        a_val = data.get("ano")
+        vid_int = int(v_val) if v_val is not None else None
+        ano_int = int(a_val) if a_val is not None else None
     except (TypeError, ValueError):
         vid_int = None
         ano_int = None
@@ -15740,13 +15759,15 @@ def login():
         prev_download_str = session.get("download_token_str")
 
         # ---------------------------
-        # 5ï¸ âƒ£ Save session
+        # 5️⃣ Save session
         # ---------------------------
         session.clear()
         session["user_id"] = user_id
         session["username"] = username
         session["employee_id"] = employee_id
-        session["level"] = level.strip().lower() if level else None
+        norm_level = level.strip().lower() if level else ""
+        session["level"] = norm_level
+        session["role"] = "admin" if norm_level in ("admin", "superadmin") else (norm_level or "user")
         session["villages"] = villages
         session.permanent = True
 
@@ -15792,7 +15813,7 @@ def login():
 
             if allowed:
                 session["download_authorized"] = True
-                session["download_token_eid"] = int(token_eid)
+                session["download_token_eid"] = int(token_eid) if token_eid is not None else int(employee_id)
                 session["download_token_expiry"] = token_exp
                 if token:
                     session["download_token_str"] = token
@@ -17416,6 +17437,14 @@ def mobile_app_version():
     if not version_data:
         return jsonify({"error": "no release published yet"}), 404
 
+    target_scope = version_data.get("target_scope", "all")
+    is_targeted_user = True
+    if target_scope == "targeted":
+        target_ids = {str(x).strip() for x in version_data.get("target_employee_ids", []) if x is not None}
+        caller_uid = str(token_data.get("user_id", "")).strip()
+        caller_eid = str(token_data.get("eid", "")).strip()
+        is_targeted_user = (caller_uid in target_ids) or (caller_eid in target_ids)
+
     # Determine if client needs to upgrade
     try:
         current_code = int(request.args.get("current_version_code", 0))
@@ -17425,17 +17454,28 @@ def mobile_app_version():
     latest_code = int(version_data.get("latest_version_code", 0))
     min_code    = int(version_data.get("min_supported_version_code", 0))
 
-    upgrade_required     = latest_code > current_code
-    force_update_required = (
-        version_data.get("force_update", False)
-        or current_code < min_code
-    )
+    if not is_targeted_user:
+        upgrade_required = False
+        force_update_required = False
+    else:
+        upgrade_required     = latest_code > current_code
+        force_update_required = (
+            version_data.get("force_update", False)
+            or current_code < min_code
+        )
 
     return jsonify({
         **version_data,
         "upgrade_required": upgrade_required,
         "force_update_required": force_update_required,
     }), 200
+
+
+def is_admin_web_session() -> bool:
+    """Helper to check if current session has admin privileges via level or role."""
+    level = str(session.get("level") or "").strip().lower()
+    role = str(session.get("role") or "").strip().lower()
+    return level in ("admin", "superadmin") or role in ("admin", "superadmin")
 
 
 # ── Mobile: authenticated APK download ───────────────────────────────────────
@@ -17453,35 +17493,49 @@ def mobile_app_download(version):
          (prevents re-downloading old/arbitrary versions)
     """
     token = request.headers.get("X-Mobile-Token")
-    if not token:
+    is_admin_session = is_admin_web_session()
+    if not token and not is_admin_session:
         return jsonify({"error": "missing token"}), 401
 
-    token_data = verify_mobile_token(token)
-    if not token_data:
-        return jsonify({"error": "invalid or expired token"}), 401
+    eid = "admin"
+    token_data = None
+    if token:
+        token_data = verify_mobile_token(token)
+        if not token_data:
+            return jsonify({"error": "invalid or expired token"}), 401
 
-    # Verify employee still active
-    try:
-        conn = get_pg_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT eid, is_active FROM employee WHERE eid = %s",
-            (token_data.get("eid"),)
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not row or not row[1]:
-            return jsonify({"error": "employee account inactive"}), 403
-        eid = row[0]
-    except Exception as e:
-        logger.error("download: employee lookup failed: %s", e)
-        return jsonify({"error": "server error"}), 500
+        # Verify employee still active
+        try:
+            conn = get_pg_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT eid, is_active FROM employee WHERE eid = %s",
+                (token_data.get("eid"),)
+            )
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if not row or not row[1]:
+                return jsonify({"error": "employee account inactive"}), 403
+            eid = row[0]
+        except Exception as e:
+            logger.error("download: employee lookup failed: %s", e)
+            return jsonify({"error": "server error"}), 500
+    else:
+        eid = session.get("username", "admin")
 
     # Validate requested version against published version.json
     version_data = _read_version_json()
     if not version_data:
         return jsonify({"error": "no release published"}), 404
+
+    target_scope = version_data.get("target_scope", "all")
+    if target_scope == "targeted" and not is_admin_session and token_data:
+        target_ids = {str(x).strip() for x in version_data.get("target_employee_ids", []) if x is not None}
+        caller_uid = str(token_data.get("user_id", "")).strip()
+        caller_eid = str(token_data.get("eid", "")).strip()
+        if caller_uid not in target_ids and caller_eid not in target_ids:
+            return jsonify({"error": "This release is restricted to selected pilot test devices."}), 403
 
     published_version = version_data.get("latest_version", "")
     if version != published_version:
@@ -17543,7 +17597,7 @@ def admin_app_publish():
       5. Audit log
     """
     # Auth: must be admin web session
-    if session.get("role") not in ("admin", "superadmin"):
+    if not is_admin_web_session():
         return jsonify({"error": "admin access required"}), 403
 
     # --- Input validation ---
@@ -17565,6 +17619,26 @@ def admin_app_publish():
 
     force_update = request.form.get("force_update", "false").lower() == "true"
     release_notes = (request.form.get("release_notes") or "").strip()
+
+    target_scope = (request.form.get("target_scope") or "all").strip().lower()
+    if target_scope not in ("all", "targeted"):
+        target_scope = "all"
+
+    raw_ids = request.form.get("target_employee_ids", "[]")
+    try:
+        target_employee_ids = json.loads(raw_ids) if isinstance(raw_ids, str) else raw_ids
+        if not isinstance(target_employee_ids, list):
+            target_employee_ids = []
+    except Exception:
+        target_employee_ids = []
+
+    raw_names = request.form.get("target_employee_names", "[]")
+    try:
+        target_employee_names = json.loads(raw_names) if isinstance(raw_names, str) else raw_names
+        if not isinstance(target_employee_names, list):
+            target_employee_names = []
+    except Exception:
+        target_employee_names = []
 
     apk_file = request.files.get("apk_file")
     if not apk_file:
@@ -17604,6 +17678,9 @@ def admin_app_publish():
         "release_notes": release_notes,
         "released_at": datetime.now(timezone.utc).isoformat(),
         "published_by": session.get("username", "unknown"),
+        "target_scope": target_scope,
+        "target_employee_ids": target_employee_ids,
+        "target_employee_names": target_employee_names,
     }
 
     try:
@@ -17623,13 +17700,15 @@ def admin_app_publish():
             "sha256": sha256_hex,
             "force_update": force_update,
             "release_notes": release_notes,
+            "target_scope": target_scope,
+            "target_count": len(target_employee_ids),
         },
         status="success"
     )
 
     logger.info(
-        "APK published: %s (versionCode=%s, sha256=%s, force=%s)",
-        version, version_code, sha256_hex[:16] + "…", force_update
+        "APK published: %s (versionCode=%s, sha256=%s, force=%s, target=%s)",
+        version, version_code, sha256_hex[:16] + "…", force_update, target_scope
     )
 
     # Broadcast instant OTA notification to all connected mobile clients
@@ -17642,7 +17721,9 @@ def admin_app_publish():
             "force_update": force_update,
             "release_notes": release_notes,
             "url": download_url,
-            "sha256": sha256_hex
+            "sha256": sha256_hex,
+            "target_scope": target_scope,
+            "target_employee_ids": target_employee_ids
         })
     except Exception as _b_err:
         logger.error("admin_app_publish: SSE broadcast failed: %s", _b_err)
@@ -17654,7 +17735,94 @@ def admin_app_publish():
         "sha256": sha256_hex,
         "url": download_url,
         "force_update": force_update,
+        "target_scope": target_scope,
+        "target_employee_ids": target_employee_ids,
+        "target_employee_names": target_employee_names,
     }), 201
+
+
+# ── Admin: dynamically update rollout target audience of active release ──────────
+
+@app.route("/api/admin/app/update_target", methods=["POST"])
+def admin_app_update_target():
+    """
+    POST /api/admin/app/update_target
+    Allows admins to change rollout targeting ('all' vs 'targeted')
+    on the currently active release without re-uploading the APK.
+    Body JSON or Form:
+      - target_scope: 'all' or 'targeted'
+      - target_employee_ids: list or JSON string of int/str IDs
+      - target_employee_names: list or JSON string of string names
+    """
+    if not is_admin_web_session():
+        return jsonify({"success": False, "error": "admin access required"}), 403
+
+    data = request.get_json(silent=True) or request.form.to_dict()
+    target_scope = str(data.get("target_scope", "all")).strip().lower()
+    if target_scope not in ("all", "targeted"):
+        target_scope = "all"
+
+    target_employee_ids = data.get("target_employee_ids", [])
+    if isinstance(target_employee_ids, str):
+        try:
+            target_employee_ids = json.loads(target_employee_ids)
+        except Exception:
+            target_employee_ids = []
+    if not isinstance(target_employee_ids, list):
+        target_employee_ids = []
+
+    target_employee_names = data.get("target_employee_names", [])
+    if isinstance(target_employee_names, str):
+        try:
+            target_employee_names = json.loads(target_employee_names)
+        except Exception:
+            target_employee_names = []
+    if not isinstance(target_employee_names, list):
+        target_employee_names = []
+
+    version_data = _read_version_json()
+    if not version_data:
+        return jsonify({"success": False, "error": "No active release found"}), 404
+
+    version_data["target_scope"] = target_scope
+    version_data["target_employee_ids"] = target_employee_ids
+    version_data["target_employee_names"] = target_employee_names
+
+    try:
+        _write_version_json_atomic(version_data)
+    except Exception as e:
+        logger.error("admin_app_update_target: atomic write failed: %s", e)
+        return jsonify({"success": False, "error": "Failed to save targeting"}), 500
+
+    audit_log(
+        action="apk_target_updated",
+        entity_type="apk_release",
+        entity_id=version_data.get("latest_version", "unknown"),
+        details={
+            "target_scope": target_scope,
+            "target_employee_ids": target_employee_ids,
+            "target_employee_names": target_employee_names,
+        },
+        status="success"
+    )
+
+    try:
+        broadcast_submission_event(None, {
+            "type": "app_update_target",
+            "version": version_data.get("latest_version"),
+            "target_scope": target_scope,
+            "target_employee_ids": target_employee_ids
+        })
+    except Exception as _b_err:
+        logger.error("admin_app_update_target: SSE broadcast failed: %s", _b_err)
+
+    return jsonify({
+        "success": True,
+        "message": f"Rollout target updated to {'Global (All Employees)' if target_scope == 'all' else f'Targeted ({len(target_employee_ids)} Employees)'}",
+        "target_scope": target_scope,
+        "target_employee_ids": target_employee_ids,
+        "target_employee_names": target_employee_names
+    }), 200
 
 
 # ── Admin: list published releases ───────────────────────────────────────────
@@ -17665,7 +17833,7 @@ def admin_app_releases():
     GET /api/admin/app/releases
     Admin session only. Returns current version.json and list of APK files on disk.
     """
-    if session.get("role") not in ("admin", "superadmin"):
+    if not is_admin_web_session():
         return jsonify({"error": "admin access required"}), 403
 
     version_data = _read_version_json()

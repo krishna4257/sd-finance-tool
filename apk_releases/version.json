@@ -1,11 +1,19 @@
 {
-  "latest_version": "1.1.6",
-  "latest_version_code": 19,
-  "min_supported_version_code": 5,
+  "latest_version": "1.1.7",
+  "latest_version_code": 20,
+  "min_supported_version_code": 20,
   "force_update": true,
-  "sha256": "2d38b8935ac9a7119a34f0f3b561f7e6f4082f2eb2bdddc529f1450bb745429b",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.6",
-  "release_notes": "Fixed payment screen flickering loop, fixed close customer submission process with active session validation, and database synchronization enhancements.",
-  "released_at": "2026-10-08T00:50:00+05:30",
-  "published_by": "admin"
+  "sha256": "e1b15b0d895468b7bacc9a88a3ace4db752978d6216cf4ed7b0de1e98872a7bd",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.7",
+  "release_notes": "[Bug Fix]",
+  "released_at": "2026-11-05T18:55:11.048678+00:00",
+  "published_by": "chinna",
+  "target_scope": "targeted",
+  "target_employee_ids": [
+    4,
+    5
+  ],
+  "target_employee_names": [
+    "KARRI CHINNA REDDY (@chinna)"
+  ]
 }

@@ -3,7 +3,7 @@ import os
 
 if sys.stdout.encoding != 'utf-8':
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
+        getattr(sys.stdout, 'reconfigure', lambda **kw: None)(encoding='utf-8')
     except Exception:
         pass
 

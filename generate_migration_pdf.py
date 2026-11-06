@@ -26,7 +26,7 @@ class NumberedCanvas(canvas.Canvas):
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
+        getattr(self, '_startPage')()
 
     def save(self):
         num_pages = len(self._saved_page_states)
@@ -42,7 +42,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#64748b"))
 
         # Running header on page 2 and later
-        if self._pageNumber > 1:
+        if getattr(self, '_pageNumber', 1) > 1:
             self.drawString(54, 750, "SIVA DURGA FINANCE — DATABASE SCHEMA MIGRATION GUIDE")
             self.drawRightString(558, 750, "PRODUCTION DEPLOYMENT RUNBOOK")
             self.setStrokeColor(colors.HexColor("#cbd5e1"))
@@ -56,7 +56,7 @@ class NumberedCanvas(canvas.Canvas):
 
         self.setFont("Helvetica", 7.5)
         self.drawString(54, 32, "Confidential — Internal Engineering Runbook — Siva Durga Finance")
-        self.drawRightString(558, 32, f"Page {self._pageNumber} of {page_count}")
+        self.drawRightString(558, 32, f"Page {getattr(self, '_pageNumber', 1)} of {page_count}")
         self.restoreState()
 
 

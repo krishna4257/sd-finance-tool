@@ -340,6 +340,30 @@
       background: linear-gradient(180deg, #070b14 0%, #0a0f1d 50%, #060a12 100%);
     }
 
+    /* ── Name Ribbon Marquee / Auto-Scroll for Long Names ── */
+    .name-ribbon-wrap {
+      position: relative;
+      overflow: hidden;
+      max-width: 100%;
+      mask-image: linear-gradient(90deg, black 0%, black calc(100% - 1.25rem), transparent 100%);
+      -webkit-mask-image: linear-gradient(90deg, black 0%, black calc(100% - 1.25rem), transparent 100%);
+    }
+    .name-ribbon-text {
+      display: inline-block;
+      white-space: nowrap;
+      transition: transform 0.4s ease;
+      will-change: transform;
+    }
+    .name-ribbon-wrap:hover .name-ribbon-text {
+      animation: ribbonScroll 4.5s linear infinite alternate;
+    }
+    @keyframes ribbonScroll {
+      0% { transform: translateX(0); }
+      15% { transform: translateX(0); }
+      85% { transform: translateX(calc(-100% + 130px)); }
+      100% { transform: translateX(calc(-100% + 130px)); }
+    }
+
     /* ── Nav Active Indicator Bar ── */
     .nav-active-bar {
       position: relative;
@@ -874,6 +898,78 @@
   </div>
 
   <!-- Global Toast -->
+    <!-- ==================== CHIT SCHEMES REARRANGE & SETTINGS MODAL ==================== -->
+  <div id="chitOrderModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+    <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-200 dark:border-slate-700/60 animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
+        <div class="flex items-center gap-3">
+          <div class="h-9 w-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <i data-lucide="sliders-horizontal" class="w-4 h-4 stroke-[2]"></i>
+          </div>
+          <div>
+            <h3 class="text-sm md:text-base font-extrabold text-slate-900 dark:text-slate-100">Rearrange Chit Schemes</h3>
+            <p class="text-xs text-slate-400 dark:text-slate-500">Customize the sequence of schemes in the top horizontal bar</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeChitOrderModal()" class="h-8 w-8 rounded-full bg-slate-100 dark:bg-chitDark-elevated text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Quick Actions Toolbar & Search -->
+      <div class="px-6 py-3 bg-slate-50/70 dark:bg-chitDark-elevated/40 border-b border-slate-100 dark:border-slate-800/40 space-y-2.5">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            <!-- Sort Alphabetical Button -->
+            <button type="button" onclick="window.sortOrderModalAlphabetical()"
+                    class="h-8 px-3 rounded-xl bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 font-bold text-xs shadow-2xs active:scale-95 transition-all inline-flex items-center gap-1.5">
+              <i data-lucide="arrow-down-a-z" class="w-3.5 h-3.5 stroke-[2]"></i>
+              <span>Sort Alphabetical (A-Z)</span>
+            </button>
+
+            <!-- Reset Default Button -->
+            <button type="button" onclick="window.resetChitOrderToDefault()"
+                    class="h-8 px-3 rounded-xl bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:text-rose-600 hover:border-rose-300 font-bold text-xs shadow-2xs active:scale-95 transition-all inline-flex items-center gap-1.5">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 stroke-[2]"></i>
+              <span>Reset Default</span>
+            </button>
+          </div>
+
+          <span id="orderSchemeCountBadge" class="text-[11px] font-extrabold text-slate-400 px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-800">
+            0 schemes
+          </span>
+        </div>
+
+        <!-- Quick Search Filter in Modal -->
+        <div class="relative">
+          <input type="text" id="orderModalSearch" oninput="window.filterOrderModalList(this.value)" placeholder="Search scheme..."
+                 class="w-full h-8 pl-8 pr-3 text-xs bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-slate-400" />
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 stroke-[1.8]"></i>
+        </div>
+      </div>
+
+      <!-- Draggable / Reorderable Scheme List -->
+      <div class="p-6 overflow-y-auto flex-1 space-y-2 max-h-[50vh]" id="orderModalListContainer">
+        <!-- Populated dynamically via JS -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-4 bg-slate-50 dark:bg-chitDark-elevated border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between gap-3">
+        <button type="button" onclick="closeChitOrderModal()" class="h-10 px-4 rounded-xl text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold text-xs transition-colors">
+          Cancel
+        </button>
+
+        <button type="button" onclick="window.saveChitOrderFromModal()" class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-sm active:scale-95 transition-all inline-flex items-center gap-2">
+          <i data-lucide="check" class="w-4 h-4 stroke-[2.5]"></i>
+          <span>Save Arrangement</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <div id="toastContainer" class="fixed bottom-6 right-6 z-50 pointer-events-none"></div>
 
   <script>
@@ -1064,6 +1160,254 @@
           });
         });
       }
+
+      // Natural Chit Sorting Helper (A1 < A01 < A2 < A02 ... < S1 < S01 < S2 ...)
+      window.naturalChitSort = function(a, b) {
+        const nameA = (typeof a === 'string' ? a : (a?.name || a?.chit_name || '')).trim();
+        const nameB = (typeof b === 'string' ? b : (b?.name || b?.chit_name || '')).trim();
+        const regex = /^([a-zA-Z\s]+?)(\d+)(.*)$/;
+        const mA = nameA.match(regex);
+        const mB = nameB.match(regex);
+        if (mA && mB) {
+          const pA = mA[1].toUpperCase();
+          const pB = mB[1].toUpperCase();
+          if (pA !== pB) return pA.localeCompare(pB);
+          const nA = parseInt(mA[2], 10);
+          const nB = parseInt(mB[2], 10);
+          if (nA !== nB) return nA - nB;
+          if (mA[2].length !== mB[2].length) return mA[2].length - mB[2].length;
+          return mA[3].toUpperCase().localeCompare(mB[3].toUpperCase());
+        }
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+      };
+
+      // Global Group Sorter: Respects custom saved order ONLY if mode === 'custom'; otherwise ALWAYS natural alphabetical!
+      window.sortChitsBySavedOrder = function(groups) {
+        if (!Array.isArray(groups)) return [];
+        try {
+          const mode = localStorage.getItem('sd_finance_chit_order_mode');
+          if (mode === 'custom') {
+            const saved = JSON.parse(localStorage.getItem('sd_finance_chit_order') || '[]');
+            if (Array.isArray(saved) && saved.length > 0) {
+              return [...groups].sort((a, b) => {
+                const idxA = saved.indexOf(a.id);
+                const idxB = saved.indexOf(b.id);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return window.naturalChitSort(a, b);
+              });
+            }
+          }
+        } catch (e) {}
+        return [...groups].sort((a, b) => window.naturalChitSort(a, b));
+      };
+
+      // ==================== GLOBAL CHIT SCHEMES ORDER SETTINGS MODAL ====================
+      window.chitOrderWorkingList = [];
+      let draggedItemIdx = null;
+
+      window.openChitOrderModal = async function() {
+        const modal = document.getElementById('chitOrderModal');
+        if (!modal) return;
+        
+        // 1. Gather all schemes (from window.allChits, window.summaryData.all_groups, or fetch API)
+        let schemes = [];
+        if (window.allChits && Array.isArray(window.allChits) && window.allChits.length > 0) {
+          schemes = [...window.allChits];
+        } else if (window.summaryData && window.summaryData.all_groups && Array.isArray(window.summaryData.all_groups)) {
+          schemes = [...window.summaryData.all_groups];
+        } else {
+          try {
+            const res = await fetch('/chit/api/chitgroups');
+            const data = await res.json();
+            schemes = data.groups || (Array.isArray(data) ? data : []);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        // Apply current active ordering to working list
+        window.chitOrderWorkingList = window.sortChitsBySavedOrder(schemes);
+        window.renderChitOrderModalList();
+        
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        if (window.lucide) lucide.createIcons();
+      };
+
+      window.closeChitOrderModal = function() {
+        const modal = document.getElementById('chitOrderModal');
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+      };
+
+      window.renderChitOrderModalList = function(searchTerm = '') {
+        const container = document.getElementById('orderModalListContainer');
+        const badge = document.getElementById('orderSchemeCountBadge');
+        if (!container) return;
+        
+        const list = window.chitOrderWorkingList;
+        if (badge) badge.textContent = `${list.length} schemes`;
+
+        const term = (searchTerm || '').trim().toLowerCase();
+        container.innerHTML = '';
+
+        if (list.length === 0) {
+          container.innerHTML = '<p class="text-xs text-slate-400 py-6 text-center">No chit schemes found.</p>';
+          return;
+        }
+
+        list.forEach((g, idx) => {
+          if (term && !(g.name || '').toLowerCase().includes(term)) {
+            return;
+          }
+          const row = document.createElement('div');
+          row.className = 'order-item-row p-3 rounded-2xl bg-white dark:bg-chitDark-surface border border-slate-200/90 dark:border-slate-700/60 flex items-center justify-between gap-3 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-600/60 transition-all select-none';
+          row.draggable = true;
+          row.dataset.idx = idx;
+
+          const val = g.chit_total_value ? ('₹' + Math.round(g.chit_total_value).toLocaleString('en-IN')) : '';
+          const dur = g.duration_months ? (`${g.duration_months} Months`) : '';
+          const subtitle = [val, dur].filter(Boolean).join(' • ');
+
+          row.innerHTML = `
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <div class="drag-handle text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-grab active:cursor-grabbing p-1" title="Drag to reorder">
+                <i data-lucide="grip-vertical" class="w-4 h-4 stroke-[2]"></i>
+              </div>
+              <span class="order-pos-badge h-6 w-6 rounded-lg bg-slate-100 dark:bg-chitDark-elevated text-slate-700 dark:text-slate-300 font-extrabold text-[11px] flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
+                #${idx + 1}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="font-extrabold text-xs text-slate-900 dark:text-slate-100 truncate">${g.name}</p>
+                ${subtitle ? `<p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium truncate">${subtitle}</p>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1 shrink-0">
+              <button type="button" onclick="window.moveOrderItem(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} 
+                      title="Move Up" class="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-chitDark-elevated flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors disabled:opacity-30 disabled:pointer-events-none">
+                <i data-lucide="chevron-up" class="w-3.5 h-3.5 stroke-[2]"></i>
+              </button>
+              <button type="button" onclick="window.moveOrderItem(${idx}, 1)" ${idx === list.length - 1 ? 'disabled' : ''}
+                      title="Move Down" class="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-chitDark-elevated flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors disabled:opacity-30 disabled:pointer-events-none">
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 stroke-[2]"></i>
+              </button>
+              <button type="button" onclick="window.moveOrderItemToTop(${idx})" ${idx === 0 ? 'disabled' : ''}
+                      title="Move to Top" class="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-chitDark-elevated flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors disabled:opacity-30 disabled:pointer-events-none">
+                <i data-lucide="chevrons-up" class="w-3.5 h-3.5 stroke-[2]"></i>
+              </button>
+            </div>
+          `;
+
+          // HTML5 Drag Events
+          row.addEventListener('dragstart', (e) => {
+            draggedItemIdx = idx;
+            e.dataTransfer.effectAllowed = 'move';
+            row.classList.add('opacity-40');
+          });
+          row.addEventListener('dragend', () => {
+            draggedItemIdx = null;
+            row.classList.remove('opacity-40');
+          });
+          row.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            row.classList.add('bg-emerald-50/50', 'dark:bg-emerald-950/30');
+          });
+          row.addEventListener('dragleave', () => {
+            row.classList.remove('bg-emerald-50/50', 'dark:bg-emerald-950/30');
+          });
+          row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            row.classList.remove('bg-emerald-50/50', 'dark:bg-emerald-950/30');
+            if (draggedItemIdx === null || draggedItemIdx === idx) return;
+            const moved = window.chitOrderWorkingList.splice(draggedItemIdx, 1)[0];
+            window.chitOrderWorkingList.splice(idx, 0, moved);
+            window.renderChitOrderModalList(document.getElementById('orderModalSearch')?.value || '');
+          });
+
+          container.appendChild(row);
+        });
+
+        if (window.lucide) lucide.createIcons();
+      };
+
+      window.moveOrderItem = function(index, delta) {
+        const newIdx = index + delta;
+        if (newIdx < 0 || newIdx >= window.chitOrderWorkingList.length) return;
+        const item = window.chitOrderWorkingList.splice(index, 1)[0];
+        window.chitOrderWorkingList.splice(newIdx, 0, item);
+        window.renderChitOrderModalList(document.getElementById('orderModalSearch')?.value || '');
+      };
+
+      window.moveOrderItemToTop = function(index) {
+        if (index <= 0) return;
+        const item = window.chitOrderWorkingList.splice(index, 1)[0];
+        window.chitOrderWorkingList.unshift(item);
+        window.renderChitOrderModalList(document.getElementById('orderModalSearch')?.value || '');
+      };
+
+      window.filterOrderModalList = function(term) {
+        window.renderChitOrderModalList(term);
+      };
+
+      window.sortOrderModalAlphabetical = function() {
+        window.chitOrderWorkingList.sort((a, b) => window.naturalChitSort(a, b));
+        window.renderChitOrderModalList(document.getElementById('orderModalSearch')?.value || '');
+        if (typeof showToast === 'function') showToast('Arranged alphabetically (A-Z)', 'info');
+      };
+
+      window.resetChitOrderToDefault = function() {
+        localStorage.removeItem('sd_finance_chit_order');
+        localStorage.setItem('sd_finance_chit_order_mode', 'alphabetical');
+        window.chitOrderWorkingList.sort((a, b) => window.naturalChitSort(a, b));
+        window.closeChitOrderModal();
+        window.dispatchEvent(new CustomEvent('chitOrderUpdated'));
+        if (typeof showToast === 'function') showToast('Reset to default alphabetical sequence', 'success');
+      };
+
+      window.saveChitOrderFromModal = function() {
+        const ids = window.chitOrderWorkingList.map(g => g.id);
+        localStorage.setItem('sd_finance_chit_order', JSON.stringify(ids));
+        localStorage.setItem('sd_finance_chit_order_mode', 'custom');
+        window.closeChitOrderModal();
+        window.dispatchEvent(new CustomEvent('chitOrderUpdated'));
+        if (typeof showToast === 'function') showToast('Custom scheme sequence saved', 'success');
+      };
+
+      // Global Horizontal Mouse Wheel Scroll Helper for navigation pill bars
+      window.setupHorizontalWheelScroll = function() {
+        const selectors = [
+          '#chitGroupPillsContainer',
+          '#monthTimelineContainer',
+          '#chitSelectorContainer',
+          '#monthsPillsList',
+          '#reportMonthsSlider',
+          '.horizontal-wheel-scroll',
+          '[data-wheel-scroll]'
+        ];
+        document.querySelectorAll(selectors.join(', ')).forEach(el => {
+          if (el.dataset.wheelScrollAttached) return;
+          el.dataset.wheelScrollAttached = 'true';
+          el.addEventListener('wheel', function(e) {
+            if (e.deltaY !== 0 && !e.shiftKey) {
+              e.preventDefault();
+              this.scrollBy({ left: e.deltaY * 1.25, behavior: 'smooth' });
+            }
+          }, { passive: false });
+        });
+      };
+      window.setupHorizontalWheelScroll();
+
+      // MutationObserver to auto-attach horizontal wheel scrolling to dynamically rendered bars
+      try {
+        const wheelObserver = new MutationObserver(function() {
+          window.setupHorizontalWheelScroll();
+        });
+        wheelObserver.observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
 
       // Global Background Click Gradient Ripple Effect (Ultra-Subtle & Compact)
       window.addEventListener('pointerdown', function (e) {

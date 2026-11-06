@@ -3,12 +3,12 @@
 {% block title %}Chit Groups – Siva Durga Chit Fund{% endblock %}
 
 {% block content %}
-<div class="p-6 md:p-10 max-w-3xl mx-auto w-full space-y-6">
+<div class="p-4 sm:p-6 md:p-8 max-w-7xl 2xl:max-w-[1600px] mx-auto w-full space-y-6">
 
-  <!-- Top Header Bar matching ChitBase screenshot -->
-  <div class="flex items-start justify-between">
+  <!-- Top Header Bar (Full-Width Responsive on Desktop) -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <h1 class="text-[22px] font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">Chit Groups</h1>
+      <h1 class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">Chit Groups</h1>
       <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
         <span><strong class="font-extrabold text-slate-900 dark:text-slate-100 money-fig" id="headerCollectedThisMonth">₹0</strong> collected this month</span>
         <span class="text-slate-300 dark:text-slate-600">·</span>
@@ -16,31 +16,32 @@
       </p>
     </div>
 
-    <!-- + New Pill Button matching ChitBase -->
-    <a href="/chit/groups/new" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold shadow-sm hover:bg-slate-800 dark:hover:bg-white transition-colors">
-      <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[2.5]"></i>
-      <span>New</span>
-    </a>
-  </div>
+    <!-- Right Controls: Filter Pills & + New Chit -->
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="p-1 bg-slate-100 dark:bg-chitDark-elevated border border-slate-200/80 dark:border-slate-700/50 rounded-2xl flex items-center gap-1 shadow-2xs" id="filterSegmentContainer">
+        <button onclick="setGroupFilter('active')" id="btnFilterActive" class="px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900">
+          <span>Active</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 dark:bg-slate-300 dark:text-slate-800" id="badgeCountActive">0</span>
+        </button>
+        <button onclick="setGroupFilter('draft')" id="btnFilterDraft" class="px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+          <span>Draft</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400" id="badgeCountDraft">0</span>
+        </button>
+        <button onclick="setGroupFilter('all')" id="btnFilterAll" class="px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+          <span>All</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400" id="badgeCountAll">0</span>
+        </button>
+      </div>
 
-  <!-- Segmented Filter Pills matching ChitBase -->
-  <div class="p-1.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200/80 dark:border-slate-700/50 rounded-2xl w-full flex items-center gap-1" id="filterSegmentContainer">
-    <button onclick="setGroupFilter('active')" id="btnFilterActive" class="px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900">
-      <span>Active</span>
-      <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 dark:bg-slate-300 dark:text-slate-800" id="badgeCountActive">0</span>
-    </button>
-    <button onclick="setGroupFilter('draft')" id="btnFilterDraft" class="px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-      <span>Draft</span>
-      <span class="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400" id="badgeCountDraft">0</span>
-    </button>
-    <button onclick="setGroupFilter('all')" id="btnFilterAll" class="px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-      <span>All</span>
-      <span class="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400" id="badgeCountAll">0</span>
-    </button>
+      <a href="/chit/groups/new" class="inline-flex items-center gap-1.5 px-4 h-10 rounded-2xl bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold shadow-sm hover:bg-slate-800 dark:hover:bg-white active:scale-95 transition-all">
+        <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
+        <span>New Scheme</span>
+      </a>
+    </div>
   </div>
 
   <!-- Chit Group Cards List -->
-  <div id="chitGroupsContainer" class="space-y-6">
+  <div id="chitGroupsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
     <p class="text-xs text-slate-400 dark:text-slate-500 py-6 text-center">Loading chit schemes...</p>
   </div>
 
@@ -120,7 +121,7 @@
     const container = document.getElementById('chitGroupsContainer');
     if (groups.length === 0) {
       container.innerHTML = `
-        <div class="bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-3xl p-10 text-center space-y-3">
+        <div class="col-span-full bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/50 rounded-3xl p-10 text-center space-y-3">
           <p class="text-xs text-slate-400 dark:text-slate-500">No ${activeFilter} chit schemes found.</p>
           <a href="/chit/groups/new" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-white transition-colors shadow-sm">
             <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[2.5]"></i>
@@ -135,9 +136,12 @@
     }
 
     container.innerHTML = '';
-    groups.forEach(g => {
+    // Ensure natural alphabetical sort (A1 < A01 < A2 < A02 ...)
+    const sortedGroups = [...groups].sort((a, b) => window.naturalChitSort ? window.naturalChitSort(a, b) : a.name.localeCompare(b.name));
+
+    sortedGroups.forEach(g => {
       const card = document.createElement('div');
-      card.className = 'bg-white border border-slate-200/90 rounded-[22px] p-6 shadow-sm relative space-y-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer select-none card-shine dark:bg-chitDark-surface dark:border-slate-700/50 dark:hover:border-slate-600';
+      card.className = 'bg-white border border-slate-200/90 rounded-[24px] p-5 md:p-6 shadow-sm relative space-y-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer select-none card-shine dark:bg-chitDark-surface dark:border-slate-700/50 dark:hover:border-slate-600 flex flex-col justify-between';
       
       // Clicking anywhere on the tile opens edit mode
       card.onclick = (e) => {
@@ -175,7 +179,7 @@
             ${g.name}
           </h2>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/70 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+          <div class="grid grid-cols-2 gap-2.5 bg-slate-50/70 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
             <!-- Current Collection -->
             <div>
               <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Current Collection</p>
