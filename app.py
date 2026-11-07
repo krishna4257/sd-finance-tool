@@ -419,7 +419,11 @@ init_scheduler()
 secret_key = os.environ.get("SECRET_KEY")
 
 if not secret_key:
-    raise RuntimeError("SECRET_KEY environment variable is not set")
+    if os.environ.get("TESTING", "").lower() in ("true", "1") or os.environ.get("FLASK_ENV") == "testing":
+        secret_key = "test-secret-key-for-unit-testing-only-32b"
+        os.environ["SECRET_KEY"] = secret_key
+    else:
+        raise RuntimeError("SECRET_KEY environment variable is not set")
 
 app.secret_key = secret_key
 
@@ -646,7 +650,7 @@ def redirect_www_and_force_https():
 
     # Force HTTPS in production to prevent Secure cookies from being blocked/discarded
     is_https = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
-    if not is_https and os.environ.get("DISABLE_SECURE_COOKIE") != "1" and not is_local_run:
+    if not is_https and not app.config.get("TESTING") and os.environ.get("DISABLE_SECURE_COOKIE") != "1" and not is_local_run:
         url = request.url.replace("http://", "https://", 1)
         return redirect(url, code=301)
 

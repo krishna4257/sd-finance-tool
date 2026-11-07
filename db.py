@@ -7,9 +7,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 required_vars = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+is_testing_env = os.environ.get("TESTING", "").lower() in ("true", "1") or os.environ.get("FLASK_ENV") == "testing"
 for var in required_vars:
     if not os.environ.get(var):
-        raise RuntimeError(f"Missing required environment variable: {var}")
+        if is_testing_env:
+            os.environ[var] = f"test_{var.lower()}"
+        else:
+            raise RuntimeError(f"Missing required environment variable: {var}")
 
 DB_CONFIG = {
     "host": os.environ["DB_HOST"].strip(),

@@ -11,6 +11,7 @@ jobs:
     name: Test & Lint (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.9', '3.11']
 
@@ -38,8 +39,16 @@ jobs:
       - name: Run Regression Test Suite
         env:
           TESTING: "True"
+          FLASK_ENV: "testing"
+          DISABLE_SECURE_COOKIE: "1"
           WTF_CSRF_ENABLED: "False"
+          SECRET_KEY: "ci-testing-secret-key-32-chars-minimum-length"
           MOBILE_QUEUE_HMAC_SECRET: "ci-test-hmac-secret-32-chars-long"
           ADMIN_RESET_PASSWORD: "ci-test-reset-pass"
+          DB_HOST: "localhost"
+          DB_NAME: "test_db"
+          DB_USER: "test_user"
+          DB_PASSWORD: "test_password"
+          DB_PORT: "5432"
         run: |
           python -m unittest discover -s tests -p "test_phase*.py"
