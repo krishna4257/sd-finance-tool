@@ -1203,27 +1203,27 @@ def get_accounting_overview():
         date_cond_repay = ""
         if period == 'today':
             date_cond_pay = "AND p.payment_date = CURRENT_DATE"
-            date_cond_sched = "AND s.payout_date = CURRENT_DATE"
+            date_cond_sched = "AND COALESCE(ms.payout_date, s.payout_date) = CURRENT_DATE"
             date_cond_loan = "AND l.disbursal_date = CURRENT_DATE"
             date_cond_repay = "AND r.repayment_date = CURRENT_DATE"
         elif period == 'yesterday':
             date_cond_pay = "AND p.payment_date = CURRENT_DATE - 1"
-            date_cond_sched = "AND s.payout_date = CURRENT_DATE - 1"
+            date_cond_sched = "AND COALESCE(ms.payout_date, s.payout_date) = CURRENT_DATE - 1"
             date_cond_loan = "AND l.disbursal_date = CURRENT_DATE - 1"
             date_cond_repay = "AND r.repayment_date = CURRENT_DATE - 1"
         elif period == '7days':
             date_cond_pay = "AND p.payment_date >= CURRENT_DATE - 7"
-            date_cond_sched = "AND s.payout_date >= CURRENT_DATE - 7"
+            date_cond_sched = "AND COALESCE(ms.payout_date, s.payout_date) >= CURRENT_DATE - 7"
             date_cond_loan = "AND l.disbursal_date >= CURRENT_DATE - 7"
             date_cond_repay = "AND r.repayment_date >= CURRENT_DATE - 7"
         elif period == '15days':
             date_cond_pay = "AND p.payment_date >= CURRENT_DATE - 15"
-            date_cond_sched = "AND s.payout_date >= CURRENT_DATE - 15"
+            date_cond_sched = "AND COALESCE(ms.payout_date, s.payout_date) >= CURRENT_DATE - 15"
             date_cond_loan = "AND l.disbursal_date >= CURRENT_DATE - 15"
             date_cond_repay = "AND r.repayment_date >= CURRENT_DATE - 15"
         elif period == 'month':
             date_cond_pay = "AND date_trunc('month', p.payment_date) = date_trunc('month', CURRENT_DATE)"
-            date_cond_sched = "AND date_trunc('month', s.payout_date) = date_trunc('month', CURRENT_DATE)"
+            date_cond_sched = "AND date_trunc('month', COALESCE(ms.payout_date, s.payout_date)) = date_trunc('month', CURRENT_DATE)"
             date_cond_loan = "AND date_trunc('month', l.disbursal_date) = date_trunc('month', CURRENT_DATE)"
             date_cond_repay = "AND date_trunc('month', r.repayment_date) = date_trunc('month', CURRENT_DATE)"
 
@@ -1290,15 +1290,15 @@ def get_accounting_overview():
 
             SELECT 
                 ms.id::text,
-                COALESCE(s.payout_date::text, CURRENT_DATE::text) as tx_date,
+                COALESCE(ms.payout_date::text, s.payout_date::text, CURRENT_DATE::text) as tx_date,
                 'outflow' as tx_type,
                 COALESCE(m.full_name, 'Prize Winner') as party_name,
                 g.name as chit_name,
                 'PAY-' || ms.lifted_month_index || '-' || SUBSTRING(ms.id::text, 1, 6) as ref_no,
-                'Bank' as payment_mode,
-                (COALESCE(s.amount_received, 0) * COALESCE(ms.share_units, 1.0)) as amount,
-                COALESCE(s.notes, 'Prize Money Payout') as notes,
-                COALESCE(s.created_at, NOW()) as created_at
+                COALESCE(SPLIT_PART(ms.payout_notes, ' · ', 1), 'Bank') as payment_mode,
+                COALESCE(ms.payout_amount, (s.amount_received * COALESCE(ms.share_units, 1.0))) as amount,
+                COALESCE(ms.payout_notes, s.notes, 'Prize Money Payout') as notes,
+                COALESCE(ms.created_at, s.created_at, NOW()) as created_at
             FROM chit_memberships ms
             JOIN chit_members m ON ms.member_id = m.id
             JOIN chit_groups g ON ms.chit_group_id = g.id
@@ -1557,25 +1557,27 @@ def get_reports_data():
             return jsonify({'success': True, 'earnings': earnings})
 
         elif rep_type == 'payouts':
-            # 4. Payouts register
+            # 4. Payouts register - per subscriber payout
             cur.execute("""
                 SELECT 
-                    s.id::text,
+                    ms.id::text,
                     g.name,
-                    s.month_index,
+                    ms.lifted_month_index,
                     s.month_year,
-                    s.amount_received,
-                    s.chit_loss,
-                    s.payout_date::text,
-                    s.payout_status,
+                    COALESCE(ms.payout_amount, s.amount_received * ms.share_units, 0),
+                    COALESCE(ms.chit_loss, s.chit_loss * ms.share_units, 0),
+                    COALESCE(ms.payout_date::text, s.payout_date::text, 'Scheduled'),
+                    COALESCE(ms.payout_status, s.payout_status, 'paid'),
                     m.full_name,
-                    ms.ticket_number
-                FROM chit_schedules s
-                JOIN chit_groups g ON s.chit_group_id = g.id
-                LEFT JOIN chit_memberships ms ON s.lifted_by_membership_id = ms.id
-                LEFT JOIN chit_members m ON ms.member_id = m.id
-                WHERE s.payout_status = 'paid' OR s.amount_received > 0
-                ORDER BY s.payout_date DESC NULLS LAST, s.created_at DESC;
+                    ms.ticket_number,
+                    COALESCE(ms.account_number, ms.ticket_number::text),
+                    ms.share_units
+                FROM chit_memberships ms
+                JOIN chit_groups g ON ms.chit_group_id = g.id
+                JOIN chit_members m ON ms.member_id = m.id
+                LEFT JOIN chit_schedules s ON g.id = s.chit_group_id AND ms.lifted_month_index = s.month_index
+                WHERE ms.has_lifted = TRUE AND ms.lifted_month_index IS NOT NULL AND g.deleted_at IS NULL
+                ORDER BY COALESCE(ms.payout_date, s.payout_date) DESC NULLS LAST, ms.created_at DESC;
             """)
             pay_rows = cur.fetchall()
             payouts = []
@@ -1590,7 +1592,9 @@ def get_reports_data():
                     'payout_date': pr[6] or 'Scheduled',
                     'status': pr[7] or 'Pending',
                     'winner': pr[8] or 'Not Assigned',
-                    'ticket_number': pr[9]
+                    'ticket_number': pr[9],
+                    'account_number': pr[10],
+                    'share_units': float(pr[11] or 1.0)
                 })
             return jsonify({'success': True, 'payouts': payouts})
 
@@ -4027,6 +4031,15 @@ def get_chit_payouts_summary(chit_id):
         """, (chit_id,))
         rows = cur.fetchall()
 
+        # Query unlifted sibling shares available for rebalancing
+        cur.execute("""
+            SELECT member_id, ticket_number, SUM(share_units)
+            FROM chit_memberships
+            WHERE chit_group_id = %s AND has_lifted = FALSE
+            GROUP BY member_id, ticket_number;
+        """, (chit_id,))
+        unlifted_by_mem = {(str(r[0]), int(r[1])): float(r[2] or 0.0) for r in cur.fetchall()}
+
         # Query all memberships that have taken a payout in this group (including per-member payout columns)
         cur.execute("""
             SELECT ms.id, ms.lifted_month_index, ms.member_id, m.full_name, ms.ticket_number,
@@ -4059,7 +4072,9 @@ def get_chit_payouts_summary(chit_id):
                 'payout_status': (lm[10] or 'paid').lower() if lm[10] else None,
                 'notes': lm[11] or '',
                 'payout_amount': float(lm[12]) if lm[12] is not None else None,
-                'chit_loss': float(lm[13]) if lm[13] is not None else None
+                'chit_loss': float(lm[13]) if lm[13] is not None else None,
+                'unlifted_shares': unlifted_by_mem.get((str(lm[2]), int(lm[4])), 0.0),
+                'max_available_shares': float(lm[5] or 1.0) + unlifted_by_mem.get((str(lm[2]), int(lm[4])), 0.0)
             })
 
         months = []
@@ -4439,7 +4454,7 @@ def handle_month_payout(chit_id, month_index):
         cur.execute("""
             UPDATE chit_schedules
             SET lifted_by_membership_id = COALESCE(lifted_by_membership_id, %s),
-                payout_date = COALESCE(%s, payout_date),
+                payout_date = COALESCE(payout_date, %s),
                 payout_status = %s,
                 amount_received = %s,
                 chit_loss = %s,
@@ -4723,37 +4738,211 @@ def delete_month_payout(chit_id, month_index):
         cur.close()
         conn.close()
 
+
+@chit_bp.route('/api/chitgroups/<chit_id>/payout/<membership_id>', methods=['PUT', 'POST'])
+def update_recipient_payout(chit_id, membership_id):
+    """Update an individual recipient's payout details (date, payment mode/notes, status, share count) without affecting other recipients."""
+    data = request.get_json() or {}
+    payout_date = data.get('payout_date')
+    payment_mode = (data.get('payment_mode') or 'Bank Transfer').strip()
+    notes_raw = (data.get('notes') or '').strip()
+    full_notes = f"{payment_mode} · {notes_raw}" if notes_raw else payment_mode
+    pay_now = data.get('pay_now')
+    new_status = ('paid' if pay_now else 'unpaid') if pay_now is not None else data.get('payout_status', 'paid')
+    requested_shares = data.get('share_count') or data.get('share_units')
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Fetch current membership details
+        cur.execute("""
+            SELECT ms.chit_group_id, ms.member_id, ms.ticket_number, ms.share_units, ms.has_lifted,
+                   ms.lifted_month_index, g.chit_total_value, g.duration_months, g.start_month_year,
+                   g.commission_percent, g.is_month1_company_month, g.name as group_name,
+                   COALESCE(ms.account_number, ms.ticket_number::text) as account_number,
+                   ms.payout_date, ms.payout_status, ms.payout_notes, ms.payout_amount, ms.chit_loss
+            FROM chit_memberships ms
+            JOIN chit_groups g ON ms.chit_group_id = g.id
+            WHERE ms.id = %s;
+        """, (membership_id,))
+        ms_row = cur.fetchone()
+        if not ms_row:
+            return jsonify({'error': 'Membership not found'}), 404
+
+        (ms_grp_id, m_id, t_num, curr_shares, has_lift,
+         lift_m_idx, g_val, g_dur, g_start, g_comm, g_isco, g_name,
+         acc_no, old_date, old_stat, old_notes, old_amt, old_loss) = ms_row
+
+        if str(ms_grp_id) != str(chit_id):
+            return jsonify({'error': 'Membership does not belong to specified chit group'}), 400
+
+        curr_shares = float(curr_shares or 1.0)
+        m_idx = lift_m_idx or int(data.get('month_index') or 1)
+        payout_date = payout_date or (str(old_date) if old_date else str(date.today()))
+
+        # Base schedule for 1 nominal chit
+        base_sched = ce.generate_chit_schedule(float(g_val), int(g_dur or 20), g_start, float(g_comm or 3.0), bool(g_isco))
+        if m_idx < 1 or m_idx > len(base_sched):
+            return jsonify({'error': 'Invalid month index'}), 400
+        
+        m_base = base_sched[m_idx - 1]
+
+        # 2. Handle share count adjustments if provided
+        final_shares = curr_shares
+        if requested_shares is not None:
+            new_shares = float(requested_shares)
+            if new_shares != curr_shares:
+                # Find unlifted siblings for the same member and ticket
+                cur.execute("""
+                    SELECT id, share_units FROM chit_memberships
+                    WHERE chit_group_id = %s AND member_id = %s AND ticket_number = %s AND has_lifted = FALSE AND id != %s
+                    LIMIT 1;
+                """, (chit_id, m_id, t_num, membership_id))
+                sib = cur.fetchone()
+                sib_id = sib[0] if sib else None
+                sib_shares = float(sib[1]) if sib else 0.0
+                total_avail = curr_shares + sib_shares
+
+                if 0.5 <= new_shares <= total_avail:
+                    rem_shares = round_curr(total_avail - new_shares)
+                    final_shares = new_shares
+                    if rem_shares > 0:
+                        if sib_id:
+                            cur.execute("UPDATE chit_memberships SET share_units = %s WHERE id = %s;", (rem_shares, sib_id))
+                        else:
+                            cur.execute("""
+                                INSERT INTO chit_memberships (chit_group_id, member_id, ticket_number, account_number, share_units, has_lifted)
+                                VALUES (%s, %s, %s, %s, %s, FALSE);
+                            """, (chit_id, m_id, t_num, acc_no, rem_shares))
+                    else:
+                        if sib_id:
+                            cur.execute("UPDATE chit_payments SET membership_id = %s WHERE membership_id = %s;", (membership_id, sib_id))
+                            cur.execute("DELETE FROM chit_installments WHERE membership_id = %s;", (sib_id,))
+                            cur.execute("DELETE FROM chit_memberships WHERE id = %s;", (sib_id,))
+
+        calc_amt_rec = round_curr(float(m_base['amount_received']) * final_shares)
+        calc_loss = round_curr(float(m_base['chit_loss']) * final_shares)
+
+        # 3. Update ONLY this membership's payout fields
+        cur.execute("""
+            UPDATE chit_memberships
+            SET payout_date = %s,
+                payout_status = %s,
+                payout_notes = %s,
+                payout_amount = %s,
+                chit_loss = %s,
+                share_units = %s,
+                has_lifted = TRUE,
+                lifted_month_index = %s
+            WHERE id = %s;
+        """, (payout_date, new_status, full_notes, calc_amt_rec, calc_loss, final_shares, m_idx, membership_id))
+
+        # Rebalance installments if shares changed
+        if final_shares != curr_shares:
+            rescale_and_rebalance_member_installments(cur, m_id, chit_id)
+
+        # 4. If this membership is the primary on chit_schedules, update schedule notes/date/status
+        cur.execute("""
+            SELECT lifted_by_membership_id FROM chit_schedules
+            WHERE chit_group_id = %s AND month_index = %s;
+        """, (chit_id, m_idx))
+        sched_row = cur.fetchone()
+        if sched_row and str(sched_row[0]) == str(membership_id):
+            cur.execute("""
+                UPDATE chit_schedules
+                SET payout_date = %s,
+                    payout_status = %s,
+                    notes = %s
+                WHERE chit_group_id = %s AND month_index = %s;
+            """, (payout_date, new_status, full_notes, chit_id, m_idx))
+
+        # 5. Audit log
+        cur.execute("""
+            INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
+            VALUES (%s, %s, 'PAYOUT_UPDATED', 'CHIT_MEMBERSHIP', %s, %s);
+        """, (
+            get_current_actor(),
+            get_current_actor_role(),
+            str(membership_id),
+            json.dumps({'month': m_idx, 'payout_date': payout_date, 'amount': calc_amt_rec, 'loss': calc_loss, 'share_count': final_shares, 'status': new_status, 'notes': full_notes})
+        ))
+
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'membership_id': str(membership_id),
+            'month_index': m_idx,
+            'payout_date': payout_date,
+            'payout_status': new_status,
+            'payout_amount': calc_amt_rec,
+            'chit_loss': calc_loss,
+            'share_count': final_shares
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @chit_bp.route('/api/chitgroups/<chit_id>/month/<int:month_index>/mark-paid', methods=['POST'])
 def mark_month_payout_paid(chit_id, month_index):
+    data = request.get_json(silent=True) or {}
+    target_ms_id = request.args.get('membership_id') or data.get('membership_id')
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
         cur.execute("""
-            UPDATE chit_schedules
-            SET payout_status = 'paid'
-            WHERE chit_group_id = %s AND month_index = %s
-            RETURNING lifted_by_membership_id, amount_received;
+            SELECT id, lifted_by_membership_id, amount_received
+            FROM chit_schedules
+            WHERE chit_group_id = %s AND month_index = %s;
         """, (chit_id, month_index))
-
-        # Also update all lifted memberships for this month to paid
-        cur.execute("""
-            UPDATE chit_memberships
-            SET payout_status = 'paid'
-            WHERE chit_group_id = %s AND lifted_month_index = %s AND has_lifted = TRUE;
-        """, (chit_id, month_index))
-        res = cur.fetchone()
-        if not res:
+        sched_res = cur.fetchone()
+        if not sched_res:
             return jsonify({'error': 'Month schedule not found'}), 404
 
-        ms_id, amt = res
+        sched_id, ms_id, amt = sched_res
+
+        if target_ms_id:
+            # Mark only this specific membership paid
+            cur.execute("""
+                UPDATE chit_memberships
+                SET payout_status = 'paid'
+                WHERE id = %s AND chit_group_id = %s;
+            """, (target_ms_id, chit_id))
+
+            # If all lifted memberships for this month are now paid, update chit_schedules as well
+            cur.execute("""
+                SELECT COUNT(*) FROM chit_memberships
+                WHERE chit_group_id = %s AND lifted_month_index = %s AND has_lifted = TRUE AND payout_status != 'paid';
+            """, (chit_id, month_index))
+            unpaid_remaining = cur.fetchone()[0]
+            if unpaid_remaining == 0:
+                cur.execute("""
+                    UPDATE chit_schedules SET payout_status = 'paid'
+                    WHERE id = %s;
+                """, (sched_id,))
+        else:
+            # Mark all for this month paid
+            cur.execute("""
+                UPDATE chit_schedules
+                SET payout_status = 'paid'
+                WHERE id = %s;
+            """, (sched_id,))
+            cur.execute("""
+                UPDATE chit_memberships
+                SET payout_status = 'paid'
+                WHERE chit_group_id = %s AND lifted_month_index = %s AND has_lifted = TRUE;
+            """, (chit_id, month_index))
+
         cur.execute("""
             INSERT INTO chit_audit_logs (actor_name, actor_role, action, entity_type, entity_id, details)
             VALUES (%s, %s, 'PAYOUT_MARKED_PAID', 'CHIT_SCHEDULE', %s, %s);
         """, (
             get_current_actor(),
             get_current_actor_role(),
-            str(ms_id) if ms_id else '',
-            json.dumps({'month': month_index, 'amount': float(amt or 0), 'status': 'paid'})
+            str(target_ms_id or ms_id or ''),
+            json.dumps({'month': month_index, 'amount': float(amt or 0), 'status': 'paid', 'target_membership_id': str(target_ms_id) if target_ms_id else None})
         ))
 
         conn.commit()
@@ -4887,8 +5076,9 @@ def get_payments_list():
         # Query payouts recorded/disbursed for this month
         po_query = """
             SELECT 
-                s.id, ms.id as membership_id, (COALESCE(s.amount_received, 0) * COALESCE(ms.share_units, 1.0)),
-                s.payout_date, s.payout_status, s.notes, s.created_at,
+                s.id, ms.id as membership_id, COALESCE(ms.payout_amount, (COALESCE(s.amount_received, 0) * COALESCE(ms.share_units, 1.0))),
+                COALESCE(ms.payout_date, s.payout_date), COALESCE(ms.payout_status, s.payout_status),
+                COALESCE(ms.payout_notes, s.notes), COALESCE(ms.created_at, s.created_at),
                 m.id as member_id, m.full_name as member_name, m.phone,
                 ms.ticket_number, ms.share_units,
                 ms.lifted_month_index as month_index, s.month_year,
@@ -6645,15 +6835,18 @@ def get_member_folio(member_id):
 
         # Member Payouts for Activity
         cur.execute("""
-            SELECT ms.id, ms.lifted_month_index, s.month_year, (COALESCE(s.amount_received, 0) * ms.share_units), s.payout_date,
-                   s.payout_status, s.notes, g.name as group_name,
+            SELECT ms.id, ms.lifted_month_index, s.month_year,
+                   COALESCE(ms.payout_amount, s.amount_received * ms.share_units, 0),
+                   COALESCE(ms.payout_date, s.payout_date),
+                   COALESCE(ms.payout_status, s.payout_status),
+                   COALESCE(ms.payout_notes, s.notes), g.name as group_name,
                    COALESCE(ms.account_number, ms.ticket_number::text) as account_number, ms.share_units,
-                   s.created_at
+                   COALESCE(ms.created_at, s.created_at)
             FROM chit_memberships ms
             JOIN chit_groups g ON ms.chit_group_id = g.id
             LEFT JOIN chit_schedules s ON g.id = s.chit_group_id AND ms.lifted_month_index = s.month_index
             WHERE ms.member_id = %s AND ms.has_lifted = TRUE AND ms.lifted_month_index IS NOT NULL
-            ORDER BY s.payout_date DESC NULLS LAST, ms.created_at DESC;
+            ORDER BY COALESCE(ms.payout_date, s.payout_date) DESC NULLS LAST, ms.created_at DESC;
         """, (member_id,))
         for por in cur.fetchall():
             (po_id, po_midx, po_myr, po_amt, po_pdate, po_pstat, po_notes, po_gname, po_acc, po_sh, po_cat) = por

@@ -385,6 +385,111 @@
   </div>
 </div>
 
+<!-- ==================== MODAL: EDIT INDIVIDUAL SUBSCRIBER PAYOUT ==================== -->
+<div id="editIndividualPayoutModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
+  <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-lg md:max-w-xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700/50 animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+    
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/50 shrink-0">
+      <div>
+        <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100" id="editRecipientHeaderTitle">Edit Subscriber Payout</h3>
+        <p class="text-xs text-slate-400 dark:text-slate-500 font-medium" id="editRecipientHeaderSubtitle">Month Payout</p>
+      </div>
+      <button type="button" onclick="closeEditIndividualPayoutModal()" class="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+        <i data-lucide="x" class="w-4 h-4 stroke-[1.8]"></i>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <form id="editIndividualPayoutForm" onsubmit="submitEditIndividualPayout(event)" class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+      <input type="hidden" id="editRecipientMembershipId">
+      <input type="hidden" id="editRecipientMonthIndex">
+
+      <!-- Subscriber Identity Card (Readonly) -->
+      <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-chitDark-elevated/70 border border-slate-200/80 dark:border-slate-700/60 flex items-center gap-3">
+        <div id="editRecipientAvatar" class="h-10 w-10 rounded-2xl bg-emerald-600 text-white font-extrabold text-base flex items-center justify-center shadow-2xs shrink-0">
+          U
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="editRecipientAccountBadge" class="px-2 py-0.5 rounded-lg bg-slate-900 dark:bg-slate-700 text-white font-extrabold text-xs">A/C #</span>
+            <span id="editRecipientCustomerBadge" class="px-2 py-0.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-xs">#</span>
+            <h4 id="editRecipientName" class="font-extrabold text-sm text-slate-900 dark:text-slate-100 truncate">Subscriber Name</h4>
+          </div>
+          <p id="editRecipientTicketInfo" class="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+            Ticket # · 1x share · Phone
+          </p>
+        </div>
+      </div>
+
+      <!-- Share Count Selection -->
+      <div class="space-y-1" id="editRecipientShareWrapper">
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Shares Lifted for this Payout</label>
+        <select id="editRecipientShareCountSelect" onchange="onEditRecipientShareChange()" 
+                class="w-full h-11 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-chitDark-elevated focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          <!-- Populated dynamically via JS -->
+        </select>
+      </div>
+
+      <!-- Real-time Dynamic Calculation Tile -->
+      <div class="bg-amber-50/90 dark:bg-amber-950/40 rounded-2xl p-4 border border-amber-200/90 dark:border-amber-700/50 space-y-2 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-700 dark:text-slate-300 font-medium">Payout Amount to Subscriber:</span>
+          <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig text-base" id="editRecipientCalculatedPayout">₹0</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-700 dark:text-slate-300 font-medium">Chit Loss Deducted:</span>
+          <span class="font-bold text-amber-800 dark:text-amber-400 money-fig text-sm" id="editRecipientCalculatedLoss">₹0</span>
+        </div>
+      </div>
+
+      <!-- Date & Method -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Payout date</label>
+          <input type="date" id="editRecipientPayoutDate" required class="w-full h-11 px-3 bg-white dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Method</label>
+          <select id="editRecipientPaymentMode" class="w-full h-11 px-3 bg-white dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+            <option value="Cash">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="Cheque">Cheque</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Checkbox: Pay the payout now -->
+      <div class="pt-1">
+        <label class="flex items-center gap-2.5 cursor-pointer select-none p-3 bg-slate-50 dark:bg-chitDark-elevated/50 hover:bg-slate-100/80 dark:hover:bg-white/[0.05] rounded-xl border border-slate-200/70 dark:border-slate-700/50 transition-colors">
+          <input type="checkbox" id="editRecipientPayNowCheckbox" class="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-slate-800 dark:border-slate-600">
+          <div class="text-xs">
+            <span class="font-bold text-slate-800 dark:text-slate-200 block">Payout Handed Over / Disbursed (Paid)</span>
+            <span class="text-[11px] text-slate-400 dark:text-slate-500">Uncheck to mark as pending / unpaid obligation</span>
+          </div>
+        </label>
+      </div>
+
+      <!-- Notes / Voucher Reference -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Voucher / Transaction Reference</label>
+        <input type="text" id="editRecipientNotes" placeholder="Cheque #, UTR reference, or notes (optional)..." 
+               class="w-full h-10 px-3.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-chitDark-elevated focus:outline-none focus:ring-2 focus:ring-emerald-400">
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-2">
+        <button type="submit" id="editRecipientSubmitBtn" 
+                class="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md active:scale-95 transition-all">
+          Update Payout
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
 <!-- ==================== MODAL: FULL SCHEDULE CHART PREVIEW ==================== -->
 <div id="scheduleChartModal" class="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto">
   <div class="relative bg-white dark:bg-chitDark-surface rounded-3xl max-w-2xl lg:max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-slate-100 dark:border-slate-700/50 max-h-[90vh] my-auto overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
@@ -1260,7 +1365,7 @@
       const isUnpaid = curMonth.payout_status === 'unpaid';
 
       let recipientsHtml = '';
-      recipients.forEach(r => {
+            recipients.forEach(r => {
         const initial = (r.name || 'U').charAt(0).toUpperCase();
         const amt = r.payout_amount != null ? r.payout_amount : (curMonth.amount_received * (r.share_units || 1));
         const loss = r.chit_loss != null ? r.chit_loss : (curMonth.chit_loss * (r.share_units || 1));
@@ -1295,13 +1400,6 @@
                     ${formatINR(amt)}
                   </p>
                 </div>
-                ${r.membership_id ? `
-                  <button type="button" onclick="handleDeleteIndividualPayout(${curMonth.month_index}, '${r.membership_id}', '${(r.name || 'Subscriber').replace(/'/g, "\\'")}', ${amt})"
-                          class="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center justify-center transition-colors shadow-2xs"
-                          title="Delete this subscriber's payout">
-                    <i data-lucide="trash-2" class="w-4 h-4 stroke-[1.8]"></i>
-                  </button>
-                ` : ''}
               </div>
             </div>
 
@@ -1320,6 +1418,41 @@
                   <p class="text-slate-400 dark:text-slate-500 font-medium">Method / Notes:</p>
                   <p class="font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">${notes}</p>
                 </div>
+              </div>
+            </div>
+
+            <!-- Tile Action Bar: Dedicated Edit and Delete buttons for this specific subscriber -->
+            <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50">
+              <div class="flex items-center gap-2">
+                ${isRecUnpaid ? `
+                  <span class="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-500/10 text-amber-900 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30 font-bold text-[11px] inline-flex items-center gap-1">
+                    <i data-lucide="alert-circle" class="w-3 h-3 text-amber-600"></i> Unpaid
+                  </span>
+                  <button type="button" onclick="handleMarkRecipientPaid('${r.membership_id}', ${curMonth.month_index})" 
+                          class="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all active:scale-95">
+                    <i data-lucide="check" class="w-3.5 h-3.5 stroke-[2]"></i>
+                    <span>Mark Paid</span>
+                  </button>
+                ` : `
+                  <span class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 font-bold text-[11px] inline-flex items-center gap-1">
+                    <i data-lucide="check-circle" class="w-3 h-3 text-emerald-500"></i> Paid / Handed Over
+                  </span>
+                `}
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="openEditIndividualPayoutModal('${r.membership_id}', ${curMonth.month_index})" 
+                        class="h-8 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface hover:bg-slate-100 dark:hover:bg-white/[0.05] text-slate-700 dark:text-slate-200 font-extrabold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+                        title="Edit this subscriber's payout">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5 stroke-[1.8] text-slate-400 dark:text-slate-500"></i>
+                  <span>Edit</span>
+                </button>
+                <button type="button" onclick="handleDeleteIndividualPayout(${curMonth.month_index}, '${r.membership_id}', '${(r.name || 'Subscriber').replace(/'/g, "\\'")}', ${amt})" 
+                        class="h-8 px-3.5 rounded-xl border border-rose-200/80 dark:border-rose-900/50 bg-rose-50/60 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 font-extrabold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+                        title="Delete this subscriber's payout">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 stroke-[1.8]"></i>
+                  <span>Delete</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1357,31 +1490,6 @@
         <!-- Recipients list (Side-by-side grid when multiple recipients on desktop) -->
         <div class="grid grid-cols-1 ${recipients.length > 1 ? 'md:grid-cols-2' : ''} gap-4">
           ${recipientsHtml}
-        </div>
-
-        <!-- Action Buttons: Mark Paid (if unpaid), Edit, Delete -->
-        <div class="flex items-center justify-between gap-3 pt-2">
-          <div class="flex items-center gap-2">
-            ${isUnpaid ? `
-              <button type="button" onclick="handleMarkPaid(${curMonth.month_index})" 
-                      class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-extrabold text-xs shadow-xs transition-all active:scale-95 inline-flex items-center gap-2">
-                <i data-lucide="check" class="w-3.5 h-3.5 stroke-[1.8]"></i>
-                <span>Mark as Paid</span>
-              </button>
-            ` : ''}
-
-            <button type="button" onclick="openEditPayoutModal(${curMonth.month_index})" 
-                    class="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.05] font-bold text-xs shadow-2xs transition-colors inline-flex items-center gap-1.5">
-              <i data-lucide="pencil" class="w-3.5 h-3.5 stroke-[1.8] text-slate-400 dark:text-slate-500"></i>
-              <span>Edit</span>
-            </button>
-          </div>
-
-          <button type="button" onclick="handleDeletePayout(${curMonth.month_index})" 
-                  class="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700/50 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-xs shadow-2xs transition-colors inline-flex items-center gap-1.5">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5 stroke-[1.8]"></i>
-            <span>Delete payout</span>
-          </button>
         </div>
       `;
     }
@@ -1474,46 +1582,151 @@
     }
   }
 
-  function openEditPayoutModal(monthIndex) {
-    editingMonthIndex = monthIndex;
+  // Individual Recipient Edit Modal Handler
+  function openEditIndividualPayoutModal(membershipId, monthIndex) {
     const curMonth = (summaryData?.months || []).find(m => m.month_index === monthIndex);
     if (!curMonth) return;
-
-    document.getElementById('modalPayoutHeaderTitle').textContent = `Edit Month ${monthIndex} Payout`;
-    document.getElementById('modalSubmitPayoutBtn').textContent = `Update payout`;
-
-    const c = summaryData?.chit || {};
-    document.getElementById('modalPayoutHeaderSubtitle').textContent = `${c.name}`;
-    populateModalMonthSelect(monthIndex);
-
-    document.getElementById('modalPayoutDate').value = curMonth.payout_date || new Date().toISOString().split('T')[0];
-    document.getElementById('modalPayNowCheckbox').checked = (curMonth.payout_status === 'paid');
-    document.getElementById('modalPayoutNotes').value = curMonth.notes || '';
-
-    // Include current recipient in members list
-    modalAvailableMembers = [...(summaryData?.eligible_members || [])];
-    let curShares = 1.0;
-    if (curMonth.recipient && curMonth.recipient.membership_id) {
-      curShares = curMonth.recipient.share_units || 1.0;
-      if (!modalAvailableMembers.find(m => m.membership_id === curMonth.recipient.membership_id)) {
-        modalAvailableMembers.unshift({
-          membership_id: curMonth.recipient.membership_id,
-          member_id: curMonth.recipient.member_id,
-          full_name: curMonth.recipient.name,
-          ticket_number: curMonth.recipient.ticket_number,
-          account_number: curMonth.recipient.account_number,
-          customer_id: curMonth.recipient.customer_id,
-          share_units: curMonth.recipient.share_units,
-          phone: curMonth.recipient.phone,
-          active_loans: []
-        });
-      }
+    const r = (curMonth.recipients || []).find(x => x.membership_id === membershipId) || 
+              (curMonth.recipient?.membership_id === membershipId ? curMonth.recipient : null);
+    if (!r) {
+      showToast('Recipient details not found');
+      return;
     }
 
-    renderEligibleMembersList(modalAvailableMembers, curMonth.recipient?.membership_id, curShares);
-    document.getElementById('assignPayoutModal').classList.remove('hidden');
-    if (window.lucide) {
-      lucide.createIcons();
+    document.getElementById('editRecipientMembershipId').value = membershipId;
+    document.getElementById('editRecipientMonthIndex').value = monthIndex;
+
+    const initial = (r.name || 'U').charAt(0).toUpperCase();
+    document.getElementById('editRecipientAvatar').textContent = initial;
+    document.getElementById('editRecipientHeaderTitle').textContent = `Edit Payout: ${r.name}`;
+    document.getElementById('editRecipientHeaderSubtitle').textContent = `${summaryData?.chit?.name || 'Chit'} · Month ${monthIndex} (${curMonth.month_name_short || curMonth.month_year})`;
+    document.getElementById('editRecipientAccountBadge').textContent = `A/C #${r.account_number || r.ticket_number}`;
+    
+    const custBadge = document.getElementById('editRecipientCustomerBadge');
+    if (r.customer_id) {
+      custBadge.textContent = `#${r.customer_id}`;
+      custBadge.classList.remove('hidden');
+    } else {
+      custBadge.classList.add('hidden');
+    }
+    
+    document.getElementById('editRecipientName').textContent = r.name || 'Subscriber';
+    document.getElementById('editRecipientTicketInfo').textContent = `Ticket #${r.ticket_number} · ${r.share_units}x share · ${r.phone || 'No phone'}`;
+
+    // Populate share count dropdown
+    const maxShares = parseFloat(r.max_available_shares || r.share_units || 1.0);
+    const selShare = document.getElementById('editRecipientShareCountSelect');
+    selShare.innerHTML = '';
+    const maxInt = Math.max(1, Math.floor(maxShares));
+    for (let i = 1; i <= maxInt; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${i} chit${i > 1 ? 's' : ''} (${i}.0x share)`;
+      if (i === Math.floor(r.share_units)) opt.selected = true;
+      selShare.appendChild(opt);
+    }
+    if (maxShares % 1 !== 0) {
+      const opt = document.createElement('option');
+      opt.value = maxShares;
+      opt.textContent = `${maxShares} chits (${maxShares}x share)`;
+      if (r.share_units === maxShares) opt.selected = true;
+      selShare.appendChild(opt);
+    }
+
+    // Payout Date: Strictly this recipient's own payout date
+    document.getElementById('editRecipientPayoutDate').value = r.payout_date || curMonth.payout_date || new Date().toISOString().split('T')[0];
+
+    // Method & Notes parsing
+    const rawNotes = r.notes || '';
+    let parsedMode = 'Bank Transfer';
+    let cleanNotes = rawNotes;
+    if (rawNotes.includes(' · ')) {
+      const parts = rawNotes.split(' · ');
+      parsedMode = parts[0].trim();
+      cleanNotes = parts.slice(1).join(' · ').trim();
+    } else if (['Cash', 'Bank Transfer', 'UPI', 'Cheque'].includes(rawNotes.trim())) {
+      parsedMode = rawNotes.trim();
+      cleanNotes = '';
+    }
+    document.getElementById('editRecipientPaymentMode').value = parsedMode;
+    document.getElementById('editRecipientNotes').value = cleanNotes;
+
+    // Status
+    const isPaid = (r.payout_status || curMonth.payout_status || 'paid').toLowerCase() === 'paid';
+    document.getElementById('editRecipientPayNowCheckbox').checked = isPaid;
+
+    onEditRecipientShareChange();
+
+    document.getElementById('editIndividualPayoutModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeEditIndividualPayoutModal() {
+    document.getElementById('editIndividualPayoutModal').classList.add('hidden');
+  }
+
+  function onEditRecipientShareChange() {
+    const monthIndex = parseInt(document.getElementById('editRecipientMonthIndex').value) || 1;
+    const curMonth = (summaryData?.months || []).find(m => m.month_index === monthIndex);
+    const shares = parseFloat(document.getElementById('editRecipientShareCountSelect').value) || 1.0;
+    if (curMonth) {
+      const baseAmt = parseFloat(curMonth.amount_received || 0);
+      const baseLoss = parseFloat(curMonth.chit_loss || 0);
+      document.getElementById('editRecipientCalculatedPayout').textContent = formatINR(baseAmt * shares);
+      document.getElementById('editRecipientCalculatedLoss').textContent = formatINR(baseLoss * shares);
+    }
+  }
+
+  async function submitEditIndividualPayout(e) {
+    e.preventDefault();
+    const membershipId = document.getElementById('editRecipientMembershipId').value;
+    const monthIndex = parseInt(document.getElementById('editRecipientMonthIndex').value) || 1;
+    const shareCount = parseFloat(document.getElementById('editRecipientShareCountSelect').value) || 1.0;
+    const payoutDate = document.getElementById('editRecipientPayoutDate').value;
+    const paymentMode = document.getElementById('editRecipientPaymentMode').value;
+    const payNow = document.getElementById('editRecipientPayNowCheckbox').checked;
+    const notes = document.getElementById('editRecipientNotes').value;
+
+    const payload = {
+      membership_id: membershipId,
+      month_index: monthIndex,
+      share_count: shareCount,
+      payout_date: payoutDate,
+      payment_mode: paymentMode,
+      pay_now: payNow,
+      notes: notes
+    };
+
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${activeChitId}/payout/${membershipId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update payout');
+
+      closeEditIndividualPayoutModal();
+      showToast('Subscriber payout updated successfully');
+      await loadPayoutsSummary(activeChitId);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Error updating payout');
+    }
+  }
+
+  async function handleMarkRecipientPaid(membershipId, monthIndex) {
+    try {
+      const res = await fetch(`/chit/api/chitgroups/${activeChitId}/month/${monthIndex}/mark-paid?membership_id=${encodeURIComponent(membershipId)}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to mark as paid');
+
+      showToast('Subscriber payout marked as paid');
+      await loadPayoutsSummary(activeChitId);
+    } catch (err) {
+      showToast(err.message || 'Error updating status');
     }
   }
 
