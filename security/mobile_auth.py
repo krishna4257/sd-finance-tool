@@ -39,7 +39,6 @@ def set_serializer(s):
 
 def get_serializer():
     """Retrieve the URLSafeTimedSerializer using the application config or environment."""
-    global _serializer_instance
     if _serializer_instance is not None:
         return _serializer_instance
 

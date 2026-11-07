@@ -2845,7 +2845,6 @@ def _get_default_telemetry():
     ]
 
 def get_fleet_telemetry(cur=None):
-    global _telemetry_cache
     close_conn = False
     conn = None
     if cur is None:
