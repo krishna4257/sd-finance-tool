@@ -7,7 +7,7 @@ import unittest
 from datetime import date, datetime
 from decimal import Decimal
 
-from banking_calc_engine import (
+from services.banking_calc_engine import (
     apply_annual_capitalization,
     calculate_compound_interest,
     calculate_days_30_360,

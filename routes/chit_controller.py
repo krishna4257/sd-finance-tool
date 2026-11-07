@@ -9,9 +9,9 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, g, flash
 from db import get_pg_connection
-import chit_calc_engine as ce
-from chit_calc_engine import round_curr
-from interest_calc_engine import calculate_days_30_360, calculate_accrued_interest_30_360
+import services.chit_calc_engine as ce
+from services.chit_calc_engine import round_curr
+from services.interest_calc_engine import calculate_days_30_360, calculate_accrued_interest_30_360
 
 logger = logging.getLogger(__name__)
 

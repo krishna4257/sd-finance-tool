@@ -50,10 +50,20 @@ function handleFeedAction(url, successMessage, failureFallback, body = null, tri
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert(successMessage);
-        location.reload();
+        if (typeof window.showSuccessToast === "function") {
+          window.showSuccessToast(successMessage);
+          setTimeout(() => location.reload(), 600);
+        } else {
+          alert(successMessage);
+          location.reload();
+        }
       } else {
-        alert(data.error || failureFallback);
+        const errTxt = data.error || failureFallback;
+        if (typeof window.showErrorToast === "function") {
+          window.showErrorToast(errTxt);
+        } else {
+          alert(errTxt);
+        }
         if (btn) {
           btn.disabled = false;
           btn.style.pointerEvents = "";
@@ -69,7 +79,11 @@ function handleFeedAction(url, successMessage, failureFallback, body = null, tri
     })
     .catch(err => {
       console.error(err);
-      alert("Server error");
+      if (typeof window.showErrorToast === "function") {
+        window.showErrorToast("Server error: " + (err.message || "Unknown"));
+      } else {
+        alert("Server error");
+      }
       if (btn) {
         btn.disabled = false;
         btn.style.pointerEvents = "";

@@ -541,6 +541,34 @@
   [data-theme="dark"] .chip-feed-badge {
     color: #0f172a !important;
   }
+
+  /* ── Inactive Village Chip Styling ── */
+  .village-chip.inactive-village-chip {
+    opacity: 0.65;
+    border-style: dashed !important;
+    border-color: rgba(239, 68, 68, 0.45) !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #ef4444 !important;
+  }
+  .village-chip.inactive-village-chip:hover {
+    opacity: 0.95;
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #f87171 !important;
+    border-color: #ef4444 !important;
+  }
+  .chip-inactive-badge {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    margin-left: 4px;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    line-height: 1.2;
+  }
 </style>
 
 <h2 class="page-title">Villages</h2>

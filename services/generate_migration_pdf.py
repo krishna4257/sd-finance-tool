@@ -903,7 +903,7 @@ COMMIT;
          "Expected output: <b>6 rows returned</b> with zero permission errors."),
         ("Phase 4: Seed Default Village Cashbag Mappings",
          "If <code>village_cashbags</code> is newly seeded on production, run the automated route seeding script:<br/>"
-         "<code>python migrate_cashbags.py</code><br/>"
+         "<code>python scripts/migrate_cashbags.py</code><br/>"
          "This maps active employee pairs and configures multi-cashbags (e.g. Sappa Kalyan's Main vs Route M)."),
         ("Phase 5: Payment Split Integrity Audit",
          "Verify that all payment records satisfy the Cash + UPI balancing invariant:<br/>"

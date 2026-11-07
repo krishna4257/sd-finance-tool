@@ -23,7 +23,7 @@ os.environ["DISABLE_SECURE_COOKIE"] = "1"
 
 from app import app
 from db import get_pg_connection
-import banking_calc_engine as bce
+import services.banking_calc_engine as bce
 
 
 class TestBankingSystemIntegration(unittest.TestCase):

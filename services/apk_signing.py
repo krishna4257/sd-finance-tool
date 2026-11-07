@@ -13,6 +13,7 @@ import logging
 import subprocess
 import zipfile
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger("sd_finance.apk_signing")
 
@@ -308,7 +309,7 @@ def verify_apk_signature(apk_path: str) -> dict:
     return result
 
 
-def sign_apk(input_apk_path: str, output_apk_path: str | None = None) -> dict:
+def sign_apk(input_apk_path: str, output_apk_path: Optional[str] = None) -> dict:
     """
     Digitally sign an APK with the official sd-finance-key.jks.
     Executes zipalign (if available) followed by apksigner.

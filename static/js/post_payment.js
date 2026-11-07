@@ -76,10 +76,17 @@ function initCustomerMapAndStats() {
 // --- Helper function to show errors and play sound ---
 function showError(message) {
     const errorMsg = document.getElementById("errorMsg");
-    errorMsg.innerText = message;
-    errorMsg.style.display = "block";
+    if (errorMsg) {
+        errorMsg.innerText = message;
+        errorMsg.style.display = "block";
+    }
+    if (typeof window.showErrorToast === "function") {
+        window.showErrorToast(message);
+    }
     // Play the sound, catching potential browser errors
-    errorSound.play().catch(e => console.warn("Could not play error sound:", e));
+    if (typeof errorSound !== 'undefined' && errorSound && errorSound.play) {
+        errorSound.play().catch(e => console.warn("Could not play error sound:", e));
+    }
 }
 
 
@@ -592,27 +599,37 @@ function printTemp() {
   printWindow.print();
 }
 
-function submitAllPayments() {
+function submitAllPayments(event) {
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   if (isSubmittingPayments) {
     console.log("Payment submission already in progress.");
     return;
   }
 
-  if (tempTable.length === 0) {
-    alert("There are no payments to submit.");
+  if (!tempTable || tempTable.length === 0) {
+    if (typeof window.showWarningToast === "function") {
+      window.showWarningToast("There are no payments to submit.");
+    } else {
+      alert("There are no payments to submit.");
+    }
     return;
   }
 
   isSubmittingPayments = true;
 
-  const submitBtn = document.querySelector(
-    'button[onclick="submitAllPayments()"]'
-  );
+  const submitBtn = document.getElementById("submitAllPaymentsBtn") || document.querySelector(
+    'button[onclick*="submitAllPayments"]'
+  ) || document.querySelector('.submit-btn');
+
+  const origHtml = submitBtn ? submitBtn.innerHTML : '<i class="fas fa-check-circle"></i> Submit';
 
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerText = "Submitting...";
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
   }
 
   const payload = tempTable.map(row => ({
@@ -634,9 +651,13 @@ function submitAllPayments() {
     })
     .then(data => {
       const successMsg = document.getElementById("successMsg");
-
-      successMsg.style.display = "block";
-      successMsg.innerText = data.message;
+      if (successMsg) {
+        successMsg.style.display = "block";
+        successMsg.innerText = data.message;
+      }
+      if (typeof window.showSuccessToast === "function") {
+        window.showSuccessToast(data.message);
+      }
 
       tempTable = data.skipped_rows || [];
       saveAndUpdate(); 
@@ -652,15 +673,15 @@ function submitAllPayments() {
       showError(`An error occurred: ${err.message}`);
     })
     .finally(() => {
-
       isSubmittingPayments = false;
 
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerText = "📤 Submit All Payments";
+        submitBtn.innerHTML = origHtml;
       }
     });
 }
+window.submitAllPayments = submitAllPayments;
 document.getElementById("ano").addEventListener("input", function () {
     this.value = this.value.replace(/[^0-9]/g, "");
 });
@@ -1501,7 +1522,11 @@ window.submitBulkDateReplace = function() {
     const replaceDate = document.getElementById("bulkReplaceDate")?.value?.trim();
 
     if (!findDate || !replaceDate) {
-        alert("❌ Please enter both Find Date and Replace Date.");
+        if (typeof window.showWarningToast === "function") {
+            window.showWarningToast("Please enter both Find Date and Replace Date.");
+        } else {
+            alert("❌ Please enter both Find Date and Replace Date.");
+        }
         return;
     }
 
@@ -1521,7 +1546,11 @@ window.submitBulkDateReplace = function() {
     }
 
     if (affectedPids.length === 0) {
-        alert("❌ No payment records found matching the Find Date.");
+        if (typeof window.showWarningToast === "function") {
+            window.showWarningToast("No payment records found matching the Find Date.");
+        } else {
+            alert("❌ No payment records found matching the Find Date.");
+        }
         return;
     }
 
@@ -1559,11 +1588,20 @@ window.submitBulkDateReplace = function() {
 
             fetchReportDataSilently();
         } else {
-            alert("❌ Failed to bulk update dates: " + (data.error || "Unknown error"));
+            const errDetail = data.error || "Unknown error";
+            if (typeof window.showErrorToast === "function") {
+                window.showErrorToast("Failed to bulk update dates: " + errDetail);
+            } else {
+                alert("❌ Failed to bulk update dates: " + errDetail);
+            }
         }
     })
     .catch(err => {
-        alert("❌ Error: " + err.message);
+        if (typeof window.showErrorToast === "function") {
+            window.showErrorToast("Error: " + err.message);
+        } else {
+            alert("❌ Error: " + err.message);
+        }
     });
 };
 
@@ -1660,6 +1698,7 @@ function createReportDeleteButton(payment) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    pid: payment.pid,
                     ano: payment.ano,
                     pdt: isoDate
                 })
@@ -1675,7 +1714,12 @@ function createReportDeleteButton(payment) {
             fetchReportDataSilently(payment.pid);
         } catch (err) {
             console.error("Delete payment failed:", err);
-            alert(err.message || "Unable to delete payment");
+            const errMsg = err.message || "Unable to delete payment";
+            if (typeof window.showErrorToast === "function") {
+                window.showErrorToast(errMsg);
+            } else {
+                alert(errMsg);
+            }
             btn.disabled = false;
         }
     });
@@ -2388,8 +2432,8 @@ window.showShortfallModal = function() {
             const balanceAmt = Number(c.bamt) || 0;
             
             tr.innerHTML = `
-                <td style="padding: 10px; text-align: left;">${c.ano}</td>
-                <td style="padding: 10px; text-align: left;">${c.name || ""}</td>
+                <td style="padding: 10px; text-align: left;">${escapeHtml(c.ano)}</td>
+                <td style="padding: 10px; text-align: left;">${escapeHtml(c.name || "")}</td>
                 <td style="padding: 10px; text-align: right;" data-money>${expectedAmt.toFixed(0)}</td>
                 <td style="padding: 10px; text-align: right;" data-money>${balanceAmt.toFixed(0)}</td>
             `;

@@ -3954,16 +3954,8 @@
   let activeActionModalCallback = null;
   let currentFleetView = localStorage.getItem('fleetViewMode') || 'tile'; // 'tile' is default!
 
-  // CSRF fetch helper
-  async function csrfFetch(url, options = {}) {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                      document.querySelector('input[name="csrf_token"]')?.value || "";
-    options.headers = {
-      ...(options.headers || {}),
-      'X-CSRFToken': csrfToken
-    };
-    return fetch(url, options);
-  }
+  // CSRF fetch helper delegates to unified network resilience layer
+  const csrfFetch = window.csrfFetch || window.fetch;
 
   // Toast notification
   function showToast(message, type = 'info') {
@@ -4942,24 +4934,30 @@
       }
 
       const initials = (u.employee_name || u.username).substring(0, 2).toUpperCase();
-      const safeName = (u.employee_name || u.username).replace(/'/g, "\\'");
+      const safeEmpName = typeof escapeHtml === 'function' ? escapeHtml(u.employee_name || '-') : (u.employee_name || '-');
+      const safeUsername = typeof escapeHtml === 'function' ? escapeHtml(u.username || '') : (u.username || '');
+      const safePhone = typeof escapeHtml === 'function' ? escapeHtml(u.phone || '') : (u.phone || '');
+      const safeInitial = typeof escapeHtml === 'function' ? escapeHtml(initials) : initials;
+      const safeNameAttr = (u.employee_name || u.username || '').replace(/'/g, "\\'");
+      const safeUserAttr = (u.username || '').replace(/'/g, "\\'");
+      const safeUserId = parseInt(u.id, 10) || 0;
 
       tr.innerHTML = `
         <td>
-          <div style="display: flex; align-items: center; gap: 10px;" onmouseenter="showFleetPopover(event, ${u.id})" onmouseleave="hideFleetPopover()">
+          <div style="display: flex; align-items: center; gap: 10px;" onmouseenter="showFleetPopover(event, ${safeUserId})" onmouseleave="hideFleetPopover()">
             <div class="tile-avatar-wrap" style="width: 36px; height: 36px;">
-              ${u.photo ? `<img src="${u.photo}" class="tile-avatar" alt="${u.employee_name}">` : `<div class="tile-avatar" style="font-size: 0.8rem;">${initials}</div>`}
+              ${u.photo ? `<img src="${encodeURI(u.photo)}" class="tile-avatar" alt="${safeEmpName}">` : `<div class="tile-avatar" style="font-size: 0.8rem;">${safeInitial}</div>`}
               <span class="tile-status-dot radar-dot sm ${dotColor}"></span>
             </div>
             <div>
-              <div style="font-weight: 800; color: var(--text);">${u.employee_name}</div>
-              <div style="font-size: 0.75rem; color: var(--text-secondary);">@${u.username} • ${u.phone}</div>
+              <div style="font-weight: 800; color: var(--text);">${safeEmpName}</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">@${safeUsername} • ${safePhone}</div>
             </div>
           </div>
         </td>
         <td>${roleBadge}</td>
         <td>
-          <span class="tile-presence-banner ${presenceClass}" style="padding: 4px 10px; display: inline-flex;" onmouseenter="showFleetPopover(event, ${u.id})" onmouseleave="hideFleetPopover()">
+          <span class="tile-presence-banner ${presenceClass}" style="padding: 4px 10px; display: inline-flex;" onmouseenter="showFleetPopover(event, ${safeUserId})" onmouseleave="hideFleetPopover()">
             <span class="radar-dot sm ${dotColor} me-1"></span>
             ${statusText}
           </span>
@@ -4968,15 +4966,15 @@
         <td><div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 220px;">${vChips}</div></td>
         <td class="text-end">
           <div style="display: inline-flex; gap: 6px;">
-            <button class="btn-tile-action btn-live-loc" onclick="openLiveLocationModal(${u.id}, '${safeName}')" title="Live GPS Tracking"><i class="fas fa-crosshairs"></i></button>
-            <button class="btn-tile-action btn-hist-loc" onclick="openLocationHistoryModal(${u.id}, '${safeName}')" title="Location History"><i class="fas fa-route"></i></button>
-            <button class="btn-tile-action btn-reset-device" onclick="confirmResetDevice(${u.id}, '${u.username}')" title="Reset Lock">
+            <button class="btn-tile-action btn-live-loc" onclick="openLiveLocationModal(${safeUserId}, '${safeNameAttr}')" title="Live GPS Tracking"><i class="fas fa-crosshairs"></i></button>
+            <button class="btn-tile-action btn-hist-loc" onclick="openLocationHistoryModal(${safeUserId}, '${safeNameAttr}')" title="Location History"><i class="fas fa-route"></i></button>
+            <button class="btn-tile-action btn-reset-device" onclick="confirmResetDevice(${safeUserId}, '${safeUserAttr}')" title="Reset Lock">
               <i class="fas fa-rotate"></i>
             </button>
-            <button class="btn-tile-action btn-force-logout" onclick="confirmForceLogout(${u.id}, '${u.username}')" title="Force Logout">
+            <button class="btn-tile-action btn-force-logout" onclick="confirmForceLogout(${safeUserId}, '${safeUserAttr}')" title="Force Logout">
               <i class="fas fa-right-from-bracket"></i>
             </button>
-            <button class="btn-tile-action btn-toggle-lock ${!u.credentials_active ? 'is-locked' : ''}" onclick="toggleUserLock(${u.id}, '${u.username}', ${u.credentials_active})" title="${u.credentials_active ? 'Lock' : 'Unlock'}">
+            <button class="btn-tile-action btn-toggle-lock ${!u.credentials_active ? 'is-locked' : ''}" onclick="toggleUserLock(${safeUserId}, '${safeUserAttr}', ${u.credentials_active})" title="${u.credentials_active ? 'Lock' : 'Unlock'}">
               <i class="fas fa-${u.credentials_active ? 'unlock' : 'lock'}"></i>
             </button>
           </div>

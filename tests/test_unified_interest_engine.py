@@ -6,9 +6,9 @@ SD Finance System: Smart Counting, Chit Fund, and Central Bank
 import unittest
 from datetime import date
 
-import interest_calc_engine as ice
-import banking_calc_engine as bce
-from chit_controller import calculate_loan_compound_interest
+import services.interest_calc_engine as ice
+import services.banking_calc_engine as bce
+from routes.chit_controller import calculate_loan_compound_interest
 
 
 class TestUnifiedDayCount30360(unittest.TestCase):

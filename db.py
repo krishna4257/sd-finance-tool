@@ -19,6 +19,9 @@ DB_CONFIG = {
     "port": os.environ.get("DB_PORT", "5432").strip(),
 }
 
+DB_POOL_MIN = int(os.environ.get("DB_POOL_MIN", "2").strip())
+DB_POOL_MAX = int(os.environ.get("DB_POOL_MAX", "12").strip())
+
 # Process-safe lazy connection pool wrapper to prevent socket sharing across Gunicorn pre-forked workers
 _pg_pool = None
 _pool_pid = None
@@ -27,13 +30,15 @@ def get_pool():
     global _pg_pool, _pool_pid
     current_pid = os.getpid()
     if _pg_pool is None or _pool_pid != current_pid:
+        min_conn = int(os.environ.get("DB_POOL_MIN", str(DB_POOL_MIN)).strip())
+        max_conn = int(os.environ.get("DB_POOL_MAX", str(DB_POOL_MAX)).strip())
         _pg_pool = ThreadedConnectionPool(
-            minconn=5,
-            maxconn=40,
+            minconn=min_conn,
+            maxconn=max_conn,
             **DB_CONFIG
         )
         _pool_pid = current_pid
-        print(f"[DB] Initialized ThreadedConnectionPool for process {current_pid}")
+        print(f"[DB] Initialized ThreadedConnectionPool (min={min_conn}, max={max_conn}) for process {current_pid}")
     return _pg_pool
 
 
@@ -140,9 +145,13 @@ def get_pool_stats():
     pool = get_pool()
     used_connections = len(getattr(pool, "_used", {}))
     available_connections = len(getattr(pool, "_pool", []))
+    max_conn = getattr(pool, "maxconn", DB_POOL_MAX)
+    utilization_pct = round((used_connections / max_conn) * 100, 1) if max_conn > 0 else 0.0
 
     return {
+        "pid": os.getpid(),
         "used_connections": used_connections,
         "available_connections": available_connections,
-        "max_connections": pool.maxconn
+        "max_connections": max_conn,
+        "utilization_pct": utilization_pct
     }

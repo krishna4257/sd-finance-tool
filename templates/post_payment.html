@@ -39,14 +39,14 @@
               <input type="number" id="amt" step="0.01" placeholder="Amount" required>
             </label>
 
-            <button class="neumorphic-btn small" type="submit" id="submitBtn" style="margin-bottom: 12px;">Add</button>
-            <button class="neumorphic-btn small submit-btn" style="margin-bottom: 12px; gap: 6px; color: #16521e;"
-              onclick="submitAllPayments()"><i class="fas fa-check-circle"></i> Submit</button>
-            <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px; color: #1d4ed8;"
+            <button class="neumorphic-btn small" type="submit" id="addPaymentBtn" data-no-block="true" style="margin-bottom: 12px;">Add</button>
+            <button type="button" class="neumorphic-btn small submit-btn" id="submitAllPaymentsBtn" data-no-block="true" style="margin-bottom: 12px; gap: 6px; color: #16521e;"
+              onclick="submitAllPayments(event)"><i class="fas fa-check-circle"></i> Submit</button>
+            <button type="button" class="neumorphic-btn small" data-no-block="true" style="margin-bottom: 12px; gap: 6px; color: #1d4ed8;"
               onclick="openBulkEntryModal()"><i class="fas fa-list-ol"></i> Bulk</button>
-            <button class="neumorphic-btn small" style="margin-bottom: 12px; gap: 6px;" onclick="printTemp()"><i
+            <button type="button" class="neumorphic-btn small" data-no-block="true" style="margin-bottom: 12px; gap: 6px;" onclick="printTemp()"><i
                 class="fas fa-print"></i> Print</button>
-            <button class="neumorphic-btn small danger-btn" style="margin-bottom: 12px; gap: 6px; color: #dc3545;"
+            <button type="button" class="neumorphic-btn small danger-btn" data-no-block="true" style="margin-bottom: 12px; gap: 6px; color: #dc3545;"
               onclick="resetTempTable()"><i class="fas fa-trash-alt"></i> Reset</button>
           </form>
 

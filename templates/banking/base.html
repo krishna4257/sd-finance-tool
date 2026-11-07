@@ -1,516 +1,509 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <!-- FOUC Prevention: apply dark class before any paint -->
-  <script>
-    (function () {
-      var saved = localStorage.getItem('sd-theme');
-      if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark');
-      }
-    })();
-  </script>
-
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>{% block title %}Central Bank – Treasury & Investment{% endblock %}</title>
-
-  <!-- CSRF Helper & Auto-Token Injection -->
-  <script>
-    (function () {
-      window.getCSRFToken = function () {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute('content') : '';
-      };
-    })();
-  </script>
-
-  <!-- Favicon / Tab Icon -->
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
-  <link rel="alternate icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
-
-  <!-- Fonts: Inter & Manrope & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
-    rel="stylesheet">
-
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@0.441.0/dist/umd/lucide.js"></script>
-
-  <!-- Tailwind CSS CDN with Custom Tokens -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            display: ['Manrope', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            slate: {
-              850: '#151f33',
-              900: '#0f172a',
-              950: '#080d1a',
-            },
-            sdGold: {
-              DEFAULT: '#f59e0b',
-              dark: '#b45309',
-              light: '#fef3c7'
-            },
-            bankDark: {
-              bg: '#0a0f1d',
-              surface: '#10172a',
-              surfaceSecondary: '#162038',
-              elevated: '#1c2846',
-              border: '#1f2d4d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-
-  <style>
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      -webkit-tap-highlight-color: transparent;
-      background-color: #f8fafc;
-      color: #0f172a;
-    }
-
-    .dark body {
-      background-color: #0a0f1d;
-      color: #e2e8f0;
-    }
-
-    .money-fig {
-      font-family: 'JetBrains Mono', monospace;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-
-    /* Glassmorphism sidebar */
-    .sidebar-glass {
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-    }
-
-    .dark .sidebar-glass {
-      background: rgba(10, 15, 29, 0.96);
-    }
-
-    .glass {
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .nav-active-bar {
-      position: relative;
-    }
-
-    .nav-active-bar::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 60%;
-      border-radius: 0 4px 4px 0;
-      background: linear-gradient(180deg, #f59e0b, #d97706);
-      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
-    }
-
-    /* Micro dot background pattern */
-    .bg-dot-matrix {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      background-image: radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
-
-    .dark .bg-dot-matrix {
-      background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
-
-    /* Subtle aurora ambient glow */
-    .bg-aurora-glow {
-      position: fixed;
-      top: -150px;
-      right: -100px;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(16, 185, 129, 0.06) 40%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .dark .bg-aurora-glow {
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, rgba(14, 165, 233, 0.04) 40%, transparent 70%);
-    }
-
-    /* Strikethrough & badge styling for reversed records */
-    .reversed-row {
-      opacity: 0.6;
-      background-color: rgba(244, 63, 94, 0.04) !important;
-    }
-
-    .reversed-text {
-      text-decoration: line-through;
-      color: #94a3b8;
-    }
-
-    /* Animated 3D Logo Aura Glow matching Chit Fund */
-    .logo-glow-bg {
-      position: absolute;
-      inset: 8px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.35) 0%, rgba(16, 185, 129, 0.12) 50%, transparent 75%);
-      animation: pulseSoft 2.5s ease-in-out infinite;
-      pointer-events: none;
-    }
-
-    @keyframes pulseSoft {
-      0%, 100% { transform: scale(1); opacity: 0.7; }
-      50% { transform: scale(1.08); opacity: 1; }
-    }
-
-    /* Smart Scrolling Ribbons: only scrolls when overflowed */
-    .smart-ribbon {
-      overflow: hidden;
-      position: relative;
-      display: flex;
-      align-items: center;
-      max-width: 100%;
-    }
-    .smart-ribbon.is-overflowing {
-      mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
-      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
-    }
-    .smart-ribbon .ribbon-inner {
-      display: flex;
-      align-items: center;
-      width: max-content;
-      white-space: nowrap;
-      will-change: transform;
-    }
-    .smart-ribbon.is-overflowing .ribbon-inner {
-      animation: smartRibbonMarquee var(--ribbon-duration, 20s) linear infinite;
-    }
-    .smart-ribbon.is-overflowing:hover .ribbon-inner {
-      animation-play-state: paused;
-    }
-    @keyframes smartRibbonMarquee {
-      0% { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
-    }
-  </style>
-
-  {% block extra_head %}{% endblock %}
-</head>
-
-<body
-  class="min-h-screen flex text-slate-900 dark:text-slate-100 antialiased selection:bg-amber-100 selection:text-amber-900 dark:selection:bg-amber-900/40 dark:selection:text-amber-200 bg-[#f8fafc] dark:bg-bankDark-bg relative overflow-x-hidden">
-
-  <!-- Ambient Glow & Matrix -->
-  <div class="bg-aurora-glow"></div>
-  <div class="bg-dot-matrix"></div>
-
-  <!-- Mobile Sidebar Backdrop Overlay -->
-  <div id="bankSidebarOverlay" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden"></div>
-
-  <!-- ==================== LEFT SIDEBAR NAVIGATION ==================== -->
-  <aside
-    id="bankSidebar"
-    class="w-64 sidebar-glass text-slate-300 flex flex-col shrink-0 fixed top-0 left-0 h-screen border-r border-slate-800/80 dark:border-slate-800/40 select-none z-50 overflow-y-auto no-scrollbar -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
-
-    <!-- Top Branding & Logo -->
-    <div class="p-4 pt-4 border-b border-slate-800/60 relative flex flex-col items-center">
-      <!-- Mobile Close Button -->
-      <button id="bankSidebarClose" type="button" aria-label="Close navigation"
-        class="lg:hidden absolute top-3 left-3 h-8 w-8 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 border border-slate-700/40 text-slate-400 hover:text-white flex items-center justify-center transition-all duration-200 z-20">
-        <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
-      </button>
-
-      <!-- Theme Toggle Button -->
-      <button id="bankThemeToggleBtn" type="button" title="Toggle theme" onclick="toggleBankTheme()"
-        class="absolute top-3 right-3 h-8 w-8 rounded-xl bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 flex items-center justify-center transition-all duration-300 group z-20">
-        <i id="themeIconSun" data-lucide="sun" class="w-4 h-4 text-amber-400 hidden dark:block"></i>
-        <i id="themeIconMoon" data-lucide="moon" class="w-4 h-4 text-slate-400 block dark:hidden"></i>
-      </button>
-
-      <!-- Prominent Centered Animated 3D Royal Logo -->
-      <a href="/banking/dashboard" class="flex flex-col items-center justify-center group w-full pt-1 pb-1">
-        <div class="relative w-[50%] max-w-[185px] aspect-square flex items-center justify-center">
-          <div class="logo-glow-bg"></div>
-          <img src="/static/images/central-bank-logo.svg" alt="Central Bank"
-            class="w-full h-full object-contain relative z-10 drop-shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-transform duration-300 group-hover:scale-105"
-            style="filter: drop-shadow(0 0 10px rgba(245,158,11,0.3));">
-        </div>
-        <div class="text-center mt-2.5">
-          <h1 class="font-display font-extrabold text-sm tracking-tight text-white flex items-center justify-center gap-1.5">
-            CENTRAL <span class="text-amber-400 font-black text-xs px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">BANK</span>
-          </h1>
-          <p class="text-[10px] text-slate-400 font-medium tracking-wide uppercase mt-0.5">Central Treasury & Investment</p>
-        </div>
-      </a>
-    </div>
-
-    <!-- Navigation Links -->
-    <nav class="p-3 space-y-1 flex-1">
-      <!-- 1. Treasury Dashboard -->
-      <a href="/banking/dashboard"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if request.path == '/banking/dashboard' or request.path == '/banking' %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="layout-dashboard" class="w-[18px] h-[18px] stroke-[1.8] text-amber-400"></i>
-        <span>Treasury Dashboard</span>
-      </a>
-
-      <!-- 2. Investors -->
-      <a href="/banking/investors"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/investors' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="users" class="w-[18px] h-[18px] stroke-[1.8] text-sky-400"></i>
-        <span>Investors</span>
-      </a>
-
-      <!-- 3. Village Banks -->
-      <a href="/banking/groups"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/groups' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="building-2" class="w-[18px] h-[18px] stroke-[1.8] text-emerald-400"></i>
-        <span>Village Banks</span>
-      </a>
-
-      <!-- 4. Direct Loans -->
-      <a href="/banking/direct-loans"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/direct-loans' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="briefcase" class="w-[18px] h-[18px] stroke-[1.8] text-amber-500"></i>
-        <span>Direct Loans</span>
-      </a>
-
-      <!-- 6. Office Expenses -->
-      <a href="/banking/expenses"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/expenses' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="receipt" class="w-[18px] h-[18px] stroke-[1.8] text-rose-400"></i>
-        <span>Office Expenses</span>
-      </a>
-
-      <!-- 7. Chit Fund Bridge -->
-      <a href="/banking/interbank"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/interbank' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
-        <i data-lucide="arrow-left-right" class="w-[18px] h-[18px] stroke-[1.8] text-teal-400"></i>
-        <span>Chit Fund Bridge</span>
-      </a>
-
-      <!-- GENERAL SECTION FOR CROSS-PLATFORM NAVIGATION -->
-      <div class="pt-3 mt-3 border-t border-slate-800/40">
-        <div class="px-3 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">GENERAL</div>
-        <div class="space-y-0.5 mt-1">
-          <!-- 1. Villages -->
-          <a href="/village"
-            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
-            <i data-lucide="map-pin" class="w-4 h-4 stroke-[1.8] text-rose-400"></i>
-            <span>Villages</span>
-          </a>
-
-          <!-- 2. Chit Fund -->
-          <a href="/chit/dashboard"
-            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
-            <i data-lucide="coins" class="w-4 h-4 stroke-[1.8] text-amber-400"></i>
-            <span>Chit Fund</span>
-          </a>
-
-          <!-- 3. Central Bank (Active) -->
-          <a href="/banking/dashboard"
-            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-bold text-white bg-slate-800/80 border border-slate-700/40 shadow-xs transition-all duration-200">
-            <i data-lucide="landmark" class="w-4 h-4 stroke-[1.8] text-amber-500"></i>
-            <span>Central Bank</span>
-          </a>
-
-          <!-- 4. Mobile App -->
-          {% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
-          <a href="/mobile_app"
-            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
-            <i data-lucide="smartphone" class="w-4 h-4 stroke-[1.8] text-indigo-400"></i>
-            <span>Mobile App</span>
-          </a>
-          {% endif %}
-        </div>
-      </div>
-    </nav>
-
-    <!-- Bottom Session Info -->
-    <div class="p-3 border-t border-slate-800/40">
-      <div class="flex items-center justify-between p-2 glass rounded-2xl">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-            {{ session.get('username', 'A')[0] | upper }}
-          </div>
-          <div class="min-w-0">
-            <p class="text-[12px] font-bold text-white leading-tight truncate">{{ session.get('username', 'Admin') }}</p>
-            <p class="text-[10px] text-slate-400 truncate">Central Treasury Role</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- ==================== MAIN CONTENT AREA ==================== -->
-  <main class="flex-1 min-w-0 flex flex-col bg-[#f8fafc] dark:bg-bankDark-bg ml-0 lg:ml-64 overflow-y-auto min-h-screen">
-    <!-- Mobile Top Navigation Header -->
-    <header class="lg:hidden flex items-center justify-between px-4 py-2.5 bg-white/90 dark:bg-bankDark-surface/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-30">
-      <div class="flex items-center gap-3">
-        <button id="bankSidebarToggle" type="button" aria-label="Open navigation" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-amber-500 active:scale-95 transition-all">
-          <i data-lucide="menu" class="w-5 h-5 stroke-[1.8]"></i>
-        </button>
-        <div class="flex items-center gap-2">
-          <img src="/static/images/central-bank-logo.svg" class="w-6 h-6 object-contain" alt="Central Bank">
-          <span class="font-display font-black text-sm tracking-tight text-slate-900 dark:text-white">CENTRAL <span class="text-amber-500">BANK</span></span>
-        </div>
-      </div>
-      <div>
-        <a href="/village" class="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
-          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Home
-        </a>
-      </div>
-    </header>
-
-    <div class="flex-1 flex flex-col p-4 md:p-8 max-w-7xl w-full mx-auto pb-20">
-      {% block content %}{% endblock %}
-    </div>
-  </main>
-
-  <!-- ==================== GLOBAL ADMIN PIN / REVERSAL CONFIRMATION MODAL ==================== -->
-  <div id="globalAdminPinModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-            <i data-lucide="shield-alert" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 id="adminPinModalTitle" class="text-base font-bold text-slate-900 dark:text-white">Security Verification</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Treasury Master Authorization</p>
-          </div>
-        </div>
-        <button type="button" onclick="closeAdminPinModal(true)" class="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <!-- Modal Body -->
-      <div class="p-6 space-y-4">
-        <p id="adminPinModalMessage" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Please enter your Admin PIN or Password to authorize this cash-out or reversal operation.
-        </p>
-
-        <!-- Reason Input (For Reversals) -->
-        <div id="adminPinReasonGroup" class="space-y-1.5 hidden">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Reversal Justification Reason <span class="text-rose-500">*</span>
-          </label>
-          <textarea id="adminPinReasonInput" rows="2" placeholder="e.g. Wrong amount entered / Duplicate entry corrected"
-            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
-        </div>
-
-        <!-- PIN Input -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Admin Master PIN / Password <span class="text-rose-500">*</span>
-          </label>
-          <div class="relative">
-            <input type="text" id="adminPinInput" name="admin_auth_code_pin" autocomplete="new-password" placeholder="••••••••"
-              style="-webkit-text-security: disc; text-security: disc;"
-              class="w-full text-sm font-mono tracking-widest rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              onkeydown="if(event.key === 'Enter') submitAdminPin();">
-            <i data-lucide="key" class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          </div>
-        </div>
-
-        <div id="adminPinModalError" class="text-xs font-semibold text-rose-500 hidden bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50"></div>
-      </div>
-
-      <!-- Modal Footer -->
-      <div class="p-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
-        <button type="button" onclick="closeAdminPinModal(true)"
-          class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
-          Cancel
-        </button>
-        <button type="button" id="adminPinModalSubmitBtn" onclick="submitAdminPin()"
-          class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center">
-          <i data-lucide="shield-check" class="w-4 h-4 mr-1.5"></i>
-          <span>Authorize Action</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Global Toast Container -->
-  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 pointer-events-none flex flex-col items-end gap-2"></div>
-
-  <!-- Core Scripts -->
-  <script src="{{ url_for('static', filename='js/banking/banking_common.js') }}"></script>
-
-  <script>
-    // Theme toggle function
-    function toggleBankTheme() {
-      const isDark = document.documentElement.classList.toggle('dark');
-      localStorage.setItem('sd-theme', isDark ? 'dark' : 'light');
-      if (window.lucide) lucide.createIcons();
-    }
-
-    // Mobile sidebar controls
-    document.addEventListener('DOMContentLoaded', function () {
-      if (window.lucide) lucide.createIcons();
-
-      const sidebar = document.getElementById('bankSidebar');
-      const overlay = document.getElementById('bankSidebarOverlay');
-      const toggle = document.getElementById('bankSidebarToggle');
-      const close = document.getElementById('bankSidebarClose');
-
-      function openSidebar() {
-        if (!sidebar || !overlay) return;
-        sidebar.classList.remove('-translate-x-full');
-        overlay.classList.remove('opacity-0', 'pointer-events-none');
-        overlay.classList.add('opacity-100', 'pointer-events-auto');
-        document.body.style.overflow = 'hidden';
-      }
-
-      function closeSidebar() {
-        if (!sidebar || !overlay) return;
-        sidebar.classList.add('-translate-x-full');
-        overlay.classList.remove('opacity-100', 'pointer-events-auto');
-        overlay.classList.add('opacity-0', 'pointer-events-none');
-        document.body.style.overflow = '';
-      }
-
-      if (toggle) toggle.addEventListener('click', openSidebar);
-      if (close) close.addEventListener('click', closeSidebar);
-      if (overlay) overlay.addEventListener('click', closeSidebar);
-    });
-  </script>
-
-  {% block extra_scripts %}{% endblock %}
-</body>
-
-</html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- FOUC Prevention: apply dark class before any paint -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('sd-theme');
+      if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Central Bank – Treasury & Investment{% endblock %}</title>
+
+  <!-- Load shared utilities (CSRF, network resilience, non-blocking toasts) -->
+  <script src="{{ url_for('static', filename='js/utils.js') }}?v={{ range(1, 10000) | random }}"></script>
+
+  <!-- Favicon / Tab Icon -->
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
+  <link rel="alternate icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
+
+  <!-- Fonts: Inter & Manrope & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@0.441.0/dist/umd/lucide.js"></script>
+
+  <!-- Tailwind CSS CDN with Custom Tokens -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Manrope', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate: {
+              850: '#151f33',
+              900: '#0f172a',
+              950: '#080d1a',
+            },
+            sdGold: {
+              DEFAULT: '#f59e0b',
+              dark: '#b45309',
+              light: '#fef3c7'
+            },
+            bankDark: {
+              bg: '#0a0f1d',
+              surface: '#10172a',
+              surfaceSecondary: '#162038',
+              elevated: '#1c2846',
+              border: '#1f2d4d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+
+    .dark body {
+      background-color: #0a0f1d;
+      color: #e2e8f0;
+    }
+
+    .money-fig {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Glassmorphism sidebar */
+    .sidebar-glass {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .dark .sidebar-glass {
+      background: rgba(10, 15, 29, 0.96);
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .nav-active-bar {
+      position: relative;
+    }
+
+    .nav-active-bar::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 60%;
+      border-radius: 0 4px 4px 0;
+      background: linear-gradient(180deg, #f59e0b, #d97706);
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    }
+
+    /* Micro dot background pattern */
+    .bg-dot-matrix {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .dark .bg-dot-matrix {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Subtle aurora ambient glow */
+    .bg-aurora-glow {
+      position: fixed;
+      top: -150px;
+      right: -100px;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(16, 185, 129, 0.06) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .dark .bg-aurora-glow {
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, rgba(14, 165, 233, 0.04) 40%, transparent 70%);
+    }
+
+    /* Strikethrough & badge styling for reversed records */
+    .reversed-row {
+      opacity: 0.6;
+      background-color: rgba(244, 63, 94, 0.04) !important;
+    }
+
+    .reversed-text {
+      text-decoration: line-through;
+      color: #94a3b8;
+    }
+
+    /* Animated 3D Logo Aura Glow matching Chit Fund */
+    .logo-glow-bg {
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.35) 0%, rgba(16, 185, 129, 0.12) 50%, transparent 75%);
+      animation: pulseSoft 2.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulseSoft {
+      0%, 100% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+
+    /* Smart Scrolling Ribbons: only scrolls when overflowed */
+    .smart-ribbon {
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      max-width: 100%;
+    }
+    .smart-ribbon.is-overflowing {
+      mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+    }
+    .smart-ribbon .ribbon-inner {
+      display: flex;
+      align-items: center;
+      width: max-content;
+      white-space: nowrap;
+      will-change: transform;
+    }
+    .smart-ribbon.is-overflowing .ribbon-inner {
+      animation: smartRibbonMarquee var(--ribbon-duration, 20s) linear infinite;
+    }
+    .smart-ribbon.is-overflowing:hover .ribbon-inner {
+      animation-play-state: paused;
+    }
+    @keyframes smartRibbonMarquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body
+  class="min-h-screen flex text-slate-900 dark:text-slate-100 antialiased selection:bg-amber-100 selection:text-amber-900 dark:selection:bg-amber-900/40 dark:selection:text-amber-200 bg-[#f8fafc] dark:bg-bankDark-bg relative overflow-x-hidden">
+
+  <!-- Ambient Glow & Matrix -->
+  <div class="bg-aurora-glow"></div>
+  <div class="bg-dot-matrix"></div>
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="bankSidebarOverlay" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden"></div>
+
+  <!-- ==================== LEFT SIDEBAR NAVIGATION ==================== -->
+  <aside
+    id="bankSidebar"
+    class="w-64 sidebar-glass text-slate-300 flex flex-col shrink-0 fixed top-0 left-0 h-screen border-r border-slate-800/80 dark:border-slate-800/40 select-none z-50 overflow-y-auto no-scrollbar -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+
+    <!-- Top Branding & Logo -->
+    <div class="p-4 pt-4 border-b border-slate-800/60 relative flex flex-col items-center">
+      <!-- Mobile Close Button -->
+      <button id="bankSidebarClose" type="button" aria-label="Close navigation"
+        class="lg:hidden absolute top-3 left-3 h-8 w-8 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 border border-slate-700/40 text-slate-400 hover:text-white flex items-center justify-center transition-all duration-200 z-20">
+        <i data-lucide="x" class="w-4 h-4 stroke-[2]"></i>
+      </button>
+
+      <!-- Theme Toggle Button -->
+      <button id="bankThemeToggleBtn" type="button" title="Toggle theme" onclick="toggleBankTheme()"
+        class="absolute top-3 right-3 h-8 w-8 rounded-xl bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 flex items-center justify-center transition-all duration-300 group z-20">
+        <i id="themeIconSun" data-lucide="sun" class="w-4 h-4 text-amber-400 hidden dark:block"></i>
+        <i id="themeIconMoon" data-lucide="moon" class="w-4 h-4 text-slate-400 block dark:hidden"></i>
+      </button>
+
+      <!-- Prominent Centered Animated 3D Royal Logo -->
+      <a href="/banking/dashboard" class="flex flex-col items-center justify-center group w-full pt-1 pb-1">
+        <div class="relative w-[50%] max-w-[185px] aspect-square flex items-center justify-center">
+          <div class="logo-glow-bg"></div>
+          <img src="/static/images/central-bank-logo.svg" alt="Central Bank"
+            class="w-full h-full object-contain relative z-10 drop-shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-transform duration-300 group-hover:scale-105"
+            style="filter: drop-shadow(0 0 10px rgba(245,158,11,0.3));">
+        </div>
+        <div class="text-center mt-2.5">
+          <h1 class="font-display font-extrabold text-sm tracking-tight text-white flex items-center justify-center gap-1.5">
+            CENTRAL <span class="text-amber-400 font-black text-xs px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">BANK</span>
+          </h1>
+          <p class="text-[10px] text-slate-400 font-medium tracking-wide uppercase mt-0.5">Central Treasury & Investment</p>
+        </div>
+      </a>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="p-3 space-y-1 flex-1">
+      <!-- 1. Treasury Dashboard -->
+      <a href="/banking/dashboard"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if request.path == '/banking/dashboard' or request.path == '/banking' %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="layout-dashboard" class="w-[18px] h-[18px] stroke-[1.8] text-amber-400"></i>
+        <span>Treasury Dashboard</span>
+      </a>
+
+      <!-- 2. Investors -->
+      <a href="/banking/investors"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/investors' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="users" class="w-[18px] h-[18px] stroke-[1.8] text-sky-400"></i>
+        <span>Investors</span>
+      </a>
+
+      <!-- 3. Village Banks -->
+      <a href="/banking/groups"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/groups' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="building-2" class="w-[18px] h-[18px] stroke-[1.8] text-emerald-400"></i>
+        <span>Village Banks</span>
+      </a>
+
+      <!-- 4. Direct Loans -->
+      <a href="/banking/direct-loans"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/direct-loans' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="briefcase" class="w-[18px] h-[18px] stroke-[1.8] text-amber-500"></i>
+        <span>Direct Loans</span>
+      </a>
+
+      <!-- 6. Office Expenses -->
+      <a href="/banking/expenses"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/expenses' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="receipt" class="w-[18px] h-[18px] stroke-[1.8] text-rose-400"></i>
+        <span>Office Expenses</span>
+      </a>
+
+      <!-- 7. Chit Fund Bridge -->
+      <a href="/banking/interbank"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 {% if '/banking/interbank' in request.path %}nav-active-bar bg-slate-800/90 text-white font-bold shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-white/[0.05]{% endif %}">
+        <i data-lucide="arrow-left-right" class="w-[18px] h-[18px] stroke-[1.8] text-teal-400"></i>
+        <span>Chit Fund Bridge</span>
+      </a>
+
+      <!-- GENERAL SECTION FOR CROSS-PLATFORM NAVIGATION -->
+      <div class="pt-3 mt-3 border-t border-slate-800/40">
+        <div class="px-3 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">GENERAL</div>
+        <div class="space-y-0.5 mt-1">
+          <!-- 1. Villages -->
+          <a href="/village"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="map-pin" class="w-4 h-4 stroke-[1.8] text-rose-400"></i>
+            <span>Villages</span>
+          </a>
+
+          <!-- 2. Chit Fund -->
+          <a href="/chit/dashboard"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="coins" class="w-4 h-4 stroke-[1.8] text-amber-400"></i>
+            <span>Chit Fund</span>
+          </a>
+
+          <!-- 3. Central Bank (Active) -->
+          <a href="/banking/dashboard"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-bold text-white bg-slate-800/80 border border-slate-700/40 shadow-xs transition-all duration-200">
+            <i data-lucide="landmark" class="w-4 h-4 stroke-[1.8] text-amber-500"></i>
+            <span>Central Bank</span>
+          </a>
+
+          <!-- 4. Mobile App -->
+          {% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
+          <a href="/mobile_app"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl text-[12px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-all duration-200">
+            <i data-lucide="smartphone" class="w-4 h-4 stroke-[1.8] text-indigo-400"></i>
+            <span>Mobile App</span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    <!-- Bottom Session Info -->
+    <div class="p-3 border-t border-slate-800/40">
+      <div class="flex items-center justify-between p-2 glass rounded-2xl">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+            {{ session.get('username', 'A')[0] | upper }}
+          </div>
+          <div class="min-w-0">
+            <p class="text-[12px] font-bold text-white leading-tight truncate">{{ session.get('username', 'Admin') }}</p>
+            <p class="text-[10px] text-slate-400 truncate">Central Treasury Role</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN CONTENT AREA ==================== -->
+  <main class="flex-1 min-w-0 flex flex-col bg-[#f8fafc] dark:bg-bankDark-bg ml-0 lg:ml-64 overflow-y-auto min-h-screen">
+    <!-- Mobile Top Navigation Header -->
+    <header class="lg:hidden flex items-center justify-between px-4 py-2.5 bg-white/90 dark:bg-bankDark-surface/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-30">
+      <div class="flex items-center gap-3">
+        <button id="bankSidebarToggle" type="button" aria-label="Open navigation" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-amber-500 active:scale-95 transition-all">
+          <i data-lucide="menu" class="w-5 h-5 stroke-[1.8]"></i>
+        </button>
+        <div class="flex items-center gap-2">
+          <img src="/static/images/central-bank-logo.svg" class="w-6 h-6 object-contain" alt="Central Bank">
+          <span class="font-display font-black text-sm tracking-tight text-slate-900 dark:text-white">CENTRAL <span class="text-amber-500">BANK</span></span>
+        </div>
+      </div>
+      <div>
+        <a href="/village" class="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Home
+        </a>
+      </div>
+    </header>
+
+    <div class="flex-1 flex flex-col p-4 md:p-8 max-w-7xl w-full mx-auto pb-20">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- ==================== GLOBAL ADMIN PIN / REVERSAL CONFIRMATION MODAL ==================== -->
+  <div id="globalAdminPinModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="adminPinModalTitle" class="text-base font-bold text-slate-900 dark:text-white">Security Verification</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Treasury Master Authorization</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAdminPinModal(true)" class="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4">
+        <p id="adminPinModalMessage" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Please enter your Admin PIN or Password to authorize this cash-out or reversal operation.
+        </p>
+
+        <!-- Reason Input (For Reversals) -->
+        <div id="adminPinReasonGroup" class="space-y-1.5 hidden">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Reversal Justification Reason <span class="text-rose-500">*</span>
+          </label>
+          <textarea id="adminPinReasonInput" rows="2" placeholder="e.g. Wrong amount entered / Duplicate entry corrected"
+            class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+        </div>
+
+        <!-- PIN Input -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Admin Master PIN / Password <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input type="text" id="adminPinInput" name="admin_auth_code_pin" autocomplete="new-password" placeholder="••••••••"
+              style="-webkit-text-security: disc; text-security: disc;"
+              class="w-full text-sm font-mono tracking-widest rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              onkeydown="if(event.key === 'Enter') submitAdminPin();">
+            <i data-lucide="key" class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          </div>
+        </div>
+
+        <div id="adminPinModalError" class="text-xs font-semibold text-rose-500 hidden bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50"></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+        <button type="button" onclick="closeAdminPinModal(true)"
+          class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
+          Cancel
+        </button>
+        <button type="button" id="adminPinModalSubmitBtn" onclick="submitAdminPin()"
+          class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center">
+          <i data-lucide="shield-check" class="w-4 h-4 mr-1.5"></i>
+          <span>Authorize Action</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Toast Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 pointer-events-none flex flex-col items-end gap-2"></div>
+
+  <!-- Core Scripts -->
+  <script src="{{ url_for('static', filename='js/banking/banking_common.js') }}"></script>
+
+  <script>
+    // Theme toggle function
+    function toggleBankTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('sd-theme', isDark ? 'dark' : 'light');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Mobile sidebar controls
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.lucide) lucide.createIcons();
+
+      const sidebar = document.getElementById('bankSidebar');
+      const overlay = document.getElementById('bankSidebarOverlay');
+      const toggle = document.getElementById('bankSidebarToggle');
+      const close = document.getElementById('bankSidebarClose');
+
+      function openSidebar() {
+        if (!sidebar || !overlay) return;
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.add('opacity-100', 'pointer-events-auto');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        if (!sidebar || !overlay) return;
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.remove('opacity-100', 'pointer-events-auto');
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        document.body.style.overflow = '';
+      }
+
+      if (toggle) toggle.addEventListener('click', openSidebar);
+      if (close) close.addEventListener('click', closeSidebar);
+      if (overlay) overlay.addEventListener('click', closeSidebar);
+    });
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+
+</html>

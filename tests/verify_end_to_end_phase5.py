@@ -9,8 +9,8 @@ import pytz
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app import app, get_pg_connection, generate_mobile_token
-from telemetry_engine import haversine_km, douglas_peucker, segment_trips_and_stops, find_nearest_village
-from cron_cleanup_telemetry import run_telemetry_rollup_and_cleanup
+from services.telemetry_engine import haversine_km, douglas_peucker, segment_trips_and_stops, find_nearest_village
+from scripts.cron_cleanup_telemetry import run_telemetry_rollup_and_cleanup
 
 print("=" * 75)
 print("PHASE 5: LEVEL 5 GOOGLE ENGINEER COMPREHENSIVE END-TO-END VERIFICATION")

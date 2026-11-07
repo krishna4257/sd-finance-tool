@@ -46,11 +46,20 @@ document.addEventListener("DOMContentLoaded", async function () {
         localStorage.setItem("landing_selected_vid", String(vid));
         window.location.href = "/dashboard";
       } else {
-        alert("Failed to set village context: " + (data.error || "Unknown error"));
+        const msg = "Failed to set village context: " + (data.error || "Unknown error");
+        if (typeof window.showErrorToast === "function") {
+          window.showErrorToast(msg);
+        } else {
+          alert(msg);
+        }
       }
     } catch (err) {
       console.error("Error setting context:", err);
-      alert("Network error. Please try again.");
+      if (typeof window.showErrorToast === "function") {
+        window.showErrorToast("Network error. Please try again.");
+      } else {
+        alert("Network error. Please try again.");
+      }
     }
   };
 
@@ -378,16 +387,19 @@ document.addEventListener("DOMContentLoaded", async function () {
           ${group.villages.map(v => {
             const isChipSelected = selectedVid && String(v.vid) === String(selectedVid);
             const hasPendingFeed = v.pending_feed_count && parseInt(v.pending_feed_count) > 0;
+            const isInactive = (v.status || "").toLowerCase() === "inactive";
             return `
               <span
-                class="village-chip draggable-village ${isChipSelected ? 'selected-village-chip' : ''} ${hasPendingFeed ? 'has-pending-feed' : ''}"
+                class="village-chip draggable-village ${isChipSelected ? 'selected-village-chip' : ''} ${hasPendingFeed ? 'has-pending-feed' : ''} ${isInactive ? 'inactive-village-chip' : ''}"
                 draggable="true"
                 data-vid="${v.vid}"
+                data-status="${v.status || 'active'}"
                 data-village-code="${v.village_code}"
                 data-village-name="${v.village_name}"
                 data-emp1="${group.emp1}"
                 data-emp2="${group.emp2}">
                 <i class="fas fa-map-pin"></i> ${v.village_name} (${v.village_code})
+                ${isInactive ? `<span class="chip-inactive-badge" title="This village is deactivated">Inactive</span>` : ''}
                 ${hasPendingFeed ? `
                   <span class="chip-feed-badge" title="${v.pending_feed_count} pending items, oldest waiting for ${v.waiting_duration_str}">
                     <i class="fas fa-clock"></i> ${v.waiting_duration_str}
@@ -2119,11 +2131,21 @@ window.openVillageDashboard = function (vid) {
     if (data.success) {
       window.location.href = "/dashboard";
     } else {
-      alert("Failed to set village context: " + (data.error || "Unknown error"));
+      const msg = "Failed to set village context: " + (data.error || "Unknown error");
+      if (typeof window.showErrorToast === "function") {
+        window.showErrorToast(msg);
+      } else {
+        alert(msg);
+      }
     }
   })
   .catch(err => {
-    alert("Connection error: " + err.message);
+    const msg = "Connection error: " + err.message;
+    if (typeof window.showErrorToast === "function") {
+      window.showErrorToast(msg);
+    } else {
+      alert(msg);
+    }
   });
 };
 

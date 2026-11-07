@@ -450,3 +450,238 @@ function triggerSuccessFeedback({
 window.getSharedAudioContext = getSharedAudioContext;
 window.playSuccessSound = playSuccessSound;
 window.triggerSuccessFeedback = triggerSuccessFeedback;
+
+/**
+ * Safely escapes HTML entities to prevent Cross-Site Scripting (XSS).
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/`/g, '&#96;');
+}
+
+window.escapeHtml = escapeHtml;
+
+// -------------------- UUID & Token Utilities --------------------
+
+/**
+ * Generate a standard RFC4122 v4 UUID.
+ */
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+window.generateUUID = generateUUID;
+
+/**
+ * Uniformly locate CSRF token from meta tags, hidden inputs, or cookies.
+ */
+function getCSRFToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta && meta.getAttribute('content')) {
+    return meta.getAttribute('content');
+  }
+  const input = document.querySelector('input[name="csrf_token"]');
+  if (input && input.value) {
+    return input.value;
+  }
+  const cookies = document.cookie ? document.cookie.split(';') : [];
+  for (let i = 0; i < cookies.length; i++) {
+    const c = cookies[i].trim();
+    if (c.startsWith('csrf_token=') || c.startsWith('XSRF-TOKEN=')) {
+      return decodeURIComponent(c.substring(c.indexOf('=') + 1));
+    }
+  }
+  return '';
+}
+window.getCSRFToken = getCSRFToken;
+
+// -------------------- Modernized Toast Notification System --------------------
+
+/**
+ * Show a sleek, accessible, non-blocking toast notification.
+ *
+ * @param {string} message Message text to display.
+ * @param {'success'|'error'|'warning'|'info'} type Notification severity.
+ * @param {number} duration Display duration in milliseconds (default 4000).
+ */
+function showToast(message, type = 'info', duration = 4000) {
+  if (!message) return null;
+  let container = document.getElementById('sd-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'sd-toast-container';
+    container.className = 'sd-toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `sd-toast sd-toast-${type}`;
+
+  const icons = {
+    success: '<i class="fas fa-check-circle"></i>',
+    error: '<i class="fas fa-exclamation-circle"></i>',
+    warning: '<i class="fas fa-exclamation-triangle"></i>',
+    info: '<i class="fas fa-info-circle"></i>'
+  };
+  const iconHtml = icons[type] || icons.info;
+
+  toast.innerHTML = `
+    <span class="sd-toast-icon">${iconHtml}</span>
+    <span class="sd-toast-text">${escapeHtml(message)}</span>
+    <button class="sd-toast-close" type="button" aria-label="Close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector('.sd-toast-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      toast.classList.remove('sd-toast-show');
+      setTimeout(() => toast.remove(), 250);
+    });
+  }
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.classList.add('sd-toast-show');
+  });
+
+  if (duration > 0) {
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.classList.remove('sd-toast-show');
+        setTimeout(() => toast.remove(), 250);
+      }
+    }, duration);
+  }
+  return toast;
+}
+
+window.showToast = showToast;
+window.showSuccessToast = (msg, d) => showToast(msg, 'success', d || 3500);
+window.showErrorToast = (msg, d) => showToast(msg, 'error', d || 6000);
+window.showWarningToast = (msg, d) => showToast(msg, 'warning', d || 4500);
+window.showInfoToast = (msg, d) => showToast(msg, 'info', d || 3500);
+
+// -------------------- Transparent Network & Fetch Wrapper --------------------
+
+(function() {
+  if (window.__SD_FETCH_INITIALIZED__) return;
+  window.__SD_FETCH_INITIALIZED__ = true;
+
+  const originalFetch = window.fetch;
+
+  async function secureFetch(resource, init = {}) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+    // 1. Auto-inject CSRF token for mutating requests
+    if (isMutating) {
+      const token = window.getCSRFToken();
+      if (token) {
+        if (init.headers instanceof Headers) {
+          if (!init.headers.has('X-CSRFToken') && !init.headers.has('X-CSRF-Token')) {
+            init.headers.append('X-CSRFToken', token);
+          }
+        } else if (Array.isArray(init.headers)) {
+          const has = init.headers.some(([k]) => k.toLowerCase() === 'x-csrftoken' || k.toLowerCase() === 'x-csrf-token');
+          if (!has) {
+            init.headers.push(['X-CSRFToken', token]);
+          }
+        } else {
+          init.headers = init.headers || {};
+          if (!init.headers['X-CSRFToken'] && !init.headers['X-CSRF-Token']) {
+            init.headers['X-CSRFToken'] = token;
+          }
+        }
+      }
+
+      // 2. Attach Client Request Id (Idempotency) if not provided
+      const reqId = window.generateUUID();
+      if (init.headers instanceof Headers) {
+        if (!init.headers.has('X-Client-Request-Id')) {
+          init.headers.append('X-Client-Request-Id', reqId);
+        }
+      } else if (Array.isArray(init.headers)) {
+        if (!init.headers.some(([k]) => k.toLowerCase() === 'x-client-request-id')) {
+          init.headers.push(['X-Client-Request-Id', reqId]);
+        }
+      } else {
+        init.headers = init.headers || {};
+        if (!init.headers['X-Client-Request-Id']) {
+          init.headers['X-Client-Request-Id'] = reqId;
+        }
+      }
+    }
+
+    let response;
+    try {
+      response = await originalFetch.call(window, resource, init);
+    } catch (err) {
+      console.warn('[Network Error] fetch failed:', err);
+      throw err;
+    }
+
+    // 3. Intercept 401 Session Expiration
+    if (response.status === 401) {
+      const isLoginPage = window.location.pathname.startsWith('/login') ||
+                          window.location.pathname.startsWith('/banking/login');
+      if (!isLoginPage && !window.__SD_SESSION_EXPIRED_NOTIFIED__) {
+        window.__SD_SESSION_EXPIRED_NOTIFIED__ = true;
+        window.showToast('Your session has expired. Redirecting to login...', 'warning', 3000);
+        setTimeout(() => {
+          const current = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/login?next=${current}`;
+        }, 1500);
+      }
+    }
+
+    return response;
+  }
+
+  window.fetch = secureFetch;
+  window.csrfFetch = secureFetch;
+
+  /**
+   * Resilient fetch with exponential backoff for flaky cellular connections.
+   */
+  async function fetchWithRetry(resource, init = {}, options = {}) {
+    const maxRetries = options.maxRetries || 3;
+    let delayMs = options.baseDelayMs || 800;
+    const retryAll = options.retryAll || false;
+    const method = (init.method || 'GET').toUpperCase();
+    const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method) || retryAll;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await window.fetch(resource, init);
+        if (isIdempotent && [502, 503, 504].includes(response.status) && attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, delayMs));
+          delayMs *= 1.5;
+          continue;
+        }
+        return response;
+      } catch (err) {
+        if (isIdempotent && attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, delayMs));
+          delayMs *= 1.5;
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  window.fetchWithRetry = fetchWithRetry;
+})();

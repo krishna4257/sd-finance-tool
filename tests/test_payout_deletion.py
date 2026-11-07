@@ -1,7 +1,7 @@
 import unittest
 from app import app
 import db
-import chit_calc_engine as ce
+import services.chit_calc_engine as ce
 
 class TestPayoutDeletion(unittest.TestCase):
     def setUp(self):

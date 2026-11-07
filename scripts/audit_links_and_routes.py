@@ -42,8 +42,13 @@ def main():
     # -------------------------------------------------------------------------
     print("\n[1] AUDITING RENDER_TEMPLATE CALLS IN CONTROLLERS...")
     controllers = [
-        'app.py', 'chit_controller.py', 'banking_controller.py', 
-        'fleet_telemetry_controller.py', 'banking_calc_engine.py'
+        'app.py',
+        os.path.join('routes', 'chit_controller.py'),
+        os.path.join('routes', 'banking_controller.py'),
+        os.path.join('routes', 'fleet_telemetry_controller.py'),
+        os.path.join('routes', 'mobile_api_routes.py'),
+        os.path.join('routes', 'feed_routes.py'),
+        os.path.join('routes', 'payment_routes.py'),
     ]
     render_re = re.compile(r'render_template\(\s*[\'"]([^\'"]+\.html)[\'"]')
     missing_templates = []

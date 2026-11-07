@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 import db
-import banking_calc_engine as bce
+import services.banking_calc_engine as bce
 
 class TestMultiCashbagAndAPI(unittest.TestCase):
     def setUp(self):

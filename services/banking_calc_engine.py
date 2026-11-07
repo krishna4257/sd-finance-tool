@@ -89,7 +89,7 @@ def _parse_time(t: Union[datetime, time, str, None]) -> Optional[time]:
 # Unified Interest Engine Integration (Single Canonical Source of Truth)
 # ---------------------------------------------------------------------------
 
-from interest_calc_engine import (
+from services.interest_calc_engine import (
     calculate_days_30_360,
     calculate_interest_30_360,
     calculate_simple_interest_30_360,

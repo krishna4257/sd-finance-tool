@@ -11,7 +11,7 @@ if sys.stdout.encoding != 'utf-8':
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
 
 from app import app
-from banking_controller import get_pg_connection
+from db import get_pg_connection
 
 def run_tests():
     print("=== Testing Investor Folio & Drawings Settlement System ===")
