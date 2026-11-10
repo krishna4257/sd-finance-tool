@@ -99,7 +99,7 @@ def get_active_mobile_user(token_data, cur=None):
 
     try:
         cur.execute("""
-            SELECT u.id, u.username, u.is_active, u.employee_id, e.level, e.status
+            SELECT u.id, u.username, u.is_active, u.employee_id, e.level, e.is_active
             FROM users u
             LEFT JOIN employee e ON e.eid = u.employee_id
             WHERE u.id = %s
@@ -108,11 +108,13 @@ def get_active_mobile_user(token_data, cur=None):
         if not row:
             return None
 
-        u_id, username, is_active, emp_id, level, emp_status = row
+        u_id, username, is_active, emp_id, level, emp_active = row
         if not is_active:
             return None
 
-        if emp_status and emp_status.strip().lower() not in ("active", "a"):
+        if emp_active is False:
+            return None
+        if isinstance(emp_active, str) and emp_active.strip().lower() in ("inactive", "terminated", "false", "0"):
             return None
 
         if eid and emp_id and str(eid) != str(emp_id):

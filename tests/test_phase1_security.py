@@ -18,6 +18,8 @@ from app import (
 
 class TestPhase1Security(unittest.TestCase):
     def setUp(self):
+        main_app.app.config["TESTING"] = True
+        main_app.app.config["WTF_CSRF_ENABLED"] = False
         self.app = main_app.app.test_client()
 
     def test_mobile_token_encoding_and_decoding(self):
@@ -37,7 +39,7 @@ class TestPhase1Security(unittest.TestCase):
     def test_get_active_mobile_user_success(self):
         """Active user and active employee returns user dict."""
         mock_cur = MagicMock()
-        mock_cur.fetchone.return_value = (10, "john_doe", True, 5, "staff", "active")
+        mock_cur.fetchone.return_value = (10, "john_doe", True, 5, "staff", True)
 
         user = get_active_mobile_user({"user_id": 10, "eid": 5}, cur=mock_cur)
         self.assertIsNotNone(user)
@@ -51,11 +53,11 @@ class TestPhase1Security(unittest.TestCase):
         """Deactivated user (is_active=False) or inactive employee status is rejected immediately."""
         mock_cur = MagicMock()
         # Case 1: user is_active is False
-        mock_cur.fetchone.return_value = (10, "john_doe", False, 5, "staff", "active")
+        mock_cur.fetchone.return_value = (10, "john_doe", False, 5, "staff", True)
         self.assertIsNone(get_active_mobile_user({"user_id": 10, "eid": 5}, cur=mock_cur))
 
-        # Case 2: employee status is inactive/terminated
-        mock_cur.fetchone.return_value = (10, "john_doe", True, 5, "staff", "inactive")
+        # Case 2: employee is inactive
+        mock_cur.fetchone.return_value = (10, "john_doe", True, 5, "staff", False)
         self.assertIsNone(get_active_mobile_user({"user_id": 10, "eid": 5}, cur=mock_cur))
 
         # Case 3: User row not found
