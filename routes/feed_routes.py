@@ -1129,18 +1129,30 @@ def delete_customer_feed(feed_id):
 @feed_bp.post("/feed/customer/accept/<feed_id>")
 @login_required
 def accept_customer(feed_id):
+    logged_user = session.get("employee_id") or session.get("eid")
+    if not logged_user:
+        return {"success": False, "error": "User not logged properly"}, 401
 
     conn = get_resolved_pg_conn()
     cur = conn.cursor()
+    try:
+        return _accept_customer_internal(conn, cur, feed_id, logged_user)
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception("Error accepting customer feed item %s: %s", feed_id, e)
+        return {"success": False, "error": f"Failed to accept customer: {str(e)}"}, 500
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
-    # Safety check: ensure logged-in employee
-    # employee_id is always set at login.
-    # eid may only exist after village/context selection.
-    logged_user = session.get("employee_id") or session.get("eid")
 
-    if not logged_user:
-        return {"success": False, "error": "User not logged properly"}
-
+def _accept_customer_internal(conn, cur, feed_id, logged_user):
     cur.execute("""
         SELECT local_uuid, payload, status
         FROM customer_feed
@@ -1404,177 +1416,183 @@ def accept_customer(feed_id):
             "reviewed_by": logged_user
         }
     )
-    cur.close()
-    conn.close()
-
-    return {"success":True}
+    return {"success": True}
 
 
 @feed_bp.post("/feed/docs/accept/<feed_id>")
 @login_required
 def accept_customer_feed_docs(feed_id):
-    conn = get_resolved_pg_conn()
-    cur = conn.cursor()
-
     logged_user = session.get("employee_id") or session.get("eid")
     if not logged_user:
-        return {"success": False, "error": "User not logged properly"}
+        return {"success": False, "error": "User not logged properly"}, 401
 
-    cur.execute("""
-        SELECT vid, payload
-        FROM customer_feed
-        WHERE feed_id = %s
-    """, (feed_id,))
+    conn = get_resolved_pg_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT vid, payload
+            FROM customer_feed
+            WHERE feed_id = %s
+        """, (feed_id,))
 
-    row = cur.fetchone()
-    if not row:
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "Feed not found"}
+        row = cur.fetchone()
+        if not row:
+            return {"success": False, "error": "Feed not found"}, 404
 
-    vid, payload = row
-    if isinstance(payload, str):
+        vid, payload = row
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                return {"success": False, "error": "Invalid payload format"}, 400
+
+        customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+        ano = normalize_account_number(customer_payload.get("ano"))
+        vid = payload.get("vid") or customer_payload.get("vid") or vid
+        if ano is None or vid is None:
+            return {"success": False, "error": "Missing ano or vid in customer feed"}, 400
+
+        cur.execute("""
+            SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
+            FROM customer_docs
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (vid, ano))
+        docs = cur.fetchone()
+
+        if not docs or (not docs[0] and not docs[1] and not docs[2]):
+            return {"success": False, "error": "No customer documents found for this feed item"}, 400
+
+        _call_audit_log(
+            action="accept_customer_feed_docs",
+            entity_type="customer_feed",
+            entity_id=feed_id,
+            details={
+                "ano": ano,
+                "vid": vid,
+                "reviewed_by": logged_user
+            }
+        )
+
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
         try:
-            payload = json.loads(payload)
+            conn.rollback()
         except Exception:
+            pass
+        logger.exception("Error accepting customer feed docs %s: %s", feed_id, e)
+        return {"success": False, "error": f"Failed to accept docs: {str(e)}"}, 500
+    finally:
+        try:
             cur.close()
             conn.close()
-            return {"success": False, "error": "Invalid payload format"}
-
-    customer_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
-    ano = normalize_account_number(customer_payload.get("ano"))
-    vid = payload.get("vid") or customer_payload.get("vid") or vid
-    if ano is None or vid is None:
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "Missing ano or vid in customer feed"}
-
-    cur.execute("""
-        SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
-        FROM customer_docs
-        WHERE vid = %s AND ano = %s
-        LIMIT 1
-    """, (vid, ano))
-    docs = cur.fetchone()
-
-    if not docs or (not docs[0] and not docs[1] and not docs[2]):
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "No customer documents found for this feed item"}
-
-    _call_audit_log(
-        action="accept_customer_feed_docs",
-        entity_type="customer_feed",
-        entity_id=feed_id,
-        details={
-            "ano": ano,
-            "vid": vid,
-            "reviewed_by": logged_user
-        }
-    )
-
-    cur.close()
-    conn.close()
-    return {"success": True}
+        except Exception:
+            pass
 
 
 @feed_bp.post("/feed/existing-docs/accept/<docs_feed_id>")
 @login_required
 def accept_existing_customer_docs(docs_feed_id):
-    conn = get_resolved_pg_conn()
-    cur = conn.cursor()
-
     logged_user = session.get("employee_id") or session.get("eid")
     if not logged_user:
-        return {"success": False, "error": "User not logged properly"}
+        return {"success": False, "error": "User not logged properly"}, 401
 
-    cur.execute("""
-        SELECT vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status
-        FROM customer_docs_feed
-        WHERE docs_feed_id = %s
-        FOR UPDATE
-    """, (docs_feed_id,))
+    conn = get_resolved_pg_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status
+            FROM customer_docs_feed
+            WHERE docs_feed_id = %s
+            FOR UPDATE
+        """, (docs_feed_id,))
 
-    row = cur.fetchone()
-    if not row:
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "Docs feed item not found"}
+        row = cur.fetchone()
+        if not row:
+            return {"success": False, "error": "Docs feed item not found"}, 404
 
-    vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status = row
-    if status != "pending":
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "Docs feed item is not pending"}
+        vid, ano, aadhaar_front_pic, aadhaar_back_pic, house_photo, status = row
+        if status != "pending":
+            return {"success": False, "error": "Docs feed item is not pending"}, 400
 
-    if not aadhaar_front_pic and not aadhaar_back_pic and not house_photo:
-        cur.close()
-        conn.close()
-        return {"success": False, "error": "No documents attached"}
+        if not aadhaar_front_pic and not aadhaar_back_pic and not house_photo:
+            return {"success": False, "error": "No documents attached"}, 400
 
-    cur.execute("""
-        SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
-        FROM customer_docs
-        WHERE vid = %s AND ano = %s
-        LIMIT 1
-    """, (vid, ano))
-    existing_docs = cur.fetchone()
+        cur.execute("""
+            SELECT aadhaar_front_pic, aadhaar_back_pic, house_photo
+            FROM customer_docs
+            WHERE vid = %s AND ano = %s
+            LIMIT 1
+        """, (vid, ano))
+        existing_docs = cur.fetchone()
 
-    existing_aadhaar_front = existing_docs[0] if existing_docs else None
-    existing_aadhaar_back = existing_docs[1] if existing_docs else None
-    existing_house = existing_docs[2] if existing_docs else None
+        existing_aadhaar_front = existing_docs[0] if existing_docs else None
+        existing_aadhaar_back = existing_docs[1] if existing_docs else None
+        existing_house = existing_docs[2] if existing_docs else None
 
-    final_aadhaar_front = aadhaar_front_pic if aadhaar_front_pic is not None else existing_aadhaar_front
-    final_aadhaar_back = aadhaar_back_pic if aadhaar_back_pic is not None else existing_aadhaar_back
-    final_house = house_photo if house_photo is not None else existing_house
+        final_aadhaar_front = aadhaar_front_pic if aadhaar_front_pic is not None else existing_aadhaar_front
+        final_aadhaar_back = aadhaar_back_pic if aadhaar_back_pic is not None else existing_aadhaar_back
+        final_house = house_photo if house_photo is not None else existing_house
 
-    cur.execute("""
-        INSERT INTO customer_docs (
+        cur.execute("""
+            INSERT INTO customer_docs (
+                vid,
+                ano,
+                aadhaar_front_pic,
+                aadhaar_back_pic,
+                house_photo,
+                uploaded_at
+            )
+            VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
+            ON CONFLICT (vid, ano)
+            DO UPDATE SET
+                aadhaar_front_pic = EXCLUDED.aadhaar_front_pic,
+                aadhaar_back_pic = EXCLUDED.aadhaar_back_pic,
+                house_photo = EXCLUDED.house_photo,
+                uploaded_at = CURRENT_TIMESTAMP
+        """, (
             vid,
             ano,
-            aadhaar_front_pic,
-            aadhaar_back_pic,
-            house_photo,
-            uploaded_at
+            final_aadhaar_front,
+            final_aadhaar_back,
+            final_house
+        ))
+
+        cur.execute("""
+            UPDATE customer_docs_feed
+            SET status = 'accepted',
+                reviewed_by = %s,
+                reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+            WHERE docs_feed_id = %s
+        """, (logged_user, docs_feed_id))
+
+        conn.commit()
+        _call_audit_log(
+            action="accept_existing_customer_docs",
+            entity_type="customer_docs_feed",
+            entity_id=docs_feed_id,
+            details={
+                "ano": ano,
+                "vid": vid,
+                "reviewed_by": logged_user
+            }
         )
-        VALUES (%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
-        ON CONFLICT (vid, ano)
-        DO UPDATE SET
-            aadhaar_front_pic = EXCLUDED.aadhaar_front_pic,
-            aadhaar_back_pic = EXCLUDED.aadhaar_back_pic,
-            house_photo = EXCLUDED.house_photo,
-            uploaded_at = CURRENT_TIMESTAMP
-    """, (
-        vid,
-        ano,
-        final_aadhaar_front,
-        final_aadhaar_back,
-        final_house
-    ))
 
-    cur.execute("""
-        UPDATE customer_docs_feed
-        SET status = 'accepted',
-            reviewed_by = %s,
-            reviewed_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-        WHERE docs_feed_id = %s
-    """, (logged_user, docs_feed_id))
-
-    conn.commit()
-    _call_audit_log(
-        action="accept_existing_customer_docs",
-        entity_type="customer_docs_feed",
-        entity_id=docs_feed_id,
-        details={
-            "ano": ano,
-            "vid": vid,
-            "reviewed_by": logged_user
-        }
-    )
-
-    cur.close()
-    conn.close()
-    return {"success": True}
+        return {"success": True}
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception("Error accepting existing customer docs %s: %s", docs_feed_id, e)
+        return {"success": False, "error": f"Failed to accept docs: {str(e)}"}, 500
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
 
 @feed_bp.post("/feed/existing-docs/edit/<docs_feed_id>")

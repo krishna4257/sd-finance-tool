@@ -371,37 +371,35 @@ def recalc_customer_repayment_score(cur, cid, force_recalc=False):
         target_table = "customer"
     elif source_table == "closed":
         target_table = "closed_cust_account"
-    else:
+    elif source_table == "historic":
         target_table = "historic_customer_data"
+    else:
+        target_table = source_table
+
+    KOLKATA = pytz.timezone('Asia/Kolkata')
+
+    new_freeze_date = freeze_date
+    new_final_frozen_rating = final_frozen_rating
+    new_final_risk_level = final_risk_level
 
     if balance_amount is not None and balance_amount <= 0:
-        if freeze_date is None:
-            cur.execute(f"""
-                UPDATE {target_table}
-                SET customer_rating = %s,
-                    risk_level = %s,
-                    final_frozen_rating = %s,
-                    final_risk_level = %s,
-                    freeze_date = CURRENT_DATE
-                WHERE cid = %s
-            """, (score, risk_level, score, risk_level, cid))
-        else:
-            cur.execute(f"""
-                UPDATE {target_table}
-                SET customer_rating = %s,
-                    risk_level = %s
-                WHERE cid = %s
-            """, (score, risk_level, cid))
+        if new_freeze_date is None:
+            new_freeze_date = datetime.now(KOLKATA)
+        new_final_frozen_rating = score
+        new_final_risk_level = risk_level
     else:
-        cur.execute(f"""
-            UPDATE {target_table}
-            SET customer_rating = %s,
-                risk_level = %s,
-                final_frozen_rating = NULL,
-                final_risk_level = NULL,
-                freeze_date = NULL
-            WHERE cid = %s
-        """, (score, risk_level, cid))
+        new_freeze_date = None
+        new_final_frozen_rating = None
+        new_final_risk_level = None
+
+    cur.execute(f"""
+        UPDATE {target_table}
+        SET customer_rating = %s,
+            final_frozen_rating = %s,
+            final_risk_level = %s,
+            freeze_date = %s
+        WHERE cid = %s
+    """, (score, new_final_frozen_rating, new_final_risk_level, new_freeze_date, cid))
 
     return {
         "score": score,
