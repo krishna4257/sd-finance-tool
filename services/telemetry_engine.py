@@ -4,8 +4,8 @@ Telemetry Engine: Algorithmic & Spatial Utilities for SD Finance Fleet Telemetry
 Includes:
   1. Haversine distance calculations
   2. Ramer-Douglas-Peucker (RDP) polyline simplification
-  3. Stationary stop & trip segmentation
-  4. Nearest village spatial matching
+  3. Stationary stop & trip segmentation (with centroid calculation)
+  4. Nearest village spatial matching (with test/placeholder filtering)
 """
 import math
 from datetime import datetime, timezone
@@ -73,12 +73,12 @@ def douglas_peucker(points, epsilon=0.00008):
     else:
         return [start, end]
 
-def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08):
+def segment_trips_and_stops(points, min_stop_minutes=5, cluster_radius_km=0.08):
     """
     Analyzes chronological coordinates and segments them into:
-      - Stops (stationary clusters >= min_stop_minutes within cluster_radius_km)
-      - Trips (moving segments between stops)
-    points: list of dicts or tuples [lat, lng, speed, heading, timestamp]
+      - Stops (stationary clusters >= min_stop_minutes within cluster_radius_km, centered at centroid)
+      - Trips (moving segments between stops with attached path coordinates)
+    points: list of dicts or tuples [lat, lng, speed, heading, timestamp, ...]
     """
     if not points:
         return [], []
@@ -111,10 +111,13 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
                 # Agent moved outside cluster radius
                 duration_mins = max(0, int((t - current_stop_start).total_seconds() // 60))
                 if duration_mins >= min_stop_minutes:
-                    # Valid stop identified!
+                    # Valid stop identified! Compute centroid of the cluster
+                    centroid_lat = sum(p[0] for p in cluster_points) / len(cluster_points)
+                    centroid_lng = sum(p[1] for p in cluster_points) / len(cluster_points)
+
                     stops.append({
-                        "latitude": current_cluster_anchor[0],
-                        "longitude": current_cluster_anchor[1],
+                        "latitude": round(centroid_lat, 6),
+                        "longitude": round(centroid_lng, 6),
                         "arrival_time": current_stop_start,
                         "departure_time": t,
                         "duration_minutes": duration_mins
@@ -126,13 +129,20 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
                             trip_dist += haversine_km(trip_points_acc[j-1][0], trip_points_acc[j-1][1],
                                                       trip_points_acc[j][0], trip_points_acc[j][1])
                         trip_duration = max(1, int((current_stop_start - trip_start_time).total_seconds() // 60))
+                        trip_coords = [[round(p[0], 6), round(p[1], 6)] for p in trip_points_acc]
+
                         trips.append({
                             "trip_number": len(trips) + 1,
                             "start_time": trip_start_time,
                             "end_time": current_stop_start,
                             "distance_km": round(trip_dist, 2),
                             "duration_minutes": trip_duration,
-                            "avg_speed_kmh": round((trip_dist / (trip_duration / 60.0)), 1) if trip_duration > 0 else 0.0
+                            "avg_speed_kmh": round((trip_dist / (trip_duration / 60.0)), 1) if trip_duration > 0 else 0.0,
+                            "coords": trip_coords,
+                            "start_lat": trip_coords[0][0] if trip_coords else None,
+                            "start_lng": trip_coords[0][1] if trip_coords else None,
+                            "end_lat": trip_coords[-1][0] if trip_coords else None,
+                            "end_lng": trip_coords[-1][1] if trip_coords else None
                         })
                         trip_points_acc = []
                         trip_start_time = None
@@ -155,9 +165,11 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
         final_time = cluster_points[-1][4]
         duration_mins = max(0, int((final_time - current_stop_start).total_seconds() // 60))
         if duration_mins >= min_stop_minutes:
+            centroid_lat = sum(p[0] for p in cluster_points) / len(cluster_points)
+            centroid_lng = sum(p[1] for p in cluster_points) / len(cluster_points)
             stops.append({
-                "latitude": current_cluster_anchor[0],
-                "longitude": current_cluster_anchor[1],
+                "latitude": round(centroid_lat, 6),
+                "longitude": round(centroid_lng, 6),
                 "arrival_time": current_stop_start,
                 "departure_time": final_time,
                 "duration_minutes": duration_mins
@@ -171,14 +183,20 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
                                       trip_points_acc[j][0], trip_points_acc[j][1])
         final_time = trip_points_acc[-1][4]
         trip_duration = max(1, int((final_time - trip_start_time).total_seconds() // 60))
-        if trip_dist >= 0.5:
+        if trip_dist >= 0.3:
+            trip_coords = [[round(p[0], 6), round(p[1], 6)] for p in trip_points_acc]
             trips.append({
                 "trip_number": len(trips) + 1,
                 "start_time": trip_start_time,
                 "end_time": final_time,
                 "distance_km": round(trip_dist, 2),
                 "duration_minutes": trip_duration,
-                "avg_speed_kmh": round((trip_dist / (trip_duration / 60.0)), 1) if trip_duration > 0 else 0.0
+                "avg_speed_kmh": round((trip_dist / (trip_duration / 60.0)), 1) if trip_duration > 0 else 0.0,
+                "coords": trip_coords,
+                "start_lat": trip_coords[0][0] if trip_coords else None,
+                "start_lng": trip_coords[0][1] if trip_coords else None,
+                "end_lat": trip_coords[-1][0] if trip_coords else None,
+                "end_lng": trip_coords[-1][1] if trip_coords else None
             })
 
     return trips, stops
@@ -186,6 +204,7 @@ def segment_trips_and_stops(points, min_stop_minutes=10, cluster_radius_km=0.08)
 def find_nearest_village(cur, lat, lng, max_distance_km=15.0):
     """
     Finds the nearest village from the village table within max_distance_km.
+    Filters out non-village test placeholders like 'chit_fund_%' and 'test_%'.
     Returns (village_name, distance_km) or (None, None).
     """
     try:
@@ -200,7 +219,9 @@ def find_nearest_village(cur, lat, lng, max_distance_km=15.0):
             cur.execute("""
                 SELECT village_name, latitude, longitude
                 FROM village
-                WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+                WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+                  AND village_name NOT ILIKE 'chit_fund_%'
+                  AND village_name NOT ILIKE 'test%';
             """)
             villages = cur.fetchall()
             closest = None

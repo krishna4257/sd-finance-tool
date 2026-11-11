@@ -27,6 +27,7 @@ from flask import (
 from psycopg2.extras import execute_values
 
 from db import get_pg_connection
+from services.geocoding_service import reverse_geocode, init_geocache_table
 from services.telemetry_engine import (
     douglas_peucker, segment_trips_and_stops,
     find_nearest_village, haversine_km
@@ -786,20 +787,21 @@ def register_fleet_telemetry_routes(app, csrf):
             # 2. Run Douglas-Peucker Simplification (epsilon = 0.00008 deg ~ 8.9m)
             simplified_points = douglas_peucker(points_for_rdp, epsilon=0.00008)
 
-            # 3. Detect Stops and Trips
-            trips, stops = segment_trips_and_stops(points_for_rdp, min_stop_minutes=10, cluster_radius_km=0.08)
+            # 3. Detect Stops and Trips with Centroid Clustering
+            trips, stops = segment_trips_and_stops(points_for_rdp, min_stop_minutes=5, cluster_radius_km=0.08)
 
-            # 4. Match Stops to Nearest Village
+            # 4. High-Precision Reverse Geocoding with Caching
+            init_geocache_table(conn)
+
             for s in stops:
-                vname, dist = find_nearest_village(cur, s["latitude"], s["longitude"])
-                s["village_name"] = vname or "Village Route"
-                s["village_distance_km"] = dist
+                geo = reverse_geocode(conn, cur, s["latitude"], s["longitude"], fallback_nearest_village_func=find_nearest_village)
+                s["place_name"] = geo.get("place_name") or "Recorded Location"
+                s["place_subtitle"] = geo.get("subtitle") or ""
+                s["village_name"] = s["place_name"]
                 s["arrival_formatted"] = s["arrival_time"].strftime("%I:%M %p")
                 s["departure_formatted"] = s["departure_time"].strftime("%I:%M %p")
-                del s["arrival_time"]
-                del s["departure_time"]
 
-            # Format trip timestamps
+            # Format and geocode trip start & end points
             total_distance = 0.0
             total_travel_minutes = 0
             for t in trips:
@@ -807,13 +809,16 @@ def register_fleet_telemetry_routes(app, csrf):
                 total_travel_minutes += t["duration_minutes"]
                 t["start_formatted"] = t["start_time"].strftime("%I:%M %p")
                 t["end_formatted"] = t["end_time"].strftime("%I:%M %p")
-                del t["start_time"]
-                del t["end_time"]
+                
+                start_geo = reverse_geocode(conn, cur, t.get("start_lat"), t.get("start_lng"), fallback_nearest_village_func=find_nearest_village) if t.get("start_lat") else {}
+                end_geo = reverse_geocode(conn, cur, t.get("end_lat"), t.get("end_lng"), fallback_nearest_village_func=find_nearest_village) if t.get("end_lat") else {}
+                t["start_location"] = start_geo.get("place_name") or "Trip Start"
+                t["end_location"] = end_geo.get("place_name") or "Trip Destination"
 
             total_stop_minutes = sum(s["duration_minutes"] for s in stops)
 
-            # Build unified chronological timeline for Google Maps Timeline UI
-            timeline = []
+            # Build unified chronological timeline (Interleaving Trips and Stops)
+            timeline_items = []
             driving_km = 0.0
             driving_mins = 0
             motorcycle_km = 0.0
@@ -830,28 +835,39 @@ def register_fleet_telemetry_routes(app, csrf):
                     motorcycle_km += t["distance_km"]
                     motorcycle_mins += t["duration_minutes"]
 
-                timeline.append({
+                timeline_items.append({
                     "type": "trip",
+                    "_sort_time": t["start_time"],
+                    "trip_number": t.get("trip_number", 1),
                     "mode": mode,
                     "title": "Driving" if is_car else "Motorcycling",
+                    "subtitle": f"{t.get('start_location', 'Start')} → {t.get('end_location', 'End')}",
                     "distance_km": t["distance_km"],
                     "duration_minutes": t["duration_minutes"],
                     "time_range": f"{t['start_formatted']} – {t['end_formatted']}",
                     "icon": "car" if is_car else "motorcycle",
-                    "avg_speed": t.get("avg_speed_kmh", 0.0)
+                    "avg_speed": t.get("avg_speed_kmh", 0.0),
+                    "coords": t.get("coords", []),
+                    "start_location": t.get("start_location"),
+                    "end_location": t.get("end_location"),
+                    "start_lat": t.get("start_lat"),
+                    "start_lng": t.get("start_lng"),
+                    "end_lat": t.get("end_lat"),
+                    "end_lng": t.get("end_lng"),
+                    "start_time_str": t["start_formatted"],
+                    "end_time_str": t["end_formatted"]
                 })
 
+            stop_icons = ["store", "building", "house", "hospital", "landmark", "bag-shopping", "briefcase"]
             for idx, s in enumerate(stops):
-                place_name = s.get("village_name") or f"Location Visit #{idx + 1}"
+                place_name = s.get("place_name") or s.get("village_name") or f"Location Visit #{idx + 1}"
                 sub = f"Stayed {s['duration_minutes']} min"
-                if s.get("village_distance_km") is not None:
-                    sub += f" • {s['village_distance_km']} km to village center"
-                
-                icons = ["store", "bag-shopping", "building", "house", "shop"]
-                icon = icons[idx % len(icons)]
+                if s.get("place_subtitle"):
+                    sub = f"{s['place_subtitle']} • Stayed {s['duration_minutes']} min"
 
-                timeline.append({
+                timeline_items.append({
                     "type": "stop",
+                    "_sort_time": s["arrival_time"],
                     "stop_index": idx + 1,
                     "title": place_name,
                     "subtitle": sub,
@@ -860,8 +876,28 @@ def register_fleet_telemetry_routes(app, csrf):
                     "duration_minutes": s["duration_minutes"],
                     "latitude": s["latitude"],
                     "longitude": s["longitude"],
-                    "icon": icon
+                    "icon": stop_icons[idx % len(stop_icons)]
                 })
+
+            # Sort strictly chronologically by timestamp
+            timeline_items.sort(key=lambda item: item["_sort_time"])
+            for item in timeline_items:
+                del item["_sort_time"]
+
+            timeline = timeline_items
+
+            # Cleanup non-serializable datetime objects in trips and stops
+            for s in stops:
+                if "arrival_time" in s:
+                    del s["arrival_time"]
+                if "departure_time" in s:
+                    del s["departure_time"]
+
+            for t in trips:
+                if "start_time" in t:
+                    del t["start_time"]
+                if "end_time" in t:
+                    del t["end_time"]
 
             # Export simplified polyline as lightweight [lat, lng, speed, heading, time_str, bat]
             export_points = [

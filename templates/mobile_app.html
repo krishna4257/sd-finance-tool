@@ -685,17 +685,54 @@
         <div class="inspector-map-wrap">
           <div id="inspectorLeafletMap" class="inspector-leaflet-map"></div>
 
+          <!-- Floating Segment Highlight Banner -->
+          <div class="leg-highlight-banner" id="legHighlightBanner" style="display: none;">
+            <div class="leg-banner-icon" id="legBannerIcon"><i class="fas fa-motorcycle"></i></div>
+            <div class="leg-banner-details">
+              <div class="leg-banner-title" id="legBannerTitle">Motorcycling · 14.0 km · 18 min</div>
+              <div class="leg-banner-subtitle" id="legBannerSubtitle">From Start → To Destination</div>
+            </div>
+            <button type="button" class="btn-leg-close" onclick="resetToFullDayRoute()" title="Show Entire Day Route">
+              <i class="fas fa-compress-arrows-alt me-1"></i> Full Route
+            </button>
+          </div>
+
+          <!-- Quick Map Layer Switcher Pills -->
+          <div class="map-layer-pills" id="mapLayerPills">
+            <button type="button" class="layer-pill active" id="btnLayerRoads" onclick="switchInspectorLayer('googleRoads', this)"><i class="fas fa-map me-1"></i> Google Map</button>
+            <button type="button" class="layer-pill" id="btnLayerSat" onclick="switchInspectorLayer('googleHybrid', this)"><i class="fas fa-satellite me-1"></i> Satellite</button>
+            <button type="button" class="layer-pill" id="btnLayerDark" onclick="switchInspectorLayer('darkTimeline', this)"><i class="fas fa-moon me-1"></i> Dark Timeline</button>
+          </div>
+
           <!-- Google Maps Journey Playback Scrubber (History Mode) -->
           <div class="insp-playback-bar" id="inspPlaybackBar" style="display: none;">
-            <button type="button" class="btn-play-toggle" id="btnInspPlayToggle" onclick="toggleInspectorPlayback()" title="Play / Pause Journey">
-              <i class="fas fa-play" id="iconInspPlay"></i>
-            </button>
-            <input type="range" id="inspScrubber" min="0" max="100" value="0" oninput="handleInspectorScrub(this.value)" style="flex: 1; accent-color: #00d2ff;">
-            <span class="scrubber-timestamp" id="inspScrubberTime" style="font-family: monospace; font-size: 0.8rem; min-width: 65px;">--:--</span>
-            <div class="playback-speed-group">
-              <button type="button" class="btn-speed active" onclick="setInspectorSpeed(1, this)">1x</button>
-              <button type="button" class="btn-speed" onclick="setInspectorSpeed(2, this)">2x</button>
-              <button type="button" class="btn-speed" onclick="setInspectorSpeed(4, this)">4x</button>
+            <div class="playback-controls-row">
+              <button type="button" class="btn-play-toggle" id="btnInspPlayToggle" onclick="toggleInspectorPlayback()" title="Play / Pause Journey (Spacebar)">
+                <i class="fas fa-play" id="iconInspPlay"></i>
+              </button>
+
+              <div class="scrubber-track-wrap">
+                <input type="range" id="inspScrubber" min="0" max="100" value="0" oninput="handleInspectorScrub(this.value)">
+                <!-- Stop Milestones on Scrubber Track -->
+                <div class="scrubber-stop-dots" id="scrubberStopDots"></div>
+                <!-- Intermediate Timestamps below Scrubber -->
+                <div class="scrubber-time-ticks" id="scrubberTimeTicks"></div>
+              </div>
+
+              <div class="scrubber-hud-right">
+                <div class="scrubber-time-readout">
+                  <span class="scrubber-time-label">TIME</span>
+                  <span class="scrubber-timestamp" id="inspScrubberTime">--:--</span>
+                </div>
+                <div class="playback-speed-group">
+                  <button type="button" class="btn-speed active" onclick="setInspectorSpeed(1, this)">1x</button>
+                  <button type="button" class="btn-speed" onclick="setInspectorSpeed(2, this)">2x</button>
+                  <button type="button" class="btn-speed" onclick="setInspectorSpeed(4, this)">4x</button>
+                </div>
+                <button type="button" class="btn-full-route" id="btnToggleFullRoute" onclick="toggleFullRouteMode()" title="Toggle full day route view">
+                  <i class="fas fa-route me-1"></i> <span id="lblFullRoute">Full Route</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3916,13 +3953,242 @@
   }
   .insp-playback-bar {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
     padding: 10px 18px;
-    background: rgba(15, 23, 42, 0.95);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(15, 23, 42, 0.96);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
     color: #fff;
     z-index: 1000;
+  }
+  .playback-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+  }
+  .scrubber-track-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 4px 0;
+  }
+  .scrubber-track-wrap input[type=range] {
+    width: 100%;
+    accent-color: #00e5ff;
+    cursor: pointer;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .scrubber-stop-dots {
+    position: absolute;
+    top: 10px;
+    left: 0;
+    right: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .scrubber-stop-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #00e5ff;
+    border: 2px solid #0f172a;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .scrubber-stop-dot:hover {
+    transform: translate(-50%, -50%) scale(1.6);
+    background: #38bdf8;
+    z-index: 10;
+  }
+  .scrubber-time-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-family: monospace;
+    margin-top: 4px;
+    user-select: none;
+  }
+  .scrubber-tick-label {
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .scrubber-tick-label:hover {
+    color: #00e5ff;
+  }
+  .scrubber-hud-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .scrubber-time-readout {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 65px;
+  }
+  .scrubber-time-label {
+    font-size: 0.58rem;
+    color: #64748b;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .btn-full-route {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #e2e8f0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .btn-full-route:hover, .btn-full-route.active {
+    background: rgba(0, 229, 255, 0.2);
+    border-color: #00e5ff;
+    color: #00e5ff;
+  }
+
+  /* Floating Segment Highlight Banner */
+  .leg-highlight-banner {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(0, 229, 255, 0.45);
+    border-radius: 30px;
+    padding: 8px 18px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 229, 255, 0.2);
+    backdrop-filter: blur(12px);
+    color: #f8fafc;
+    animation: slideDownFade 0.25s ease-out;
+  }
+  @keyframes slideDownFade {
+    from { opacity: 0; transform: translate(-50%, -10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  .leg-banner-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00d2ff, #0284c7);
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+  .leg-banner-details {
+    display: flex;
+    flex-direction: column;
+  }
+  .leg-banner-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #00e5ff;
+    line-height: 1.2;
+  }
+  .leg-banner-subtitle {
+    font-size: 0.72rem;
+    color: #cbd5e1;
+    line-height: 1.2;
+  }
+  .btn-leg-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #f8fafc;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-leg-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #00e5ff;
+  }
+
+  /* Map Layer Switcher Pills */
+  .map-layer-pills {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 999;
+    display: flex;
+    gap: 4px;
+    background: rgba(15, 23, 42, 0.88);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(8px);
+  }
+  .layer-pill {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .layer-pill:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .layer-pill.active {
+    background: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+  }
+
+  /* Clickable Timeline Card styling */
+  .timeline-node.node-travel {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .timeline-node.node-travel:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(0, 229, 255, 0.4);
+    transform: translateX(3px);
+  }
+  .timeline-node.node-travel.active-leg {
+    border-color: #00e5ff !important;
+    background: rgba(0, 229, 255, 0.12) !important;
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.22);
+  }
+  .timeline-node.node-visit {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .timeline-node.node-visit:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(2, 132, 199, 0.5);
+    transform: translateX(3px);
+  }
+  .stop-pin-bloom {
+    animation: stopPinPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes stopPinPop {
+    0% { transform: scale(0.3); opacity: 0; }
+    70% { transform: scale(1.25); opacity: 1; }
+    100% { transform: scale(1.0); opacity: 1; }
   }
 
   /* Google Maps Timeline Pins */
@@ -5280,20 +5546,53 @@
       attribution: '&copy; Google Maps Satellite'
     });
 
+    const darkTimeline = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      subdomains: 'abcd',
+      attribution: '&copy; CARTO &copy; OpenStreetMap'
+    });
+
     const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       subdomains: ['a', 'b', 'c'],
       attribution: '&copy; OpenStreetMap'
     });
 
+    inspectorBaseTileLayers = {
+      googleRoads,
+      googleHybrid,
+      darkTimeline,
+      osmStandard
+    };
+
     return {
       defaultLayer: googleRoads,
       baseMaps: {
         "Google Map": googleRoads,
         "Satellite Hybrid": googleHybrid,
+        "Dark Timeline": darkTimeline,
         "OpenStreetMap": osmStandard
       }
     };
+  }
+
+  function switchInspectorLayer(layerKey, btn) {
+    if (!inspectorMap) return;
+    if (activeInspectorBaseLayer) {
+      inspectorMap.removeLayer(activeInspectorBaseLayer);
+    }
+    if (!inspectorBaseTileLayers || !inspectorBaseTileLayers[layerKey]) {
+      createBaseTileLayers();
+    }
+    activeInspectorBaseLayer = inspectorBaseTileLayers[layerKey];
+    if (activeInspectorBaseLayer) {
+      activeInspectorBaseLayer.addTo(inspectorMap);
+      activeInspectorBaseLayer.bringToBack();
+    }
+    if (btn) {
+      btn.parentElement.querySelectorAll('.layer-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -5824,12 +6123,23 @@
   let inspectorHistoryPoints = [];
   let inspectorHistoryPolyline = null;
   let inspectorHistoryPolylineGlow = null;
+  let inspectorActivePolyline = null;
+  let inspectorActivePolylineGlow = null;
+  let inspectorLegPolyline = null;
+  let inspectorLegPolylineGlow = null;
+  let inspectorLegStartMarker = null;
+  let inspectorLegEndMarker = null;
   let inspectorHistoryMarkers = [];
   let inspectorPlaybackMarker = null;
   let inspectorPlaybackIndex = 0;
   let inspectorPlaybackSpeed = 1;
   let inspectorPlaybackTimer = null;
   let activeTimelineDateStr = new Date().toISOString().split('T')[0];
+  let inspectorStops = [];
+  let inspectorTrips = [];
+  let isFullRouteVisible = false;
+  let activeInspectorBaseLayer = null;
+  let inspectorBaseTileLayers = {};
 
   function openUserDeviceInspector(userId, preferredDeviceId) {
     activeInspectorUserId = userId;
@@ -6241,7 +6551,7 @@
     container.innerHTML = '';
 
     const summary = res.summary || {};
-    // Update Summary Strip (Image 2 style)
+    // Update Summary Strip (Google Maps Timeline style)
     document.getElementById('sumDrivingText').textContent = `${summary.driving_km || 0} km • ${summary.driving_minutes || 0} min`;
     document.getElementById('sumMotorcycleText').textContent = `${summary.motorcycle_km || 0} km • ${summary.motorcycle_minutes || 0} min`;
     document.getElementById('sumVisitsText').textContent = `${summary.visits_count || (res.stops ? res.stops.length : 0)} visits`;
@@ -6268,7 +6578,11 @@
       
       if (item.type === 'stop') {
         node.className = 'timeline-node node-visit';
-        node.onclick = () => focusTimelineStop(item.latitude, item.longitude, item.title, item.subtitle);
+        node.onclick = () => {
+          document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('active-leg'));
+          node.classList.add('active-leg');
+          focusTimelineStop(item.latitude, item.longitude, item.title, item.subtitle, item.arrival, item.departure, item.duration_minutes);
+        };
 
         node.innerHTML = `
           <div class="timeline-node-icon">
@@ -6277,7 +6591,7 @@
           <div class="timeline-node-body">
             <div class="timeline-node-title">${item.title}</div>
             <div class="timeline-node-sub">${item.subtitle}</div>
-            <div class="timeline-node-time">Left at ${item.departure || item.arrival || '--:--'}</div>
+            <div class="timeline-node-time">${item.arrival ? item.arrival + ' – ' : ''}Left at ${item.departure || item.arrival || '--:--'}</div>
           </div>
         `;
       } else {
@@ -6285,13 +6599,15 @@
         const isCar = (item.mode === 'driving');
         const iconName = isCar ? 'car' : 'motorcycle';
 
+        node.onclick = () => highlightTimelineLeg(item, node);
+
         node.innerHTML = `
           <div class="timeline-node-icon">
             <i class="fas fa-${iconName}"></i>
           </div>
           <div class="timeline-node-body">
             <div class="timeline-node-title">${item.title || (isCar ? 'Driving' : 'Motorcycling')}</div>
-            <div class="timeline-node-sub">${item.distance_km} km • ${item.duration_minutes} min</div>
+            <div class="timeline-node-sub">${item.distance_km} km • ${item.duration_minutes} min ${item.subtitle ? '• ' + item.subtitle : ''}</div>
             <div class="timeline-node-time">${item.time_range || '--:--'}</div>
           </div>
         `;
@@ -6301,13 +6617,148 @@
     });
   }
 
-  function focusTimelineStop(lat, lng, title, subtitle) {
+  function focusTimelineStop(lat, lng, title, subtitle, arrival, departure, duration) {
     if (!inspectorMap || !lat || !lng) return;
-    inspectorMap.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
-    L.popup()
+    inspectorMap.flyTo([lat, lng], 17, { animate: true, duration: 1.0 });
+
+    const content = `
+      <div style="font-family: inherit; min-width: 180px;">
+        <div style="font-size: 0.95rem; font-weight: 800; color: #0284c7; margin-bottom: 2px;">${title}</div>
+        <div style="font-size: 0.75rem; color: #475569; margin-bottom: 6px;">${subtitle || ''}</div>
+        <div style="font-size: 0.72rem; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 4px;">
+          <i class="far fa-clock me-1"></i> ${arrival || '--:--'} – ${departure || '--:--'} (${duration || 0} min stay)
+        </div>
+      </div>
+    `;
+
+    L.popup({ offset: [0, -10] })
       .setLatLng([lat, lng])
-      .setContent(`<div style="font-family: inherit;"><strong>${title}</strong><br><small style="color: #64748b;">${subtitle}</small></div>`)
+      .setContent(content)
       .openOn(inspectorMap);
+  }
+
+  function clearInspectorLegHighlights() {
+    if (inspectorLegPolyline && inspectorMap) {
+      inspectorMap.removeLayer(inspectorLegPolyline);
+      inspectorLegPolyline = null;
+    }
+    if (inspectorLegPolylineGlow && inspectorMap) {
+      inspectorMap.removeLayer(inspectorLegPolylineGlow);
+      inspectorLegPolylineGlow = null;
+    }
+    if (inspectorLegStartMarker && inspectorMap) {
+      inspectorMap.removeLayer(inspectorLegStartMarker);
+      inspectorLegStartMarker = null;
+    }
+    if (inspectorLegEndMarker && inspectorMap) {
+      inspectorMap.removeLayer(inspectorLegEndMarker);
+      inspectorLegEndMarker = null;
+    }
+  }
+
+  function highlightTimelineLeg(trip, node) {
+    if (!inspectorMap) return;
+    stopInspectorPlayback();
+    clearInspectorLegHighlights();
+
+    document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('active-leg'));
+    if (node) node.classList.add('active-leg');
+
+    const coords = trip.coords || [];
+    if (coords.length === 0) return;
+
+    // Dim full route to ghost line
+    if (inspectorHistoryPolyline) inspectorHistoryPolyline.setStyle({ opacity: 0.15 });
+    if (inspectorHistoryPolylineGlow) inspectorHistoryPolylineGlow.setStyle({ opacity: 0 });
+    if (inspectorActivePolyline) inspectorActivePolyline.setStyle({ opacity: 0 });
+    if (inspectorActivePolylineGlow) inspectorActivePolylineGlow.setStyle({ opacity: 0 });
+
+    // Draw glowing leg polyline
+    inspectorLegPolylineGlow = L.polyline(coords, {
+      color: '#005b82',
+      weight: 10,
+      opacity: 0.7,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
+
+    inspectorLegPolyline = L.polyline(coords, {
+      color: '#00f0ff',
+      weight: 6,
+      opacity: 1.0,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
+
+    // Origin Marker (Green Pin A)
+    const startIcon = L.divIcon({
+      className: 'leg-start-pin-wrapper',
+      html: `<div style="background: #10b981; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.75rem; border: 2px solid #ffffff; box-shadow: 0 3px 8px rgba(0,0,0,0.5);">A</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+    inspectorLegStartMarker = L.marker(coords[0], { icon: startIcon })
+      .bindPopup(`<strong>Departure: ${trip.start_location || 'Start'}</strong><br><small>${trip.start_time_str || ''}</small>`)
+      .addTo(inspectorMap);
+
+    // Destination Marker (Checkered Pin B)
+    const endIcon = L.divIcon({
+      className: 'leg-end-pin-wrapper',
+      html: `<div style="background: #ef4444; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.75rem; border: 2px solid #ffffff; box-shadow: 0 3px 8px rgba(0,0,0,0.5);"><i class="fas fa-flag-checkered" style="font-size: 11px;"></i></div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+    inspectorLegEndMarker = L.marker(coords[coords.length - 1], { icon: endIcon })
+      .bindPopup(`<strong>Destination: ${trip.end_location || 'End'}</strong><br><small>${trip.end_time_str || ''}</small>`)
+      .addTo(inspectorMap);
+
+    // Display Floating Leg Highlight Banner
+    const isCar = (trip.mode === 'driving');
+    document.getElementById('legBannerIcon').innerHTML = isCar ? '<i class="fas fa-car"></i>' : '<i class="fas fa-motorcycle"></i>';
+    document.getElementById('legBannerTitle').textContent = `${trip.title}: ${trip.distance_km} km · ${trip.duration_minutes} min`;
+    document.getElementById('legBannerSubtitle').textContent = `${trip.start_location} (${trip.start_time_str}) → ${trip.end_location} (${trip.end_time_str}) · Avg: ${trip.avg_speed} km/h`;
+    document.getElementById('legHighlightBanner').style.display = 'flex';
+
+    inspectorMap.fitBounds(inspectorLegPolyline.getBounds(), { padding: [60, 60] });
+  }
+
+  function resetToFullDayRoute() {
+    clearInspectorLegHighlights();
+    document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('active-leg'));
+    const banner = document.getElementById('legHighlightBanner');
+    if (banner) banner.style.display = 'none';
+
+    if (inspectorHistoryPolyline) inspectorHistoryPolyline.setStyle({ opacity: 0.95 });
+    if (inspectorHistoryPolylineGlow) inspectorHistoryPolylineGlow.setStyle({ opacity: 0.5 });
+    if (inspectorActivePolyline) inspectorActivePolyline.setStyle({ opacity: 1.0 });
+    if (inspectorActivePolylineGlow) inspectorActivePolylineGlow.setStyle({ opacity: 0.6 });
+
+    if (inspectorHistoryPolyline && inspectorMap) {
+      inspectorMap.fitBounds(inspectorHistoryPolyline.getBounds(), { padding: [40, 40] });
+    }
+  }
+
+  function toggleFullRouteMode() {
+    isFullRouteVisible = !isFullRouteVisible;
+    const btn = document.getElementById('btnToggleFullRoute');
+    const lbl = document.getElementById('lblFullRoute');
+
+    if (isFullRouteVisible) {
+      btn.classList.add('active');
+      lbl.textContent = 'Active Draw';
+      if (inspectorHistoryPolyline) inspectorHistoryPolyline.setStyle({ opacity: 0.95 });
+      if (inspectorHistoryPolylineGlow) inspectorHistoryPolylineGlow.setStyle({ opacity: 0.5 });
+      inspectorHistoryMarkers.forEach(m => {
+        if (!inspectorMap.hasLayer(m)) m.addTo(inspectorMap);
+      });
+      if (inspectorHistoryPolyline) inspectorMap.fitBounds(inspectorHistoryPolyline.getBounds(), { padding: [40, 40] });
+    } else {
+      btn.classList.remove('active');
+      lbl.textContent = 'Full Route';
+      if (inspectorHistoryPolyline) inspectorHistoryPolyline.setStyle({ opacity: 0 });
+      if (inspectorHistoryPolylineGlow) inspectorHistoryPolylineGlow.setStyle({ opacity: 0 });
+      updateInspectorScrubberPosition(inspectorPlaybackIndex);
+    }
   }
 
   function initInspectorMap() {
@@ -6444,6 +6895,10 @@
   }
 
   function clearInspectorHistoryMap() {
+    clearInspectorLegHighlights();
+    const banner = document.getElementById('legHighlightBanner');
+    if (banner) banner.style.display = 'none';
+
     if (inspectorHistoryPolyline && inspectorMap) {
       inspectorMap.removeLayer(inspectorHistoryPolyline);
       inspectorHistoryPolyline = null;
@@ -6452,63 +6907,163 @@
       inspectorMap.removeLayer(inspectorHistoryPolylineGlow);
       inspectorHistoryPolylineGlow = null;
     }
+    if (inspectorActivePolyline && inspectorMap) {
+      inspectorMap.removeLayer(inspectorActivePolyline);
+      inspectorActivePolyline = null;
+    }
+    if (inspectorActivePolylineGlow && inspectorMap) {
+      inspectorMap.removeLayer(inspectorActivePolylineGlow);
+      inspectorActivePolylineGlow = null;
+    }
     if (inspectorPlaybackMarker && inspectorMap) {
       inspectorMap.removeLayer(inspectorPlaybackMarker);
       inspectorPlaybackMarker = null;
     }
-    inspectorHistoryMarkers.forEach(m => inspectorMap.removeLayer(m));
+    inspectorHistoryMarkers.forEach(m => {
+      if (inspectorMap.hasLayer(m)) inspectorMap.removeLayer(m);
+    });
     inspectorHistoryMarkers = [];
+  }
+
+  function findClosestPointIndexForStop(stop) {
+    if (!inspectorHistoryPoints || inspectorHistoryPoints.length === 0) return 0;
+    let minD = Infinity;
+    let bestIdx = 0;
+    for (let i = 0; i < inspectorHistoryPoints.length; i++) {
+      const p = inspectorHistoryPoints[i];
+      const d = Math.hypot(p[0] - stop.latitude, p[1] - stop.longitude);
+      if (d < minD) {
+        minD = d;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
   }
 
   function renderInspectorHistoryMap(points, stops, trips) {
     if (!inspectorMap) return;
     clearInspectorHistoryMap();
 
-    inspectorHistoryPoints = points;
+    inspectorHistoryPoints = points || [];
+    inspectorStops = stops || [];
+    inspectorTrips = trips || [];
+    isFullRouteVisible = false;
+
     if (!points || points.length === 0) {
       return;
     }
 
     const latLngs = points.map(p => [p[0], p[1]]);
 
-    // Outer glow casing for Google Maps Timeline effect
+    // Background Full Route Polyline (Hidden during dynamic playback, visible on 'Full Route' toggle)
     inspectorHistoryPolylineGlow = L.polyline(latLngs, {
       color: '#005b82',
       weight: 8,
-      opacity: 0.5,
+      opacity: 0,
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(inspectorMap);
 
-    // Inner bright cyan path (Google Maps Timeline Cyan #00d2ff)
     inspectorHistoryPolyline = L.polyline(latLngs, {
       color: '#00d2ff',
       weight: 5,
-      opacity: 0.95,
+      opacity: 0,
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(inspectorMap);
 
-    // Stops markers on map
-    (stops || []).forEach((s, idx) => {
+    // Active Dynamic Journey Polyline (Created in real-time as vehicle travels)
+    inspectorActivePolylineGlow = L.polyline([], {
+      color: '#005b82',
+      weight: 8,
+      opacity: 0.6,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
+
+    inspectorActivePolyline = L.polyline([], {
+      color: '#00e5ff',
+      weight: 5,
+      opacity: 1.0,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(inspectorMap);
+
+    // Stops markers on map (Linked to their chronological appearance)
+    inspectorStops.forEach((s, idx) => {
+      const stopPointIdx = findClosestPointIndexForStop(s);
+      s._pointIdx = stopPointIdx;
+
       const stopIcon = L.divIcon({
         className: 'stop-pin-wrapper',
-        html: `<div class="stop-marker-pin">${idx + 1}</div>`,
+        html: `<div class="stop-marker-pin" id="stopPin_${idx}">${idx + 1}</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       });
+
       const m = L.marker([s.latitude, s.longitude], { icon: stopIcon })
-        .bindPopup(`<strong>Stop #${idx + 1}: ${s.village_name || 'Village Route'}</strong><br>Duration: ${s.duration_minutes} mins`)
-        .addTo(inspectorMap);
+        .bindPopup(`
+          <div style="font-family: inherit; min-width: 170px;">
+            <strong style="color: #0284c7;">Stop #${idx + 1}: ${s.place_name || s.village_name || 'Location Visit'}</strong>
+            <br><small style="color: #475569;">${s.place_subtitle || ''}</small>
+            <br><small style="color: #64748b;">${s.arrival_formatted ? s.arrival_formatted + ' – ' : ''}Left: ${s.departure_formatted || ''} (${s.duration_minutes} mins)</small>
+          </div>
+        `);
+      m._stopPointIdx = stopPointIdx;
+      m._stopData = s;
       inspectorHistoryMarkers.push(m);
     });
 
-    inspectorMap.fitBounds(inspectorHistoryPolyline.getBounds(), { padding: [40, 40] });
+    // Fit initial bounds to the full day trajectory
+    inspectorMap.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
 
-    // Scrubber setup
-    document.getElementById('inspScrubber').value = 0;
-    document.getElementById('inspScrubber').max = Math.max(1, points.length - 1);
+    // Setup Scrubber Slider
+    const scrubber = document.getElementById('inspScrubber');
+    scrubber.value = 0;
+    scrubber.max = Math.max(1, points.length - 1);
     document.getElementById('inspScrubberTime').textContent = points[0][4] || '--:--';
+
+    // Intermediate Time Stamps along Scrubber Track
+    const ticksWrap = document.getElementById('scrubberTimeTicks');
+    if (ticksWrap) {
+      ticksWrap.innerHTML = '';
+      if (points.length >= 2) {
+        const step = Math.max(1, Math.floor((points.length - 1) / 4));
+        const tickIdxs = [0, step, step * 2, step * 3, points.length - 1];
+        const uniqueIdxs = [...new Set(tickIdxs)];
+        uniqueIdxs.forEach(tIdx => {
+          const tickSpan = document.createElement('span');
+          tickSpan.className = 'scrubber-tick-label';
+          tickSpan.textContent = points[tIdx][4] || '';
+          tickSpan.title = `Jump to ${points[tIdx][4]}`;
+          tickSpan.onclick = () => handleInspectorScrub(tIdx);
+          ticksWrap.appendChild(tickSpan);
+        });
+      }
+    }
+
+    // Stop Milestone Dots on Scrubber Track
+    const dotsWrap = document.getElementById('scrubberStopDots');
+    if (dotsWrap) {
+      dotsWrap.innerHTML = '';
+      inspectorStops.forEach((s, idx) => {
+        const dot = document.createElement('div');
+        dot.className = 'scrubber-stop-dot';
+        const pct = points.length > 1 ? ((s._pointIdx || 0) / (points.length - 1)) * 100 : 0;
+        dot.style.left = `${pct}%`;
+        dot.title = `Stop #${idx + 1}: ${s.place_name || s.village_name} (${s.arrival_formatted || ''})`;
+        dot.onclick = (e) => {
+          e.stopPropagation();
+          handleInspectorScrub(s._pointIdx);
+          focusTimelineStop(s.latitude, s.longitude, s.place_name, s.place_subtitle, s.arrival_formatted, s.departure_formatted, s.duration_minutes);
+        };
+        dotsWrap.appendChild(dot);
+      });
+    }
+
+    // Draw initial position at 0
+    inspectorPlaybackIndex = 0;
+    updateInspectorScrubberPosition(0);
   }
 
   function toggleInspectorPlayback() {
@@ -6524,11 +7079,27 @@
     const icon = document.getElementById('iconInspPlay');
     if (icon) icon.className = 'fas fa-pause';
 
+    // Clear any selected leg highlight
+    resetToFullDayRoute();
+
+    // User requirement: Complete map free up of lines when play is pressed!
+    if (inspectorHistoryPolyline) inspectorHistoryPolyline.setStyle({ opacity: 0 });
+    if (inspectorHistoryPolylineGlow) inspectorHistoryPolylineGlow.setStyle({ opacity: 0 });
+    const fullBtn = document.getElementById('btnToggleFullRoute');
+    if (fullBtn) fullBtn.classList.remove('active');
+    isFullRouteVisible = false;
+
     if (inspectorPlaybackIndex >= inspectorHistoryPoints.length - 1) {
       inspectorPlaybackIndex = 0;
+      if (inspectorActivePolyline) inspectorActivePolyline.setLatLngs([]);
+      if (inspectorActivePolylineGlow) inspectorActivePolylineGlow.setLatLngs([]);
+      // Hide all stops initially
+      inspectorHistoryMarkers.forEach(m => {
+        if (inspectorMap.hasLayer(m)) inspectorMap.removeLayer(m);
+      });
     }
 
-    const intervalMs = Math.max(80, Math.floor(400 / inspectorPlaybackSpeed));
+    const intervalMs = Math.max(70, Math.floor(350 / inspectorPlaybackSpeed));
     inspectorPlaybackTimer = setInterval(() => {
       inspectorPlaybackIndex++;
       if (inspectorPlaybackIndex >= inspectorHistoryPoints.length) {
@@ -6572,10 +7143,18 @@
     document.getElementById('inspScrubber').value = index;
     document.getElementById('inspScrubberTime').textContent = pt[4] || '--:--';
 
+    // Dynamic Route Line Construction: Render polyline up to current timestamp
+    if (inspectorActivePolyline && inspectorActivePolylineGlow) {
+      const activeCoords = inspectorHistoryPoints.slice(0, index + 1).map(p => [p[0], p[1]]);
+      inspectorActivePolyline.setLatLngs(activeCoords);
+      inspectorActivePolylineGlow.setLatLngs(activeCoords);
+    }
+
+    // Directional Arrow Vehicle Marker with GPS Heading
     const rot = Math.round(pt[3] || 0);
     const playbackIcon = L.divIcon({
       className: 'playback-vehicle-wrapper',
-      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #00d2ff; color: #000;"><i class="fas fa-motorcycle" style="font-size: 14px;"></i></div>`,
+      html: `<div class="live-vehicle-marker" style="transform: rotate(${rot}deg); background: #00e5ff; color: #000; box-shadow: 0 0 14px #00e5ff;"><i class="fas fa-location-arrow" style="font-size: 14px;"></i></div>`,
       iconSize: [32, 32],
       iconAnchor: [16, 16]
     });
@@ -6586,7 +7165,55 @@
       inspectorPlaybackMarker.setLatLng(latLng);
       inspectorPlaybackMarker.setIcon(playbackIcon);
     }
+
+    // Update Telemetry HUD metrics
+    const spdEl = document.getElementById('hudSpeed');
+    if (spdEl) spdEl.textContent = `${Math.round(pt[2] || 0)} km/h`;
+    const batEl = document.getElementById('hudBattery');
+    if (batEl && pt[5] != null) batEl.textContent = `${pt[5]}%`;
+
+    // Progressive Stop Blooming: show stop pins reached so far
+    inspectorHistoryMarkers.forEach((m, sIdx) => {
+      const reached = (m._stopPointIdx <= index);
+      if (reached) {
+        if (!inspectorMap.hasLayer(m)) {
+          m.addTo(inspectorMap);
+          // Add pulse blooming class
+          const pinEl = document.getElementById(`stopPin_${sIdx}`);
+          if (pinEl) pinEl.classList.add('stop-pin-bloom');
+        }
+      } else if (!isFullRouteVisible) {
+        if (inspectorMap.hasLayer(m)) inspectorMap.removeLayer(m);
+      }
+    });
   }
+
+  document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('userDeviceInspectorModal');
+    if (!modal || modal.style.display === 'none') return;
+    const viewTimeline = document.getElementById('inspTimelineView');
+    if (!viewTimeline || viewTimeline.style.display === 'none') return;
+
+    if (e.code === 'Space') {
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      if (activeTag !== 'input' && activeTag !== 'textarea') {
+        e.preventDefault();
+        toggleInspectorPlayback();
+      }
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : 1;
+      const nextIdx = Math.min((inspectorHistoryPoints ? inspectorHistoryPoints.length - 1 : 0), inspectorPlaybackIndex + step);
+      handleInspectorScrub(nextIdx);
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : 1;
+      const prevIdx = Math.max(0, inspectorPlaybackIndex - step);
+      handleInspectorScrub(prevIdx);
+    } else if (e.code === 'Escape') {
+      resetToFullDayRoute();
+    }
+  });
 
   function closeUserDeviceInspector() {
     if (inspectorLiveTimer) {
