@@ -449,7 +449,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Always enforce Secure cookie — the site is always served over HTTPS at
 # sivadurga.in. ProxyFix above ensures Flask sees the correct protocol.
 # Set DISABLE_SECURE_COOKIE=1 only for local http:// development.
-is_local_run = (__name__ == "__main__")
+is_local_run = (__name__ == "__main__") or (os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true")) or (os.environ.get("DISABLE_SECURE_COOKIE") == "1")
 app.config["SESSION_COOKIE_SECURE"] = (os.environ.get("DISABLE_SECURE_COOKIE") != "1") and not is_local_run
 app.config["SESSION_COOKIE_NAME"] = "sivadurga_session"
 app.config["SESSION_COOKIE_DOMAIN"] = None
@@ -646,6 +646,11 @@ def set_security_headers(response):
 def redirect_www_and_force_https():
     # Skip for static assets
     if request.path.startswith("/static/"):
+        return
+
+    # Never force HTTPS on localhost / loopback interfaces during local development or testing
+    req_host = (request.headers.get("Host") or request.host or "").split(":")[0].lower()
+    if req_host in ("localhost", "127.0.0.1", "0.0.0.0"):
         return
 
     # Force HTTPS in production to prevent Secure cookies from being blocked/discarded

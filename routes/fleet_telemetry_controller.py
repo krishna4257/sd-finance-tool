@@ -27,7 +27,7 @@ from flask import (
 from psycopg2.extras import execute_values
 
 from db import get_pg_connection
-from services.geocoding_service import reverse_geocode, init_geocache_table
+from services.geocoding_service import reverse_geocode, init_geocache_table, batch_reverse_geocode
 from services.telemetry_engine import (
     douglas_peucker, segment_trips_and_stops,
     find_nearest_village, haversine_km
@@ -790,11 +790,21 @@ def register_fleet_telemetry_routes(app, csrf):
             # 3. Detect Stops and Trips with Centroid Clustering
             trips, stops = segment_trips_and_stops(points_for_rdp, min_stop_minutes=5, cluster_radius_km=0.08)
 
-            # 4. High-Precision Reverse Geocoding with Caching
+            # 4. High-Precision Parallel Batch Reverse Geocoding with Caching
             init_geocache_table(conn)
 
+            coords_to_geocode = [(s["latitude"], s["longitude"]) for s in stops]
+            for t in trips:
+                if t.get("start_lat") is not None and t.get("start_lng") is not None:
+                    coords_to_geocode.append((t["start_lat"], t["start_lng"]))
+                if t.get("end_lat") is not None and t.get("end_lng") is not None:
+                    coords_to_geocode.append((t["end_lat"], t["end_lng"]))
+
+            geo_map = batch_reverse_geocode(conn, cur, coords_to_geocode, fallback_nearest_village_func=find_nearest_village)
+
             for s in stops:
-                geo = reverse_geocode(conn, cur, s["latitude"], s["longitude"], fallback_nearest_village_func=find_nearest_village)
+                k = (round(float(s["latitude"]), 4), round(float(s["longitude"]), 4))
+                geo = geo_map.get(k, {})
                 s["place_name"] = geo.get("place_name") or "Recorded Location"
                 s["place_subtitle"] = geo.get("subtitle") or ""
                 s["village_name"] = s["place_name"]
@@ -810,8 +820,10 @@ def register_fleet_telemetry_routes(app, csrf):
                 t["start_formatted"] = t["start_time"].strftime("%I:%M %p")
                 t["end_formatted"] = t["end_time"].strftime("%I:%M %p")
                 
-                start_geo = reverse_geocode(conn, cur, t.get("start_lat"), t.get("start_lng"), fallback_nearest_village_func=find_nearest_village) if t.get("start_lat") else {}
-                end_geo = reverse_geocode(conn, cur, t.get("end_lat"), t.get("end_lng"), fallback_nearest_village_func=find_nearest_village) if t.get("end_lat") else {}
+                k_start = (round(float(t["start_lat"]), 4), round(float(t["start_lng"]), 4)) if t.get("start_lat") else None
+                k_end = (round(float(t["end_lat"]), 4), round(float(t["end_lng"]), 4)) if t.get("end_lat") else None
+                start_geo = geo_map.get(k_start, {}) if k_start else {}
+                end_geo = geo_map.get(k_end, {}) if k_end else {}
                 t["start_location"] = start_geo.get("place_name") or "Trip Start"
                 t["end_location"] = end_geo.get("place_name") or "Trip Destination"
 

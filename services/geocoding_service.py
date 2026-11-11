@@ -7,12 +7,14 @@ Includes:
   2. High-speed OpenStreetMap / Photon POI reverse geocoding
   3. BigDataCloud fallback reverse geocoding
   4. Local village database fallback
+  5. High-concurrency batch geocoding with ThreadPoolExecutor
 """
 
 import json
 import logging
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -102,7 +104,7 @@ def _fetch_photon_reverse(lat, lng):
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SD-Finance-Fleet/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=3.0) as resp:
+    with urllib.request.urlopen(req, timeout=1.2) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         features = data.get("features", [])
         if not features:
@@ -158,7 +160,7 @@ def _fetch_bigdatacloud_reverse(lat, lng):
         url,
         headers={"User-Agent": "Mozilla/5.0 SD-Finance-Fleet/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=3.0) as resp:
+    with urllib.request.urlopen(req, timeout=1.2) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         locality = data.get("locality") or data.get("city")
         subdivision = data.get("principalSubdivision")
@@ -216,14 +218,17 @@ def reverse_geocode(conn, cur, lat, lng, fallback_nearest_village_func=None):
 
     # 5. Local Village database fallback
     if not resolved and fallback_nearest_village_func and cur:
-        vname, dist = fallback_nearest_village_func(cur, lat, lng)
-        if vname:
-            resolved = {
-                "place_name": vname,
-                "subtitle": f"{dist} km to center" if dist is not None else "Village Route",
-                "road": "",
-                "city": vname
-            }
+        try:
+            vname, dist = fallback_nearest_village_func(cur, lat, lng)
+            if vname:
+                resolved = {
+                    "place_name": vname,
+                    "subtitle": f"{dist} km to center" if dist is not None else "Village Route",
+                    "road": "",
+                    "city": vname
+                }
+        except Exception:
+            pass
 
     # Ultimate fallback if completely offline
     if not resolved:
@@ -251,3 +256,79 @@ def reverse_geocode(conn, cur, lat, lng, fallback_nearest_village_func=None):
         )
 
     return resolved
+
+def batch_reverse_geocode(conn, cur, coord_tuples, fallback_nearest_village_func=None):
+    """
+    Parallel reverse geocoding for a list of (lat, lng) tuples.
+    Returns a dict mapping (lat_round, lng_round) -> resolved dict.
+    """
+    unique_coords = set()
+    for lat, lng in coord_tuples:
+        if lat is not None and lng is not None:
+            unique_coords.add(_get_cache_key(lat, lng))
+
+    results = {}
+    uncached = []
+
+    # 1. Check memory and DB cache first
+    for key in unique_coords:
+        if key in _MEMORY_CACHE:
+            results[key] = _MEMORY_CACHE[key]
+        elif cur:
+            cached = lookup_cached_geocache(cur, key[0], key[1])
+            if cached:
+                _MEMORY_CACHE[key] = cached
+                results[key] = cached
+            else:
+                uncached.append(key)
+        else:
+            uncached.append(key)
+
+    # 2. Fetch uncached coordinates in parallel
+    if uncached:
+        def _fetch_one(key):
+            lat, lng = key
+            res = None
+            try:
+                res = _fetch_photon_reverse(lat, lng)
+            except Exception:
+                pass
+            if not res:
+                try:
+                    res = _fetch_bigdatacloud_reverse(lat, lng)
+                except Exception:
+                    pass
+            if not res and fallback_nearest_village_func and cur:
+                try:
+                    vname, dist = fallback_nearest_village_func(cur, lat, lng)
+                    if vname:
+                        res = {
+                            "place_name": vname,
+                            "subtitle": f"{dist} km to center" if dist is not None else "Village Route",
+                            "road": "",
+                            "city": vname
+                        }
+                except Exception:
+                    pass
+            if not res:
+                res = {
+                    "place_name": f"Location ({lat:.3f}, {lng:.3f})",
+                    "subtitle": "GPS Telemetry Point",
+                    "road": "",
+                    "city": ""
+                }
+            return key, res
+
+        with ThreadPoolExecutor(max_workers=min(6, len(uncached))) as executor:
+            future_to_key = {executor.submit(_fetch_one, k): k for k in uncached}
+            for future in as_completed(future_to_key):
+                try:
+                    k, resolved = future.result()
+                    results[k] = resolved
+                    _MEMORY_CACHE[k] = resolved
+                    if conn and not resolved["place_name"].startswith("Location ("):
+                        save_to_geocache(conn, k[0], k[1], resolved["place_name"], resolved.get("subtitle", ""), resolved.get("road", ""), resolved.get("city", ""))
+                except Exception as e:
+                    logger.debug(f"Parallel geocode worker error: {e}")
+
+    return results
