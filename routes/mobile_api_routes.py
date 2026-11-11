@@ -657,9 +657,9 @@ def mobile_cashbag_add():
         username = user_row[0] if user_row else f"Employee {eid}"
 
         # Resolve emp1, emp2, and group_id
-        bank_id = payload.get("bank_id") or payload.get("group_id")
-        emp1 = payload.get("emp1")
-        emp2 = payload.get("emp2")
+        bank_id = body.get("bank_id") or body.get("group_id")
+        emp1 = body.get("emp1")
+        emp2 = body.get("emp2")
 
         if not emp1:
             if bank_id:
