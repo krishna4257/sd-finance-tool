@@ -5238,7 +5238,9 @@ def retrieve_customer_account_pg():
             return jsonify({"success": False, "error": "Missing customer id"})
 
         conn = get_pg_connection()
-        cur = conn.cursor()        # Move customer BACK to customer table
+        cur = conn.cursor()
+
+        # 1. Move customer BACK to customer table
         cur.execute("""
             INSERT INTO customer (
                 cid, ano, name, vid,
@@ -5292,7 +5294,8 @@ def retrieve_customer_account_pg():
             UPDATE customer
             SET final_frozen_rating = NULL,
                 final_risk_level = NULL,
-                freeze_date = NULL
+                freeze_date = NULL,
+                status = 'open'
             WHERE cid = %s
         """, (cid,))
 
