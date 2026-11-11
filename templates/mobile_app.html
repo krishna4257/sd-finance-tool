@@ -227,19 +227,19 @@
             </div>
           </div>
 
-          <!-- Pre-filled Manifest Inputs -->
+          <!-- Manifest Inputs Auto-Populated From APK -->
           <div class="form-row-grid">
             <div class="form-group">
-              <label for="inputVersion">Version Name (e.g. 1.1.7) <span class="required">*</span></label>
-              <input type="text" id="inputVersion" class="hub-input" placeholder="1.1.7" required pattern="^[0-9]+(\.[0-9]+)+$">
+              <label for="inputVersion">Version Name <span class="required">*</span> <span class="text-success" style="font-size: 0.72rem; font-weight: normal;">(Auto-pulled from APK)</span></label>
+              <input type="text" id="inputVersion" class="hub-input" placeholder="Auto-detected (e.g. 1.1.8)" required pattern="^[0-9]+(\.[0-9]+)+$">
             </div>
             <div class="form-group">
-              <label for="inputVersionCode">Version Code <span class="required">*</span></label>
-              <input type="number" id="inputVersionCode" class="hub-input" placeholder="20" required min="1">
+              <label for="inputVersionCode">Version Code <span class="required">*</span> <span class="text-success" style="font-size: 0.72rem; font-weight: normal;">(Auto-pulled from APK)</span></label>
+              <input type="number" id="inputVersionCode" class="hub-input" placeholder="Auto-detected (e.g. 21)" required min="1">
             </div>
             <div class="form-group">
-              <label for="inputMinVersionCode">Min Supported Code</label>
-              <input type="number" id="inputMinVersionCode" class="hub-input" placeholder="5" min="1" value="5">
+              <label for="inputMinVersionCode">Min Supported Code <span class="text-muted" style="font-size: 0.72rem; font-weight: normal;">(Default: same or min SDK)</span></label>
+              <input type="number" id="inputMinVersionCode" class="hub-input" placeholder="e.g. 20" min="1">
             </div>
           </div>
 
@@ -4097,12 +4097,14 @@
         }
         if (data.version_code) {
           document.getElementById('inputVersionCode').value = data.version_code;
-          document.getElementById('inputMinVersionCode').value = data.version_code;
+          document.getElementById('inputMinVersionCode').value = data.min_version_code || data.version_code;
         }
 
-        document.getElementById('inspectedSub').textContent = `${sizeMb} MB • ${data.package_name || 'com.sdfinance.mobile'}`;
+        const minSdkText = data.min_sdk ? ` • Min SDK ${data.min_sdk}` : '';
+        document.getElementById('inspectedSub').textContent = `${sizeMb} MB • v${data.version_name || ''} (Build #${data.version_code || ''})${minSdkText}`;
         pill.className = 'signature-status-pill verified';
-        pill.innerHTML = '<i class="fas fa-check-circle"></i> Package verified • Ready for signing';
+        pill.innerHTML = '<i class="fas fa-check-circle"></i> Manifest Auto-Detected • Verified';
+        showToast(`Auto-pulled v${data.version_name} (Build #${data.version_code}) directly from APK!`, 'success');
       } else {
         pill.className = 'signature-status-pill';
         pill.innerHTML = `<i class="fas fa-info-circle"></i> Ready for upload (${sizeMb} MB)`;
@@ -4523,12 +4525,14 @@
 
   // ── Load Active Release QR Code ──
   function loadActiveReleaseQr(ver) {
-    const version = ver || document.getElementById('statVersion').textContent || '1.1.6';
+    const version = ver || document.getElementById('currentVerText')?.textContent || document.getElementById('statVersion')?.textContent || '1.1.8';
     const qrImg = document.getElementById('otaQrImg');
     const loading = document.getElementById('qrLoading');
 
+    if (!qrImg || !loading) return;
     qrImg.style.display = 'none';
     loading.style.display = 'flex';
+    loading.innerHTML = '<i class="fas fa-qrcode fa-3x" style="color: #94a3b8;"></i><span>Generating QR...</span>';
 
     fetch(`/api/admin/app/qr/${version}`)
     .then(r => r.json())
@@ -4537,14 +4541,17 @@
         qrImg.src = data.qr_data_url;
         qrImg.style.display = 'block';
         loading.style.display = 'none';
+      } else {
+        loading.innerHTML = '<i class="fas fa-exclamation-triangle fa-2x text-warning mb-1"></i><span style="font-size:0.75rem;">Could not load QR</span>';
       }
     })
     .catch(err => {
       console.warn('QR error:', err);
+      loading.innerHTML = '<i class="fas fa-exclamation-triangle fa-2x text-warning mb-1"></i><span style="font-size:0.75rem;">Could not load QR</span>';
     });
   }
 
-  // ── Load Releases Archive ──
+  // ── Load Releases Archive & Sync Live Release Card ──
   function loadReleasesArchive() {
     fetch('/api/admin/app/releases')
     .then(r => r.json())
@@ -4552,6 +4559,7 @@
       const tbody = document.getElementById('releasesTableBody');
       const badge = document.getElementById('buildsCountBadge');
       const currentVer = data.current_version?.latest_version || '';
+      const currentCode = data.current_version?.latest_version_code || '';
 
       if (!data.apk_files || data.apk_files.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No release APKs found in repository.</td></tr>';
@@ -4562,11 +4570,66 @@
       badge.textContent = `${data.apk_files.length} Builds Available`;
       tbody.innerHTML = '';
 
-      // Update Live Release Card with Rollout Target
+      // Update Live Release Card Dynamically with all live release data
       if (data.current_version) {
         activeReleaseVersionData = data.current_version;
         const curScope = data.current_version.target_scope || 'all';
         const targetNames = data.current_version.target_employee_names || [];
+
+        // 1. Live Version & Build Code in Hero Card & Top Stat Badges
+        if (document.getElementById('currentVerText')) {
+          document.getElementById('currentVerText').textContent = currentVer;
+        }
+        if (document.getElementById('currentCodeText')) {
+          document.getElementById('currentCodeText').textContent = currentCode;
+        }
+        if (document.getElementById('statVersion')) {
+          document.getElementById('statVersion').textContent = currentVer;
+        }
+        if (document.getElementById('statBuildCode')) {
+          document.getElementById('statBuildCode').textContent = currentCode;
+        }
+
+        // 2. Direct Download Button & Size
+        const dlBtn = document.getElementById('btnDirectDownload');
+        if (dlBtn) {
+          dlBtn.href = data.current_version.url || `/api/mobile/app/download/${currentVer}`;
+        }
+        // Match current build size
+        const currApk = data.apk_files.find(a => a.is_current || a.filename.includes(currentVer));
+        if (currApk && document.getElementById('currentSizeText')) {
+          document.getElementById('currentSizeText').textContent = `${currApk.size_mb} MB`;
+        }
+
+        // 3. Metadata Rows
+        if (document.getElementById('currentPublishedBy')) {
+          document.getElementById('currentPublishedBy').textContent = data.current_version.published_by || 'admin';
+        }
+        if (document.getElementById('currentReleasedAt')) {
+          if (data.current_version.released_at) {
+            const relDt = new Date(data.current_version.released_at).toLocaleString('en-IN', {
+              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            document.getElementById('currentReleasedAt').textContent = relDt;
+          } else {
+            document.getElementById('currentReleasedAt').textContent = '-';
+          }
+        }
+        if (document.getElementById('currentForceStatus')) {
+          document.getElementById('currentForceStatus').innerHTML = data.current_version.force_update
+            ? '<span class="badge-force-yes">MANDATORY</span>'
+            : '<span class="badge-force-no">OPTIONAL</span>';
+        }
+        if (document.getElementById('currentSha256') && data.current_version.sha256) {
+          const sha = data.current_version.sha256;
+          document.getElementById('currentSha256').title = sha;
+          document.getElementById('currentSha256').innerHTML = `${sha.substring(0, 16)}… <button class="copy-tiny-btn" onclick="copyToClipboard('${sha}', this)"><i class="far fa-copy"></i></button>`;
+        }
+        if (document.getElementById('currentNotesText')) {
+          document.getElementById('currentNotesText').textContent = data.current_version.release_notes || 'No release notes specified.';
+        }
+
+        // 4. Rollout Audience Badges
         const scopeBadge = document.getElementById('currentRolloutScopeBadge');
         const targetRow = document.getElementById('currentTargetEmployeesRow');
         const targetList = document.getElementById('currentTargetEmployeesList');
@@ -4588,30 +4651,38 @@
             targetList.innerHTML = '';
           }
         }
+
+        // Generate QR code for the active live release
+        loadActiveReleaseQr(currentVer);
       }
 
+      // Render Builds Table (Latest at the top)
       data.apk_files.forEach(apk => {
         const tr = document.createElement('tr');
-        const isCurrent = apk.filename.includes(currentVer);
-        const curScope = (isCurrent && data.current_version?.target_scope) ? data.current_version.target_scope : 'all';
-        const targetCount = (isCurrent && data.current_version?.target_employee_names) ? data.current_version.target_employee_names.length : 0;
+        const isCurrent = apk.is_current || apk.filename.includes(currentVer);
+        const curScope = apk.target_scope || (isCurrent && data.current_version?.target_scope) || 'all';
+        const targetNames = apk.target_employee_names || (isCurrent && data.current_version?.target_employee_names) || [];
+        const targetCount = targetNames.length;
         const audienceBadge = (curScope === 'targeted')
-          ? `<span class="badge-target-pilot"><i class="fas fa-users-viewfinder me-1"></i> Targeted (${targetCount})</span>`
+          ? `<span class="badge-target-pilot" title="${targetNames.join(', ')}"><i class="fas fa-users-viewfinder me-1"></i> Targeted (${targetCount || 1})</span>`
           : `<span class="badge-target-all"><i class="fas fa-globe me-1"></i> Global</span>`;
 
         const modDate = apk.modified_at ? new Date(apk.modified_at).toLocaleDateString('en-IN', {
           day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '-';
 
-        const sizeDisplay = apk.size_mb || (apk.size_bytes ? (apk.size_bytes / (1024 * 1024)).toFixed(1) : '115');
+        const sizeDisplay = apk.size_mb || (apk.size_bytes ? (apk.size_bytes / (1024 * 1024)).toFixed(1) : '35');
+        const notesSub = apk.release_notes ? `<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; font-weight: normal; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${apk.release_notes}">${apk.release_notes}</div>` : '';
+        const vDisplay = apk.version_code ? `<span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: normal; margin-left: 4px;">#${apk.version_code}</span>` : '';
 
         tr.innerHTML = `
           <td>
             <div style="font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;">
               <i class="fab fa-android" style="color: var(--primary); font-size: 1.1rem;"></i>
-              ${apk.filename}
+              ${apk.filename}${vDisplay}
               ${isCurrent ? '<span class="badge-force-yes" style="background: var(--primary-light); color: var(--primary);">LIVE OTA</span>' : ''}
             </div>
+            ${notesSub}
           </td>
           <td>${audienceBadge}</td>
           <td><strong>${sizeDisplay} MB</strong></td>
@@ -4622,7 +4693,7 @@
             </span>
           </td>
           <td class="text-end">
-            <a href="/api/mobile/app/download/${apk.filename.replace('sdfin-', '').replace('.apk', '')}" class="btn-direct-download" target="_blank" title="Download APK artifact">
+            <a href="/api/mobile/app/download/${apk.version || apk.filename.replace('sdfin-', '').replace('.apk', '')}" class="btn-direct-download" target="_blank" title="Download APK artifact">
               <i class="fas fa-download me-1"></i> Download
             </a>
           </td>

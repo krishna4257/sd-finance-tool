@@ -139,6 +139,116 @@ def get_keystore_vault_info():
     }
 
 
+def _parse_axml_manifest(data: bytes) -> dict:
+    """Pure-Python Android Binary XML (AXML) manifest parser.
+    Extracts package_name, version_name, version_code, and min_sdk
+    directly from raw AndroidManifest.xml bytes without any external tools.
+    """
+    import struct
+    res = {"package_name": "", "version_name": "", "version_code": 0, "min_sdk": 0}
+    if len(data) < 40:
+        return res
+    try:
+        magic, size = struct.unpack('<II', data[:8])
+        if magic != 0x00080003:
+            return res
+
+        # String pool chunk (type: 0x0001)
+        sp_type, sp_header_size, sp_size = struct.unpack('<HHI', data[8:16])
+        if sp_type != 0x0001:
+            return res
+
+        string_count, style_count, flags, strings_start, styles_start = struct.unpack('<IIIII', data[16:36])
+        is_utf8 = bool(flags & (1 << 8))
+
+        if 36 + 4 * string_count > len(data):
+            return res
+
+        string_offsets = struct.unpack(f'<{string_count}I', data[36:36 + 4 * string_count])
+        strings_data_start = 8 + strings_start
+        strings = []
+
+        for offset in string_offsets:
+            idx = strings_data_start + offset
+            if idx >= len(data):
+                strings.append("")
+                continue
+            if is_utf8:
+                u8len = data[idx]
+                if u8len & 0x80:
+                    idx += 1
+                idx += 1
+                if idx >= len(data):
+                    strings.append("")
+                    continue
+                u8len = data[idx]
+                if u8len & 0x80:
+                    idx += 1
+                idx += 1
+                s = data[idx:idx + u8len].decode('utf-8', errors='replace')
+            else:
+                if idx + 2 > len(data):
+                    strings.append("")
+                    continue
+                u16len = struct.unpack('<H', data[idx:idx+2])[0]
+                if u16len & 0x8000:
+                    idx += 2
+                idx += 2
+                s = data[idx:idx + u16len * 2].decode('utf-16le', errors='replace')
+            strings.append(s)
+
+        # Resource IDs map (chunk 0x0180)
+        pos = 8 + sp_size
+        res_ids = []
+        if pos + 8 <= len(data):
+            chunk_type, header_size, chunk_size = struct.unpack('<HHI', data[pos:pos+8])
+            if chunk_type == 0x0180:
+                res_count = (chunk_size - 8) // 4
+                if pos + 8 + res_count * 4 <= len(data):
+                    res_ids = list(struct.unpack(f'<{res_count}I', data[pos+8:pos+8+res_count*4]))
+                pos += chunk_size
+
+        # XML Element chunks
+        while pos + 8 <= len(data):
+            chunk_type, header_size, chunk_size = struct.unpack('<HHI', data[pos:pos+8])
+            if chunk_size <= 0:
+                break
+
+            if chunk_type == 0x0102:  # START_TAG
+                if pos + 30 <= len(data):
+                    ns_idx, name_idx, attr_start, attr_size, attr_count = struct.unpack('<IIHHH', data[pos+16:pos+30])
+                    tag = strings[name_idx] if name_idx < len(strings) else ''
+
+                    attr_pos = pos + 16 + attr_start
+                    for _ in range(attr_count):
+                        if attr_pos + 20 > len(data):
+                            break
+                        uri_idx, a_name_idx, a_val_idx, val_size, val_res0, val_type, val_data = struct.unpack('<IIIHBB I', data[attr_pos:attr_pos+20])
+                        a_name = strings[a_name_idx] if a_name_idx < len(strings) else ''
+                        r_id = res_ids[a_name_idx] if a_name_idx < len(res_ids) else 0
+                        s_val = strings[a_val_idx] if (a_val_idx < len(strings) and a_val_idx != 0xFFFFFFFF) else None
+
+                        if tag == 'manifest':
+                            if a_name == 'package' or (s_val and 'com.' in s_val):
+                                if s_val:
+                                    res["package_name"] = s_val
+                            if a_name == 'versionName' or r_id == 0x0101021c:
+                                if s_val:
+                                    res["version_name"] = s_val
+                            if a_name == 'versionCode' or r_id == 0x0101021b:
+                                res["version_code"] = int(val_data)
+                        elif tag == 'uses-sdk':
+                            if a_name == 'minSdkVersion' or r_id == 0x0101020c:
+                                res["min_sdk"] = int(val_data)
+
+                        attr_pos += attr_size
+
+            pos += chunk_size
+    except Exception as e:
+        logger.debug("AXML parser error: %s", e)
+
+    return res
+
 def extract_apk_metadata(apk_path: str) -> dict:
     """Extract versionName, versionCode, packageName, and SHA256 from an APK."""
     result = {
@@ -157,6 +267,27 @@ def extract_apk_metadata(apk_path: str) -> dict:
 
     result["size_bytes"] = os.path.getsize(apk_path)
     result["sha256"] = calculate_sha256(apk_path)
+
+    # 1. Primary: Native pure-Python AXML parser (zero external tool dependencies)
+    try:
+        with zipfile.ZipFile(apk_path, "r") as zf:
+            if "AndroidManifest.xml" in zf.namelist():
+                manifest_data = zf.read("AndroidManifest.xml")
+                axml_res = _parse_axml_manifest(manifest_data)
+                if axml_res.get("version_name") or axml_res.get("version_code"):
+                    if axml_res.get("package_name"):
+                        result["package_name"] = axml_res["package_name"]
+                    if axml_res.get("version_name"):
+                        result["version_name"] = axml_res["version_name"]
+                    if axml_res.get("version_code"):
+                        result["version_code"] = axml_res["version_code"]
+                    if axml_res.get("min_sdk"):
+                        result["min_sdk"] = axml_res["min_sdk"]
+                    result["method"] = "axml_parser"
+                    return result
+    except Exception as e:
+        logger.warning("Pure AXML manifest extraction failed: %s", e)
+
 
     # 1. Try aapt if available
     aapt_tool = _find_tool("aapt")

@@ -1,19 +1,14 @@
 {
-  "latest_version": "1.1.7",
-  "latest_version_code": 20,
+  "latest_version": "1.1.8",
+  "latest_version_code": 21,
   "min_supported_version_code": 20,
   "force_update": true,
-  "sha256": "e1b15b0d895468b7bacc9a88a3ace4db752978d6216cf4ed7b0de1e98872a7bd",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.7",
-  "release_notes": "[Bug Fix]",
-  "released_at": "2026-11-05T18:55:11.048678+00:00",
+  "sha256": "a6339862f3a3212320755f8a0929ae2307bc053cf7de1bd56c2d55c396f62cd6",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.1.8",
+  "release_notes": "[Feature] Performance updates and OTA pipeline optimizations.",
+  "released_at": "2026-11-10T11:49:06.319265+00:00",
   "published_by": "chinna",
-  "target_scope": "targeted",
-  "target_employee_ids": [
-    4,
-    5
-  ],
-  "target_employee_names": [
-    "KARRI CHINNA REDDY (@chinna)"
-  ]
+  "target_scope": "all",
+  "target_employee_ids": [],
+  "target_employee_names": []
 }

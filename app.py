@@ -10160,14 +10160,14 @@ def update_payment_date_bulk():
 @app.route("/cashbag")
 @login_required
 def cashbag():
-
-    # ── Scope: employee pair from query params ──
+    # ── Scope: employee pair & optional bank/cashbag from query params ──
     emp1 = request.args.get("emp1", type=int)
     emp2 = request.args.get("emp2", type=int)  # may be None if solo employee
     limit_val = request.args.get("limit", default=250, type=int)
     if not limit_val or limit_val <= 0:
         limit_val = 250
     bank_id = request.args.get("bank_id", type=str)
+    cashbag_id = request.args.get("cashbag_id", type=str)
 
     if not emp1:
         flash("Please open Cash Bag from a village group tile.", "warning")
@@ -10175,528 +10175,22 @@ def cashbag():
 
     conn = get_pg_connection()
     cur = conn.cursor()
-
     try:
-
-        # Resolve current_bank
-        current_bank = None
-        if bank_id:
-            cur.execute("""
-                SELECT id, group_code, group_name, emp1_id, emp2_id
-                FROM village_groups
-                WHERE id = %s
-            """, (bank_id,))
-            brow = cur.fetchone()
-            if brow:
-                current_bank = {
-                    "id": str(brow[0]),
-                    "group_code": brow[1],
-                    "group_name": brow[2],
-                    "emp1_id": brow[3],
-                    "emp2_id": brow[4]
-                }
-
-        if not current_bank:
-            if emp2:
-                cur.execute("""
-                    SELECT id, group_code, group_name, emp1_id, emp2_id
-                    FROM village_groups
-                    WHERE (emp1_id = %s AND emp2_id = %s) OR (emp1_id = %s AND emp2_id = %s)
-                    ORDER BY created_at DESC LIMIT 1
-                """, (emp1, emp2, emp2, emp1))
-            else:
-                cur.execute("""
-                    SELECT id, group_code, group_name, emp1_id, emp2_id
-                    FROM village_groups
-                    WHERE emp1_id = %s AND (emp2_id IS NULL OR emp2_id = %s)
-                    ORDER BY created_at DESC LIMIT 1
-                """, (emp1, emp1))
-            brow = cur.fetchone()
-            if brow:
-                current_bank = {
-                    "id": str(brow[0]),
-                    "group_code": brow[1],
-                    "group_name": brow[2],
-                    "emp1_id": brow[3],
-                    "emp2_id": brow[4]
-                }
-
-        # Fetch group_banks
-        if emp2:
-            cur.execute("""
-                SELECT id, group_code, group_name
-                FROM village_groups
-                WHERE (emp1_id = %s AND emp2_id = %s) OR (emp1_id = %s AND emp2_id = %s)
-                ORDER BY group_name
-            """, (emp1, emp2, emp2, emp1))
-        else:
-            cur.execute("""
-                SELECT id, group_code, group_name
-                FROM village_groups
-                WHERE emp1_id = %s AND (emp2_id IS NULL OR emp2_id = %s)
-                ORDER BY group_name
-            """, (emp1, emp1))
-        group_banks = [{"id": str(r[0]), "group_code": r[1], "group_name": r[2]} for r in cur.fetchall()]
-
-        # Fetch group_cashbags
-        if emp2:
-            cur.execute("""
-                SELECT id, name, village_codes
-                FROM village_cashbags
-                WHERE emp1 = %s AND emp2 = %s
-                ORDER BY name
-            """, (emp1, emp2))
-        else:
-            cur.execute("""
-                SELECT id, name, village_codes
-                FROM village_cashbags
-                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = %s)
-                ORDER BY name
-            """, (emp1, emp1))
-        group_cashbags = [{
-            "id": str(r[0]),
-            "name": r[1],
-            "village_codes": r[2] or []
-        } for r in cur.fetchall()]
-
-        # ------------------------------------------------
-        # BUILD emp pair WHERE clause helper
-        # ------------------------------------------------
-        if emp2:
-            pair_filter = "emp1 = %s AND emp2 = %s"
-            pair_params_single = (emp1, emp2)
-        else:
-            pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
-            pair_params_single = (emp1,)
-
-        # ------------------------------------------------
-        # EMPLOYEE NAMES for page header
-        # ------------------------------------------------
-        cur.execute("SELECT name FROM employee WHERE eid = %s", (emp1,))
-        row_e1 = cur.fetchone()
-        emp1_name = row_e1[0] if row_e1 else f"Employee {emp1}"
-
-        emp2_name = None
-        if emp2:
-            cur.execute("SELECT name FROM employee WHERE eid = %s", (emp2,))
-            row_e2 = cur.fetchone()
-            emp2_name = row_e2[0] if row_e2 else f"Employee {emp2}"
-
-        # ------------------------------------------------
-        # VILLAGES in this group (for context display)
-        # ------------------------------------------------
-        if emp2:
-            cur.execute("""
-                SELECT vid, village_name, village_code
-                FROM village
-                WHERE emp1 = %s AND emp2 = %s AND status = 'active'
-                ORDER BY village_code
-            """, (emp1, emp2))
-        else:
-            cur.execute("""
-                SELECT vid, village_name, village_code
-                FROM village
-                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
-                ORDER BY village_code
-            """, (emp1,))
-        rows_v = cur.fetchall()
-        group_villages = [{"id": r[0], "name": r[1], "code": r[2]} for r in rows_v]
-        vids = [r[0] for r in rows_v]
-
-        # ------------------------------------------------
-        # SUMMARY TOTALS  (scoped to emp pair / vids)
-        # ------------------------------------------------
-
-        # 1. Manual transactions sum
-        cur.execute(f"""
-            SELECT 
-                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' THEN amount ELSE 0 END), 0) AS office_cash,
-                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS office_cash_cash,
-                COALESCE(SUM(CASE WHEN txn = 'OFFICE_CASH' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS office_cash_upi,
-                
-                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' THEN amount ELSE 0 END), 0) AS expenses,
-                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS expenses_cash,
-                COALESCE(SUM(CASE WHEN txn = 'EXPENSE' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS expenses_upi,
-                
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' THEN amount ELSE 0 END), 0) AS adj_add,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_add_cash,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'ADD' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_add_upi,
-                
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' THEN amount ELSE 0 END), 0) AS adj_minus,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS adj_minus_cash,
-                COALESCE(SUM(CASE WHEN txn = 'ADJUSTMENT' AND txn_sub = 'MINUS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS adj_minus_upi,
-
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' THEN amount ELSE 0 END), 0) AS profit_val,
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS profit_cash,
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'PROFIT' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS profit_upi,
-                
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' THEN amount ELSE 0 END), 0) AS loss_val,
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' AND txn_type = 'CASH' THEN amount ELSE 0 END), 0) AS loss_cash,
-                COALESCE(SUM(CASE WHEN txn = 'PROFIT_LOSS' AND txn_sub = 'LOSS' AND txn_type = 'UPI' THEN amount ELSE 0 END), 0) AS loss_upi
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-        """, pair_params_single)
-        row_manual = cur.fetchone()
-        office_cash = float(row_manual[0] or 0)
-        office_cash_cash = float(row_manual[1] or 0)
-        office_cash_upi = float(row_manual[2] or 0)
-        expenses = float(row_manual[3] or 0)
-        expenses_cash = float(row_manual[4] or 0)
-        expenses_upi = float(row_manual[5] or 0)
-        adjustments_add = float(row_manual[6] or 0)
-        adjustments_add_cash = float(row_manual[7] or 0)
-        adjustments_add_upi = float(row_manual[8] or 0)
-        adjustments_minus = float(row_manual[9] or 0)
-        adjustments_minus_cash = float(row_manual[10] or 0)
-        adjustments_minus_upi = float(row_manual[11] or 0)
-        profit_val = float(row_manual[12] or 0)
-        profit_cash = float(row_manual[13] or 0)
-        profit_upi = float(row_manual[14] or 0)
-        loss_val = float(row_manual[15] or 0)
-        loss_cash = float(row_manual[16] or 0)
-        loss_upi = float(row_manual[17] or 0)
-        profit_loss_net = profit_val - loss_val
-
-        # 2. Installments sum
-        installments = 0.0
-        installments_cash = 0.0
-        installments_upi = 0.0
-        if vids:
-            cur.execute("""
-                SELECT 
-                    COALESCE(SUM(p.amt), 0) AS total,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(p.payment_type) = 'cash' THEN p.amt 
-                        WHEN LOWER(p.payment_type) = 'upi' THEN 0 
-                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.cash_amount, 0)
-                        ELSE p.amt 
-                    END), 0) AS cash,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(p.payment_type) = 'upi' THEN p.amt 
-                        WHEN LOWER(p.payment_type) = 'partial' THEN COALESCE(p.upi_amount, 0)
-                        ELSE 0 
-                    END), 0) AS upi
-                FROM v_all_payments p
-                WHERE p.vid = ANY(%s)
-            """, (vids,))
-            row_inst = cur.fetchone()
-            installments = float(row_inst[0] or 0)
-            installments_cash = float(row_inst[1] or 0)
-            installments_upi = float(row_inst[2] or 0)
-
-        # 3. Loans & commissions sum
-        loans_disbursed = 0.0
-        loans_disbursed_cash = 0.0
-        loans_disbursed_upi = 0.0
-        loan_commission = 0.0
-        loan_commission_cash = 0.0
-        loan_commission_upi = 0.0
-        interest_total = 0.0
-        base_amount_total = 0.0
-        outstanding_balance_total = 0.0
-        active_balance_total = 0.0
-        if vids:
-            cur.execute("""
-                SELECT 
-                    COALESCE(SUM(c.total_amount), 0) AS loans_disbursed,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
-                        ELSE c.total_amount
-                    END), 0) AS loans_disbursed_cash,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(c.payment_type) = 'upi' THEN c.total_amount
-                        ELSE 0
-                    END), 0) AS loans_disbursed_upi,
-                    
-                    COALESCE(SUM(CASE 
-                        WHEN c.cutting_amount > 0 THEN c.cutting_amount 
-                        ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) 
-                    END), 0) AS loan_commission,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(c.payment_type) = 'upi' THEN 0
-                        ELSE (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
-                    END), 0) AS loan_commission_cash,
-                    COALESCE(SUM(CASE 
-                        WHEN LOWER(c.payment_type) = 'upi' THEN (CASE WHEN c.cutting_amount > 0 THEN c.cutting_amount ELSE ROUND(c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0), 2) END)
-                        ELSE 0
-                    END), 0) AS loan_commission_upi,
-                    
-                    COALESCE(SUM(CASE 
-                        WHEN c.interest_amount > 0 THEN c.interest_amount 
-                        ELSE ROUND(c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0), 2) 
-                    END), 0) AS interest_total,
-
-                    COALESCE(SUM(CASE 
-                        WHEN c.base_amount > 0 THEN c.base_amount 
-                        ELSE ROUND(c.total_amount - (c.total_amount * (COALESCE(v.interest_rate, 0) / 100.0)) - (c.total_amount * (COALESCE(v.cutting_rate, 0) / 100.0)), 2) 
-                    END), 0) AS base_amount_total,
-
-                    COALESCE(SUM(c.balance_amount), 0) AS outstanding_balance_total,
-                    COALESCE(SUM(CASE WHEN c.status = 'active' THEN c.balance_amount ELSE 0 END), 0) AS active_balance_total
-                FROM v_all_customers c
-                JOIN village v ON c.vid = v.vid
-                WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-            """, (vids,))
-            row_loans = cur.fetchone()
-            loans_disbursed = float(row_loans[0] or 0)
-            loans_disbursed_cash = float(row_loans[1] or 0)
-            loans_disbursed_upi = float(row_loans[2] or 0)
-            loan_commission = float(row_loans[3] or 0)
-            loan_commission_cash = float(row_loans[4] or 0)
-            loan_commission_upi = float(row_loans[5] or 0)
-            interest_total = float(row_loans[6] or 0)
-            base_amount_total = float(row_loans[7] or 0)
-            outstanding_balance_total = float(row_loans[8] or 0)
-            active_balance_total = float(row_loans[9] or 0)
-
-        # Capital deployed and Withdrawn
-        cb_group_filter = f"({pair_filter} OR group_id = %s)" if bank_id else pair_filter
-        cb_group_params = pair_params_single + (bank_id,) if bank_id else pair_params_single
-        cur.execute(f"""
-            SELECT 
-                COALESCE(SUM(CASE WHEN txn IN ('CAPITAL_DEPLOYED', 'OFFICE_CASH') AND (notes ILIKE 'Capital Deployed%%' OR txn = 'CAPITAL_DEPLOYED') THEN amount ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN txn IN ('CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' THEN amount ELSE 0 END), 0)
-            FROM cashbag_transactions
-            WHERE {cb_group_filter}
-        """, cb_group_params)
-        row_caps = cur.fetchone()
-        capital_deployed = float(row_caps[0] or 0)
-        total_withdrawn = float(row_caps[1] or 0)
-
-        if current_bank:
-            cur.execute("""
-                SELECT COALESCE(SUM(amount), 0)
-                FROM group_capital_allocations
-                WHERE group_id = %s
-            """, (current_bank["id"],))
-            cap_gca = float(cur.fetchone()[0] or 0)
-            if cap_gca > capital_deployed:
-                capital_deployed = cap_gca
-
-            cur.execute("""
-                SELECT COALESCE(SUM(total_withdrawn), 0)
-                FROM group_withdrawal_logs
-                WHERE group_id = %s
-            """, (current_bank["id"],))
-            wdr_gwl = float(cur.fetchone()[0] or 0)
-            if wdr_gwl > total_withdrawn:
-                total_withdrawn = wdr_gwl
-
-        # Interest discount total
-        interest_discount_total = 0.0
-        if vids:
-            cur.execute("""
-                SELECT COALESCE(SUM(interest_discount), 0)
-                FROM v_all_customers
-                WHERE vid = ANY(%s) AND status != 'deleted'
-            """, (vids,))
-            row_disc = cur.fetchone()
-            interest_discount_total = float(row_disc[0] or 0) if row_disc else 0.0
-
-        # ------------------------------------------------
-        # FINAL CASHBAG TOTALS
-        # ------------------------------------------------
-        cashbag_total_cash = (
-            capital_deployed
-            + office_cash_cash
-            + installments_cash
-            + loan_commission_cash
-            + interest_total
-            + adjustments_add_cash
-            + profit_cash
-            - loans_disbursed_cash
-            - expenses_cash
-            - adjustments_minus_cash
-            - loss_cash
-            - total_withdrawn
-        )
-        cashbag_total_upi = (
-            office_cash_upi
-            + installments_upi
-            + loan_commission_upi
-            + adjustments_add_upi
-            + profit_upi
-            - loans_disbursed_upi
-            - expenses_upi
-            - adjustments_minus_upi
-            - loss_upi
-        )
-        cashbag_total = cashbag_total_cash + cashbag_total_upi
-
-        # ------------------------------------------------
-        # TRANSACTION HISTORY (Unified Ledger)
-        # ------------------------------------------------
-        if vids:
-            query = f"""
-                SELECT 
-                    id,
-                    txn,
-                    txn_sub,
-                    txn_type,
-                    amount,
-                    notes,
-                    created_by,
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
-                FROM (
-                    -- Manual entries (Office Cash, Expense, Adjustment, Capital Deployed, Withdrawal)
-                    SELECT 
-                        id::text AS id,
-                        txn,
-                        txn_sub,
-                        txn_type,
-                        amount,
-                        notes,
-                        created_by,
-                        created_at
-                    FROM cashbag_transactions
-                    WHERE {cb_group_filter}
-                      AND (txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS', 'CAPITAL_DEPLOYED', 'CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' OR notes ILIKE 'Capital Deployed%%')
-
-                    UNION ALL
-
-                    -- Customer Loans (Auto)
-                    SELECT 
-                        'loan_' || c.cid::text AS id,
-                        'LOAN' AS txn,
-                        NULL AS txn_sub,
-                        'CASH' AS txn_type,
-                        CASE 
-                            WHEN c.base_amount > 0 THEN c.base_amount
-                            ELSE ROUND(c.total_amount - (c.total_amount * (v.interest_rate / 100.0)) - (c.total_amount * (v.cutting_rate / 100.0)), 2)
-                        END AS amount,
-                        'Loan issued to ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        c.start_date::timestamp WITH time zone AS created_at
-                    FROM (
-                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM customer
-                        UNION ALL
-                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM closed_cust_account
-                    ) c
-                    JOIN village v ON c.vid = v.vid
-                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-
-                    UNION ALL
-
-                    -- Customer Loan Commission (Auto)
-                    SELECT 
-                        'comm_' || c.cid::text AS id,
-                        'LOAN_COMMISION' AS txn,
-                        NULL AS txn_sub,
-                        'CASH' AS txn_type,
-                        CASE 
-                            WHEN c.cutting_amount > 0 THEN c.cutting_amount
-                            ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
-                        END AS amount,
-                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        c.start_date::timestamp WITH time zone AS created_at
-                    FROM (
-                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM customer
-                        UNION ALL
-                        SELECT cid, base_amount, total_amount, cutting_amount, name, ano, start_date, status, vid FROM closed_cust_account
-                    ) c
-                    JOIN village v ON c.vid = v.vid
-                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-
-                    UNION ALL
-
-                    -- Customer Payments (Auto)
-                    SELECT 
-                        'pay_' || p.pid::text AS id,
-                        'INSTALLMENT_AMOUNT' AS txn,
-                        NULL AS txn_sub,
-                        p.payment_type AS txn_type,
-                        p.amt AS amount,
-                        'Collection from ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        p.created_at AS created_at
-                    FROM v_all_payments p
-                    JOIN v_all_customers c ON p.cid = c.cid
-                    WHERE p.vid = ANY(%s)
-                ) AS combined
-                ORDER BY combined.created_at DESC, id DESC
-                LIMIT %s
-            """
-            params = cb_group_params + (vids, vids, vids, limit_val)
-            cur.execute(query, params)
-        else:
-            query = f"""
-                SELECT 
-                    id::text AS id,
-                    txn,
-                    txn_sub,
-                    txn_type,
-                    amount,
-                    notes,
-                    created_by,
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
-                FROM cashbag_transactions
-                WHERE {cb_group_filter}
-                  AND (txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT', 'PROFIT_LOSS', 'CAPITAL_DEPLOYED', 'CAPITAL_WITHDRAWN', 'WITHDRAWN', 'INTEREST_WITHDRAWN') OR notes ILIKE '%%Withdrawal%%' OR notes ILIKE 'Capital Deployed%%')
-                ORDER BY created_at DESC, id DESC
-                LIMIT %s
-            """
-            cur.execute(query, cb_group_params + (limit_val,))
-
-        rows = cur.fetchall()
-        transactions = []
-
-        for row in rows:
-            transactions.append({
-                "id":         row[0],
-                "txn":        row[1],
-                "txn_sub":    row[2],
-                "txn_type":   row[3],
-                "amount":     float(row[4] or 0),
-                "notes":      row[5],
-                "created_by": row[6],
-                "created_at": row[7]
-            })
-
-        return render_template(
-            "cashbag.html",
-
+        from services.cashbag_engine import compute_cashbag_metrics
+        data = compute_cashbag_metrics(
+            cur,
             emp1=emp1,
             emp2=emp2,
-            emp1_name=emp1_name,
-            emp2_name=emp2_name,
-            group_villages=group_villages,
-
-            cashbag_total=cashbag_total,
-            cashbag_total_cash=cashbag_total_cash,
-            cashbag_total_upi=cashbag_total_upi,
-            office_cash=office_cash,
-            installments=installments,
-            loans_disbursed=loans_disbursed,
-            loan_commission=loan_commission,
-            interest_total=interest_total,
-            expenses=expenses,
-            adjustments_add=adjustments_add,
-            adjustments_minus=adjustments_minus,
-            profit_loss_net=profit_loss_net,
-
-            transactions=transactions,
-            limit_val=limit_val,
-            current_bank=current_bank,
-            group_banks=group_banks,
-            group_cashbags=group_cashbags,
-            capital_deployed=capital_deployed,
-            total_withdrawn=total_withdrawn,
-            capital_withdrawn=total_withdrawn,
-            interest_discount_total=interest_discount_total,
-            base_amount_total=base_amount_total,
-            outstanding_balance_total=outstanding_balance_total,
-            active_balance_total=active_balance_total
+            bank_id=bank_id,
+            cashbag_id=cashbag_id,
+            limit_val=limit_val
         )
-
+        return render_template("cashbag.html", **data)
     except Exception as e:
-
         traceback.print_exc()
         flash(f"Cashbag loading failed: {str(e)}", "danger")
         return redirect(url_for("village_page"))
-
     finally:
-
         cur.close()
         conn.close()
 
@@ -10712,6 +10206,8 @@ def add_cashbag_transaction():
     # emp1/emp2 come as hidden fields from the cashbag form
     emp1 = request.form.get("emp1", type=int)
     emp2 = request.form.get("emp2", type=int)
+    bank_id = request.form.get("bank_id") or request.args.get("bank_id")
+    cashbag_id = request.form.get("cashbag_id") or request.args.get("cashbag_id")
 
     if not emp1:
         flash("Employee group context missing", "warning")
@@ -10753,6 +10249,10 @@ def add_cashbag_transaction():
     redirect_args = {"emp1": emp1}
     if emp2:
         redirect_args["emp2"] = emp2
+    if bank_id:
+        redirect_args["bank_id"] = bank_id
+    if cashbag_id:
+        redirect_args["cashbag_id"] = cashbag_id
 
     # Validate
     if txn not in allowed_txn:
@@ -10813,9 +10313,10 @@ def add_cashbag_transaction():
                     amount,
                     notes,
                     created_by,
-                    created_at
+                    created_at,
+                    group_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 emp1,
                 emp2,
@@ -10826,7 +10327,8 @@ def add_cashbag_transaction():
                 amount,
                 notes or None,
                 username,
-                created_at_val
+                created_at_val,
+                bank_id or None
             ))
         else:
             cur.execute("""
@@ -10839,9 +10341,10 @@ def add_cashbag_transaction():
                     txn_type,
                     amount,
                     notes,
-                    created_by
+                    created_by,
+                    group_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 emp1,
                 emp2,
@@ -10851,7 +10354,8 @@ def add_cashbag_transaction():
                 txn_type,
                 amount,
                 notes or None,
-                username
+                username,
+                bank_id or None
             ))
 
         conn.commit()
@@ -11031,6 +10535,34 @@ def _write_version_json_atomic(data: dict):
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp_path, VERSION_JSON_PATH)
+
+
+RELEASES_LEDGER_PATH = os.path.join(APK_DIR, "releases_ledger.json")
+
+
+def _read_releases_ledger() -> list:
+    """Read releases_ledger.json from disk. Returns list of release dicts."""
+    if not os.path.isfile(RELEASES_LEDGER_PATH):
+        return []
+    try:
+        with open(RELEASES_LEDGER_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _append_releases_ledger(entry: dict):
+    """Atomically record a release entry into releases_ledger.json."""
+    os.makedirs(APK_DIR, exist_ok=True)
+    ledger = _read_releases_ledger()
+    # Replace existing entry for this version or insert at front
+    ledger = [e for e in ledger if str(e.get("version")) != str(entry.get("version"))]
+    ledger.insert(0, entry)
+    tmp_path = RELEASES_LEDGER_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_path, RELEASES_LEDGER_PATH)
 
 
 def _sha256_file(path: str) -> str:
@@ -11379,6 +10911,23 @@ def admin_app_publish():
         logger.error("admin_app_publish: sha256 failed: %s", e)
         return jsonify({"error": "failed to compute checksum"}), 500
 
+    # --- Auto-detect & enforce versionCode from APK manifest ---
+    try:
+        from services import apk_signing
+        meta = apk_signing.extract_apk_metadata(apk_path) if apk_signing else {}
+        apk_vcode = meta.get("version_code") or 0
+        if apk_vcode > 0:
+            if version_code <= 0 or version_code != apk_vcode:
+                logger.info("Setting publish version_code to binary APK versionCode %s (client sent %s)", apk_vcode, version_code)
+                version_code = apk_vcode
+        if not version and meta.get("version_name"):
+            version = meta["version_name"]
+            apk_filename = f"sdfin-{version}.apk"
+        if not sha256_hex and meta.get("sha256"):
+            sha256_hex = meta["sha256"]
+    except Exception as _ex:
+        logger.warning("APK metadata extraction during publish: %s", _ex)
+
     # --- Write version.json atomically ---
     download_url = f"https://sivadurga.in/api/mobile/app/download/{version}"
     version_payload = {
@@ -11401,6 +10950,28 @@ def admin_app_publish():
     except Exception as e:
         logger.error("admin_app_publish: version.json write failed: %s", e)
         return jsonify({"error": "failed to update version manifest"}), 500
+
+    # Record to release history ledger
+    try:
+        _append_releases_ledger({
+            "version": version,
+            "version_code": version_code,
+            "min_supported_version_code": min_version_code,
+            "force_update": force_update,
+            "filename": apk_filename,
+            "size_bytes": os.path.getsize(apk_path),
+            "size_mb": f"{os.path.getsize(apk_path) / (1024 * 1024):.1f}",
+            "sha256": sha256_hex,
+            "url": download_url,
+            "release_notes": release_notes,
+            "released_at": version_payload["released_at"],
+            "published_by": session.get("username", "unknown"),
+            "target_scope": target_scope,
+            "target_employee_ids": target_employee_ids,
+            "target_employee_names": target_employee_names,
+        })
+    except Exception as _ledg_err:
+        logger.warning("Failed appending to releases ledger: %s", _ledg_err)
 
     # --- Audit ---
     audit_log(
@@ -11507,6 +11078,22 @@ def admin_app_update_target():
         logger.error("admin_app_update_target: atomic write failed: %s", e)
         return jsonify({"success": False, "error": "Failed to save targeting"}), 500
 
+    # Update active release in releases_ledger.json
+    try:
+        ledger = _read_releases_ledger()
+        for item in ledger:
+            if str(item.get("version")) == str(version_data.get("latest_version")):
+                item["target_scope"] = target_scope
+                item["target_employee_ids"] = target_employee_ids
+                item["target_employee_names"] = target_employee_names
+                break
+        tmp_path = RELEASES_LEDGER_PATH + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(ledger, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, RELEASES_LEDGER_PATH)
+    except Exception as _ledg_err:
+        logger.warning("Failed updating target in releases ledger: %s", _ledg_err)
+
     audit_log(
         action="apk_target_updated",
         entity_type="apk_release",
@@ -11544,25 +11131,116 @@ def admin_app_update_target():
 def admin_app_releases():
     """
     GET /api/admin/app/releases
-    Admin session only. Returns current version.json and list of APK files on disk.
+    Admin session only. Returns current version.json and list of APK files on disk,
+    enriched with release history metadata, sorted latest to the top.
     """
     if not is_admin_web_session():
         return jsonify({"error": "admin access required"}), 403
 
     version_data = _read_version_json()
+    ledger_entries = {str(e.get("version")): e for e in _read_releases_ledger() if e.get("version")}
+
+    # Also query audit log for published releases to backfill historical metadata
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT entity_id, username, details, created_at
+            FROM audit_log
+            WHERE action = 'apk_published'
+            ORDER BY audit_id DESC
+        """)
+        for ent_id, pub_user, details, c_at in cur.fetchall():
+            s_ent = str(ent_id) if ent_id else ""
+            if s_ent and s_ent not in ledger_entries and isinstance(details, dict):
+                ledger_entries[s_ent] = {
+                    "version": s_ent,
+                    "version_code": details.get("version_code", 0),
+                    "force_update": details.get("force_update", False),
+                    "target_scope": details.get("target_scope", "all"),
+                    "target_count": details.get("target_count", 0),
+                    "release_notes": details.get("release_notes", ""),
+                    "published_by": pub_user,
+                    "released_at": c_at.isoformat() if c_at else None,
+                    "sha256": details.get("sha256", "")
+                }
+        cur.close()
+        conn.close()
+    except Exception as _e:
+        logger.debug("Failed querying audit_log for releases: %s", _e)
 
     apk_files = []
     if os.path.isdir(APK_DIR):
-        for fname in sorted(os.listdir(APK_DIR)):
+        for fname in os.listdir(APK_DIR):
             if fname.endswith(".apk"):
                 fpath = os.path.join(APK_DIR, fname)
+                size_bytes = os.path.getsize(fpath)
+                mtime = os.path.getmtime(fpath)
+                mod_iso = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+
+                # Extract version string from filename: sdfin-1.1.8.apk -> 1.1.8
+                v_str = fname.replace("sdfin-", "").replace(".apk", "")
+
+                # Check ledger info
+                info = ledger_entries.get(v_str, {})
+                v_code = info.get("version_code")
+                target_scope = info.get("target_scope", "all")
+                target_names = info.get("target_employee_names", [])
+                target_ids = info.get("target_employee_ids", [])
+                rel_notes = info.get("release_notes", "")
+                pub_by = info.get("published_by", "admin")
+                sha256 = info.get("sha256", "")
+
+                # If version_code missing, inspect APK
+                if not v_code:
+                    try:
+                        from services import apk_signing
+                        meta = apk_signing.extract_apk_metadata(fpath) if apk_signing else {}
+                        v_code = meta.get("version_code", 0)
+                        if not sha256:
+                            sha256 = meta.get("sha256", "")
+                    except Exception:
+                        v_code = 0
+
+                is_curr = bool(version_data and str(version_data.get("latest_version")) == v_str)
+
+                # If it's the current active release, use current targeting
+                if is_curr and version_data:
+                    target_scope = version_data.get("target_scope", target_scope)
+                    target_names = version_data.get("target_employee_names", target_names)
+                    target_ids = version_data.get("target_employee_ids", target_ids)
+                    if version_data.get("release_notes"):
+                        rel_notes = version_data.get("release_notes")
+                    if version_data.get("published_by"):
+                        pub_by = version_data.get("published_by")
+
                 apk_files.append({
                     "filename": fname,
-                    "size_bytes": os.path.getsize(fpath),
-                    "modified_at": datetime.fromtimestamp(
-                        os.path.getmtime(fpath), tz=timezone.utc
-                    ).isoformat(),
+                    "version": v_str,
+                    "version_code": int(v_code or 0),
+                    "size_bytes": size_bytes,
+                    "size_mb": f"{size_bytes / (1024 * 1024):.1f}",
+                    "modified_at": mod_iso,
+                    "target_scope": target_scope,
+                    "target_employee_names": target_names,
+                    "target_employee_ids": target_ids,
+                    "release_notes": rel_notes,
+                    "published_by": pub_by,
+                    "sha256": sha256,
+                    "is_current": is_curr
                 })
+
+    # Sort descending by version_code (highest first), then by semver components, then by modified_at
+    def _sort_key(item):
+        v_parts = []
+        for p in item.get("version", "").split("."):
+            try:
+                v_parts.append(int(p))
+            except ValueError:
+                v_parts.append(0)
+        return (item.get("version_code", 0), v_parts, item.get("modified_at", ""))
+
+    apk_files.sort(key=_sort_key, reverse=True)
 
     return jsonify({
         "current_version": version_data,

@@ -70,7 +70,8 @@ def register_fleet_telemetry_routes(app, csrf):
 
         # Read version data
         version_data = {}
-        version_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk_releases", "version.json")
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        version_json_path = os.path.join(root_dir, "apk_releases", "version.json")
         if os.path.isfile(version_json_path):
             try:
                 with open(version_json_path, "r", encoding="utf-8") as f:
@@ -1054,12 +1055,21 @@ def register_fleet_telemetry_routes(app, csrf):
             metadata = {}
             if apk_signing and hasattr(apk_signing, "extract_apk_metadata"):
                 metadata = apk_signing.extract_apk_metadata(tmp_path)
-            
+
+            v_name = metadata.get("version_name") or ""
+            v_code = int(metadata.get("version_code") or 0)
+            pkg_name = metadata.get("package_name") or "com.sdfinance.mobile"
+            min_sdk = int(metadata.get("min_sdk") or 0)
+
             return jsonify({
                 "success": True,
-                "version_name": metadata.get("version_name", "1.1.7"),
-                "version_code": metadata.get("version_code", 20),
-                "package_name": metadata.get("package_name", "com.sdfinance.mobile")
+                "version_name": v_name,
+                "version_code": v_code,
+                "min_version_code": v_code,
+                "min_sdk": min_sdk,
+                "package_name": pkg_name,
+                "sha256": metadata.get("sha256", ""),
+                "size_bytes": os.path.getsize(tmp_path)
             }), 200
         except Exception as e:
             logger.error("inspect_apk error: %s", e)
@@ -1073,17 +1083,27 @@ def register_fleet_telemetry_routes(app, csrf):
     # ──────────────────────────────────────────────────────────────────────────
     @app.route("/api/admin/app/qr/<version>", methods=["GET"])
     def admin_app_qr(version):
-        """Generates a downloadable QR code linking to the mobile APK portal."""
+        """Generates a downloadable QR code linking to the mobile APK direct download."""
         if not is_admin():
             return jsonify({"error": "Admin access required"}), 403
 
         if not qrcode:
             return jsonify({"error": "qrcode package not installed"}), 500
 
-        download_url = url_for("app_portal", _external=True)
+        download_url = f"https://sivadurga.in/api/mobile/app/download/{version}"
         img = qrcode.make(download_url)
         buf = io.BytesIO()
         img.save(buf, "PNG")
         buf.seek(0)
 
-        return send_file(buf, mimetype="image/png")
+        if request.args.get("raw") == "1" or request.accept_mimetypes.best == "image/png":
+            return send_file(buf, mimetype="image/png")
+
+        import base64
+        b64_qr = base64.b64encode(buf.getvalue()).decode("ascii")
+        return jsonify({
+            "success": True,
+            "version": version,
+            "download_url": download_url,
+            "qr_data_url": f"data:image/png;base64,{b64_qr}"
+        }), 200

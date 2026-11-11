@@ -18,6 +18,7 @@ from db import get_pg_connection
 from extensions import limiter
 from services.audit_service import audit_log
 from services.chit_calc_engine import round_curr
+from services.cashbag_engine import resolve_employee_cashbags, compute_cashbag_metrics
 from security.mobile_auth import (
     mobile_auth_required,
     verify_mobile_token,
@@ -288,266 +289,48 @@ def mobile_villages():
 @mobile_auth_required(verify_village=False)
 def mobile_cashbag_get():
     eid = g.mobile_user["eid"]
+    is_admin = g.mobile_user.get("role") in ["admin", "superadmin"] or g.mobile_user.get("level") in ["admin", "superadmin"]
+
+    bank_id = request.args.get("bank_id", type=str)
+    cashbag_id = request.args.get("cashbag_id", type=str)
+    emp1_arg = request.args.get("emp1", type=int)
+    emp2_arg = request.args.get("emp2", type=int)
+    limit_val = request.args.get("limit", default=250, type=int)
 
     conn = get_resolved_pg_conn()
     cur = conn.cursor()
     try:
-        # Resolve emp1, emp2 from village or default to eid
-        cur.execute("SELECT emp1, emp2 FROM village WHERE emp1 = %s OR emp2 = %s LIMIT 1", (eid, eid))
-        row = cur.fetchone()
-        if row:
-            emp1, emp2 = row[0], row[1]
+        available_cashbags = resolve_employee_cashbags(cur, eid, is_admin=is_admin)
+
+        target_cb = None
+        if bank_id:
+            target_cb = next((cb for cb in available_cashbags if cb.get("bank_id") == bank_id), None)
+        elif cashbag_id:
+            target_cb = next((cb for cb in available_cashbags if cb.get("cashbag_id") == cashbag_id), None)
+        elif emp1_arg:
+            target_cb = next((cb for cb in available_cashbags if cb.get("emp1") == emp1_arg and (emp2_arg is None or cb.get("emp2") == emp2_arg)), None)
+
+        if not target_cb and available_cashbags:
+            target_cb = available_cashbags[0]
+
+        if target_cb:
+            emp1 = target_cb.get("emp1") or eid
+            emp2 = target_cb.get("emp2")
+            b_id = target_cb.get("bank_id") or bank_id
+            c_id = target_cb.get("cashbag_id") or cashbag_id
         else:
-            emp1, emp2 = eid, None
+            emp1 = emp1_arg or eid
+            emp2 = emp2_arg
+            b_id = bank_id
+            c_id = cashbag_id
 
-        # Fetch names
-        cur.execute("SELECT name FROM employee WHERE eid = %s", (emp1,))
-        row_e1 = cur.fetchone()
-        emp1_name = row_e1[0] if row_e1 else f"Employee {emp1}"
-
-        emp2_name = None
-        if emp2:
-            cur.execute("SELECT name FROM employee WHERE eid = %s", (emp2,))
-            row_e2 = cur.fetchone()
-            emp2_name = row_e2[0] if row_e2 else f"Employee {emp2}"
-
-        # Fetch villages in the group
-        if emp2:
-            cur.execute("""
-                SELECT vid, village_name, village_code
-                FROM village
-                WHERE emp1 = %s AND emp2 = %s AND status = 'active'
-                ORDER BY village_code
-            """, (emp1, emp2))
-        else:
-            cur.execute("""
-                SELECT vid, village_name, village_code
-                FROM village
-                WHERE emp1 = %s AND (emp2 IS NULL OR emp2 = emp1) AND status = 'active'
-                ORDER BY village_code
-            """, (emp1,))
-        rows_v = cur.fetchall()
-        group_villages = [{"id": r[0], "name": r[1], "code": r[2]} for r in rows_v]
-        vids = [r[0] for r in rows_v]
-
-        # Consolidated Manual Transactions
-        if emp2:
-            pair_filter = "emp1 = %s AND emp2 = %s"
-            pair_params_single = (emp1, emp2)
-        else:
-            pair_filter = "emp1 = %s AND (emp2 IS NULL OR emp2 = emp1)"
-            pair_params_single = (emp1,)
-
-        cur.execute(f"""
-            SELECT id, txn, txn_sub, txn_type, amount, notes, created_by, created_at
-            FROM cashbag_transactions
-            WHERE {pair_filter}
-            ORDER BY created_at DESC, id DESC
-        """, pair_params_single)
-        manual_rows = cur.fetchall()
-
-        office_cash = 0.0
-        expenses = 0.0
-        adjustments_add = 0.0
-        adjustments_minus = 0.0
-
-        for tid, txn, txn_sub, txn_type, amount_db, notes, created_by, created_at in manual_rows:
-            amt = float(amount_db or 0)
-            if txn == 'OFFICE_CASH':
-                office_cash += amt
-            elif txn == 'EXPENSE':
-                expenses += amt
-            elif txn == 'ADJUSTMENT':
-                if txn_sub == 'ADD':
-                    adjustments_add += amt
-                elif txn_sub == 'MINUS':
-                    adjustments_minus += amt
-
-        # Installment Collections
-        if vids:
-            cur.execute("""
-                SELECT COALESCE(SUM(amt), 0)
-                FROM payment
-                WHERE vid = ANY(%s)
-            """, (vids,))
-            installments = float(cur.fetchone()[0] or 0)
-        else:
-            installments = 0.0
-
-        # Loans & Commissions
-        loans_disbursed = 0.0
-        loan_commission = 0.0
-        if vids:
-            cur.execute("""
-                SELECT c.base_amount, c.cutting_amount, c.total_amount,
-                       v.interest_rate, v.cutting_rate
-                FROM customer c
-                JOIN village v ON c.vid = v.vid
-                WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-            """, (vids,))
-            loan_rows = cur.fetchall()
-
-            for base_amt_db, cutting_amt_db, total_amt_db, ir_db, cr_db in loan_rows:
-                base_amt = float(base_amt_db or 0)
-                cutting_amt = float(cutting_amt_db or 0)
-                total_amt = float(total_amt_db or 0)
-
-                if base_amt <= 0.0:
-                    ir = float(ir_db or 0)
-                    cr = float(cr_db or 0)
-                    interest = round_curr(total_amt * (ir / 100.0))
-                    cutting_amt = round_curr(total_amt * (cr / 100.0))
-                    base_amt = round_curr(total_amt - interest - cutting_amt)
-
-                loans_disbursed += base_amt
-                loan_commission += cutting_amt
-
-        cashbag_total = (
-            office_cash
-            + installments
-            + loan_commission
-            + adjustments_add
-            - loans_disbursed
-            - expenses
-            - adjustments_minus
-        )
-
-        # UNIFIED LEDGER
-        transactions = []
-        if vids:
-            query = f"""
-                SELECT 
-                    id,
-                    txn,
-                    txn_sub,
-                    txn_type,
-                    amount,
-                    notes,
-                    created_by,
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
-                FROM (
-                    -- Manual entries
-                    SELECT 
-                        id::text AS id,
-                        txn,
-                        txn_sub,
-                        txn_type,
-                        amount,
-                        notes,
-                        created_by,
-                        created_at
-                    FROM cashbag_transactions
-                    WHERE {pair_filter}
-                      AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
-
-                    UNION ALL
-
-                    -- Customer Loans
-                    SELECT 
-                        'loan_' || c.cid::text AS id,
-                        'LOAN' AS txn,
-                        NULL AS txn_sub,
-                        'CASH' AS txn_type,
-                        CASE 
-                            WHEN c.base_amount > 0 THEN c.base_amount
-                            ELSE ROUND(c.total_amount - (c.total_amount * (v.interest_rate / 100.0)) - (c.total_amount * (v.cutting_rate / 100.0)), 2)
-                        END AS amount,
-                        'Loan issued to ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        c.start_date::timestamp WITH time zone AS created_at
-                    FROM customer c
-                    JOIN village v ON c.vid = v.vid
-                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-
-                    UNION ALL
-
-                    -- Customer Loan Commission
-                    SELECT 
-                        'comm_' || c.cid::text AS id,
-                        'LOAN_COMMISION' AS txn,
-                        NULL AS txn_sub,
-                        'CASH' AS txn_type,
-                        CASE 
-                            WHEN c.cutting_amount > 0 THEN c.cutting_amount
-                            ELSE ROUND(c.total_amount * (v.cutting_rate / 100.0), 2)
-                        END AS amount,
-                        'Rusum - ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        c.start_date::timestamp WITH time zone AS created_at
-                    FROM customer c
-                    JOIN village v ON c.vid = v.vid
-                    WHERE c.vid = ANY(%s) AND c.status != 'deleted'
-
-                    UNION ALL
-
-                    -- Customer Payments
-                    SELECT 
-                        'pay_' || p.pid::text AS id,
-                        'INSTALLMENT_AMOUNT' AS txn,
-                        NULL AS txn_sub,
-                        p.payment_type AS txn_type,
-                        p.amt AS amount,
-                        'Collection from ' || c.name || ' (A/c: ' || c.ano || ')' AS notes,
-                        'System' AS created_by,
-                        p.created_at AS created_at
-                    FROM payment p
-                    JOIN customer c ON p.cid = c.cid
-                    WHERE c.vid = ANY(%s)
-                ) AS combined
-                ORDER BY combined.created_at DESC, id DESC
-            """
-            if emp2:
-                params = (emp1, emp2, vids, vids, vids)
-            else:
-                params = (emp1, vids, vids, vids)
-            cur.execute(query, params)
-        else:
-            query = f"""
-                SELECT 
-                    id::text AS id,
-                    txn,
-                    txn_sub,
-                    txn_type,
-                    amount,
-                    notes,
-                    created_by,
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD/MM/YYYY HH12:MI AM') AS created_at
-                FROM cashbag_transactions
-                WHERE {pair_filter}
-                  AND txn IN ('OFFICE_CASH', 'EXPENSE', 'ADJUSTMENT')
-                ORDER BY created_at DESC, id DESC
-            """
-            cur.execute(query, pair_params_single)
-
-        rows = cur.fetchall()
-        for row in rows:
-            transactions.append({
-                "id":         row[0],
-                "txn":        row[1],
-                "txn_sub":    row[2],
-                "txn_type":   row[3],
-                "amount":     float(row[4] or 0),
-                "notes":      row[5],
-                "created_by": row[6],
-                "created_at": row[7]
-            })
-
-        return {
-            "emp1": emp1,
-            "emp2": emp2,
-            "emp1_name": emp1_name,
-            "emp2_name": emp2_name,
-            "group_villages": group_villages,
-            "cashbag_total": cashbag_total,
-            "office_cash": office_cash,
-            "installments": installments,
-            "loans_disbursed": loans_disbursed,
-            "loan_commission": loan_commission,
-            "expenses": expenses,
-            "adjustments_add": adjustments_add,
-            "adjustments_minus": adjustments_minus,
-            "transactions": transactions
-        }
+        data = compute_cashbag_metrics(cur, emp1=emp1, emp2=emp2, bank_id=b_id, cashbag_id=c_id, limit_val=limit_val)
+        data["available_cashbags"] = available_cashbags
+        data["selected_cashbag_id"] = target_cb["id"] if target_cb else (b_id or c_id or "default")
+        return data, 200
+    except Exception as e:
+        logger.error(f"mobile_cashbag_get error: {e}", exc_info=True)
+        return {"error": f"Failed to load cashbag data: {str(e)}"}, 500
     finally:
         cur.close()
         conn.close()
@@ -873,13 +656,24 @@ def mobile_cashbag_add():
         user_row = cur.fetchone()
         username = user_row[0] if user_row else f"Employee {eid}"
 
-        # Resolve emp1, emp2
-        cur.execute("SELECT emp1, emp2 FROM village WHERE emp1 = %s OR emp2 = %s LIMIT 1", (eid, eid))
-        row = cur.fetchone()
-        if row:
-            emp1, emp2 = row[0], row[1]
-        else:
-            emp1, emp2 = eid, None
+        # Resolve emp1, emp2, and group_id
+        bank_id = payload.get("bank_id") or payload.get("group_id")
+        emp1 = payload.get("emp1")
+        emp2 = payload.get("emp2")
+
+        if not emp1:
+            if bank_id:
+                cur.execute("SELECT emp1_id, emp2_id FROM village_groups WHERE id = %s", (bank_id,))
+                brow = cur.fetchone()
+                if brow:
+                    emp1, emp2 = brow[0], brow[1]
+            if not emp1:
+                cur.execute("SELECT emp1, emp2 FROM village WHERE emp1 = %s OR emp2 = %s LIMIT 1", (eid, eid))
+                row = cur.fetchone()
+                if row:
+                    emp1, emp2 = row[0], row[1]
+                else:
+                    emp1, emp2 = eid, None
 
         cur.execute("""
             INSERT INTO cashbag_transactions (
@@ -891,9 +685,10 @@ def mobile_cashbag_add():
                 txn_type,
                 amount,
                 notes,
-                created_by
+                created_by,
+                group_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             emp1,
             emp2,
@@ -903,7 +698,8 @@ def mobile_cashbag_add():
             txn_type,
             amount,
             notes or None,
-            username
+            username,
+            bank_id or None
         ))
 
         conn.commit()
