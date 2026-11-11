@@ -1,14 +1,25 @@
 {
   "latest_version": "1.1.8",
   "latest_version_code": 21,
-  "min_supported_version_code": 20,
+  "min_supported_version_code": 5,
   "force_update": true,
   "sha256": "a6339862f3a3212320755f8a0929ae2307bc053cf7de1bd56c2d55c396f62cd6",
   "url": "https://sivadurga.in/api/mobile/app/download/1.1.8",
   "release_notes": "[Feature] Performance updates and OTA pipeline optimizations.",
-  "released_at": "2026-11-10T11:49:06.319265+00:00",
+  "released_at": "2026-11-10T12:07:41.494967+00:00",
   "published_by": "chinna",
-  "target_scope": "all",
-  "target_employee_ids": [],
-  "target_employee_names": []
+  "target_scope": "targeted",
+  "target_employee_ids": [
+    2,
+    6,
+    4,
+    5,
+    3
+  ],
+  "target_employee_names": [
+    "KARRI JAYA KRISHNA REDDY (@jayakrishna)",
+    "KARRI CHINNA REDDY (@chinna)",
+    "KOVVURI DURGA KRISHNA REDDY (@durga)",
+    "KOVVURI RAMAKOTI REDDY (@koti)"
+  ]
 }
