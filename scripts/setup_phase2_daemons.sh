@@ -109,6 +109,7 @@ cat <<EOF > "$CONFIG_PATH"
       "hmac_secret_key": "$APP_SECRET_KEY"
     },
     "allowed_origins": [
+      "*",
       "https://sivadurga.in",
       "http://localhost:8000",
       "http://127.0.0.1:8000"
@@ -119,6 +120,7 @@ cat <<EOF > "$CONFIG_PATH"
   },
   "channel": {
     "without_namespace": {
+      "allow_subscribe_for_client": true,
       "presence": true,
       "history_size": 100,
       "history_ttl": "300s"
@@ -126,12 +128,14 @@ cat <<EOF > "$CONFIG_PATH"
     "namespaces": [
       {
         "name": "chat",
+        "allow_subscribe_for_client": true,
         "presence": true,
         "history_size": 100,
         "history_ttl": "300s"
       },
       {
         "name": "broadcast",
+        "allow_subscribe_for_client": true,
         "presence": true,
         "history_size": 50,
         "history_ttl": "86400s"
@@ -170,7 +174,12 @@ systemctl daemon-reload
 systemctl enable centrifugo
 systemctl restart centrifugo
 sleep 1
-echo "    [+] Centrifugo service reloaded and started."
+if ! systemctl is-active --quiet centrifugo; then
+    echo "    [-] ERROR: Centrifugo failed to start! Journal logs:"
+    journalctl -u centrifugo -n 30 --no-pager
+    exit 1
+fi
+echo "    [+] Centrifugo service reloaded and active."
 
 # ------------------------------------------------------------------------------
 # STEP 3: Setup Chat Media Storage Directory

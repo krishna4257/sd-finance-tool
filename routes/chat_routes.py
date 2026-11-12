@@ -557,7 +557,8 @@ def send_message():
                     body, media_url, media_duration_sec, latitude, longitude, status
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'sent')
                 ON CONFLICT (client_uuid) DO UPDATE 
-                    SET updated_at = NOW()
+                    SET status = EXCLUDED.status,
+                        updated_at = NOW()
                 RETURNING id, created_at, status;
             """, (client_uuid, channel_id, user_id, msg_type, body, media_url, duration, lat, lng))
             
@@ -567,35 +568,37 @@ def send_message():
 
         # 5. Broadcast in real-time via Centrifugo (<10ms)
         centrifugo_url = current_app.config.get("CENTRIFUGO_API_URL", DEFAULT_CENTRIFUGO_URL)
-        api_key = current_app.config.get("CENTRIFUGO_API_KEY", "default-api-key")
+        api_key = current_app.config.get("CENTRIFUGO_API_KEY", "sdfinance-centrifugo-api-key-2026")
         
-        centrifugo_msg = {
-            "method": "publish",
-            "params": {
-                "channel": f"chat:{channel_id}",
-                "data": {
-                    "event": "new_message",
-                    "id": str(msg_id),
-                    "client_uuid": client_uuid,
-                    "channel_id": str(channel_id),
-                    "sender_id": user_id,
-                    "sender_name": user["username"],
-                    "message_type": msg_type,
-                    "body": body,
-                    "media_url": media_url,
-                    "media_duration_sec": duration,
-                    "latitude": float(lat) if lat is not None else None,
-                    "longitude": float(lng) if lng is not None else None,
-                    "status": "sent",
-                    "created_at": created_at.isoformat()
-                }
+        publish_url = f"{centrifugo_url.rstrip('/')}/publish" if not centrifugo_url.endswith("/publish") else centrifugo_url
+        centrifugo_payload = {
+            "channel": f"chat:{channel_id}",
+            "data": {
+                "event": "new_message",
+                "id": str(msg_id),
+                "client_uuid": client_uuid,
+                "channel_id": str(channel_id),
+                "sender_id": user_id,
+                "sender_name": user["username"],
+                "message_type": msg_type,
+                "body": body,
+                "media_url": media_url,
+                "media_duration_sec": duration,
+                "latitude": float(lat) if lat is not None else None,
+                "longitude": float(lng) if lng is not None else None,
+                "status": "sent",
+                "created_at": created_at.isoformat()
             }
         }
         try:
             requests.post(
-                centrifugo_url,
-                headers={"Authorization": f"apikey {api_key}"},
-                json=centrifugo_msg,
+                publish_url,
+                headers={
+                    "X-API-Key": api_key,
+                    "Authorization": f"apikey {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=centrifugo_payload,
                 timeout=1.0
             )
         except Exception as e:
@@ -619,6 +622,9 @@ def send_message():
             "status": status,
             "created_at": created_at.isoformat()
         })
+    except Exception as ex:
+        logger.error("[ChatSend] Failed to store or process message: %s", ex, exc_info=True)
+        return jsonify({"success": False, "error": str(ex)}), 500
     finally:
         conn.close()
 

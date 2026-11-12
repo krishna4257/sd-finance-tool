@@ -133,7 +133,7 @@ class TestPhase6ChatApi(unittest.TestCase):
         mock_requests_post.assert_called_once()
         _, kwargs = mock_requests_post.call_args
         self.assertIn("apikey", kwargs.get("headers", {}).get("Authorization", "").lower())
-        self.assertEqual(kwargs.get("json", {}).get("method"), "publish")
+        self.assertTrue(kwargs.get("json", {}).get("channel", "").startswith("chat:"))
 
         # Verify NotifKit background alert was dispatched for recipient 10
         mock_notify.assert_called_once()

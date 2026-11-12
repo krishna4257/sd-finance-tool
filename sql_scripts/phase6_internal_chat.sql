@@ -65,8 +65,12 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     status chat_delivery_status NOT NULL DEFAULT 'sent',
     delivered_at TIMESTAMP WITH TIME ZONE,
     read_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure updated_at column exists if table was already created
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 -- 6. User Notification Settings (FCM & Quiet Hours for NotifKit)
 CREATE TABLE IF NOT EXISTS user_notification_settings (

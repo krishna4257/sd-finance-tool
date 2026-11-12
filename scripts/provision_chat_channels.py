@@ -77,6 +77,9 @@ def ensure_direct_channel(cur, user_a_id, user_a_role, user_b_id, user_b_role, a
 def provision_channels(conn):
     """Provisions broadcast, leadership-to-leadership, and leadership-to-staff channels."""
     with conn.cursor() as cur:
+        # Guarantee schema updates
+        cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();")
+
         # 1. Fetch Leadership (Admin, Superadmin, Mgmt)
         cur.execute("""
             SELECT 

@@ -15,7 +15,9 @@
 
   let ws = null;
   let jwtToken = null;
-  let wsEndpoint = 'wss://sivadurga.in/connection/websocket';
+  const loc = window.location;
+  const isHttps = loc.protocol === 'https:';
+  let wsEndpoint = `${isHttps ? 'wss:' : 'ws:'}//${loc.host}/connection/websocket`;
   let activeChannel = null;
   let channelsList = [];
   let isConnected = false;
@@ -41,7 +43,9 @@
 
       if (tokenRes.success) {
         jwtToken = tokenRes.token;
-        if (tokenRes.ws_endpoint) wsEndpoint = tokenRes.ws_endpoint;
+        if (tokenRes.ws_endpoint && loc.host.includes('sivadurga.in')) {
+          wsEndpoint = tokenRes.ws_endpoint;
+        }
         connectCentrifugo();
       }
 
@@ -67,10 +71,11 @@
     if (!jwtToken) return;
 
     try {
+      console.log('[Chat] Connecting to WebSocket:', wsEndpoint);
       ws = new WebSocket(wsEndpoint);
 
       ws.onopen = function () {
-        // Send connect handshake
+        console.log('[Chat] WebSocket open, sending handshake token...');
         sendWsCommand({
           connect: { token: jwtToken }
         });
@@ -81,7 +86,8 @@
         handleWsMessage(event.data);
       };
 
-      ws.onclose = function () {
+      ws.onclose = function (e) {
+        console.warn('[Chat] WebSocket closed (code: ' + e.code + ', reason: ' + e.reason + ')');
         updateStatusPill(false, 'Reconnecting...');
         clearInterval(pingTimer);
         setTimeout(connectCentrifugo, 4000);
@@ -117,10 +123,15 @@
 
       // Connected acknowledgment
       if (data.connect) {
+        console.log('[Chat] Centrifugo connected successfully:', data.connect);
         updateStatusPill(true, 'Connected (Real-time)');
         if (activeChannel) {
           subscribeToChannel(activeChannel.channel_id);
         }
+      }
+
+      if (data.error) {
+        console.warn('[Chat] Centrifugo error frame:', data.error);
       }
 
       // Incoming Push Notification
@@ -387,7 +398,7 @@
     appendMessage(tempMsg);
 
     try {
-      const res = await fetch('/api/v1/chat/send', {
+      const resp = await fetch('/api/v1/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -396,15 +407,83 @@
           type: 'text',
           body: text
         })
-      }).then(r => r.json());
+      });
+      const res = await resp.json();
 
-      if (res.success) {
+      if (res && res.success) {
         updateMessageTick(clientUuid, 'sent', res.message_id);
+        updateChannelSnippet(activeChannel.channel_id, text);
+      } else {
+        console.error('[Chat] Send failed:', res ? res.error : 'Unknown');
+        const errorEl = document.getElementById('msg-' + clientUuid);
+        if (errorEl) {
+          const footer = errorEl.querySelector('.bubble-footer');
+          if (footer) footer.innerHTML += ' <span style="color:#ef4444; font-size:10px;">(Failed)</span>';
+        }
       }
     } catch (e) {
-      console.error('[Chat] Send message failed:', e);
+      console.error('[Chat] Send message network error:', e);
     }
   };
+
+  function updateChannelSnippet(channelId, text) {
+    const itemEl = document.getElementById('channel-item-' + channelId);
+    if (itemEl) {
+      const snippetEl = itemEl.querySelector('.channel-snippet');
+      if (snippetEl) snippetEl.innerText = text;
+      const timeEl = itemEl.querySelector('.channel-time');
+      if (timeEl) timeEl.innerText = formatTime(new Date());
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SMART BACKGROUND SYNC (Guarantees messages never disappear or stall)
+  // ---------------------------------------------------------------------------
+  setInterval(async function () {
+    if (!activeChannel) return;
+    try {
+      const res = await fetch('/api/v1/chat/history/' + activeChannel.channel_id + '?limit=20').then(r => r.json());
+      if (res.success && res.messages && res.messages.length > 0) {
+        syncHistoryMessages(res.messages);
+      }
+    } catch (e) {
+      // background sync catch
+    }
+  }, 3000);
+
+  function syncHistoryMessages(messages) {
+    const container = document.getElementById('conversation-messages');
+    if (!container) return;
+
+    // Clear empty notice if messages arrive
+    const emptyNotice = container.querySelector('[style*="No messages"]');
+    if (emptyNotice && messages.length > 0) {
+      renderMessages(messages);
+      return;
+    }
+
+    let appended = false;
+    messages.forEach(m => {
+      const existing = document.getElementById('msg-' + m.id) || (m.client_uuid && document.getElementById('msg-' + m.client_uuid));
+      if (!existing) {
+        appendMessage(m);
+        appended = true;
+        if (!m.is_me && m.status !== 'read') {
+          ackMessage(m.id, activeChannel.channel_id, 'read');
+        }
+      } else {
+        // Update tick status
+        if (m.is_me) {
+          const tickContainer = existing.querySelector('.bubble-footer');
+          if (tickContainer) {
+            tickContainer.innerHTML = `<span>${formatTime(m.created_at)}</span> ${buildTickHtml(m.status)}`;
+          }
+        }
+      }
+    });
+
+    if (appended) scrollToBottom();
+  }
 
   // ---------------------------------------------------------------------------
   // REAL-TIME EVENT HANDLERS
