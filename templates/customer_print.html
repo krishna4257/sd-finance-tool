@@ -150,8 +150,8 @@
     <div class="details-section">
       <h2>Loan Information</h2>
       <div class="details-grid">
-        <div><strong>Loan Start Date:</strong> {{ customer.start_date or '-' }}</div>
-        <div><strong>Loan End Date:</strong> {{ customer.end_date or '-' }}</div>
+        <div><strong>Loan Start Date:</strong> {{ customer.start_date|ddmmyyyy or '-' }}</div>
+        <div><strong>Loan End Date:</strong> {{ customer.end_date|ddmmyyyy or '-' }}</div>
         <div><strong>Loan Amount:</strong> ₹{{ "{:,.0f}".format(customer.total_amount|float) }}</div>
         <div><strong>Amount Paid:</strong> ₹{{ "{:,.0f}".format(customer.paid_amount|float) }}</div>
         <div><strong>Balance Amount:</strong> ₹{{ "{:,.0f}".format(customer.balance_amount|float) }}</div>

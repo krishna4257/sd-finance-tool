@@ -255,6 +255,145 @@
     <!-- Rendered via JS: Either "No payout this month" or Recorded Payout Details -->
   </div>
 
+  <!-- ==================== ROW 8: ALL PAYOUTS AUDIT LEDGER & FILTERABLE TABLE ==================== -->
+  <div class="bg-white dark:bg-chitDark-surface rounded-[28px] border border-slate-200/80 dark:border-slate-700/40 p-6 md:p-8 card-shadow space-y-6" id="allPayoutsLedgerCard">
+    
+    <!-- Header Row -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800/80 pb-5">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/60">
+            <i data-lucide="book-open-check" class="w-3 h-3 stroke-[2.2]"></i>
+            CHIT PAYOUTS REGISTER
+          </span>
+          <span class="text-xs font-semibold text-slate-400 dark:text-slate-500">· Comprehensive Ledger</span>
+        </div>
+        <h2 class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+          All Disbursed &amp; Scheduled Payouts
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+          Grouped by Chit Scheme, sorted with latest payouts on top with real-time dynamic total calculations.
+        </p>
+      </div>
+
+      <!-- Quick Summary Badges -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="bg-slate-50 dark:bg-chitDark-elevated rounded-2xl px-4 py-2.5 border border-slate-200/80 dark:border-slate-700/50">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">DISBURSED TOTAL</p>
+          <p class="text-base md:text-lg font-black text-emerald-600 dark:text-emerald-400 money-fig" id="ledgerSummaryDisbursed">₹0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-chitDark-elevated rounded-2xl px-4 py-2.5 border border-slate-200/80 dark:border-slate-700/50">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">CHIT LOSS DEDUCTED</p>
+          <p class="text-base md:text-lg font-black text-amber-600 dark:text-amber-400 money-fig" id="ledgerSummaryLoss">₹0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-chitDark-elevated rounded-2xl px-4 py-2.5 border border-slate-200/80 dark:border-slate-700/50">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ENTRIES</p>
+          <p class="text-base md:text-lg font-black text-slate-800 dark:text-slate-200 money-fig" id="ledgerSummaryCount">0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters & Search Toolbar -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center bg-slate-50/70 dark:bg-chitDark-elevated/40 p-3.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/50">
+      
+      <!-- Filter 1: Chit Group -->
+      <div class="lg:col-span-3">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          <i data-lucide="layers" class="w-3 h-3 inline mr-1"></i> Chit Scheme
+        </label>
+        <select id="ledgerFilterGroup" onchange="applyLedgerFilters()" 
+                class="w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+          <option value="all">All Chit Schemes</option>
+        </select>
+      </div>
+
+      <!-- Filter 2: Disbursement Month -->
+      <div class="lg:col-span-3">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i> Disbursement Month
+        </label>
+        <select id="ledgerFilterMonth" onchange="applyLedgerFilters()" 
+                class="w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+          <option value="all">All Disbursement Months</option>
+        </select>
+      </div>
+
+      <!-- Filter 3: Payment Mode -->
+      <div class="lg:col-span-2">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          <i data-lucide="wallet" class="w-3 h-3 inline mr-1"></i> Payment Mode
+        </label>
+        <select id="ledgerFilterMode" onchange="applyLedgerFilters()" 
+                class="w-full h-10 px-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+          <option value="all">All Modes</option>
+          <option value="cash">Cash</option>
+          <option value="bank">Bank Transfer</option>
+        </select>
+      </div>
+
+      <!-- Filter 4: Live Search -->
+      <div class="lg:col-span-3">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          <i data-lucide="search" class="w-3 h-3 inline mr-1"></i> Search Subscriber / A/C / Notes
+        </label>
+        <div class="relative flex items-center">
+          <input type="text" id="ledgerSearchInput" oninput="applyLedgerFilters()" placeholder="Search subscriber, #, notes..."
+                 class="w-full h-10 pl-9 pr-3 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none"></i>
+        </div>
+      </div>
+
+      <!-- Reset Button -->
+      <div class="lg:col-span-1 flex items-end">
+        <button type="button" onclick="resetLedgerFilters()" title="Reset all filters"
+                class="w-full h-10 px-2 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-chitDark-surface hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 transition-colors">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 stroke-[2]"></i>
+          <span class="lg:hidden">Reset</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Table Container -->
+    <div class="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-2xs">
+      <table class="w-full text-left text-xs border-collapse" id="allPayoutsTable">
+        <thead class="bg-slate-100/80 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-300 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-700/60">
+          <tr>
+            <th class="py-3 px-3.5 text-center w-12">#</th>
+            <th class="py-3 px-4">Chit Scheme</th>
+            <th class="py-3 px-4">A/C &amp; Ticket</th>
+            <th class="py-3 px-4">Subscriber</th>
+            <th class="py-3 px-4">Payout Month</th>
+            <th class="py-3 px-4">Disbursed Date</th>
+            <th class="py-3 px-4">Mode</th>
+            <th class="py-3 px-4 text-right">Disbursed Amount</th>
+            <th class="py-3 px-4 text-right">Chit Loss</th>
+            <th class="py-3 px-4">Notes</th>
+            <th class="py-3 px-3.5 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="allPayoutsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-chitDark-surface">
+          <!-- Populated via JS -->
+        </tbody>
+        <tfoot class="bg-slate-100 dark:bg-chitDark-elevated font-extrabold text-xs text-slate-900 dark:text-slate-100 border-t-2 border-slate-300 dark:border-slate-700">
+          <tr>
+            <td colspan="7" class="py-3.5 px-4 text-right uppercase tracking-wider text-[11px] font-bold text-slate-600 dark:text-slate-400">
+              Total Filtered Payouts (<span id="footerVisibleCount">0</span> entries):
+            </td>
+            <td class="py-3.5 px-4 text-right money-fig font-black text-emerald-600 dark:text-emerald-400 text-sm md:text-base" id="footerTotalDisbursed">
+              ₹0
+            </td>
+            <td class="py-3.5 px-4 text-right money-fig font-bold text-amber-600 dark:text-amber-400 text-xs md:text-sm" id="footerTotalLoss">
+              ₹0
+            </td>
+            <td colspan="2" class="py-3.5 px-4"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+  </div>
+
 </div>
 
 <!-- ==================== MODAL: ASSIGN / RECORD PAYOUT ==================== -->
@@ -583,6 +722,7 @@
     enableHorizontalWheelScroll('chitGroupPillsContainer');
     enableHorizontalWheelScroll('monthTimelineContainer');
     await loadInitialChitGroups();
+    await loadAllPayoutsLedger();
     if (window.lucide) {
       lucide.createIcons();
     }
@@ -824,7 +964,7 @@
       if (groups.length > 0) {
         activeChitId = groups[0].id;
         activeMonthIndex = groups[0].current_month_index || 1;
-        await loadPayoutsSummary(activeChitId);
+        await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
       }
     } catch (e) {
       console.error('Error loading initial chits:', e);
@@ -1369,7 +1509,7 @@
         const initial = (r.name || 'U').charAt(0).toUpperCase();
         const amt = r.payout_amount != null ? r.payout_amount : (curMonth.amount_received * (r.share_units || 1));
         const loss = r.chit_loss != null ? r.chit_loss : (curMonth.chit_loss * (r.share_units || 1));
-        const dt = r.payout_date || curMonth.payout_date || '—';
+        const dt = (r.payout_date || curMonth.payout_date) ? formatDate(r.payout_date || curMonth.payout_date) : '—';
         const notes = r.notes || curMonth.notes || 'Cash';
         const recStatus = (r.payout_status || curMonth.payout_status || 'paid').toLowerCase();
         const isRecUnpaid = recStatus === 'unpaid';
@@ -1708,7 +1848,7 @@
 
       closeEditIndividualPayoutModal();
       showToast('Subscriber payout updated successfully');
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       console.error(err);
       showToast(err.message || 'Error updating payout');
@@ -1724,7 +1864,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to mark as paid');
 
       showToast('Subscriber payout marked as paid');
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       showToast(err.message || 'Error updating status');
     }
@@ -1853,7 +1993,7 @@
 
       closeAssignPayoutModal();
       showToast(editingMonthIndex ? 'Payout updated successfully' : 'Payout recorded successfully');
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       console.error(err);
       showToast(err.message || 'Error processing payout');
@@ -1870,7 +2010,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to mark as paid');
 
       showToast(`Month ${monthIndex} payout marked as paid`);
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       showToast(err.message || 'Error updating status');
     }
@@ -1937,7 +2077,7 @@
 
       closeDeletePayoutPickerModal();
       showToast(`Month ${monthIndex} payout for ${memberName} deleted successfully`);
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       showToast(err.message || 'Error deleting payout');
     }
@@ -1958,7 +2098,7 @@
 
       closeDeletePayoutPickerModal();
       showToast(`All payouts for Month ${mIdx} deleted successfully`);
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       showToast(err.message || 'Error deleting payouts');
     }
@@ -1993,7 +2133,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to delete payout');
 
       showToast(`Month ${monthIndex} payout deleted successfully`);
-      await loadPayoutsSummary(activeChitId);
+      await loadPayoutsSummary(activeChitId); await loadAllPayoutsLedger();
     } catch (err) {
       showToast(err.message || 'Error deleting payout');
     }
@@ -2042,5 +2182,251 @@
     }
     setTimeout(() => t.remove(), 3500);
   }
+
+
+  // =============================================================
+  // ALL PAYOUTS AUDIT LEDGER & FILTERABLE TABLE LOGIC
+  // =============================================================
+
+  let allLedgerPayouts = [];
+  let ledgerSchemes = [];
+  let ledgerMonths = [];
+
+  async function loadAllPayoutsLedger() {
+    try {
+      const res = await fetch('/chit/api/payouts/ledger');
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to load payouts ledger');
+
+      allLedgerPayouts = data.payouts || [];
+      ledgerSchemes = data.schemes || [];
+      ledgerMonths = data.disbursement_months || [];
+
+      // Populate Chit Schemes dropdown
+      const groupSelect = document.getElementById('ledgerFilterGroup');
+      if (groupSelect) {
+        const curVal = groupSelect.value;
+        groupSelect.innerHTML = '<option value="all">All Chit Schemes</option>';
+        ledgerSchemes.forEach(sc => {
+          const opt = document.createElement('option');
+          opt.value = sc.id;
+          opt.textContent = sc.name;
+          groupSelect.appendChild(opt);
+        });
+        if (curVal) groupSelect.value = curVal;
+      }
+
+      // Populate Months dropdown
+      const monthSelect = document.getElementById('ledgerFilterMonth');
+      if (monthSelect) {
+        const curMVal = monthSelect.value;
+        monthSelect.innerHTML = '<option value="all">All Disbursement Months</option>';
+        ledgerMonths.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.month_year;
+          opt.textContent = m.label;
+          monthSelect.appendChild(opt);
+        });
+        if (curMVal) monthSelect.value = curMVal;
+      }
+
+      renderAllPayoutsLedgerTable();
+    } catch (err) {
+      console.error('Error in loadAllPayoutsLedger:', err);
+    }
+  }
+
+  function applyLedgerFilters() {
+    renderAllPayoutsLedgerTable();
+  }
+
+  function resetLedgerFilters() {
+    const gSel = document.getElementById('ledgerFilterGroup');
+    const mSel = document.getElementById('ledgerFilterMonth');
+    const modeSel = document.getElementById('ledgerFilterMode');
+    const searchInp = document.getElementById('ledgerSearchInput');
+    if (gSel) gSel.value = 'all';
+    if (mSel) mSel.value = 'all';
+    if (modeSel) modeSel.value = 'all';
+    if (searchInp) searchInp.value = '';
+    renderAllPayoutsLedgerTable();
+  }
+
+  function renderAllPayoutsLedgerTable() {
+    const tbody = document.getElementById('allPayoutsTableBody');
+    if (!tbody) return;
+
+    const selectedGroup = document.getElementById('ledgerFilterGroup')?.value || 'all';
+    const selectedMonth = document.getElementById('ledgerFilterMonth')?.value || 'all';
+    const selectedMode = (document.getElementById('ledgerFilterMode')?.value || 'all').toLowerCase();
+    const searchQ = (document.getElementById('ledgerSearchInput')?.value || '').trim().toLowerCase();
+
+    // Filter payouts
+    const filtered = allLedgerPayouts.filter(p => {
+      if (selectedGroup !== 'all' && p.chit_group_id !== selectedGroup) return false;
+      if (selectedMonth !== 'all' && p.disbursement_month !== selectedMonth) return false;
+      if (selectedMode !== 'all') {
+        const pMode = (p.payment_mode || '').toLowerCase();
+        if (selectedMode === 'cash' && !pMode.includes('cash')) return false;
+        if (selectedMode === 'bank' && !pMode.includes('bank') && !pMode.includes('neft') && !pMode.includes('rtgs')) return false;
+      }
+      if (searchQ) {
+        const haystack = `${p.member_name} ${p.account_number} ${p.ticket_number} ${p.chit_group_name} ${p.notes} ${p.payment_mode}`.toLowerCase();
+        if (!haystack.includes(searchQ)) return false;
+      }
+      return true;
+    });
+
+    // Update Summary Header & Footer Totals
+    const totalDisb = filtered.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalLoss = filtered.reduce((sum, p) => sum + (p.chit_loss || 0), 0);
+
+    const sumDisbEl = document.getElementById('ledgerSummaryDisbursed');
+    const sumLossEl = document.getElementById('ledgerSummaryLoss');
+    const sumCountEl = document.getElementById('ledgerSummaryCount');
+    if (sumDisbEl) sumDisbEl.textContent = formatINR(totalDisb);
+    if (sumLossEl) sumLossEl.textContent = formatINR(totalLoss);
+    if (sumCountEl) sumCountEl.textContent = filtered.length;
+
+    const footDisbEl = document.getElementById('footerTotalDisbursed');
+    const footLossEl = document.getElementById('footerTotalLoss');
+    const footCountEl = document.getElementById('footerVisibleCount');
+    if (footDisbEl) footDisbEl.textContent = formatINR(totalDisb);
+    if (footLossEl) footLossEl.textContent = formatINR(totalLoss);
+    if (footCountEl) footCountEl.textContent = filtered.length;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="11" class="py-10 text-center text-slate-400 dark:text-slate-500">
+            <div class="flex flex-col items-center justify-center gap-2">
+              <i data-lucide="inbox" class="w-8 h-8 stroke-[1.5] text-slate-300 dark:text-slate-600"></i>
+              <p class="font-bold text-sm">No payouts match the selected filters.</p>
+              <button type="button" onclick="resetLedgerFilters()" class="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">Reset filters</button>
+            </div>
+          </td>
+        </tr>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+
+    // Group filtered payouts by Chit Scheme
+    const groupsMap = {};
+    filtered.forEach(p => {
+      const gId = p.chit_group_id;
+      if (!groupsMap[gId]) {
+        groupsMap[gId] = {
+          id: gId,
+          name: p.chit_group_name,
+          items: [],
+          subtotalAmt: 0,
+          subtotalLoss: 0
+        };
+      }
+      groupsMap[gId].items.push(p);
+      groupsMap[gId].subtotalAmt += (p.amount || 0);
+      groupsMap[gId].subtotalLoss += (p.chit_loss || 0);
+    });
+
+    let html = '';
+    let globalIdx = 1;
+
+    Object.values(groupsMap).forEach(grp => {
+      // Group Header Row
+      html += `
+        <tr class="bg-slate-100/90 dark:bg-chitDark-elevated/80 border-t-2 border-slate-200 dark:border-slate-700/80">
+          <td colspan="7" class="py-2.5 px-4 font-extrabold text-slate-800 dark:text-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="flex h-5 w-5 items-center justify-center rounded-lg bg-emerald-600 text-white text-[10px]">
+                <i data-lucide="layers" class="w-3 h-3 stroke-[2.2]"></i>
+              </span>
+              <span class="text-sm font-black">${grp.name}</span>
+              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                ${grp.items.length} payout${grp.items.length > 1 ? 's' : ''}
+              </span>
+            </div>
+          </td>
+          <td class="py-2.5 px-4 text-right font-mono font-black text-emerald-700 dark:text-emerald-300 text-xs md:text-sm">
+            Subtotal: ${formatINR(grp.subtotalAmt)}
+          </td>
+          <td class="py-2.5 px-4 text-right font-mono font-bold text-amber-700 dark:text-amber-300 text-xs">
+            ${formatINR(grp.subtotalLoss)}
+          </td>
+          <td colspan="2" class="py-2.5 px-4"></td>
+        </tr>
+      `;
+
+      // Payout rows inside group (already ordered latest payout on top)
+      grp.items.forEach(p => {
+        const isPaid = (p.status || '').toLowerCase() === 'paid';
+        const isCash = (p.payment_mode || '').toLowerCase().includes('cash');
+        const formattedDisbDate = p.disbursement_date ? formatDate(p.disbursement_date) : 'Scheduled';
+
+        html += `
+          <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02] transition-colors">
+            <td class="py-3 px-3.5 text-center font-mono text-[11px] text-slate-400 dark:text-slate-500">
+              ${globalIdx++}
+            </td>
+            <td class="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+              ${p.chit_group_name}
+            </td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-lg bg-slate-900 dark:bg-slate-700 text-white font-mono font-extrabold text-[11px]">
+                A/C #${p.account_number}
+              </span>
+              <span class="text-slate-400 dark:text-slate-500 text-[10px] block mt-0.5">Ticket #${p.ticket_number} (${p.share_units}x)</span>
+            </td>
+            <td class="py-3 px-4">
+              <p class="font-extrabold text-slate-900 dark:text-slate-100">${p.member_name}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500">${p.phone || 'No phone'}</p>
+            </td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="font-bold text-slate-700 dark:text-slate-300">${p.payout_month_label}</span>
+            </td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="inline-flex items-center gap-1 font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md text-[11px]">
+                <i data-lucide="calendar" class="w-3 h-3 text-slate-400"></i>
+                ${formattedDisbDate}
+              </span>
+            </td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isCash 
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60' 
+                  : 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60'
+              }">
+                ${p.payment_mode}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 text-xs md:text-sm whitespace-nowrap">
+              ${formatINR(p.amount)}
+            </td>
+            <td class="py-3 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400 text-xs whitespace-nowrap">
+              ${formatINR(p.chit_loss)}
+            </td>
+            <td class="py-3 px-4 text-slate-600 dark:text-slate-400 text-[11px] max-w-[200px] truncate" title="${p.notes || ''}">
+              ${p.notes || '—'}
+            </td>
+            <td class="py-3 px-3.5 text-center whitespace-nowrap">
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                isPaid 
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/60' 
+                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300/80 dark:border-rose-800/60'
+              }">
+                ${isPaid ? 'Disbursed' : 'Pending'}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+    });
+
+    tbody.innerHTML = html;
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  }
+
 </script>
 {% endblock %}

@@ -238,3 +238,6 @@ certs/
 *.jks
 key.properties
 
+
+# Scratch directory
+scratch/

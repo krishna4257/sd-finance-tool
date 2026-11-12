@@ -287,49 +287,64 @@
 
   </div>
 
-      <!-- ==================== CARD 4: COLLECTIONS CHART ==================== -->
+      <!-- ==================== CARD 4: COLLECTIONS & CASHFLOW CHART ==================== -->
   <div class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-blue border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-5">
     
     <div class="flex items-center justify-between">
-      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-        COLLECTIONS
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400" id="trendChartTitle">
+        COLLECTIONS TREND
       </p>
 
-      <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
-        <span class="flex items-center gap-1.5 text-emerald-600">
+      <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider" id="trendLegend">
+        <span class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
           <span class="h-2 w-2 rounded-full bg-emerald-500"></span> COLLECTED
         </span>
-        <span class="flex items-center gap-1.5 text-amber-500">
+        <span class="flex items-center gap-1.5 text-amber-500 font-bold">
           <span class="h-2 w-2 rounded-full bg-amber-400"></span> PENDING
         </span>
       </div>
     </div>
 
     <!-- Dynamic SVG Trend Line Chart -->
-    <div class="pt-2">
-      <div class="relative w-full h-32" id="chartContainer">
-        <svg id="trendSvg" class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 500 120">
+    <div class="pt-2 relative">
+      <div class="relative w-full h-36" id="chartContainer">
+        <svg id="trendSvg" class="w-full h-full overflow-visible select-none" preserveAspectRatio="none" viewBox="0 0 500 130">
           <!-- Rendered via JS -->
         </svg>
+        <div id="chartTooltip" class="hidden absolute pointer-events-none z-30 bg-slate-900/95 dark:bg-black/95 backdrop-blur-md text-white px-3 py-2 rounded-xl text-xs shadow-xl border border-white/10 space-y-1 transition-opacity duration-150">
+        </div>
       </div>
 
       <!-- X-axis Month Labels -->
       <div class="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-400 font-semibold pt-3 px-1" id="chartMonthLabels">
-        <span>APR '26</span>
-        <span>MAY '26</span>
-        <span>JUN '26</span>
-        <span>JUL '26</span>
-        <span>AUG '26</span>
-        <span class="text-slate-700 dark:text-slate-300 font-bold">SEP '26</span>
+        <!-- Populated via JS -->
       </div>
     </div>
 
-    <!-- This Month - Per Chit Breakdown -->
-    <div class="pt-3 border-t border-slate-100 dark:border-slate-700/50 space-y-3">
+    <!-- Mode A: This Month - Per Chit Breakdown (when activeChitId === 'all') -->
+    <div id="allChitsBreakdownSection" class="pt-3 border-t border-slate-100 dark:border-slate-700/50 space-y-3">
       <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
         THIS MONTH · PER CHIT
       </p>
       <div id="perChitContainer" class="space-y-3">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- Mode B: Subscriber Analytics Roster (when activeChitId !== 'all') -->
+    <div id="subscriberAnalyticsSection" class="hidden pt-4 border-t border-slate-100 dark:border-slate-700/50 space-y-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+            SUBSCRIBER ANALYTICS & FOLIO
+          </p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5" id="subscribersFolioSummary">
+            <!-- Populated via JS -->
+          </p>
+        </div>
+        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 italic">Click subscriber to view profile →</span>
+      </div>
+      <div id="subscribersListContainer" class="divide-y divide-slate-100 dark:divide-slate-800/80 max-h-96 overflow-y-auto pr-1">
         <!-- Rendered via JS -->
       </div>
     </div>
@@ -339,6 +354,22 @@
 
     <!-- RIGHT COLUMN (5 Cols on desktop): Subscriber Payment Status & Payments Feed -->
     <div class="lg:col-span-5 xl:col-span-5 space-y-6">
+      <!-- ==================== PERSISTENT UNIFIED SEARCH BAR ==================== -->
+      <div class="bg-white dark:bg-chitDark-surface rounded-2xl p-2.5 border border-slate-200/80 dark:border-slate-700/50 card-shadow flex items-center gap-2">
+        <div class="relative flex-1 flex items-center">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none stroke-[2]"></i>
+          <input type="text" id="unifiedSearchInput" oninput="handleUnifiedSearch(this.value)" placeholder="Search subscriber, A/C #, or payments..." 
+                 class="w-full h-10 pl-9 pr-9 bg-slate-50/80 dark:bg-chitDark-elevated rounded-xl border border-slate-200/60 dark:border-slate-700/50 text-xs placeholder:text-slate-400 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 transition-all">
+          <button type="button" id="clearSearchBtn" onclick="clearUnifiedSearch()" class="hidden absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs">
+            <i data-lucide="x" class="w-3.5 h-3.5 stroke-[2]"></i>
+          </button>
+        </div>
+        <button type="button" onclick="toggleAmountSort()" title="Sort by pending amount" class="px-2.5 py-2 bg-slate-50 dark:bg-chitDark-elevated hover:bg-slate-100 dark:hover:bg-white/[0.05] border border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0">
+          <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 stroke-[1.8] text-[10px]"></i>
+          <span class="hidden sm:inline">Sort</span>
+        </button>
+      </div>
+
       <!-- ==================== CARD 2: YET TO PAY SUBSCRIBERS ==================== -->
   <div id="yetToPayCard" class="bg-white dark:bg-chitDark-surface rounded-[28px] card-shine tint-amber border border-slate-200/80 dark:border-slate-700/50 p-6 md:p-8 card-shadow space-y-5">
     
@@ -1410,9 +1441,11 @@
       const duesUrl = chitId === 'all' 
         ? `/chit/api/chitgroups/all/month/${monthIndex}/dues`
         : `/chit/api/chitgroups/${chitId}/month/${monthIndex}/dues`;
-      const payUrl = `/chit/api/payments?chit_id=${chitId}&month_index=${monthIndex}`;
-      const trendUrl = chitId === 'all' && allChits.length > 0
-        ? `/chit/api/dashboard/trend?chit_id=${allChits[0].id}`
+      const curMObj = (allMonths || []).find(m => m.month_index === monthIndex);
+      const mYearParam = curMObj && curMObj.month_year ? `&month_year=${encodeURIComponent(curMObj.month_year)}` : '';
+      const payUrl = `/chit/api/payments?chit_id=${chitId}&month_index=${monthIndex}${mYearParam}`;
+      const trendUrl = chitId === 'all'
+        ? `/chit/api/dashboard/trend?chit_id=all`
         : `/chit/api/dashboard/trend?chit_id=${chitId}`;
 
       const [duesRes, payRes, trendRes] = await Promise.all([
@@ -1644,6 +1677,13 @@
 
     // Filter out subscribers who are 100% paid up (pending_amount <= 0)
     const actualPending = (pendingList || []).filter(m => (m.pending_amount || 0) > 0);
+
+    // Strictly sort by numerical A/C number
+    actualPending.sort((a, b) => {
+      const na = parseInt(String(a.account_number || a.ticket_number || '0').replace(/\D/g, ''), 10) || 0;
+      const nb = parseInt(String(b.account_number || b.ticket_number || '0').replace(/\D/g, ''), 10) || 0;
+      return na - nb;
+    });
 
     container.innerHTML = '';
     if (window.lucide) { lucide.createIcons(); }
@@ -1880,21 +1920,67 @@
     }
   }
 
+  function handleUnifiedSearch(query) {
+    const q = (query || '').toLowerCase().trim();
+    const clearBtn = document.getElementById('clearSearchBtn');
+    if (clearBtn) {
+      if (q) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+
+    // Sync internal search input if present
+    const pInp = document.getElementById('pendingSearchInput');
+    if (pInp && pInp.value !== q) pInp.value = q;
+
+    // 1. Filter pending dues
+    if (currentDuesData && currentDuesData.dues) {
+      let filteredDues = currentDuesData.dues.filter(d => (d.pending_amount || 0) > 0);
+      if (q) {
+        filteredDues = filteredDues.filter(d => 
+          (d.member_name || '').toLowerCase().includes(q) || 
+          String(d.account_number || d.ticket_number || '').toLowerCase().includes(q) ||
+          (d.phone && d.phone.includes(q))
+        );
+      }
+      if (isDefaultedFilterActive) {
+        filteredDues = filteredDues.filter(d => d.is_defaulted);
+      }
+      renderPendingSubscribers(filteredDues);
+    }
+
+    // 2. Filter payments list
+    if (currentPaymentsData) {
+      let filteredPayments = currentPaymentsData;
+      if (q) {
+        filteredPayments = filteredPayments.filter(m => {
+          const matchMember = (m.member_name || '').toLowerCase().includes(q) ||
+                              String(m.account_number || m.ticket_number || '').toLowerCase().includes(q) ||
+                              (m.phone && m.phone.includes(q));
+          const matchPayments = (m.payments || []).some(p => 
+            (p.reference_no && p.reference_no.toLowerCase().includes(q)) ||
+            (p.receipt_no && p.receipt_no.toLowerCase().includes(q)) ||
+            (p.notes && p.notes.toLowerCase().includes(q)) ||
+            (p.payment_mode && p.payment_mode.toLowerCase().includes(q))
+          );
+          return matchMember || matchPayments;
+        });
+      }
+      renderPaymentsCard(filteredPayments, filteredPayments.length);
+    }
+  }
+
+  function clearUnifiedSearch() {
+    const inp = document.getElementById('unifiedSearchInput');
+    if (inp) inp.value = '';
+    handleUnifiedSearch('');
+  }
+
   function filterPendingMembers() {
-    const q = document.getElementById('pendingSearchInput').value.toLowerCase().trim();
-    if (!currentDuesData || !currentDuesData.dues) return;
-    let filtered = currentDuesData.dues.filter(d => (d.pending_amount || 0) > 0);
-    if (q) {
-      filtered = filtered.filter(d => 
-        d.member_name.toLowerCase().includes(q) || 
-        String(d.account_number || d.ticket_number).includes(q) ||
-        (d.phone && d.phone.includes(q))
-      );
-    }
-    if (isDefaultedFilterActive) {
-      filtered = filtered.filter(d => d.is_defaulted);
-    }
-    renderPendingSubscribers(filtered);
+    const pInp = document.getElementById('pendingSearchInput');
+    const q = pInp ? pInp.value : '';
+    const uInp = document.getElementById('unifiedSearchInput');
+    if (uInp) uInp.value = q;
+    handleUnifiedSearch(q);
   }
 
   function toggleAmountSort() {
@@ -1909,81 +1995,421 @@
     showToast('Select mode: pick members to remind or mark as paid in bulk');
   }
 
-  // 8. Render Collections Trend SVG Chart
+  // 8. Render Collections & Payouts Trend SVG Chart + Subscriber Analytics
   function renderCollectionsTrend(trendData) {
     const svg = document.getElementById('trendSvg');
-    const collectedPoints = trendData.collected_points || [0, 0, 0, 0, 0, 0];
-    const maxVal = Math.max(...collectedPoints, trendData.total_target || 10000, 50000);
+    const container = document.getElementById('chartContainer');
+    const monthLabelsContainer = document.getElementById('chartMonthLabels');
+    const chartTitle = document.getElementById('trendChartTitle');
+    const chartLegend = document.getElementById('trendLegend');
+    const allChitsSection = document.getElementById('allChitsBreakdownSection');
+    const subAnalyticsSection = document.getElementById('subscriberAnalyticsSection');
+    const tooltip = document.getElementById('chartTooltip');
 
-    const width = 500;
-    const height = 110;
-    const step = width / (collectedPoints.length - 1);
+    if (!trendData || !svg) return;
 
-    const coords = collectedPoints.map((val, i) => {
-      const x = i * step;
-      const y = height - ((val / maxVal) * (height - 20)) - 10;
-      return { x, y, val };
-    });
+    const isSingleMode = trendData.mode === 'single' && activeChitId !== 'all';
 
-    // Build smooth cubic bezier path
-    let d = `M ${coords[0].x} ${coords[0].y}`;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const p0 = coords[i];
-      const p1 = coords[i + 1];
-      const cx1 = p0.x + (p1.x - p0.x) / 2;
-      const cy1 = p0.y;
-      const cx2 = p0.x + (p1.x - p0.x) / 2;
-      const cy2 = p1.y;
-      d += ` C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p1.x} ${p1.y}`;
+    if (isSingleMode) {
+      // ===== SINGLE GROUP MODE: BI-DIRECTIONAL CASHFLOW & SUBSCRIBER FOLIO =====
+      if (chartTitle) chartTitle.textContent = `CASHFLOW & DISBURSEMENTS · ${trendData.chit_name || ''}`;
+      if (chartLegend) {
+        chartLegend.innerHTML = `
+          <span class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span> ▲ COLLECTIONS
+          </span>
+          <span class="flex items-center gap-1.5 text-amber-500 dark:text-amber-400 font-bold">
+            <span class="h-2 w-2 rounded-full bg-amber-400"></span> ▼ PAYOUTS
+          </span>
+        `;
+      }
+      if (allChitsSection) allChitsSection.classList.add('hidden');
+      if (subAnalyticsSection) subAnalyticsSection.classList.remove('hidden');
+
+      const months = trendData.months || [];
+      const collPts = trendData.collected_points || [];
+      const poPts = trendData.payout_points || [];
+      const maxVal = Math.max(...collPts, ...poPts, 10000);
+
+      const width = 500;
+      const height = 130;
+      const yBaseline = 65;
+      const n = Math.max(months.length, 2);
+      const step = width / (n - 1);
+
+      const collCoords = collPts.map((val, i) => {
+        const x = i * step;
+        const y = yBaseline - ((val / maxVal) * 52);
+        return { x, y, val };
+      });
+
+      const poCoords = poPts.map((val, i) => {
+        const x = i * step;
+        const y = yBaseline + ((val / maxVal) * 52);
+        return { x, y, val };
+      });
+
+      const buildSmoothPath = (pts) => {
+        if (!pts.length) return '';
+        let d = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p0 = pts[i];
+          const p1 = pts[i + 1];
+          const cx1 = p0.x + (p1.x - p0.x) / 2;
+          const cy1 = p0.y;
+          const cx2 = p0.x + (p1.x - p0.x) / 2;
+          const cy2 = p1.y;
+          d += ` C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p1.x} ${p1.y}`;
+        }
+        return d;
+      };
+
+      const collPath = buildSmoothPath(collCoords);
+      const collFill = `${collPath} L ${width} ${yBaseline} L 0 ${yBaseline} Z`;
+
+      const poPath = buildSmoothPath(poCoords);
+      const poFill = `${poPath} L ${width} ${yBaseline} L 0 ${yBaseline} Z`;
+
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="collGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
+            <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+          </linearGradient>
+          <linearGradient id="poGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.0" />
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.30" />
+          </linearGradient>
+          <filter id="sparkGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- Baseline Y=0 -->
+        <line x1="0" y1="${yBaseline}" x2="${width}" y2="${yBaseline}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3" opacity="0.6" />
+        <text x="6" y="${yBaseline - 4}" fill="#94a3b8" font-size="8" font-family="monospace" opacity="0.8">0 BASELINE</text>
+
+        <!-- Top Region: Collections -->
+        <path d="${collFill}" fill="url(#collGrad)" />
+        <path id="trendCollStroke" d="${collPath}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+        <!-- Bottom Region: Payouts -->
+        <path d="${poFill}" fill="url(#poGrad)" />
+        <path id="trendPoStroke" d="${poPath}" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+
+        <!-- Dots on data points -->
+        ${collCoords.map((pt, idx) => `
+          <circle cx="${pt.x}" cy="${pt.y}" r="${pt.val > 0 ? 3.5 : 2}" fill="${pt.val > 0 ? '#10b981' : '#ffffff'}" stroke="#10b981" stroke-width="2" class="cursor-pointer" />
+        `).join('')}
+        ${poCoords.map((pt, idx) => `
+          <circle cx="${pt.x}" cy="${pt.y}" r="${pt.val > 0 ? 3.5 : 2}" fill="${pt.val > 0 ? '#f59e0b' : '#ffffff'}" stroke="#f59e0b" stroke-width="2" class="cursor-pointer" />
+        `).join('')}
+
+        <!-- Entrance Spark -->
+        <circle id="chartSparkNode" cx="${collCoords[0].x}" cy="${collCoords[0].y}" r="5" fill="#34d399" filter="url(#sparkGlow)" opacity="0.9" />
+
+        <!-- Vertical Crosshair line -->
+        <line id="trackerLine" x1="0" y1="0" x2="0" y2="${height}" stroke="#64748b" stroke-width="1.2" stroke-dasharray="2,2" opacity="0" />
+      `;
+
+      // Spark entrance animation along stroke
+      const spark = document.getElementById('chartSparkNode');
+      const collStroke = document.getElementById('trendCollStroke');
+      if (spark && collStroke && collStroke.getTotalLength) {
+        try {
+          const pathLen = collStroke.getTotalLength();
+          if (pathLen > 0) {
+            collStroke.style.strokeDasharray = pathLen;
+            collStroke.style.strokeDashoffset = pathLen;
+            let startT = null;
+            const animDuration = 800;
+            function animStep(timestamp) {
+              if (!startT) startT = timestamp;
+              const progress = Math.min((timestamp - startT) / animDuration, 1);
+              const easeProgress = 1 - Math.pow(1 - progress, 3);
+              collStroke.style.strokeDashoffset = pathLen * (1 - easeProgress);
+              const curPt = collStroke.getPointAtLength(pathLen * easeProgress);
+              spark.setAttribute('cx', curPt.x);
+              spark.setAttribute('cy', curPt.y);
+              if (progress < 1) {
+                requestAnimationFrame(animStep);
+              } else {
+                spark.style.opacity = '0.3';
+              }
+            }
+            requestAnimationFrame(animStep);
+          }
+        } catch (err) {
+          console.warn('Spark animation error:', err);
+        }
+      }
+
+      // X-axis Month Labels
+      if (monthLabelsContainer) {
+        monthLabelsContainer.innerHTML = '';
+        months.forEach((m, i) => {
+          const sp = document.createElement('span');
+          sp.className = `text-[10px] font-semibold ${i === months.length - 1 ? 'text-slate-900 dark:text-slate-100 font-extrabold' : 'text-slate-400'}`;
+          sp.textContent = m;
+          monthLabelsContainer.appendChild(sp);
+        });
+      }
+
+      // Mouse Hover Crosshair & Glassmorphic Tooltip
+      svg.onmousemove = (e) => {
+        const rect = svg.getBoundingClientRect();
+        const mouseX = ((e.clientX - rect.left) / rect.width) * width;
+        let closestIdx = 0;
+        let minDiff = Infinity;
+        collCoords.forEach((pt, idx) => {
+          const diff = Math.abs(pt.x - mouseX);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIdx = idx;
+          }
+        });
+
+        const cPt = collCoords[closestIdx];
+        const pPt = poCoords[closestIdx];
+        const mLabel = months[closestIdx] || `Cycle ${closestIdx + 1}`;
+        const cVal = cPt.val;
+        const pVal = pPt.val;
+        const net = cVal - pVal;
+
+        const tracker = document.getElementById('trackerLine');
+        if (tracker) {
+          tracker.setAttribute('x1', cPt.x);
+          tracker.setAttribute('x2', cPt.x);
+          tracker.style.opacity = '1';
+        }
+
+        if (tooltip) {
+          tooltip.classList.remove('hidden');
+          const leftPx = (cPt.x / width) * rect.width;
+          const topPx = Math.max(10, ((cPt.y / height) * rect.height) - 45);
+          tooltip.style.left = `${Math.min(Math.max(10, leftPx - 60), rect.width - 170)}px`;
+          tooltip.style.top = `${topPx}px`;
+          tooltip.innerHTML = `
+            <div class="font-bold text-[11px] text-slate-200 border-b border-white/10 pb-1">${mLabel}</div>
+            <div class="flex items-center justify-between gap-4 text-emerald-400 text-[10px] pt-0.5">
+              <span>Collected:</span>
+              <span class="font-extrabold money-fig">+${formatINR(cVal)}</span>
+            </div>
+            <div class="flex items-center justify-between gap-4 text-amber-400 text-[10px]">
+              <span>Disbursed:</span>
+              <span class="font-extrabold money-fig">-${formatINR(pVal)}</span>
+            </div>
+            <div class="border-t border-white/10 pt-1 flex items-center justify-between gap-4 text-[11px] ${net >= 0 ? 'text-teal-300' : 'text-rose-400'}">
+              <span class="font-bold">Net:</span>
+              <span class="font-black money-fig">${net >= 0 ? '+' : ''}${formatINR(net)}</span>
+            </div>
+          `;
+        }
+      };
+
+      svg.onmouseleave = () => {
+        const tracker = document.getElementById('trackerLine');
+        if (tracker) tracker.style.opacity = '0';
+        if (tooltip) tooltip.classList.add('hidden');
+      };
+
+      // Populate Subscriber Analytics Folio
+      renderSubscriberFolio(trendData.subscribers || [], trendData.subscribers_summary || {});
+
+    } else {
+      // ===== ALL CHITS MODE: HISTORICAL COLLECTIONS OVERVIEW & PER CHIT PROGRESS =====
+      if (chartTitle) chartTitle.textContent = 'COLLECTIONS TREND';
+      if (chartLegend) {
+        chartLegend.innerHTML = `
+          <span class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span> COLLECTED
+          </span>
+          <span class="flex items-center gap-1.5 text-amber-500 font-bold">
+            <span class="h-2 w-2 rounded-full bg-amber-400"></span> PENDING
+          </span>
+        `;
+      }
+      if (allChitsSection) allChitsSection.classList.remove('hidden');
+      if (subAnalyticsSection) subAnalyticsSection.classList.add('hidden');
+
+      const collectedPoints = trendData.collected_points || [0, 0, 0, 0, 0, 0];
+      const maxVal = Math.max(...collectedPoints, trendData.total_target || 10000, 50000);
+      const width = 500;
+      const height = 110;
+      const step = width / (collectedPoints.length - 1 || 1);
+
+      const coords = collectedPoints.map((val, i) => {
+        const x = i * step;
+        const y = height - ((val / maxVal) * (height - 24)) - 12;
+        return { x, y, val };
+      });
+
+      let d = `M ${coords[0].x} ${coords[0].y}`;
+      for (let i = 0; i < coords.length - 1; i++) {
+        const p0 = coords[i];
+        const p1 = coords[i + 1];
+        const cx1 = p0.x + (p1.x - p0.x) / 2;
+        const cy1 = p0.y;
+        const cx2 = p0.x + (p1.x - p0.x) / 2;
+        const cy2 = p1.y;
+        d += ` C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p1.x} ${p1.y}`;
+      }
+
+      const fillPath = `${d} L ${width} ${height} L 0 ${height} Z`;
+
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
+            <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d="${fillPath}" fill="url(#trendGrad)" />
+        <path id="allTrendStroke" d="${d}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        ${coords.map((pt, idx) => `
+          <circle cx="${pt.x}" cy="${pt.y}" r="${idx === coords.length - 1 ? '4' : '3'}" 
+                  fill="${idx === coords.length - 1 ? '#10b981' : '#ffffff'}" 
+                  stroke="#10b981" stroke-width="2" />
+        `).join('')}
+      `;
+
+      svg.onmousemove = null;
+      svg.onmouseleave = null;
+      if (tooltip) tooltip.classList.add('hidden');
+
+      // Month labels
+      if (monthLabelsContainer) {
+        monthLabelsContainer.innerHTML = '';
+        (trendData.months || []).forEach((m, idx, arr) => {
+          const sp = document.createElement('span');
+          sp.className = idx === arr.length - 1 ? 'text-slate-900 dark:text-slate-100 font-extrabold' : 'text-slate-400';
+          sp.textContent = m;
+          monthLabelsContainer.appendChild(sp);
+        });
+      }
+
+      // Per chit bars
+      const perChitContainer = document.getElementById('perChitContainer');
+      if (perChitContainer) {
+        perChitContainer.innerHTML = '';
+        (trendData.per_chit || []).forEach(pc => {
+          const div = document.createElement('div');
+          div.className = 'space-y-1.5 cursor-pointer hover:opacity-80 transition-opacity';
+          div.onclick = () => selectChitGroup(pc.id);
+          div.innerHTML = `
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${pc.name}</span>
+              <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig">${formatINR(pc.collected)}</span>
+            </div>
+            <div class="h-2 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full overflow-hidden flex">
+              <div class="h-full bg-emerald-500 rounded-full" style="width: ${pc.percent}%"></div>
+            </div>
+          `;
+          perChitContainer.appendChild(div);
+        });
+      }
+    }
+    if (window.lucide) { lucide.createIcons(); }
+  }
+
+  // 8B. Render Subscriber Analytics & Folio (Group Specific)
+  function renderSubscriberFolio(subscribers, summary) {
+    const container = document.getElementById('subscribersListContainer');
+    const summaryEl = document.getElementById('subscribersFolioSummary');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (summaryEl) {
+      summaryEl.textContent = `${subscribers.length} subscribers · ${summary.ontime_count || 0} on-time · ${summary.arrears_count || 0} with arrears · ${summary.payouts_count || 0} prized`;
     }
 
-    const fillPath = `${d} L ${width} ${height} L 0 ${height} Z`;
+    if (subscribers.length === 0) {
+      container.innerHTML = '<div class="py-6 text-center text-xs text-slate-400">No subscribers enrolled in this chit group.</div>';
+      return;
+    }
 
-    svg.innerHTML = `
-      <defs>
-        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
-          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
-        </linearGradient>
-      </defs>
-      <path d="${fillPath}" fill="url(#trendGrad)" />
-      <path d="${d}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-      ${coords.map((pt, idx) => `
-        <circle cx="${pt.x}" cy="${pt.y}" r="${idx === coords.length - 1 ? '4' : '3'}" 
-                fill="${idx === coords.length - 1 ? '#10b981' : '#ffffff'}" 
-                stroke="#10b981" stroke-width="2" />
-      `).join('')}
-    `;
-        if (window.lucide) { lucide.createIcons(); }
+    subscribers.forEach((sub, idx) => {
+      const acBadge = formatAcBadge(sub.account_number, sub.ticket_number, idx + 1);
+      const avatarColor = getAvatarColor(acBadge || idx);
 
-    // Per chit bars
-    const perChitContainer = document.getElementById('perChitContainer');
-    perChitContainer.innerHTML = '';
-        if (window.lucide) { lucide.createIcons(); }
-    (trendData.per_chit || []).forEach(pc => {
-      const div = document.createElement('div');
-      div.className = 'space-y-1.5';
-      div.innerHTML = `
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${pc.name}</span>
-          <span class="font-extrabold text-slate-900 dark:text-slate-100 money-fig">${formatINR(pc.collected)}</span>
+      let healthBadge = '';
+      if (sub.health === 'arrears') {
+        healthBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300/60">Arrears (${sub.arrears_count} mo)</span>`;
+      } else if (sub.has_lifted) {
+        healthBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60">Prized · On-time</span>`;
+      } else if (sub.cur_month_pending <= 0) {
+        healthBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60">On-time</span>`;
+      } else if (sub.cur_month_paid > 0) {
+        healthBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/60">Partial</span>`;
+      } else {
+        healthBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200">Pending</span>`;
+      }
+
+      const row = document.createElement('div');
+      row.className = 'py-2.5 px-2 hover:bg-slate-50 dark:hover:bg-white/[0.04] rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 group border-b border-slate-100 dark:border-slate-800/60 last:border-0';
+      row.title = `Click to view profile for ${sub.full_name}`;
+      row.onclick = () => window.location.href = `/chit/members/${sub.member_id}`;
+
+      row.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="h-9 w-9 rounded-full ${avatarColor} font-black flex items-center justify-center text-xs shrink-0 font-mono tracking-tight border shadow-2xs" title="A/C #${acBadge}">
+            ${acBadge}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors truncate">
+                ${sub.full_name}
+              </span>
+              <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-chitDark-elevated text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50">
+                ${sub.share_units}x · ${sub.installment_type}
+              </span>
+              ${sub.has_lifted ? `
+                <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200/60">
+                  Prized M${sub.lifted_month_index} (${formatINR(sub.payout_amount)})
+                </span>
+              ` : ''}
+              ${healthBadge}
+            </div>
+            <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
+              <span>Paid: <strong class="text-emerald-600 dark:text-emerald-400 font-bold">${formatINR(sub.total_paid)}</strong></span>
+              ${sub.cur_month_pending > 0 ? `<span>· Due: <strong class="text-rose-500 font-bold">${formatINR(sub.cur_month_pending)}</strong></span>` : '<span>· Caught up</span>'}
+              ${sub.phone ? `<span>· 📞 ${sub.phone}</span>` : ''}
+            </div>
+          </div>
         </div>
-        <div class="h-2 w-full bg-slate-100 dark:bg-chitDark-elevated rounded-full overflow-hidden flex">
-          <div class="h-full bg-emerald-500 rounded-full" style="width: ${pc.percent}%"></div>
+        <div class="flex items-center gap-1 shrink-0 text-slate-300 dark:text-slate-600 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+          <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2]"></i>
         </div>
       `;
-        if (window.lucide) { lucide.createIcons(); }
-      perChitContainer.appendChild(div);
+      container.appendChild(row);
     });
+    if (window.lucide) { lucide.createIcons(); }
   }
 
   // 9. Render Payments Section
   function renderPaymentsCard(memberPayments, totalCount) {
     const container = document.getElementById('paymentsListContainer');
     container.innerHTML = '';
-        if (window.lucide) { lucide.createIcons(); }
+    if (window.lucide) { lucide.createIcons(); }
 
-    document.getElementById('paymentsHeaderTitle').textContent = `PAYMENTS ${memberPayments.length} members`;
+    const allCol = memberPayments.reduce((s, m) => s + (m.payments || []).filter(p => !p.is_payout).reduce((a, b) => a + (b.amount || 0), 0), 0);
+    const allPo = memberPayments.reduce((s, m) => s + (m.payments || []).filter(p => p.is_payout).reduce((a, b) => a + (b.amount || 0), 0), 0);
+    let titleText = `PAYMENTS ${memberPayments.length} members`;
+    if (allPo > 0 && allCol > 0) {
+      titleText = `PAYMENTS · ${memberPayments.length} members · ${formatINR(allCol)} coll · ${formatINR(allPo)} disbursed`;
+    } else if (allPo > 0) {
+      titleText = `PAYMENTS · ${memberPayments.length} members · ${formatINR(allPo)} disbursed`;
+    } else if (allCol > 0) {
+      titleText = `PAYMENTS · ${memberPayments.length} members · ${formatINR(allCol)} collected`;
+    }
+    const headerTitleEl = document.getElementById('paymentsHeaderTitle');
+    if (headerTitleEl) headerTitleEl.textContent = titleText;
 
     if (memberPayments.length === 0) {
       container.innerHTML = `
@@ -1991,7 +2417,7 @@
           No payments recorded yet for Month ${activeMonthIndex}.
         </div>
       `;
-        if (window.lucide) { lucide.createIcons(); }
+      if (window.lucide) { lucide.createIcons(); }
       return;
     }
 
@@ -2003,11 +2429,10 @@
       const card = document.createElement('div');
       card.className = 'space-y-3 pt-3 first:pt-0';
       
-      let totalAmtDisplay = mp.total_paid;
-      if (totalAmtDisplay === 0) {
-        const poSum = (mp.payments || []).filter(p => p.is_payout).reduce((a, b) => a + (b.amount || 0), 0);
-        if (poSum > 0) totalAmtDisplay = poSum;
-      }
+      const colSum = (mp.payments || []).filter(p => !p.is_payout).reduce((a, b) => a + (b.amount || 0), 0);
+      const poSum = (mp.payments || []).filter(p => p.is_payout).reduce((a, b) => a + (b.amount || 0), 0);
+      const totalAmtDisplay = colSum + poSum;
+      const hasBoth = colSum > 0 && poSum > 0;
 
       let html = `
         <!-- Member header row -->
@@ -2029,10 +2454,22 @@
 
           <div class="flex items-center gap-2">
             <div class="text-right">
-              <span class="text-sm md:text-base font-black text-emerald-600 dark:text-emerald-400 money-fig block">
+              <span class="text-sm md:text-base font-black ${poSum > 0 && colSum === 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} money-fig block">
                 ${formatINR(totalAmtDisplay)}
               </span>
               <div class="flex items-center gap-1 justify-end flex-wrap mt-0.5">
+                ${hasBoth ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60">
+                    +${formatINR(colSum)} Coll
+                  </span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/60">
+                    -${formatINR(poSum)} Payout
+                  </span>
+                ` : (poSum > 0 ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/60">
+                    Payout Disbursed
+                  </span>
+                ` : '')}
                 ${(mp.credit_settled > 0 && mp.cash_paid > 0) ? `
                   <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                     (Cash: ${formatINR(mp.cash_paid)} · Credit: ${formatINR(mp.credit_settled)})
@@ -2069,6 +2506,10 @@
                   </span>
                   <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">${p.payment_mode}</span>
                   <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${p.month_tag}</span>
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-700 flex items-center gap-1">
+                    <i data-lucide="calendar" class="w-3 h-3"></i>
+                    Disbursed: ${formatDate(p.payment_date)}
+                  </span>
                 </div>
 
                 <div class="flex items-center gap-2.5 shrink-0">
@@ -2100,6 +2541,10 @@
                     </span>
                   ` : ''}
                   <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${p.month_tag}</span>
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1">
+                    <i data-lucide="calendar" class="w-3 h-3"></i>
+                    ${formatDate(p.payment_date)}
+                  </span>
                 </div>
 
                 <div class="flex items-center gap-2.5 shrink-0">

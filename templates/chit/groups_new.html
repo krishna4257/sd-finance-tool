@@ -551,12 +551,11 @@
   }
 
   function suggestNextAccountNumber() {
-    const existing = new Set(assignedMembers.map(m => String(m.account_number || '').trim()));
-    let n = 1;
-    while (existing.has(String(n))) {
-      n++;
-    }
-    return String(n);
+    const nums = (assignedMembers || [])
+      .map(m => parseInt(String(m.account_number || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+    return String(maxNum + 1);
   }
 
   function renderAvailableMembersChips(members) {
@@ -821,15 +820,16 @@
     const row = document.createElement('div');
     row.className = 'grid grid-cols-12 gap-2 items-center';
 
-    // Find next suggested account number
-    const existing = new Set(assignedMembers.map(m => String(m.account_number || '').trim()));
+    // Find next suggested account number (max + 1)
+    const nums = (assignedMembers || [])
+      .map(m => parseInt(String(m.account_number || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
     document.querySelectorAll('.quick-add-account').forEach(inp => {
-      if (inp.value.trim()) existing.add(inp.value.trim());
+      const v = parseInt(inp.value.replace(/\D/g, ''), 10);
+      if (!isNaN(v)) nums.push(v);
     });
-    let nextAcc = 1;
-    while (existing.has(String(nextAcc))) {
-      nextAcc++;
-    }
+    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+    const nextAcc = maxNum + 1;
 
     const fixedBase = getFixedMonthlyBase();
 

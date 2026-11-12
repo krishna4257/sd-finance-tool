@@ -1820,7 +1820,7 @@
             ${l.repayments.map(r => `
               <div class="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                 <div class="flex items-center gap-2">
-                  <span class="font-mono text-slate-500 dark:text-slate-400 text-[11px]">${r.date}</span>
+                  <span class="font-mono text-slate-500 dark:text-slate-400 text-[11px]">${formatDate(r.date)}</span>
                   <span class="text-slate-400">·</span>
                   <span class="font-semibold text-slate-700 dark:text-slate-300">${escapeHtml(r.mode)}</span>
                   ${r.receipt_no ? `<span class="text-[10px] font-mono text-slate-400 bg-slate-200/60 dark:bg-slate-700/60 px-1.5 py-0.2 rounded">#${escapeHtml(r.receipt_no)}</span>` : ''}

@@ -898,7 +898,7 @@
       } else {
         repsBody.innerHTML = loan.repayments.map(r => `
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-            <td class="py-2.5 px-3 font-mono">${r.date}</td>
+            <td class="py-2.5 px-3 font-mono">${formatDate(r.date)}</td>
             <td class="py-2.5 px-3">
               <span class="font-bold text-slate-800 dark:text-slate-200">${escapeHtml(r.mode)}</span>
               ${r.receipt_no ? `<span class="text-[10px] text-slate-400 block">${escapeHtml(r.receipt_no)}</span>` : ''}

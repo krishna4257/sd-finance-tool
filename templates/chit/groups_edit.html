@@ -1192,16 +1192,15 @@
   }
 
   function getNextAvailableEditAccountNumber() {
-    const existing = new Set((groupPayload?.members || []).map(m => String(m.account_number || '').trim()));
+    const nums = (groupPayload?.members || [])
+      .map(m => parseInt(String(m.account_number || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
     document.querySelectorAll('.edit-qa-acc').forEach(inp => {
-      const val = inp.value.trim();
-      if (val) existing.add(val);
+      const v = parseInt(inp.value.replace(/\D/g, ''), 10);
+      if (!isNaN(v)) nums.push(v);
     });
-    let n = 1;
-    while (existing.has(String(n))) {
-      n++;
-    }
-    return n;
+    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+    return maxNum + 1;
   }
 
   function addEditQuickAddRow() {
@@ -1338,12 +1337,12 @@
     const searchInput = document.getElementById('editModalMemberSearch');
     if (searchInput) searchInput.value = '';
     
-    // Auto-suggest next sequential account number inside this group
-    const existingAccs = new Set((groupPayload?.members || []).map(m => String(m.account_number || '').trim()));
-    let nextAcc = 1;
-    while (existingAccs.has(String(nextAcc))) {
-      nextAcc++;
-    }
+    // Auto-suggest next sequential account number inside this group (max + 1)
+    const nums = (groupPayload?.members || [])
+      .map(m => parseInt(String(m.account_number || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const maxAcc = nums.length > 0 ? Math.max(...nums) : 0;
+    const nextAcc = maxAcc + 1;
     const accInput = document.getElementById('newMemberAccountNumber');
     if (accInput) accInput.value = nextAcc;
 

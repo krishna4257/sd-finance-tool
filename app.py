@@ -10513,6 +10513,12 @@ def b64encode_filter(data):
 def format_date_iso_filter(value):
     return format_date_iso(value)
 
+@app.template_filter('format_date_display')
+@app.template_filter('ddmmyyyy')
+@app.template_filter('date_in')
+def format_date_display_filter(value):
+    return format_date_display(value)
+
 
 # ====================================================
 # SELF-HOSTED APK DISTRIBUTION

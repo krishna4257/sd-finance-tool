@@ -383,7 +383,7 @@
             </div>
             <div class="spec-row">
               <span class="s-label"><i class="fas fa-calendar-alt me-1"></i> Released At</span>
-              <span class="s-val" id="currentReleasedAt">{{ version_data.released_at if version_data and version_data.released_at else '-' }}</span>
+              <span class="s-val" id="currentReleasedAt">{{ version_data.released_at|ddmmyyyy if version_data and version_data.released_at else '-' }}</span>
             </div>
             <div class="spec-row">
               <span class="s-label"><i class="fas fa-user-circle me-1"></i> Published By</span>
@@ -4873,9 +4873,7 @@
         }
         if (document.getElementById('currentReleasedAt')) {
           if (data.current_version.released_at) {
-            const relDt = new Date(data.current_version.released_at).toLocaleString('en-IN', {
-              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
+            const relDt = formatDate(data.current_version.released_at);
             document.getElementById('currentReleasedAt').textContent = relDt;
           } else {
             document.getElementById('currentReleasedAt').textContent = '-';
@@ -4933,9 +4931,7 @@
           ? `<span class="badge-target-pilot" title="${targetNames.join(', ')}"><i class="fas fa-users-viewfinder me-1"></i> Targeted (${targetCount || 1})</span>`
           : `<span class="badge-target-all"><i class="fas fa-globe me-1"></i> Global</span>`;
 
-        const modDate = apk.modified_at ? new Date(apk.modified_at).toLocaleDateString('en-IN', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        }) : '-';
+        const modDate = apk.modified_at ? formatDate(apk.modified_at) : '-';
 
         const sizeDisplay = apk.size_mb || (apk.size_bytes ? (apk.size_bytes / (1024 * 1024)).toFixed(1) : '35');
         const notesSub = apk.release_notes ? `<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; font-weight: normal; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${apk.release_notes}">${apk.release_notes}</div>` : '';

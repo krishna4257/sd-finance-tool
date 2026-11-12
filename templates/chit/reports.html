@@ -796,7 +796,7 @@
           <td class="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">${p.winner}</td>
           <td class="py-3 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">${formatINR(p.amount_received)}</td>
           <td class="py-3 px-4 text-right font-mono text-amber-600">${formatINR(p.chit_loss)}</td>
-          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${p.payout_date}</td>
+          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${formatDate(p.payout_date)}</td>
           <td class="py-3 px-4 text-center">
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
               p.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -876,7 +876,7 @@
 
       document.getElementById('rcptTimestamp').textContent = timeStr;
       document.getElementById('rcptNumber').textContent = '#' + r.receipt_no;
-      document.getElementById('rcptDateTop').textContent = r.payment_date;
+      document.getElementById('rcptDateTop').textContent = formatDate(r.payment_date);
       document.getElementById('rcptAmount').textContent = formatINR(r.amount);
       document.getElementById('rcptModeBadge').textContent = 'via ' + r.payment_mode;
 
@@ -884,7 +884,7 @@
       document.getElementById('rcptChitGroup').textContent = `${r.chit_name} · ${formatINR(r.chit_value)} · ${r.duration_months} Months`;
       document.getElementById('rcptAppliedMonth').textContent = `${r.month_year} · M${r.month_index}`;
       document.getElementById('rcptPaymentMethod').textContent = r.payment_mode;
-      document.getElementById('rcptDate').textContent = r.payment_date;
+      document.getElementById('rcptDate').textContent = formatDate(r.payment_date);
       document.getElementById('rcptNoDetails').textContent = r.receipt_no;
 
       document.getElementById('paymentReceiptModal').classList.remove('hidden');

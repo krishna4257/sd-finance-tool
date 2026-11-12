@@ -151,8 +151,58 @@ function applyGlobalMoneyFormatting() {
 }
 
 // Expose formatting helpers globally
+window.formatDate = formatDate;
+window.formatDateToDDMMYYYY = formatDateToDDMMYYYY;
+window.formatDDMMYYYY = formatDate;
+window.formatDateIN = formatDate;
+window.parseDDMMYYYY = parseDDMMYYYY;
+window.formatDateToISO = formatDateToISO;
 window.formatWithRupeeAndCommas = formatWithRupeeAndCommas;
 window.applyGlobalMoneyFormatting = applyGlobalMoneyFormatting;
+
+/**
+ * Apply Indian date formatting (dd-mm-yyyy) to elements annotated with
+ * data-date, .date-cell, .date-display, or plain text nodes/cells matching
+ * ISO date pattern (yyyy-mm-dd).
+ * Skips interactive inputs (e.g. <input type="date">) to preserve native UI pickers.
+ */
+function applyGlobalDateFormatting(root = document) {
+  if (!root || !root.querySelectorAll) return;
+
+  // 1. Explicit data-date elements
+  const dateElements = root.querySelectorAll('[data-date]');
+  dateElements.forEach(el => {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+    const raw = el.getAttribute('data-date');
+    if (raw) {
+      el.textContent = formatDate(raw);
+    }
+  });
+
+  // 2. Elements with date classes
+  const dateClasses = root.querySelectorAll('.date-cell, .date-display, [data-format-date]');
+  dateClasses.forEach(el => {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+    const txt = el.textContent.trim();
+    if (txt) {
+      el.textContent = formatDate(txt);
+    }
+  });
+
+  // 3. Automatically format table cells containing purely an ISO date YYYY-MM-DD
+  const isoDateRegex = /^\s*(\d{4})[-/](\d{2})[-/](\d{2})\s*$/;
+  const cells = root.querySelectorAll('td, .date-auto');
+  cells.forEach(el => {
+    if (el.children.length === 0) {
+      const match = el.textContent.match(isoDateRegex);
+      if (match) {
+        el.textContent = `${match[3]}-${match[2]}-${match[1]}`;
+      }
+    }
+  });
+}
+
+window.applyGlobalDateFormatting = applyGlobalDateFormatting;
 
 // -------------------- DataTables Extensions --------------------
 
@@ -292,6 +342,7 @@ if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
 // should call applyGlobalMoneyFormatting manually.
 document.addEventListener('DOMContentLoaded', () => {
   applyGlobalMoneyFormatting();
+  applyGlobalDateFormatting();
 });
 
 // -------------------- Modernized Success Animations & Sounds --------------------
