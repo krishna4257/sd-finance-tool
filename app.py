@@ -22,6 +22,7 @@ import base64
 import hashlib
 import hmac
 import json
+from typing import Any
 from functools import wraps
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10254,7 +10255,7 @@ def add_cashbag_transaction():
     allowed_txn_type = ["CASH", "UPI"]
 
     # Build redirect URL back to cashbag page with pair params
-    redirect_args = {"emp1": emp1}
+    redirect_args: dict[str, Any] = {"emp1": emp1}
     if emp2:
         redirect_args["emp2"] = emp2
     if bank_id:
