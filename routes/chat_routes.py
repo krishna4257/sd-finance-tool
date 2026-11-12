@@ -478,6 +478,7 @@ def get_channel_history(channel_id):
                 messages.append({
                     "id": str(m_id),
                     "client_uuid": c_uuid,
+                    "channel_id": str(channel_id),
                     "sender_id": s_id,
                     "sender_name": s_name,
                     "is_me": s_id == user["id"],
