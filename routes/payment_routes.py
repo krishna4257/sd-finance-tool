@@ -727,6 +727,7 @@ def submit_post_payment():
 
     submitted = 0
     skipped = []
+    already_present = []
     seen_in_batch = set()
 
     try:
@@ -781,19 +782,45 @@ def submit_post_payment():
                 continue
             seen_in_batch.add(batch_key)
 
-            # 🔹 Database duplicate check (prevent duplicate payment for same customer on same date)
+            # 🔹 Database duplicate check (auto-acknowledge exact matches, allow update if requested)
             cur.execute("""
                 SELECT pid, amt FROM payment
                 WHERE vid = %s AND ano = %s AND payment_date = %s
                 LIMIT 1
             """, (vid, ano, payment_date))
             existing = cur.fetchone()
-            if existing:
-                skipped.append({
-                    **row,
-                    "reason": f"Account #{ano}: Payment already recorded on {format_date_display(str(payment_date))} (Amount: ₹{existing[1]})"
-                })
-                continue
+            if existing and existing != (0,) and existing[0] != 0:
+                existing_pid, existing_amt = existing
+                existing_amt_dec = Decimal(str(existing_amt))
+                if existing_amt_dec == amt:
+                    # EXACT MATCH: Payment is already in database with identical amount!
+                    already_present.append({
+                        "ano": ano,
+                        "amt": str(amt),
+                        "pdt": str(payment_date),
+                        "reason": f"Account #{ano}: Already recorded on {format_date_display(str(payment_date))} (₹{amt})"
+                    })
+                    continue
+                elif row.get("allow_update") or row.get("overwrite"):
+                    # Explicit update of existing payment
+                    cur.execute("""
+                        UPDATE payment
+                        SET amt = %s,
+                            payment_type = %s,
+                            cash_amount = %s,
+                            upi_amount = %s,
+                            eid = %s
+                        WHERE pid = %s
+                    """, (amt, payment_type, cash_amount, upi_amount, eid, existing_pid))
+                    _call_recalc_balance(cur, cid)
+                    submitted += 1
+                    continue
+                else:
+                    skipped.append({
+                        **row,
+                        "reason": f"Account #{ano}: Payment already recorded on {format_date_display(str(payment_date))} with amount ₹{existing_amt_dec} (differs from entered ₹{amt})"
+                    })
+                    continue
 
             total_amt = Decimal(total_amt)
             paid_amt = Decimal(paid_amt or 0)
@@ -843,15 +870,27 @@ def submit_post_payment():
                 "eid": eid,
                 "vid": vid,
                 "submitted_count": submitted,
+                "already_present_count": len(already_present),
                 "skipped_count": len(skipped),
                 "skipped_reasons": [s.get("reason") for s in skipped] if skipped else []
             }
         )
 
-        return jsonify( 
+        msg_parts = []
+        if submitted > 0:
+            msg_parts.append(f"{submitted} payment(s) posted")
+        if already_present:
+            msg_parts.append(f"{len(already_present)} payment(s) already recorded and up to date")
+        if not msg_parts:
+            msg_parts.append("No new payments posted")
+        if skipped:
+            msg_parts.append(f"{len(skipped)} skipped")
+
+        return jsonify(
             success=True,
-            message=f"{submitted} payment(s) posted" + (f", {len(skipped)} skipped" if skipped else ""),
+            message=" | ".join(msg_parts),
             submitted_count=submitted,
+            already_present_count=len(already_present),
             skipped_count=len(skipped),
             skipped_rows=skipped
         )

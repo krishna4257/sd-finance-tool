@@ -1745,18 +1745,24 @@ def payment_feed_batch():
                     logger.warning("Skipping duplicate payment feed item (already in payment table): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
                     continue
 
-                # 2. Check if already pending in payment_feed_items
+                # 2. Check if already pending in payment_feed_items -> update with latest payload
                 cur.execute("""
-                    SELECT 1 FROM payment_feed_items
+                    SELECT feed_payment_id FROM payment_feed_items
                     WHERE (payload->>'vid')::int = %s 
                       AND (payload->>'ano')::int = %s 
-                      AND (payload->>'payment_date') = %s
-                      AND status IN ('pending', 'approved', 'synced')
-                      AND (local_uuid != %s OR local_uuid IS NULL)
+                      AND (COALESCE(payload->>'payment_date', payload->>'pdate')) = %s
+                      AND status = 'pending'
                     LIMIT 1
-                """, (p_vid, p_ano, str(p_date), local_uuid or ''))
-                if cur.fetchone():
-                    logger.warning("Skipping duplicate payment feed item (already pending in feed): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
+                """, (p_vid, p_ano, str(p_date)))
+                pending_existing = cur.fetchone()
+                if pending_existing:
+                    # Update pending feed item payload with latest data
+                    cur.execute("""
+                        UPDATE payment_feed_items
+                        SET payload = %s,
+                            local_uuid = COALESCE(%s, local_uuid)
+                        WHERE feed_payment_id = %s
+                    """, (payload, local_uuid, pending_existing[0]))
                     continue
 
             cur.execute("""

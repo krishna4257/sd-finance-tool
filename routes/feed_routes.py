@@ -231,11 +231,16 @@ def feed():
             c.start_date AS customer_start_date
         FROM payment_feed_items pfi
         LEFT JOIN LATERAL (
-            SELECT cid, name, start_date
+            SELECT cid, name, start_date, 'active' AS account_tier
             FROM customer c
             WHERE c.vid = (pfi.payload->>'vid')::INT
               AND c.ano = (pfi.payload->>'ano')::INT
-            ORDER BY c.cid DESC
+            UNION ALL
+            SELECT cid, name, start_date, 'closed' AS account_tier
+            FROM closed_cust_account cca
+            WHERE cca.vid = (pfi.payload->>'vid')::INT
+              AND cca.ano = (pfi.payload->>'ano')::INT
+            ORDER BY cid DESC
             LIMIT 1
         ) c ON TRUE
         WHERE pfi.status='pending'
@@ -2105,18 +2110,60 @@ def accept_payment(feed_payment_id):
             "error": f"Customer Account #{ano} start date is {format_date_display(str(start_date))}. Payment date ({format_date_display(str(payment_date))}) cannot be earlier than start date."
         }
 
-    # Duplicate check in payment table
+    # Duplicate check in payment table (auto-reconcile if exact match already in ledger)
     cur.execute("""
-        SELECT COUNT(*) FROM payment
+        SELECT pid, amt FROM payment
         WHERE ano = %s AND vid = %s AND payment_date = %s
+        LIMIT 1
     """, (ano, vid, payment_date))
-    if cur.fetchone()[0] > 0:
-        cur.close()
-        conn.close()
-        return {
-            "success": False,
-            "error": f"Duplicate payment already recorded in database for Account #{ano} on {format_date_display(str(payment_date))}."
-        }
+    existing_pay = cur.fetchone()
+    if existing_pay and existing_pay != (0,) and existing_pay[0] != 0:
+        if len(existing_pay) > 1 and existing_pay[1] is not None:
+            existing_pid, existing_amt = existing_pay[0], existing_pay[1]
+            existing_amt_dec = Decimal(str(existing_amt))
+            if existing_amt_dec == amt:
+                # Payment is already recorded in core ledger with identical amount.
+                # Auto-reconcile feed item as accepted without duplicate insert.
+                cur.execute("""
+                    UPDATE payment_feed_items
+                    SET status = 'accepted',
+                        review_by = %s,
+                        review_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+                    WHERE feed_payment_id = %s
+                """, (logged_user, feed_payment_id))
+                if local_uuid:
+                    cur.execute("""
+                        UPDATE payment_feed_edits
+                        SET edit_status = 'accepted'
+                        WHERE local_uuid = %s AND edit_status = 'pending'
+                    """, (local_uuid,))
+                conn.commit()
+                if local_uuid:
+                    _call_broadcast(vid, {
+                        "type": "status_update",
+                        "feed_type": "payment",
+                        "local_uuid": local_uuid,
+                        "ano": ano,
+                        "vid": vid,
+                        "status": "approved"
+                    })
+                cur.close()
+                conn.close()
+                return {"success": True, "reconciled": True, "message": f"Payment already recorded in ledger (₹{amt}). Feed entry reconciled."}
+            else:
+                cur.close()
+                conn.close()
+                return {
+                    "success": False,
+                    "error": f"Duplicate payment already recorded for Account #{ano} on {format_date_display(str(payment_date))} with amount ₹{existing_amt_dec} (differs from feed amount ₹{amt})."
+                }
+        else:
+            cur.close()
+            conn.close()
+            return {
+                "success": False,
+                "error": f"Duplicate payment already recorded in database for Account #{ano} on {format_date_display(str(payment_date))}."
+            }
 
     # Insert payment
     cur.execute("""
@@ -2409,18 +2456,39 @@ def accept_payment_batch():
                 continue
             seen_in_batch.add(batch_pair)
 
-            # Check 4: Database duplicate check
+            # Check 4: Database duplicate check (auto-reconcile identical payments)
             cur.execute("""
-                SELECT COUNT(*) FROM payment
+                SELECT pid, amt FROM payment
                 WHERE ano = %s AND vid = %s AND payment_date = %s
+                LIMIT 1
             """, (ano_int, vid_val, payment_date))
-            if cur.fetchone()[0] > 0:
-                failed_items.append({
-                    "feed_payment_id": f_id,
-                    "ano": ano_int,
-                    "reason": f"Account #{ano_int}: Duplicate payment already recorded in database on {format_date_display(str(payment_date))}."
-                })
-                continue
+            existing_pay = cur.fetchone()
+            if existing_pay and existing_pay != (0,) and existing_pay[0] != 0:
+                if len(existing_pay) > 1 and existing_pay[1] is not None:
+                    existing_pid, existing_amt = existing_pay[0], existing_pay[1]
+                    existing_amt_dec = to_decimal(existing_amt)
+                    if existing_amt_dec == amt:
+                        # EXACT MATCH: Payment is already recorded in the core ledger!
+                        # Mark feed item as accepted (reconciled) without inserting duplicate into payment table.
+                        successful_feed_ids.append(f_id)
+                        if l_uuid:
+                            successful_local_uuids.append(l_uuid)
+                            successful_uuid_vid_pairs.append((l_uuid, vid_val))
+                        continue
+                    else:
+                        failed_items.append({
+                            "feed_payment_id": f_id,
+                            "ano": ano_int,
+                            "reason": f"Account #{ano_int}: Duplicate payment already recorded on {format_date_display(str(payment_date))} with amount ₹{existing_amt_dec} (differs from feed amount ₹{amt})."
+                        })
+                        continue
+                else:
+                    failed_items.append({
+                        "feed_payment_id": f_id,
+                        "ano": ano_int,
+                        "reason": f"Account #{ano_int}: Duplicate payment already recorded in database on {format_date_display(str(payment_date))}."
+                    })
+                    continue
 
             # Check 5: Future date guardrail
             if payment_date and payment_date > (date.today() + timedelta(days=1)):
@@ -2484,7 +2552,8 @@ def accept_payment_batch():
             for c_id in affected_cids:
                 _call_recalc_balance(cur, c_id)
 
-            # ONLY update status for successful payments!
+        # Update status for all successful / reconciled payments!
+        if successful_feed_ids:
             cur.execute("""
                 UPDATE payment_feed_items
                 SET status = 'accepted',

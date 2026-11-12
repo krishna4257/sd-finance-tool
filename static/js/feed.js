@@ -1517,33 +1517,48 @@ function acceptSinglePaymentRow(feed_payment_id, btnEl) {
 function acceptSelected() {
   const btn = document.getElementById("acceptBtn");
 
-  // Guard against any selected duplicates
+  // Non-blocking selection: automatically exclude duplicates and unmapped accounts from submission
   const selectedDuplicates = [];
-  document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
-    const row = cb.closest("tr");
-    if (row && row.classList.contains("row-duplicate")) {
-      const ano = (row.dataset.ano || "").trim();
-      if (ano && !selectedDuplicates.includes(ano)) {
-        selectedDuplicates.push(ano);
-      }
-    }
-  });
-
-  if (selectedDuplicates.length > 0) {
-    alert(`Cannot submit payments while duplicate rows are selected.\n\nDuplicate Account(s): ${selectedDuplicates.join(", ")}\n\nPlease delete the duplicate row(s) or edit the account number before submitting.`);
-    return;
-  }
-
+  const selectedUnmapped = [];
   const selectedIds = [];
   let selectedSum = 0;
 
   document.querySelectorAll(".pay-checkbox:checked").forEach(cb => {
     const row = cb.closest("tr");
-    if (row && !row.classList.contains("row-duplicate")) {
-      selectedIds.push(cb.value);
-      selectedSum += parseFloat(row.dataset.amount) || 0;
+    if (!row) return;
+
+    if (row.classList.contains("row-duplicate")) {
+      const ano = (row.dataset.ano || "").trim();
+      if (ano && !selectedDuplicates.includes(ano)) {
+        selectedDuplicates.push(ano);
+      }
+      cb.checked = false;
+      return;
     }
+
+    if (row.classList.contains("row-unmapped")) {
+      const ano = (row.dataset.ano || "").trim();
+      if (ano && !selectedUnmapped.includes(ano)) {
+        selectedUnmapped.push(ano);
+      }
+      cb.checked = false;
+      return;
+    }
+
+    selectedIds.push(cb.value);
+    selectedSum += parseFloat(row.dataset.amount) || 0;
   });
+
+  if (selectedDuplicates.length > 0 || selectedUnmapped.length > 0) {
+    let warnMsg = [];
+    if (selectedDuplicates.length > 0) {
+      warnMsg.push(`Duplicate Account(s) skipped: ${selectedDuplicates.join(", ")}`);
+    }
+    if (selectedUnmapped.length > 0) {
+      warnMsg.push(`Unmapped Account(s) skipped: ${selectedUnmapped.join(", ")}`);
+    }
+    showToast(`⚠️ ${warnMsg.join(" | ")}. Proceeding with ${selectedIds.length} valid payment(s).`, 4000);
+  }
 
   if (selectedIds.length === 0) {
     showToast("Select at least one payment");
