@@ -3,11 +3,13 @@
  * File: SD_Accounting_Tool/static/js/chat.js
  * 
  * Provides:
- * 1. Centrifugo WebSocket connection with JWT handshake.
- * 2. Real-time message streaming (<10ms).
- * 3. WhatsApp-style delivery receipts (sent -> delivered -> read).
- * 4. Telugu & English message rendering.
- * 5. Audio recording & Photo attachment uploads.
+ * 1. Centrifugo WebSocket connection via official Centrifuge SDK with JWT handshake.
+ * 2. Instant real-time message streaming (<10ms).
+ * 3. WhatsApp-style delivery receipts (sent [✓] -> delivered [✓✓] -> read [✓✓ blue]).
+ * 4. Dynamic unread count badges without page refresh.
+ * 5. Automatic 2.5s dual-resilience background sync (history + channel list).
+ * 6. Telugu & English UTF-8 message support.
+ * 7. Audio recording, camera photos, and GPS location sharing.
  */
 
 (function () {
@@ -24,6 +26,10 @@
   let pingTimer = null;
   let commandId = 1;
 
+  // Centrifuge SDK instance and active subscription
+  let centrifugeClient = null;
+  let activeSubscription = null;
+
   // Audio recording state
   let mediaRecorder = null;
   let audioChunks = [];
@@ -31,29 +37,37 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     initChat();
+    startBackgroundSync();
   });
 
+  // ---------------------------------------------------------------------------
+  // 1. INITIAL LOAD: Fetch Config & Channels
+  // ---------------------------------------------------------------------------
   async function initChat() {
     try {
-      // 1. Fetch token and channels in parallel
       const [tokenRes, channelsRes] = await Promise.all([
         fetch('/api/v1/chat/token').then(r => r.json()),
         fetch('/api/v1/chat/channels').then(r => r.json())
       ]);
 
-      if (tokenRes.success) {
+      if (tokenRes && tokenRes.success) {
         jwtToken = tokenRes.token;
-        if (tokenRes.ws_endpoint && loc.host.includes('sivadurga.in')) {
-          wsEndpoint = tokenRes.ws_endpoint;
+        if (tokenRes.ws_endpoint) {
+          // If accessing via domain or localhost, use endpoint
+          if (loc.host && !loc.host.includes('sivadurga.in') && tokenRes.ws_endpoint.includes('sivadurga.in')) {
+            wsEndpoint = `${isHttps ? 'wss:' : 'ws:'}//${loc.host}/connection/websocket`;
+          } else {
+            wsEndpoint = tokenRes.ws_endpoint;
+          }
         }
         connectCentrifugo();
       }
 
-      if (channelsRes.success) {
+      if (channelsRes && channelsRes.success) {
         channelsList = channelsRes.channels || [];
         renderChannels(channelsList);
 
-        // Auto-select first channel (e.g. Broadcast or first staff)
+        // Auto-select first channel
         if (channelsList.length > 0) {
           selectChannel(channelsList[0]);
         }
@@ -65,39 +79,81 @@
   }
 
   // ---------------------------------------------------------------------------
-  // CENTRIFUGO WEBSOCKET CONNECTION
+  // 2. CENTRIFUGO CONNECTION (Official Centrifuge SDK + WebSocket Fallback)
   // ---------------------------------------------------------------------------
   function connectCentrifugo() {
     if (!jwtToken) return;
 
     try {
-      console.log('[Chat] Connecting to WebSocket:', wsEndpoint);
+      console.log('[Chat] Initializing Centrifuge SDK client for:', wsEndpoint);
+
+      if (typeof Centrifuge !== 'undefined') {
+        centrifugeClient = new Centrifuge(wsEndpoint, {
+          token: jwtToken,
+          minReconnectDelay: 1000,
+          maxReconnectDelay: 4000
+        });
+
+        centrifugeClient.on('connected', function (ctx) {
+          console.log('[Chat] Centrifugo connected (transport: ' + ctx.transport + ')');
+          updateStatusPill(true, 'Connected (Real-time)');
+          if (activeChannel) {
+            subscribeToChannel(activeChannel.channel_id);
+          }
+        });
+
+        centrifugeClient.on('connecting', function () {
+          updateStatusPill(false, 'Connecting...');
+        });
+
+        centrifugeClient.on('disconnected', function (ctx) {
+          console.warn('[Chat] Centrifugo disconnected (code: ' + ctx.code + ', reason: ' + ctx.reason + ')');
+          updateStatusPill(false, 'Reconnecting...');
+        });
+
+        centrifugeClient.on('error', function (err) {
+          console.warn('[Chat] Centrifugo client error:', err);
+        });
+
+        centrifugeClient.connect();
+      } else {
+        console.warn('[Chat] Centrifuge SDK not found, using native WebSocket fallback');
+        connectNativeWs();
+      }
+    } catch (e) {
+      console.error('[Chat] Centrifugo initialization error:', e);
+      updateStatusPill(false, 'Reconnecting...');
+    }
+  }
+
+  function connectNativeWs() {
+    try {
       ws = new WebSocket(wsEndpoint);
 
       ws.onopen = function () {
-        console.log('[Chat] WebSocket open, sending handshake token...');
+        console.log('[Chat] Native WebSocket open, sending handshake token...');
         sendWsCommand({
           connect: { token: jwtToken }
         });
         startPing();
       };
 
-      ws.onmessage = function (event) {
-        handleWsMessage(event.data);
+      ws.onmessage = function (e) {
+        handleWsMessage(e.data);
       };
 
       ws.onclose = function (e) {
-        console.warn('[Chat] WebSocket closed (code: ' + e.code + ', reason: ' + e.reason + ')');
+        console.warn('[Chat] Native WebSocket closed:', e.code, e.reason);
         updateStatusPill(false, 'Reconnecting...');
         clearInterval(pingTimer);
-        setTimeout(connectCentrifugo, 4000);
+        setTimeout(connectNativeWs, 3000);
       };
 
       ws.onerror = function (err) {
-        console.warn('[Chat] WebSocket error:', err);
+        console.warn('[Chat] Native WebSocket error:', err);
       };
     } catch (e) {
-      console.error('[Chat] WebSocket connection failed:', e);
+      console.error('[Chat] Native WebSocket failed:', e);
     }
   }
 
@@ -121,20 +177,14 @@
     try {
       const data = JSON.parse(raw);
 
-      // Connected acknowledgment
       if (data.connect) {
-        console.log('[Chat] Centrifugo connected successfully:', data.connect);
+        console.log('[Chat] Native Centrifugo connected:', data.connect);
         updateStatusPill(true, 'Connected (Real-time)');
         if (activeChannel) {
           subscribeToChannel(activeChannel.channel_id);
         }
       }
 
-      if (data.error) {
-        console.warn('[Chat] Centrifugo error frame:', data.error);
-      }
-
-      // Incoming Push Notification
       if (data.push && data.push.pub && data.push.pub.data) {
         const payload = data.push.pub.data;
         const event = payload.event || 'new_message';
@@ -151,10 +201,39 @@
   }
 
   function subscribeToChannel(channelId) {
+    if (!channelId) return;
     const channelName = channelId.startsWith('chat:') ? channelId : 'chat:' + channelId;
-    sendWsCommand({
-      subscribe: { channel: channelName }
-    });
+
+    if (centrifugeClient) {
+      if (activeSubscription) {
+        try { activeSubscription.unsubscribe(); } catch (e) {}
+      }
+
+      activeSubscription = centrifugeClient.getSubscription(channelName);
+      if (!activeSubscription) {
+        activeSubscription = centrifugeClient.newSubscription(channelName);
+      }
+
+      activeSubscription.removeAllListeners();
+
+      activeSubscription.on('publication', function (ctx) {
+        console.log('[Chat] Real-time publication received:', ctx.data);
+        const payload = ctx.data;
+        const event = payload.event || 'new_message';
+
+        if (event === 'new_message') {
+          handleIncomingMessage(payload);
+        } else if (event === 'status_update') {
+          handleStatusUpdate(payload);
+        }
+      });
+
+      activeSubscription.subscribe();
+    } else if (ws && ws.readyState === WebSocket.OPEN) {
+      sendWsCommand({
+        subscribe: { channel: channelName }
+      });
+    }
   }
 
   function updateStatusPill(connected, text) {
@@ -176,7 +255,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // CHANNELS RENDERING & SELECTION
+  // 3. CHANNELS RENDERING & SELECTION
   // ---------------------------------------------------------------------------
   function renderChannels(list) {
     const container = document.getElementById('chat-channels-list');
@@ -225,8 +304,10 @@
         ? (ch.last_message.type === 'text' ? escapeHtml(ch.last_message.body) : '📎 Attachment: ' + ch.last_message.type)
         : 'No messages yet';
 
-      const badgeHtml = ch.unread_count > 0 
-        ? `<span class="channel-badge">${ch.unread_count}</span>` 
+      // Hide badge for currently open channel
+      const unreadCount = (activeChannel && activeChannel.channel_id === ch.channel_id) ? 0 : (ch.unread_count || 0);
+      const badgeHtml = unreadCount > 0 
+        ? `<span class="channel-badge">${unreadCount}</span>` 
         : '';
 
       const cleanTitle = escapeHtml(ch.title.replace(/\s*\[(ADMIN|SUPER ADMIN|MGMT)\]/i, ''));
@@ -262,7 +343,12 @@
     // Highlight active in UI
     document.querySelectorAll('.chat-channel-item').forEach(el => el.classList.remove('active'));
     const itemEl = document.getElementById('channel-item-' + ch.channel_id);
-    if (itemEl) itemEl.classList.add('active');
+    if (itemEl) {
+      itemEl.classList.add('active');
+      // Clear badge immediately upon selection
+      const badge = itemEl.querySelector('.channel-badge');
+      if (badge) badge.remove();
+    }
 
     // Show conversation view
     document.getElementById('chat-empty-view').style.display = 'none';
@@ -288,7 +374,7 @@
 
     try {
       const res = await fetch('/api/v1/chat/history/' + channelId).then(r => r.json());
-      if (res.success) {
+      if (res && res.success) {
         const messages = res.messages || [];
         renderMessages(messages);
 
@@ -366,7 +452,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // SEND MESSAGE HANDLERS
+  // 4. SEND MESSAGE HANDLERS
   // ---------------------------------------------------------------------------
   window.handleInputKey = function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -437,19 +523,24 @@
   }
 
   // ---------------------------------------------------------------------------
-  // SMART BACKGROUND SYNC (Guarantees messages never disappear or stall)
+  // 5. DUAL RESILIENCE BACKGROUND SYNC (2.5s) - Messages, Badges & Ticks
   // ---------------------------------------------------------------------------
-  setInterval(async function () {
-    if (!activeChannel) return;
-    try {
-      const res = await fetch('/api/v1/chat/history/' + activeChannel.channel_id + '?limit=20').then(r => r.json());
-      if (res.success && res.messages && res.messages.length > 0) {
-        syncHistoryMessages(res.messages);
+  function startBackgroundSync() {
+    setInterval(async function () {
+      // 1. Sync messages in active conversation
+      if (activeChannel) {
+        try {
+          const res = await fetch('/api/v1/chat/history/' + activeChannel.channel_id + '?limit=30').then(r => r.json());
+          if (res && res.success && res.messages && res.messages.length > 0) {
+            syncHistoryMessages(res.messages);
+          }
+        } catch (e) {}
       }
-    } catch (e) {
-      // background sync catch
-    }
-  }, 3000);
+
+      // 2. Sync channel list (unread badge counters & snippets)
+      syncChannels();
+    }, 2500);
+  }
 
   function syncHistoryMessages(messages) {
     const container = document.getElementById('conversation-messages');
@@ -472,11 +563,13 @@
           ackMessage(m.id, activeChannel.channel_id, 'read');
         }
       } else {
-        // Update tick status
+        // Synchronize tick status (sent -> delivered -> read)
         if (m.is_me) {
-          const tickContainer = existing.querySelector('.bubble-footer');
-          if (tickContainer) {
-            tickContainer.innerHTML = `<span>${formatTime(m.created_at)}</span> ${buildTickHtml(m.status)}`;
+          const footer = existing.querySelector('.bubble-footer');
+          if (footer) {
+            const span = footer.querySelector('span');
+            const timeText = span ? span.outerHTML : `<span>${formatTime(m.created_at)}</span>`;
+            footer.innerHTML = `${timeText} ${buildTickHtml(m.status)}`;
           }
         }
       }
@@ -485,8 +578,67 @@
     if (appended) scrollToBottom();
   }
 
+  async function syncChannels() {
+    try {
+      const res = await fetch('/api/v1/chat/channels').then(r => r.json());
+      if (res && res.success && Array.isArray(res.channels)) {
+        updateChannelsList(res.channels);
+      }
+    } catch (e) {}
+  }
+
+  function updateChannelsList(newList) {
+    channelsList = newList;
+
+    newList.forEach(ch => {
+      const itemEl = document.getElementById('channel-item-' + ch.channel_id);
+      if (!itemEl) return;
+
+      const isCurrentActive = activeChannel && activeChannel.channel_id === ch.channel_id;
+
+      // Update snippet
+      const snippetEl = itemEl.querySelector('.channel-snippet');
+      if (snippetEl) {
+        const lastSnippet = ch.last_message 
+          ? (ch.last_message.type === 'text' ? escapeHtml(ch.last_message.body) : '📎 Attachment: ' + ch.last_message.type)
+          : 'No messages yet';
+        if (snippetEl.innerHTML !== lastSnippet) {
+          snippetEl.innerHTML = lastSnippet;
+        }
+      }
+
+      // Update time
+      const timeEl = itemEl.querySelector('.channel-time');
+      if (timeEl) {
+        const timeStr = formatTime(ch.last_message ? ch.last_message.created_at : ch.created_at);
+        if (timeEl.innerText !== timeStr) {
+          timeEl.innerText = timeStr;
+        }
+      }
+
+      // Update unread badge dynamically without page refresh
+      const bottomRow = itemEl.querySelector('.channel-bottom-row');
+      let badgeEl = itemEl.querySelector('.channel-badge');
+      const unreadCount = isCurrentActive ? 0 : (ch.unread_count || 0);
+
+      if (unreadCount > 0) {
+        if (badgeEl) {
+          if (badgeEl.innerText !== String(unreadCount)) {
+            badgeEl.innerText = unreadCount;
+          }
+        } else if (bottomRow) {
+          bottomRow.insertAdjacentHTML('beforeend', `<span class="channel-badge">${unreadCount}</span>`);
+        }
+      } else {
+        if (badgeEl) {
+          badgeEl.remove();
+        }
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------------
-  // REAL-TIME EVENT HANDLERS
+  // 6. REAL-TIME EVENT HANDLERS (WebSocket Push)
   // ---------------------------------------------------------------------------
   function handleIncomingMessage(payload) {
     if (activeChannel && activeChannel.channel_id === payload.channel_id) {
@@ -503,8 +655,23 @@
         status: payload.status,
         created_at: payload.created_at
       });
-      // Mark as read immediately
+      // Mark as read immediately since the recipient is actively viewing this channel
       ackMessage(payload.id, payload.channel_id, 'read');
+    } else {
+      // Increment unread badge in sidebar in real time (<10ms)
+      const itemEl = document.getElementById('channel-item-' + payload.channel_id);
+      if (itemEl) {
+        let badgeEl = itemEl.querySelector('.channel-badge');
+        if (badgeEl) {
+          const cur = parseInt(badgeEl.innerText, 10) || 0;
+          badgeEl.innerText = cur + 1;
+        } else {
+          const bottomRow = itemEl.querySelector('.channel-bottom-row');
+          if (bottomRow) {
+            bottomRow.insertAdjacentHTML('beforeend', '<span class="channel-badge">1</span>');
+          }
+        }
+      }
     }
 
     // Update left sidebar snippet
@@ -521,10 +688,9 @@
     if (el) {
       const footer = el.querySelector('.bubble-footer');
       if (footer) {
-        const tickSpan = footer.querySelector('i');
-        if (tickSpan) {
-          tickSpan.className = newStatus === 'read' ? 'fas fa-check-double tick-read' : (newStatus === 'delivered' ? 'fas fa-check-double' : 'fas fa-check');
-        }
+        const span = footer.querySelector('span');
+        const timeText = span ? span.outerHTML : '';
+        footer.innerHTML = `${timeText} ${buildTickHtml(newStatus)}`;
       }
     }
   }
@@ -562,7 +728,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // PHOTO & LOCATION ACTIONS
+  // 7. PHOTO & LOCATION ACTIONS
   // ---------------------------------------------------------------------------
   window.handlePhotoSelect = async function (event) {
     const file = event.target.files[0];
@@ -624,7 +790,7 @@
   };
 
   // ---------------------------------------------------------------------------
-  // VOICE RECORDING (HTML5 MediaRecorder)
+  // 8. VOICE RECORDING (HTML5 MediaRecorder)
   // ---------------------------------------------------------------------------
   window.toggleVoiceRecording = async function () {
     const btn = document.getElementById('btn-voice-record');
@@ -684,7 +850,7 @@
   };
 
   // ---------------------------------------------------------------------------
-  // BROADCAST MODAL
+  // 9. BROADCAST ANNOUNCEMENT MODAL
   // ---------------------------------------------------------------------------
   window.openBroadcastModal = function () {
     const modal = document.getElementById('broadcastModal');
@@ -701,7 +867,6 @@
     const text = textarea.value.trim();
     if (!text) return;
 
-    // Find the broadcast channel
     const bChannel = channelsList.find(c => c.channel_type === 'broadcast');
     if (!bChannel) {
       alert('Broadcast channel not found.');
@@ -726,7 +891,7 @@
   };
 
   // ---------------------------------------------------------------------------
-  // UTILITIES
+  // 10. UTILITIES
   // ---------------------------------------------------------------------------
   function formatTime(isoStr) {
     if (!isoStr) return '';
@@ -769,6 +934,7 @@
 
   window.refreshCurrentChannel = function () {
     if (activeChannel) loadHistory(activeChannel.channel_id);
+    syncChannels();
   };
 
 })();

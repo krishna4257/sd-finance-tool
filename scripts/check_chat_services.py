@@ -48,6 +48,29 @@ def check_http_endpoint(url, timeout=2.0, expected_codes=(200, 404, 401)):
         return False, f"Connection Failed: {e}"
 
 
+def check_websocket_handshake(host="127.0.0.1", port=8001, path="/connection/websocket", timeout=2.0):
+    """Verify Centrifugo WebSocket upgrade handshake."""
+    start = time.time()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as s:
+            req = (
+                f"GET {path} HTTP/1.1\r\n"
+                f"Host: {host}:{port}\r\n"
+                f"Upgrade: websocket\r\n"
+                f"Connection: Upgrade\r\n"
+                f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                f"Sec-WebSocket-Version: 13\r\n\r\n"
+            )
+            s.sendall(req.encode("utf-8"))
+            res = s.recv(1024).decode("utf-8", errors="ignore")
+            latency = (time.time() - start) * 1000
+            if "101 Switching Protocols" in res:
+                return True, f"101 Switching Protocols ({latency:.1f}ms)"
+            return False, f"Handshake failed: {res.splitlines()[0] if res else 'No response'}"
+    except Exception as e:
+        return False, str(e)
+
+
 def check_media_storage(path="/var/www/sd-chat-media"):
     """Check media directory existence, writability, and free disk space."""
     if not os.path.exists(path):
@@ -79,14 +102,17 @@ def main():
 
     services = [
         ("Redis Server", "127.0.0.1", 6379, "TCP Socket"),
-        ("Centrifugo WebSockets", "http://127.0.0.1:8001/health", None, "HTTP Health API"),
+        ("Centrifugo HTTP Health", "http://127.0.0.1:8001/health", None, "HTTP Health API"),
+        ("Centrifugo WS Protocol", "127.0.0.1", 8001, "ws_handshake"),
         ("NotifKit Engine", "http://127.0.0.1:4000/health", None, "HTTP Health API")
     ]
 
     all_passed = True
 
     for name, target, port, stype in services:
-        if port is not None:
+        if stype == "ws_handshake":
+            ok, detail = check_websocket_handshake(target, port)
+        elif port is not None:
             ok, detail = check_port(target, port)
         else:
             ok, detail = check_http_endpoint(target)

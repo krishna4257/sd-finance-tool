@@ -2,7 +2,7 @@
 
 {% block content %}
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=2.1.0">
 
 <div class="chat-portal-wrapper">
   <!-- Top Bar -->
@@ -141,5 +141,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/centrifuge.min.js') }}?v=5.2.2"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=2.2.0"></script>
 {% endblock %}

@@ -661,29 +661,31 @@ def acknowledge_message_status():
                 """, (message_id,))
             conn.commit()
 
-        # Broadcast status update event to Centrifugo
+        # Broadcast status update event to Centrifugo v5
         centrifugo_url = current_app.config.get("CENTRIFUGO_API_URL", DEFAULT_CENTRIFUGO_URL)
-        api_key = current_app.config.get("CENTRIFUGO_API_KEY", "default-api-key")
+        api_key = current_app.config.get("CENTRIFUGO_API_KEY", "sdfinance-centrifugo-api-key-2026")
+        publish_url = f"{centrifugo_url.rstrip('/')}/publish" if not centrifugo_url.endswith("/publish") else centrifugo_url
         try:
             requests.post(
-                centrifugo_url,
-                headers={"Authorization": f"apikey {api_key}"},
+                publish_url,
+                headers={
+                    "X-API-Key": api_key,
+                    "Authorization": f"apikey {api_key}",
+                    "Content-Type": "application/json"
+                },
                 json={
-                    "method": "publish",
-                    "params": {
-                        "channel": f"chat:{channel_id}",
-                        "data": {
-                            "event": "status_update",
-                            "message_id": str(message_id),
-                            "status": new_status,
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        }
+                    "channel": f"chat:{channel_id}",
+                    "data": {
+                        "event": "status_update",
+                        "message_id": str(message_id),
+                        "status": new_status,
+                        "updated_at": datetime.now(timezone.utc).isoformat()
                     }
                 },
                 timeout=1.0
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[Centrifugo] Status update publish failed: %s", e)
 
         return jsonify({"success": True, "message_id": str(message_id), "status": new_status})
     finally:

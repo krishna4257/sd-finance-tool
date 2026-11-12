@@ -26,7 +26,13 @@ APP_SECRET_KEY="default-secret-key-2026"
 ENV_FILES=("/srv/sd-finance-tool/.env" "$APP_DIR/.env" "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env")
 for ef in "${ENV_FILES[@]}"; do
     if [ -f "$ef" ]; then
-        FOUND_KEY=$(grep -E "^SECRET_KEY=" "$ef" | head -n1 | cut -d '=' -f2- | tr -d ' "' || true)
+        FOUND_CENT_KEY=$(grep -E "^CENTRIFUGO_SECRET_KEY=" "$ef" | head -n1 | cut -d '=' -f2- | tr -d " '\r\n\"" || true)
+        if [ -n "$FOUND_CENT_KEY" ]; then
+            APP_SECRET_KEY="$FOUND_CENT_KEY"
+            echo "[*] Detected application CENTRIFUGO_SECRET_KEY from $ef"
+            break
+        fi
+        FOUND_KEY=$(grep -E "^SECRET_KEY=" "$ef" | head -n1 | cut -d '=' -f2- | tr -d " '\r\n\"" || true)
         if [ -n "$FOUND_KEY" ]; then
             APP_SECRET_KEY="$FOUND_KEY"
             echo "[*] Detected application SECRET_KEY from $ef"
@@ -108,12 +114,7 @@ cat <<EOF > "$CONFIG_PATH"
     "token": {
       "hmac_secret_key": "$APP_SECRET_KEY"
     },
-    "allowed_origins": [
-      "*",
-      "https://sivadurga.in",
-      "http://localhost:8000",
-      "http://127.0.0.1:8000"
-    ]
+    "allowed_origins": []
   },
   "http_api": {
     "key": "sdfinance-centrifugo-api-key-2026"
