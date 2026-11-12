@@ -225,6 +225,9 @@ def feed():
             pfi.payload->>'cash_amount' AS cash_amount,
             pfi.payload->>'upi_amount' AS upi_amount,
             pfi.payload->>'vid' AS vid,
+            pfi.payload->>'is_updated' AS is_updated,
+            pfi.payload->>'updated_at' AS updated_at,
+            pfi.payload->>'old_amt' AS old_amt,
             pfi.status,
             c.cid,
             c.name AS customer_name,
@@ -457,6 +460,21 @@ def feed():
                         p["customer_name"] = None
                 except Exception:
                     pass
+
+            is_upd = (
+                p.get("is_updated") in (True, "true", "True", 1, "1")
+                or (edit is not None)
+            )
+            p["is_updated"] = is_upd
+            upd_time = (edit and edit.get("updated_at")) or p.get("updated_at")
+            if upd_time:
+                try:
+                    dt = datetime.fromisoformat(str(upd_time).replace("Z", "+00:00"))
+                    p["updated_at_display"] = dt.strftime("%d-%m-%Y, %H:%M")
+                except Exception:
+                    p["updated_at_display"] = str(upd_time)
+            elif is_upd:
+                p["updated_at_display"] = "Recently Updated"
 
         # ACCOUNT CLOSURE FEED
         cur.execute("""
@@ -1691,6 +1709,9 @@ def edit_payment_feed(feed_payment_id):
             payload["payment_date"] = str(data["pdt"]).strip()
         if "payment_type" in data and data["payment_type"]:
             payload["payment_type"] = str(data["payment_type"]).strip()
+
+        payload["is_updated"] = True
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         cur.execute("""
             UPDATE payment_feed_items

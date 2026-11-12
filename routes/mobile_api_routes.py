@@ -78,6 +78,15 @@ class _CSRFExemptHelper:
 csrf = _CSRFExemptHelper()
 
 
+# ----------------------------------------------------
+# /api/mobile/ping - Fast connectivity & latency pre-check
+# ----------------------------------------------------
+@csrf.exempt
+@mobile_bp.route("/api/mobile/ping", methods=["GET"])
+def mobile_ping():
+    return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}), 200
+
+
 # ROUTES - mobile app
 # ----------------------------------------------------
 @csrf.exempt
@@ -1083,6 +1092,44 @@ def customer_feed():
         ano = customer_payload.get("ano") # type: ignore
         payload = json.dumps(customer_payload, default=str)
 
+        # Duplicate check: prevent duplicate customer registrations in same village
+        if ano is not None:
+            cur.execute("""
+                SELECT cid FROM customer
+                WHERE vid = %s AND ano = %s
+                LIMIT 1
+            """, (vid, int(ano)))
+            if cur.fetchone():
+                conn.rollback()
+                return jsonify({
+                    "error": f"Duplicate customer: Account #{ano} already exists in Village {vid}"
+                }), 409
+
+            cur.execute("""
+                SELECT feed_id FROM customer_feed
+                WHERE vid = %s AND (payload->>'ano')::int = %s AND status = 'pending'
+                LIMIT 1
+            """, (vid, int(ano)))
+            if cur.fetchone():
+                conn.rollback()
+                return jsonify({
+                    "error": f"Duplicate customer: Account #{ano} is already pending approval for Village {vid}"
+                }), 409
+
+        aadhaar_raw = str(customer_payload.get("aadhaar_number") or "").replace(" ", "").replace("-", "").strip()
+        if len(aadhaar_raw) == 12 and aadhaar_raw.isdigit():
+            cur.execute("""
+                SELECT cid, ano FROM customer
+                WHERE vid = %s AND REPLACE(REPLACE(COALESCE(aadhaar_number, ''), ' ', ''), '-', '') = %s
+                LIMIT 1
+            """, (vid, aadhaar_raw))
+            existing_aadhaar = cur.fetchone()
+            if existing_aadhaar:
+                conn.rollback()
+                return jsonify({
+                    "error": f"Duplicate customer: Aadhaar number already registered under Account #{existing_aadhaar[1]} in Village {vid}"
+                }), 409
+
         logger.debug(
             "Customer feed received for vid=%s ano=%s nonce=%s idempotency_key=%s",
             vid,
@@ -1306,6 +1353,33 @@ def close_account_feed():
             closure_payload = json.loads(closure_payload)
 
         ano = int(closure_payload.get("ano", 0)) # type: ignore
+
+        # Duplicate check: ensure account is not already closed or pending closure
+        if ano > 0:
+            cur.execute("""
+                SELECT 1 FROM customer
+                WHERE vid = %s AND ano = %s AND status = 'closed'
+                UNION
+                SELECT 1 FROM closed_cust_account
+                WHERE vid = %s AND ano = %s
+                LIMIT 1
+            """, (vid, ano, vid, ano))
+            if cur.fetchone():
+                conn.rollback()
+                return jsonify({
+                    "error": f"Account #{ano} in Village {vid} is already closed."
+                }), 409
+
+            cur.execute("""
+                SELECT feed_id FROM account_closure_feed
+                WHERE vid = %s AND ano = %s AND status = 'pending'
+                LIMIT 1
+            """, (vid, ano))
+            if cur.fetchone():
+                conn.rollback()
+                return jsonify({
+                    "error": f"Account closure for Account #{ano} in Village {vid} is already pending review."
+                }), 409
 
         cur.execute("""
             INSERT INTO account_closure_feed
@@ -1733,21 +1807,28 @@ def payment_feed_batch():
             local_uuid = p.get("local_uuid")
             payload = json.dumps(p, default=str)
 
-            # Prevent duplicate payment for the same ANO, VID, and payment_date
+            # Prevent duplicate payment for the same ANO, VID, and payment_date; properly handle updates
+            p_amt = float(p.get("amt") or 0)
+            is_updated = bool(p.get("is_updated"))
+            p_eid_val = p.get("eid") or eid
+
             if p_ano is not None and p_vid is not None and p_date:
                 # 1. Check if already in accepted payment table
                 cur.execute("""
-                    SELECT 1 FROM payment 
+                    SELECT amt FROM payment 
                     WHERE vid = %s AND ano = %s AND payment_date = %s
                     LIMIT 1
                 """, (p_vid, p_ano, p_date))
-                if cur.fetchone():
-                    logger.warning("Skipping duplicate payment feed item (already in payment table): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
-                    continue
+                accepted_row = cur.fetchone()
+                if accepted_row:
+                    accepted_amt = float(accepted_row[0] or 0)
+                    if not is_updated or abs(p_amt - accepted_amt) < 0.001:
+                        logger.warning("Skipping duplicate payment feed item (already accepted in payment table): ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
+                        continue
 
-                # 2. Check if already pending in payment_feed_items -> update with latest payload
+                # 2. Check if already pending in payment_feed_items
                 cur.execute("""
-                    SELECT feed_payment_id FROM payment_feed_items
+                    SELECT feed_payment_id, payload->>'amt', local_uuid FROM payment_feed_items
                     WHERE (payload->>'vid')::int = %s 
                       AND (payload->>'ano')::int = %s 
                       AND (COALESCE(payload->>'payment_date', payload->>'pdate')) = %s
@@ -1756,14 +1837,50 @@ def payment_feed_batch():
                 """, (p_vid, p_ano, str(p_date)))
                 pending_existing = cur.fetchone()
                 if pending_existing:
-                    # Update pending feed item payload with latest data
+                    feed_pid = pending_existing[0]
+                    pending_amt = float(pending_existing[1] or 0)
+                    target_uuid = local_uuid or pending_existing[2]
+
+                    # If exact duplicate and not an explicit update, skip
+                    if not is_updated and abs(p_amt - pending_amt) < 0.001:
+                        logger.warning("Skipping duplicate pending payment feed item: ano=%s, vid=%s, date=%s", p_ano, p_vid, p_date)
+                        continue
+
+                    # Otherwise, update pending feed item with new amount & update timestamp
+                    p["is_updated"] = True
+                    if not p.get("updated_at"):
+                        p["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    updated_payload = json.dumps(p, default=str)
+
                     cur.execute("""
                         UPDATE payment_feed_items
                         SET payload = %s,
                             local_uuid = COALESCE(%s, local_uuid)
                         WHERE feed_payment_id = %s
-                    """, (payload, local_uuid, pending_existing[0]))
+                    """, (updated_payload, local_uuid, feed_pid))
+
+                    if target_uuid:
+                        cur.execute("SELECT edit_id FROM payment_feed_edits WHERE local_uuid = %s LIMIT 1", (target_uuid,))
+                        ex_edit = cur.fetchone()
+                        if ex_edit:
+                            cur.execute("""
+                                UPDATE payment_feed_edits
+                                SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                                WHERE edit_id = %s
+                            """, (updated_payload, ex_edit[0]))
+                        else:
+                            cur.execute("""
+                                INSERT INTO payment_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                                VALUES (%s, %s, %s, %s, 'pending', NOW())
+                            """, (target_uuid, updated_payload, p_eid_val, p_vid))
                     continue
+
+            # 3. Insert new pending feed payment
+            if is_updated:
+                p["is_updated"] = True
+                if not p.get("updated_at"):
+                    p["updated_at"] = datetime.now(timezone.utc).isoformat()
+                payload = json.dumps(p, default=str)
 
             cur.execute("""
                 INSERT INTO payment_feed_items (
@@ -1778,6 +1895,21 @@ def payment_feed_batch():
                 local_uuid,
                 payload
             ))
+
+            if is_updated and local_uuid:
+                cur.execute("SELECT edit_id FROM payment_feed_edits WHERE local_uuid = %s LIMIT 1", (local_uuid,))
+                ex_edit = cur.fetchone()
+                if ex_edit:
+                    cur.execute("""
+                        UPDATE payment_feed_edits
+                        SET edited_payload = %s, edit_status = 'pending', created_at = NOW()
+                        WHERE edit_id = %s
+                    """, (payload, ex_edit[0]))
+                else:
+                    cur.execute("""
+                        INSERT INTO payment_feed_edits (local_uuid, edited_payload, eid, vid, edit_status, created_at)
+                        VALUES (%s, %s, %s, %s, 'pending', NOW())
+                    """, (local_uuid, payload, p_eid_val, p_vid))
 
         conn.commit()
         audit_log(

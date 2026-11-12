@@ -2050,6 +2050,25 @@
         box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
     }
 
+    .row-warn-dot.updated {
+        background: #0ea5e9;
+        box-shadow: 0 0 10px #0ea5e9, 0 0 4px #38bdf8;
+        animation: pulse-blue-glow 2s infinite ease-in-out;
+        cursor: help;
+    }
+    @keyframes pulse-blue-glow {
+        0%, 100% {
+            opacity: 0.85;
+            box-shadow: 0 0 6px #0ea5e9, 0 0 2px #38bdf8;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 1;
+            box-shadow: 0 0 14px #0ea5e9, 0 0 8px #38bdf8;
+            transform: scale(1.35);
+        }
+    }
+
     /* Wrapper for Date Cell with subtle calendar trigger */
     .date-cell-wrap {
         position: relative;
@@ -2236,6 +2255,12 @@
     .row-warn-dot.duplicate {
         background: #f59e0b;
         box-shadow: 0 0 8px #f59e0b;
+    }
+    .row-warn-dot.updated {
+        background: #0ea5e9;
+        box-shadow: 0 0 10px #0ea5e9, 0 0 4px #38bdf8;
+        animation: pulse-blue-glow 2s infinite ease-in-out;
+        cursor: help;
     }
 
     .payment-total-badge {
@@ -3437,7 +3462,12 @@
                                 {% for p in payments[:4] %}
                                 <div class="snapshot-row" onclick="switchFeedTab('payments')" title="Click to view in posting queue">
                                     <div class="d-flex align-items-center gap-3">
-                                        <span class="snapshot-ano-badge">#{{ p.edit.ano if (p.edit and p.edit.ano) else p.ano }}</span>
+                                        <span class="snapshot-ano-badge d-inline-flex align-items-center gap-1">
+                                            #{{ p.edit.ano if (p.edit and p.edit.ano) else p.ano }}
+                                            {% if p.is_updated or p.edit %}
+                                            <span class="row-warn-dot updated" style="position: static; display: inline-block; width: 6px; height: 6px;" title="Updated on {{ p.updated_at_display or 'Recently' }}"></span>
+                                            {% endif %}
+                                        </span>
                                         <div class="snapshot-col-date">
                                             <i class="fas fa-calendar-day text-secondary"></i>
                                             <span>{{ p.edit.pdt if (p.edit and p.edit.pdt) else p.pdt }}</span>
@@ -4710,6 +4740,9 @@
                                                    autocomplete="off"
                                                    spellcheck="false"
                                                    onchange="onInlineFeedEdit(this, '{{ row.feed_payment_id }}', 'ano')">
+                                            {% if row.is_updated or row.edit %}
+                                            <span class="row-warn-dot updated" title="Updated on {{ row.updated_at_display or 'Recently' }}"></span>
+                                            {% endif %}
                                             {% if not row.cid %}
                                             <span class="row-warn-dot unmapped" title="Unmapped account for this village"></span>
                                             {% endif %}
