@@ -108,7 +108,7 @@ def main():
         sys.exit(0)
     else:
         print("[!] Note: Some daemons are not running locally.")
-        print("    Run: sudo bash SD_Accounting_Tool/scripts/setup_phase2_daemons.sh")
+        print("    Run: sudo bash scripts/setup_phase2_daemons.sh")
         sys.exit(1)
 
 

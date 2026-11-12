@@ -38,9 +38,11 @@ class TestPhase6ChatPhase2(unittest.TestCase):
 
         self.assertEqual(cfg.get("port"), 8001)
         self.assertEqual(cfg.get("address"), "127.0.0.1")
-        self.assertIn("https://sivadurga.in", cfg.get("allowed_origins", []))
+        origins = cfg.get("client", {}).get("allowed_origins") or cfg.get("allowed_origins", [])
+        self.assertIn("https://sivadurga.in", origins)
 
-        namespaces = {ns["name"]: ns for ns in cfg.get("namespaces", [])}
+        namespaces_list = cfg.get("channel", {}).get("namespaces") or cfg.get("namespaces", [])
+        namespaces = {ns["name"]: ns for ns in namespaces_list}
         self.assertIn("chat", namespaces)
         self.assertIn("broadcast", namespaces)
 

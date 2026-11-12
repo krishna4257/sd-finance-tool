@@ -233,6 +233,46 @@ class TestPhase6ChatApi(unittest.TestCase):
         self.assertEqual(result["id"], "notif-123")
         mock_post.assert_called_once()
 
+    @patch("routes.chat_routes.get_pg_connection")
+    def test_get_chat_directory_for_admin_and_staff(self, mock_get_conn):
+        """Verify leadership sees all users in directory and staff only sees leadership."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_get_conn.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        mock_cur.fetchall.return_value = [
+            (2, "admin_user", "Admin Two", "admin"),
+            (3, "mgmt_user", "Manager Three", "mgmt"),
+            (4, "staff_user", "Field Staff", "staff")
+        ]
+
+        # 1. Admin user request
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["username"] = "superadmin"
+            sess["user_level"] = "superadmin"
+
+        res = self.client.get("/api/v1/chat/users")
+        self.assertEqual(res.status_code, 200)
+        users = res.get_json()["users"]
+        self.assertEqual(len(users), 3)
+
+        # 2. Staff user request (should only see leadership users: admin & mgmt)
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 4
+            sess["username"] = "staff_user"
+            sess["user_level"] = "staff"
+
+        res = self.client.get("/api/v1/chat/users")
+        self.assertEqual(res.status_code, 200)
+        staff_users = res.get_json()["users"]
+        self.assertEqual(len(staff_users), 2)
+        roles = [u["role"] for u in staff_users]
+        self.assertIn("admin", roles)
+        self.assertIn("mgmt", roles)
+        self.assertNotIn("staff", roles)
+
 
 if __name__ == "__main__":
     unittest.main()

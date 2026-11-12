@@ -180,7 +180,43 @@
   flex-shrink: 0;
 }
 .channel-avatar.direct { background: linear-gradient(135deg, #0284c7, #2563eb); }
+.channel-avatar.staff { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+.channel-avatar.superadmin { background: linear-gradient(135deg, #e11d48, #d97706); }
+.channel-avatar.admin { background: linear-gradient(135deg, #7c3aed, #4f46e5); }
+.channel-avatar.mgmt { background: linear-gradient(135deg, #0284c7, #0d9488); }
 .channel-avatar.broadcast { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+.role-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.role-pill.superadmin {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.role-pill.admin {
+  background: rgba(124, 58, 237, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(124, 58, 237, 0.4);
+}
+.role-pill.mgmt {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.4);
+}
+.role-pill.staff {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
 
 .channel-meta {
   flex: 1;

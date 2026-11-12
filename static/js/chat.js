@@ -178,8 +178,36 @@
 
     container.innerHTML = list.map(ch => {
       const isDirect = ch.channel_type === 'direct';
-      const avatarClass = isDirect ? 'direct' : 'broadcast';
-      const icon = isDirect ? 'fa-user-tie' : 'fa-bullhorn';
+      const role = (ch.other_user_role || '').toLowerCase();
+      const isSuperAdmin = isDirect && role.includes('superadmin');
+      const isAdmin = isDirect && !isSuperAdmin && role.includes('admin');
+      const isMgmt = isDirect && (role.includes('mgmt') || role.includes('management'));
+
+      let avatarClass = 'staff';
+      let icon = 'fa-user';
+      let rolePill = '';
+
+      if (!isDirect) {
+        avatarClass = 'broadcast';
+        icon = 'fa-bullhorn';
+      } else if (isSuperAdmin) {
+        avatarClass = 'superadmin';
+        icon = 'fa-crown';
+        rolePill = '<span class="role-pill superadmin">SUPER ADMIN</span>';
+      } else if (isAdmin) {
+        avatarClass = 'admin';
+        icon = 'fa-shield-halved';
+        rolePill = '<span class="role-pill admin">ADMIN</span>';
+      } else if (isMgmt) {
+        avatarClass = 'mgmt';
+        icon = 'fa-user-tie';
+        rolePill = '<span class="role-pill mgmt">MGMT</span>';
+      } else {
+        avatarClass = 'staff';
+        icon = 'fa-user';
+        rolePill = '<span class="role-pill staff">STAFF</span>';
+      }
+
       const activeClass = (activeChannel && activeChannel.channel_id === ch.channel_id) ? 'active' : '';
 
       const lastSnippet = ch.last_message 
@@ -190,6 +218,8 @@
         ? `<span class="channel-badge">${ch.unread_count}</span>` 
         : '';
 
+      const cleanTitle = escapeHtml(ch.title.replace(/\s*\[(ADMIN|SUPER ADMIN|MGMT)\]/i, ''));
+
       return `
         <div class="chat-channel-item ${activeClass}" id="channel-item-${ch.channel_id}" onclick="window.selectChannelById('${ch.channel_id}')">
           <div class="channel-avatar ${avatarClass}">
@@ -197,7 +227,7 @@
           </div>
           <div class="channel-meta">
             <div class="channel-top-row">
-              <span class="channel-title">${escapeHtml(ch.title)}</span>
+              <span class="channel-title">${cleanTitle} ${rolePill}</span>
               <span class="channel-time">${formatTime(ch.last_message ? ch.last_message.created_at : ch.created_at)}</span>
             </div>
             <div class="channel-bottom-row">
@@ -645,8 +675,16 @@
   }
 
   window.filterChannels = function () {
-    const q = (document.getElementById('channel-search-input').value || '').toLowerCase();
-    const filtered = channelsList.filter(c => c.title.toLowerCase().includes(q));
+    const q = (document.getElementById('channel-search-input').value || '').toLowerCase().trim();
+    if (!q) {
+      renderChannels(channelsList);
+      return;
+    }
+    const filtered = channelsList.filter(c => {
+      const titleMatch = (c.title || '').toLowerCase().includes(q);
+      const roleMatch = (c.other_user_role || '').toLowerCase().includes(q);
+      return titleMatch || roleMatch;
+    });
     renderChannels(filtered);
   };
 

@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# SD Finance: Phase 2 Daemons Setup & Hardening Script
+# SD Finance: Phase 2 Daemons Setup & Hardening Script (Centrifugo v5 + Redis)
 # File: SD_Accounting_Tool/scripts/setup_phase2_daemons.sh
 # Usage: sudo bash setup_phase2_daemons.sh
-# ==============================================================================
-# Sets up and configures:
-# 1. Redis Server (in-memory queue, capped at 128MB with volatile-lru eviction)
-# 2. Centrifugo Daemon (real-time WebSockets on 127.0.0.1:8001)
-# 3. NotifKit Notification Engine (/opt/notifkit on 127.0.0.1:4000)
-# 4. Media Storage Directory (/var/www/sd-chat-media)
 # ==============================================================================
 
 set -euo pipefail
@@ -26,6 +20,22 @@ echo "    Siva Durga Finance: Phase 2 Infrastructure Setup      "
 echo "=========================================================="
 
 # ------------------------------------------------------------------------------
+# STEP 0: Detect Application SECRET_KEY from .env
+# ------------------------------------------------------------------------------
+APP_SECRET_KEY="default-secret-key-2026"
+ENV_FILES=("/srv/sd-finance-tool/.env" "$APP_DIR/.env" "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env")
+for ef in "${ENV_FILES[@]}"; do
+    if [ -f "$ef" ]; then
+        FOUND_KEY=$(grep -E "^SECRET_KEY=" "$ef" | head -n1 | cut -d '=' -f2- | tr -d ' "' || true)
+        if [ -n "$FOUND_KEY" ]; then
+            APP_SECRET_KEY="$FOUND_KEY"
+            echo "[*] Detected application SECRET_KEY from $ef"
+            break
+        fi
+    fi
+done
+
+# ------------------------------------------------------------------------------
 # STEP 1: Redis Server Installation & Hardening
 # ------------------------------------------------------------------------------
 echo "[*] Step 1: Checking and configuring Redis Server..."
@@ -34,23 +44,20 @@ if ! command -v redis-server &>/dev/null; then
     apt-get update -qq
     apt-get install -y -qq redis-server
 else
-    echo "    redis-server already installed."
+    echo "    redis-server is already installed."
 fi
 
 REDIS_CONF="/etc/redis/redis.conf"
 if [ -f "$REDIS_CONF" ]; then
     echo "    Hardening Redis memory limits (128mb, volatile-lru)..."
-    # Ensure local binding
-    sed -i -E 's/^bind .*/bind 127.0.0.1 ::1/' "$REDIS_CONF"
+    sed -i -E 's/^bind .*/bind 127.0.0.1 ::1/' "$REDIS_CONF" || true
     
-    # Configure maxmemory if not present
     if ! grep -q "^maxmemory " "$REDIS_CONF"; then
         echo "maxmemory 128mb" >> "$REDIS_CONF"
     else
         sed -i 's/^maxmemory .*/maxmemory 128mb/' "$REDIS_CONF"
     fi
 
-    # Configure eviction policy if not present
     if ! grep -q "^maxmemory-policy " "$REDIS_CONF"; then
         echo "maxmemory-policy volatile-lru" >> "$REDIS_CONF"
     else
@@ -59,13 +66,13 @@ if [ -f "$REDIS_CONF" ]; then
 
     systemctl restart redis-server || true
     systemctl enable redis-server || true
-    echo "    [+] Redis service hardened and running."
+    echo "    [+] Redis service hardened and active."
 fi
 
 # ------------------------------------------------------------------------------
-# STEP 2: Centrifugo Real-time Engine Installation
+# STEP 2: Centrifugo v5 Real-time Engine Installation
 # ------------------------------------------------------------------------------
-echo "[*] Step 2: Setting up Centrifugo Real-time Daemon..."
+echo "[*] Step 2: Setting up Centrifugo v5 Daemon..."
 CENTRIFUGO_BIN="/usr/local/bin/centrifugo"
 CENTRIFUGO_VERSION="5.4.5"
 
@@ -83,18 +90,60 @@ if [ ! -f "$CENTRIFUGO_BIN" ]; then
     rm -f "$TMP_TAR"
     echo "    [+] Installed Centrifugo binary to $CENTRIFUGO_BIN"
 else
-    echo "    Centrifugo binary already exists at $CENTRIFUGO_BIN"
+    echo "    Centrifugo binary exists at $CENTRIFUGO_BIN"
 fi
 
-# Deploy Centrifugo Configuration
+# Deploy Centrifugo v5 JSON Configuration with dynamic secret injection
 mkdir -p /etc/centrifugo
-if [ -f "$SCRIPT_DIR/centrifugo.json" ]; then
-    cp "$SCRIPT_DIR/centrifugo.json" /etc/centrifugo/config.json
-    chmod 640 /etc/centrifugo/config.json
-    echo "    [+] Installed /etc/centrifugo/config.json"
-fi
+CONFIG_PATH="/etc/centrifugo/config.json"
 
-# Deploy Centrifugo Systemd Unit
+cat <<EOF > "$CONFIG_PATH"
+{
+  "address": "127.0.0.1",
+  "port": 8001,
+  "health": {
+    "enabled": true
+  },
+  "client": {
+    "token": {
+      "hmac_secret_key": "$APP_SECRET_KEY"
+    },
+    "allowed_origins": [
+      "https://sivadurga.in",
+      "http://localhost:8000",
+      "http://127.0.0.1:8000"
+    ]
+  },
+  "http_api": {
+    "key": "sdfinance-centrifugo-api-key-2026"
+  },
+  "channel": {
+    "without_namespace": {
+      "presence": true,
+      "history_size": 100,
+      "history_ttl": "300s"
+    },
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": true,
+        "history_size": 100,
+        "history_ttl": "300s"
+      },
+      {
+        "name": "broadcast",
+        "presence": true,
+        "history_size": 50,
+        "history_ttl": "86400s"
+      }
+    ]
+  }
+}
+EOF
+chmod 640 "$CONFIG_PATH"
+echo "    [+] Generated Centrifugo v5 config with synchronized HMAC secret."
+
+# Deploy Centrifugo Systemd Service
 CENTRIFUGO_SERVICE="/etc/systemd/system/centrifugo.service"
 cat <<EOF > "$CENTRIFUGO_SERVICE"
 [Unit]
@@ -119,8 +168,9 @@ EOF
 
 systemctl daemon-reload
 systemctl enable centrifugo
-systemctl restart centrifugo || true
-echo "    [+] Centrifugo systemd unit deployed and started."
+systemctl restart centrifugo
+sleep 1
+echo "    [+] Centrifugo service reloaded and started."
 
 # ------------------------------------------------------------------------------
 # STEP 3: Setup Chat Media Storage Directory
@@ -128,7 +178,6 @@ echo "    [+] Centrifugo systemd unit deployed and started."
 echo "[*] Step 3: Setting up Chat Media Directory..."
 MEDIA_DIR="/var/www/sd-chat-media"
 mkdir -p "$MEDIA_DIR"
-# Give ownership to active web server user or current login
 if id "jayakrishna" &>/dev/null; then
     chown -R jayakrishna:www-data "$MEDIA_DIR"
 elif id "www-data" &>/dev/null; then
@@ -138,40 +187,42 @@ chmod -R 775 "$MEDIA_DIR"
 echo "    [+] Chat media directory ready at $MEDIA_DIR"
 
 # ------------------------------------------------------------------------------
-# STEP 4: Setup NotifKit Notification Engine
+# STEP 4: Setup NotifKit Notification Orchestration Daemon
 # ------------------------------------------------------------------------------
-echo "[*] Step 4: Checking NotifKit prerequisites..."
-if command -v node &>/dev/null; then
-    NODE_VER="$(node -v)"
-    echo "    Found Node.js: $NODE_VER"
-else
-    echo "    [-] Notice: Node.js (v20+) is not yet installed."
-    echo "    To install Node.js v20 LTS on Ubuntu/Debian:"
-    echo "        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
-    echo "        sudo apt-get install -y nodejs"
+echo "[*] Step 4: Setting up NotifKit Notification Engine..."
+NOTIFKIT_DIR="/opt/notifkit"
+mkdir -p "$NOTIFKIT_DIR"
+
+if [ -f "$SCRIPT_DIR/notifkit_daemon.py" ]; then
+    cp "$SCRIPT_DIR/notifkit_daemon.py" "$NOTIFKIT_DIR/daemon.py"
+    chmod 755 "$NOTIFKIT_DIR/daemon.py"
 fi
 
-NOTIFKIT_DIR="/opt/notifkit"
-if [ ! -d "$NOTIFKIT_DIR" ]; then
-    echo "    Creating $NOTIFKIT_DIR directory..."
-    mkdir -p "$NOTIFKIT_DIR"
+# Detect Python interpreter (prefer virtualenv)
+PYTHON_BIN="/usr/bin/python3"
+if [ -f "/srv/sd-finance-tool/venv/bin/python3" ]; then
+    PYTHON_BIN="/srv/sd-finance-tool/venv/bin/python3"
+elif [ -f "$APP_DIR/venv/bin/python3" ]; then
+    PYTHON_BIN="$APP_DIR/venv/bin/python3"
 fi
 
 NOTIFKIT_SERVICE="/etc/systemd/system/notifkit.service"
 cat <<EOF > "$NOTIFKIT_SERVICE"
 [Unit]
 Description=NotifKit Notification Orchestration Engine
-After=network.target redis-server.service postgresql.service
-Wants=redis-server.service postgresql.service
+After=network.target redis-server.service
+Wants=redis-server.service
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/notifkit
-EnvironmentFile=-/opt/notifkit/.env
-ExecStart=/usr/bin/npm start
+Environment="NOTIFKIT_HOST=127.0.0.1"
+Environment="NOTIFKIT_PORT=4000"
+Environment="NOTIFKIT_API_SECRET=sdfinance-notifkit-secret-2026"
+ExecStart=$PYTHON_BIN /opt/notifkit/daemon.py
 Restart=always
-RestartSec=5s
+RestartSec=3s
 LimitNOFILE=65535
 StandardOutput=journal
 StandardError=journal
@@ -182,7 +233,10 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-echo "    [+] NotifKit systemd unit staged at $NOTIFKIT_SERVICE"
+systemctl enable notifkit
+systemctl restart notifkit
+sleep 1
+echo "    [+] NotifKit systemd service active on port 4000."
 
 # ------------------------------------------------------------------------------
 # STEP 5: Service Status & Loopback Port Verification
@@ -203,9 +257,11 @@ if command -v curl &>/dev/null; then
     echo "    Centrifugo Health Check (HTTP): $CENT_RESP"
 fi
 
+echo "Checking NotifKit (port 4000)..."
+if command -v curl &>/dev/null; then
+    NOTIF_RESP="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4000/health || echo 'DOWN')"
+    echo "    NotifKit Health Check (HTTP): $NOTIF_RESP"
+fi
+
 echo "=========================================================="
 echo "[✓] Phase 2 setup completed successfully!"
-echo "Next step: Add Nginx reverse proxy snippet from:"
-echo "    $SCRIPT_DIR/nginx_chat.conf"
-echo "into your Nginx configuration, then run: sudo nginx -t && sudo systemctl reload nginx"
-echo "=========================================================="

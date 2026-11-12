@@ -5,9 +5,10 @@ File: SD_Accounting_Tool/scripts/provision_chat_channels.py
 
 Automatically provisions:
 1. "Company Announcements" broadcast channel (Admin/Mgmt publish, Staff listen).
-2. Direct 1-on-1 channels between each active Field Staff and Leadership (Admin/Mgmt).
-3. Synchronizes user phone numbers into user_notification_settings for NotifKit.
-4. Enforces the strict RBAC rule: No direct channels created between two field staff.
+2. Direct 1-on-1 channels between Leadership users (Admin, Superadmin, Mgmt).
+3. Direct 1-on-1 channels between each Leadership user and every Field Staff member.
+4. Synchronizes user phone numbers into user_notification_settings for NotifKit.
+5. Strictly prevents direct channels between two field staff members (RBAC rule).
 """
 
 import os
@@ -40,10 +41,43 @@ def apply_migration(conn):
     print("[+] Migration successfully verified/applied.")
 
 
+def ensure_direct_channel(cur, user_a_id, user_a_role, user_b_id, user_b_role, admin_id):
+    """Checks if a direct channel exists between user A and user B, creating one if not."""
+    cur.execute("""
+        SELECT c.id 
+        FROM chat_channels c
+        JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = %s
+        JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id = %s
+        WHERE c.channel_type = 'direct';
+    """, (user_a_id, user_b_id))
+    existing = cur.fetchone()
+
+    if not existing:
+        cur.execute("""
+            INSERT INTO chat_channels (channel_type, created_by, is_active)
+            VALUES ('direct', %s, TRUE)
+            RETURNING id;
+        """, (admin_id,))
+        new_channel_id = cur.fetchone()[0]
+
+        cur.execute("""
+            INSERT INTO chat_channel_members (channel_id, user_id, role)
+            VALUES (%s, %s, %s);
+        """, (new_channel_id, user_a_id, user_a_role))
+
+        cur.execute("""
+            INSERT INTO chat_channel_members (channel_id, user_id, role)
+            VALUES (%s, %s, %s);
+        """, (new_channel_id, user_b_id, user_b_role))
+
+        return True
+    return False
+
+
 def provision_channels(conn):
-    """Provisions broadcast and 1-on-1 direct channels based on employee roles."""
+    """Provisions broadcast, leadership-to-leadership, and leadership-to-staff channels."""
     with conn.cursor() as cur:
-        # 1. Fetch Leadership (Admin / Management)
+        # 1. Fetch Leadership (Admin, Superadmin, Mgmt)
         cur.execute("""
             SELECT 
                 u.id, 
@@ -55,7 +89,7 @@ def provision_channels(conn):
             LEFT JOIN employee e ON e.eid = u.employee_id
             WHERE u.is_active = TRUE 
               AND (
-                  LOWER(COALESCE(e.level, '')) IN ('admin', 'superadmin', 'mgmt') 
+                  LOWER(COALESCE(e.level, '')) IN ('admin', 'superadmin', 'mgmt', 'management') 
                   OR LOWER(u.username) IN ('admin', 'superadmin')
               )
             ORDER BY u.id ASC;
@@ -68,7 +102,11 @@ def provision_channels(conn):
 
         primary_admin = leadership_users[0]
         admin_id = primary_admin[0]
-        print(f"[*] Found {len(leadership_users)} leadership user(s). Primary Admin ID: {admin_id} ({primary_admin[1]})")
+        print(f"[*] Found {len(leadership_users)} leadership user(s):")
+        for lu in leadership_users:
+            clean_lvl = lu[3]
+            role_tag = 'SUPER ADMIN' if 'superadmin' in clean_lvl else ('ADMIN' if 'admin' in clean_lvl else 'MGMT')
+            print(f"    - ID {lu[0]}: {lu[2]} ({lu[1]}) [Role: {role_tag}]")
 
         # 2. Fetch Field Staff
         cur.execute("""
@@ -81,7 +119,7 @@ def provision_channels(conn):
             FROM users u
             LEFT JOIN employee e ON e.eid = u.employee_id
             WHERE u.is_active = TRUE 
-              AND LOWER(COALESCE(e.level, '')) NOT IN ('admin', 'superadmin', 'mgmt')
+              AND LOWER(COALESCE(e.level, '')) NOT IN ('admin', 'superadmin', 'mgmt', 'management')
               AND LOWER(u.username) NOT IN ('admin', 'superadmin')
             ORDER BY u.id ASC;
         """)
@@ -110,7 +148,7 @@ def provision_channels(conn):
         # Ensure all leadership members are added as admin/mgmt
         for lead in leadership_users:
             lead_id = lead[0]
-            role = 'admin' if 'admin' in lead[3] else 'mgmt'
+            role = 'admin' if any(k in lead[3] for k in ('admin', 'superadmin')) else 'mgmt'
             cur.execute("""
                 INSERT INTO chat_channel_members (channel_id, user_id, role)
                 VALUES (%s, %s, %s)
@@ -126,47 +164,34 @@ def provision_channels(conn):
                 ON CONFLICT (channel_id, user_id) DO NOTHING;
             """, (broadcast_id, staff_id))
 
-        # 4. Provision 1-on-1 Direct Channels (Staff <-> Primary Admin / Management)
-        direct_channels_created = 0
-        for staff in staff_users:
-            staff_id = staff[0]
-            staff_name = staff[2]
+        # 4. Provision Direct Channels Between Leadership Users Themselves (Admin <-> Mgmt, Admin <-> Admin)
+        leadership_direct_count = 0
+        for i in range(len(leadership_users)):
+            for j in range(i + 1, len(leadership_users)):
+                user_a = leadership_users[i]
+                user_b = leadership_users[j]
+                role_a = 'admin' if any(k in user_a[3] for k in ('admin', 'superadmin')) else 'mgmt'
+                role_b = 'admin' if any(k in user_b[3] for k in ('admin', 'superadmin')) else 'mgmt'
+                
+                if ensure_direct_channel(cur, user_a[0], role_a, user_b[0], role_b, admin_id):
+                    leadership_direct_count += 1
 
-            # Check if direct channel already exists between staff and primary admin
-            cur.execute("""
-                SELECT c.id 
-                FROM chat_channels c
-                JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = %s
-                JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id = %s
-                WHERE c.channel_type = 'direct';
-            """, (staff_id, admin_id))
-            existing_direct = cur.fetchone()
+        print(f"[+] Provisioned {leadership_direct_count} new direct channel(s) between Leadership users.")
 
-            if not existing_direct:
-                cur.execute("""
-                    INSERT INTO chat_channels (channel_type, created_by, is_active)
-                    VALUES ('direct', %s, TRUE)
-                    RETURNING id;
-                """, (admin_id,))
-                new_channel_id = cur.fetchone()[0]
+        # 5. Provision Direct Channels Between EVERY Leadership User and EVERY Field Staff Member
+        staff_direct_count = 0
+        for lead in leadership_users:
+            lead_id = lead[0]
+            lead_role = 'admin' if any(k in lead[3] for k in ('admin', 'superadmin')) else 'mgmt'
 
-                # Add Admin member
-                cur.execute("""
-                    INSERT INTO chat_channel_members (channel_id, user_id, role)
-                    VALUES (%s, %s, 'admin');
-                """, (new_channel_id, admin_id))
+            for staff in staff_users:
+                staff_id = staff[0]
+                if ensure_direct_channel(cur, lead_id, lead_role, staff_id, 'staff', admin_id):
+                    staff_direct_count += 1
 
-                # Add Staff member
-                cur.execute("""
-                    INSERT INTO chat_channel_members (channel_id, user_id, role)
-                    VALUES (%s, %s, 'staff');
-                """, (new_channel_id, staff_id))
+        print(f"[+] Provisioned {staff_direct_count} new direct staff-to-leadership channel(s).")
 
-                direct_channels_created += 1
-
-        print(f"[+] Provisioned {direct_channels_created} new direct staff-to-admin channel(s).")
-
-        # 5. Populate Notification Settings for NotifKit
+        # 6. Populate Notification Settings for NotifKit
         all_users = leadership_users + staff_users
         notif_upserted = 0
         for u in all_users:
@@ -184,7 +209,7 @@ def provision_channels(conn):
         print(f"[+] Synchronized {notif_upserted} user notification profile(s).")
 
     conn.commit()
-    print("[✓] Provisioning complete.")
+    print("[✓] Provisioning complete: Leadership can now message everyone (admins, mgmt, and staff)!")
 
 
 def main():

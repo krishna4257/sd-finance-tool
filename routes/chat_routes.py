@@ -189,7 +189,7 @@ def get_user_channels():
                     -- Other member details for direct chat
                     other_u.id AS other_user_id,
                     COALESCE(other_e.name, other_u.username) AS other_user_name,
-                    other_m.role AS other_user_role,
+                    LOWER(COALESCE(other_e.level, other_m.role, 'staff')) AS other_user_role,
                     -- Last message preview
                     last_msg.id AS last_msg_id,
                     last_msg.body AS last_msg_body,
@@ -229,17 +229,30 @@ def get_user_channels():
                 c_id, c_type, c_name, c_created, last_read_id, o_uid, o_name, o_role, \
                 lm_id, lm_body, lm_type, lm_time, lm_status, lm_sender, unread_cnt = r
 
+                clean_role = (o_role or "").lower()
                 # RBAC filter for staff: direct channels must be with admin or mgmt
-                if is_staff and c_type == "direct" and o_role not in ("admin", "mgmt"):
+                if is_staff and c_type == "direct" and not any(k in clean_role for k in ("admin", "mgmt", "superadmin", "management")):
                     continue
 
-                display_title = c_name if c_type == "broadcast" else (o_name or "Support / Admin")
+                if c_type == "broadcast":
+                    display_title = c_name
+                else:
+                    if "superadmin" in clean_role:
+                        role_suffix = " [SUPER ADMIN]"
+                    elif "admin" in clean_role:
+                        role_suffix = " [ADMIN]"
+                    elif any(m in clean_role for m in ("mgmt", "management")):
+                        role_suffix = " [MGMT]"
+                    else:
+                        role_suffix = ""
+                    display_title = f"{o_name or 'User'}{role_suffix}"
+
                 channels.append({
                     "channel_id": str(c_id),
                     "channel_type": c_type,
                     "title": display_title,
                     "other_user_id": o_uid,
-                    "other_user_role": o_role,
+                    "other_user_role": clean_role,
                     "unread_count": int(unread_cnt or 0),
                     "last_message": {
                         "id": str(lm_id) if lm_id else None,
@@ -253,6 +266,155 @@ def get_user_channels():
                 })
 
             return jsonify({"success": True, "channels": channels})
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------------------------------
+# ENDPOINT 2B: Directory & Dynamic Direct Channel Creation
+# ------------------------------------------------------------------------------
+@chat_bp.route("/users", methods=["GET"])
+@chat_auth_required
+def get_chat_directory():
+    """
+    Returns directory of reachable users.
+    Leadership users (admin, superadmin, mgmt) can see and message all users.
+    Field staff can only see and message leadership users.
+    """
+    current_user = g.chat_user
+    is_staff = current_user["role"] == "staff"
+
+    conn = get_pg_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    u.id, 
+                    u.username, 
+                    COALESCE(e.name, u.username) AS display_name,
+                    LOWER(COALESCE(e.level, 'staff')) AS level
+                FROM users u
+                LEFT JOIN employee e ON e.eid = u.employee_id
+                WHERE u.is_active = TRUE AND u.id != %s
+                ORDER BY display_name ASC;
+            """, (current_user["id"],))
+            rows = cur.fetchall()
+
+            directory = []
+            for uid, uname, dname, raw_level in rows:
+                clean_level = (raw_level or "").strip().lower()
+                is_target_lead = any(k in clean_level for k in ("admin", "superadmin", "mgmt", "management"))
+                
+                # RBAC: Staff cannot see or message other staff
+                if is_staff and not is_target_lead:
+                    continue
+
+                if "superadmin" in clean_level:
+                    role_tag = "superadmin"
+                elif "admin" in clean_level:
+                    role_tag = "admin"
+                elif any(k in clean_level for k in ("mgmt", "management")):
+                    role_tag = "mgmt"
+                else:
+                    role_tag = "staff"
+
+                directory.append({
+                    "user_id": uid,
+                    "username": uname,
+                    "display_name": dname,
+                    "role": role_tag
+                })
+
+            return jsonify({"success": True, "users": directory})
+    finally:
+        conn.close()
+
+
+@chat_bp.route("/direct-channel", methods=["POST"])
+@chat_auth_required
+def open_direct_channel():
+    """
+    Finds or provisions a 1-to-1 direct channel between current user and target user.
+    Admins, superadmins, and management can open a channel with anyone.
+    Staff can only open a channel with leadership.
+    """
+    current_user = g.chat_user
+    current_uid = current_user["id"]
+    current_role = current_user["role"]
+
+    data = request.get_json(silent=True) or {}
+    target_uid = data.get("target_user_id")
+    if not target_uid:
+        return jsonify({"success": False, "error": "target_user_id is required"}), 400
+
+    try:
+        target_uid = int(target_uid)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid target_user_id"}), 400
+
+    if current_uid == target_uid:
+        return jsonify({"success": False, "error": "Cannot message yourself"}), 400
+
+    conn = get_pg_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT u.id, u.username, COALESCE(e.name, u.username) AS name,
+                       LOWER(COALESCE(e.level, 'staff')) AS level
+                FROM users u
+                LEFT JOIN employee e ON e.eid = u.employee_id
+                WHERE u.id = %s AND u.is_active = TRUE;
+            """, (target_uid,))
+            target = cur.fetchone()
+            if not target:
+                return jsonify({"success": False, "error": "Target user not found"}), 404
+
+            t_id, t_uname, t_name, t_level = target
+            clean_t_level = (t_level or "").strip().lower()
+            t_is_lead = any(k in clean_t_level for k in ("admin", "superadmin", "mgmt", "management"))
+            target_role = "admin" if any(k in clean_t_level for k in ("admin", "superadmin")) else ("mgmt" if any(k in clean_t_level for k in ("mgmt", "management")) else "staff")
+
+            # RBAC Enforcement: Staff cannot message staff
+            if current_role == "staff" and not t_is_lead:
+                return jsonify({"success": False, "error": "Staff-to-staff direct channels are prohibited"}), 403
+
+            # Check if direct channel exists
+            cur.execute("""
+                SELECT c.id 
+                FROM chat_channels c
+                JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = %s
+                JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id = %s
+                WHERE c.channel_type = 'direct'
+                LIMIT 1;
+            """, (current_uid, target_uid))
+            existing = cur.fetchone()
+
+            if existing:
+                channel_id = str(existing[0])
+            else:
+                # Create direct channel
+                cur.execute("""
+                    INSERT INTO chat_channels (channel_type, created_by, is_active)
+                    VALUES ('direct', %s, TRUE)
+                    RETURNING id;
+                """, (current_uid,))
+                channel_id = str(cur.fetchone()[0])
+
+                cur.execute("""
+                    INSERT INTO chat_channel_members (channel_id, user_id, role)
+                    VALUES (%s, %s, %s), (%s, %s, %s);
+                """, (channel_id, current_uid, current_role, channel_id, target_uid, target_role))
+                conn.commit()
+
+            return jsonify({
+                "success": True,
+                "channel_id": channel_id,
+                "target_user": {
+                    "id": t_id,
+                    "name": t_name,
+                    "role": target_role
+                }
+            })
     finally:
         conn.close()
 
