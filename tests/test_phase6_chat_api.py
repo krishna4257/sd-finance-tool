@@ -129,11 +129,11 @@ class TestPhase6ChatApi(unittest.TestCase):
         self.assertEqual(data["client_uuid"], client_uuid)
         self.assertEqual(data["status"], "sent")
 
-        # Verify Centrifugo loopback was called
-        mock_requests_post.assert_called_once()
-        _, kwargs = mock_requests_post.call_args
-        self.assertIn("apikey", kwargs.get("headers", {}).get("Authorization", "").lower())
-        self.assertTrue(kwargs.get("json", {}).get("channel", "").startswith("chat:"))
+        # Verify Centrifugo loopback was called for both channel and recipient user
+        self.assertGreaterEqual(mock_requests_post.call_count, 1)
+        first_call_kwargs = mock_requests_post.call_args_list[0][1]
+        self.assertIn("apikey", first_call_kwargs.get("headers", {}).get("Authorization", "").lower())
+        self.assertTrue(first_call_kwargs.get("json", {}).get("channel", "").startswith("chat:"))
 
         # Verify NotifKit background alert was dispatched for recipient 10
         mock_notify.assert_called_once()
@@ -272,6 +272,27 @@ class TestPhase6ChatApi(unittest.TestCase):
         self.assertIn("admin", roles)
         self.assertIn("mgmt", roles)
         self.assertNotIn("staff", roles)
+
+    @patch("routes.chat_routes.get_pg_connection")
+    def test_unread_count_endpoint(self, mock_get_conn):
+        """Verify /unread_count queries unread messages count for authenticated user."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_get_conn.return_value = mock_conn
+
+        mock_cur.fetchone.return_value = (5,)
+
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["username"] = "admin"
+            sess["user_level"] = "admin"
+
+        res = self.client.get("/api/v1/chat/unread_count")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["unread_count"], 5)
 
 
 if __name__ == "__main__":

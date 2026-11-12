@@ -271,6 +271,64 @@ def get_user_channels():
 
 
 # ------------------------------------------------------------------------------
+# ENDPOINT 2A: Total Unread Count
+# ------------------------------------------------------------------------------
+@chat_bp.route("/unread_count", methods=["GET"])
+@chat_auth_required
+def get_unread_count():
+    """Returns the total unread messages count for the authenticated user across all permitted channels."""
+    user = g.chat_user
+    user_id = user["id"]
+    is_staff = user["role"] == "staff"
+
+    conn = get_pg_connection()
+    try:
+        with conn.cursor() as cur:
+            if is_staff:
+                cur.execute("""
+                    SELECT COUNT(*)
+                    FROM chat_messages m
+                    JOIN chat_channels c ON c.id = m.channel_id
+                    JOIN chat_channel_members ccm ON ccm.channel_id = c.id AND ccm.user_id = %s
+                    WHERE m.sender_id != %s
+                      AND m.status != 'read'
+                      AND c.is_active = TRUE
+                      AND (
+                          c.channel_type = 'broadcast'
+                          OR EXISTS (
+                              SELECT 1 FROM chat_channel_members om
+                              JOIN users ou ON ou.id = om.user_id
+                              LEFT JOIN employee oe ON oe.eid = ou.employee_id
+                              WHERE om.channel_id = c.id
+                                AND om.user_id != %s
+                                AND LOWER(COALESCE(oe.level, om.role, 'staff')) IN ('admin', 'mgmt', 'superadmin', 'management')
+                          )
+                      );
+                """, (user_id, user_id, user_id))
+            else:
+                cur.execute("""
+                    SELECT COUNT(*)
+                    FROM chat_messages m
+                    JOIN chat_channels c ON c.id = m.channel_id
+                    JOIN chat_channel_members ccm ON ccm.channel_id = c.id AND ccm.user_id = %s
+                    WHERE m.sender_id != %s
+                      AND m.status != 'read'
+                      AND c.is_active = TRUE;
+                """, (user_id, user_id))
+            row = cur.fetchone()
+            count = row[0] if row else 0
+        return jsonify({
+            "success": True,
+            "unread_count": int(count)
+        })
+    except Exception as e:
+        logger.error("[ChatAPI] get_unread_count error: %s", e)
+        return jsonify({"success": False, "error": str(e), "unread_count": 0}), 500
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------------------------------
 # ENDPOINT 2B: Directory & Dynamic Direct Channel Creation
 # ------------------------------------------------------------------------------
 @chat_bp.route("/users", methods=["GET"])
@@ -605,6 +663,26 @@ def send_message():
         except Exception as e:
             logger.warning("[Centrifugo] Instant publish failed (client offline): %s", e)
 
+        # 5b. Broadcast to user channels so all clients update unread counts and notifications instantly
+        recipient_ids = [m[0] for m in members if m[0] != user_id]
+        for rid in recipient_ids:
+            try:
+                requests.post(
+                    publish_url,
+                    headers={
+                        "X-API-Key": api_key,
+                        "Authorization": f"apikey {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "channel": f"chat:user_{rid}",
+                        "data": centrifugo_payload["data"]
+                    },
+                    timeout=0.8
+                )
+            except Exception as pe:
+                logger.debug("[Centrifugo] User channel publish error: %s", pe)
+
         # 6. Trigger NotifKit background push for offline recipients
         recipient_ids = [m[0] for m in members if m[0] != user_id]
         for rid in recipient_ids:
@@ -645,6 +723,7 @@ def acknowledge_message_status():
     if not message_id or not channel_id or new_status not in ("delivered", "read"):
         return jsonify({"success": False, "error": "Invalid acknowledgment payload"}), 400
 
+    sender_id = None
     conn = get_pg_connection()
     try:
         with conn.cursor() as cur:
@@ -652,20 +731,35 @@ def acknowledge_message_status():
                 cur.execute("""
                     UPDATE chat_messages 
                     SET status = 'delivered', delivered_at = NOW() 
-                    WHERE id = %s AND status = 'sent';
+                    WHERE id = %s AND status = 'sent'
+                    RETURNING sender_id;
                 """, (message_id,))
             elif new_status == "read":
                 cur.execute("""
                     UPDATE chat_messages 
                     SET status = 'read', read_at = NOW() 
-                    WHERE id = %s AND status IN ('sent', 'delivered');
+                    WHERE id = %s AND status IN ('sent', 'delivered')
+                    RETURNING sender_id;
                 """, (message_id,))
+            row = cur.fetchone()
+            if row:
+                sender_id = row[0]
             conn.commit()
 
         # Broadcast status update event to Centrifugo v5
         centrifugo_url = current_app.config.get("CENTRIFUGO_API_URL", DEFAULT_CENTRIFUGO_URL)
         api_key = current_app.config.get("CENTRIFUGO_API_KEY", "sdfinance-centrifugo-api-key-2026")
         publish_url = f"{centrifugo_url.rstrip('/')}/publish" if not centrifugo_url.endswith("/publish") else centrifugo_url
+        status_payload = {
+            "channel": f"chat:{channel_id}",
+            "data": {
+                "event": "status_update",
+                "message_id": str(message_id),
+                "channel_id": str(channel_id),
+                "status": new_status,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
         try:
             requests.post(
                 publish_url,
@@ -674,17 +768,23 @@ def acknowledge_message_status():
                     "Authorization": f"apikey {api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "channel": f"chat:{channel_id}",
-                    "data": {
-                        "event": "status_update",
-                        "message_id": str(message_id),
-                        "status": new_status,
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    }
-                },
+                json=status_payload,
                 timeout=1.0
             )
+            if sender_id:
+                requests.post(
+                    publish_url,
+                    headers={
+                        "X-API-Key": api_key,
+                        "Authorization": f"apikey {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "channel": f"chat:user_{sender_id}",
+                        "data": status_payload["data"]
+                    },
+                    timeout=0.8
+                )
         except Exception as e:
             logger.warning("[Centrifugo] Status update publish failed: %s", e)
 

@@ -29,6 +29,8 @@
   // Centrifuge SDK instance and active subscription
   let centrifugeClient = null;
   let activeSubscription = null;
+  let userSubscription = null;
+  let currentUserId = null;
 
   // Audio recording state
   let mediaRecorder = null;
@@ -52,6 +54,7 @@
 
       if (tokenRes && tokenRes.success) {
         jwtToken = tokenRes.token;
+        currentUserId = tokenRes.user_id;
         if (tokenRes.ws_endpoint) {
           // If accessing via domain or localhost, use endpoint
           if (loc.host && !loc.host.includes('sivadurga.in') && tokenRes.ws_endpoint.includes('sivadurga.in')) {
@@ -72,6 +75,7 @@
           selectChannel(channelsList[0]);
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     } catch (e) {
       console.error('[Chat] Init error:', e);
       updateStatusPill(false, 'Disconnected');
@@ -99,6 +103,9 @@
           updateStatusPill(true, 'Connected (Real-time)');
           if (activeChannel) {
             subscribeToChannel(activeChannel.channel_id);
+          }
+          if (currentUserId) {
+            subscribeToChannel('chat:user_' + currentUserId);
           }
         });
 
@@ -183,6 +190,9 @@
         if (activeChannel) {
           subscribeToChannel(activeChannel.channel_id);
         }
+        if (currentUserId) {
+          subscribeToChannel('chat:user_' + currentUserId);
+        }
       }
 
       if (data.push && data.push.pub && data.push.pub.data) {
@@ -195,6 +205,7 @@
           handleStatusUpdate(payload);
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     } catch (e) {
       console.warn('[Chat] Malformed frame:', e);
     }
@@ -203,21 +214,18 @@
   function subscribeToChannel(channelId) {
     if (!channelId) return;
     const channelName = channelId.startsWith('chat:') ? channelId : 'chat:' + channelId;
+    const isUserCh = channelName.startsWith('chat:user_');
 
     if (centrifugeClient) {
-      if (activeSubscription) {
-        try { activeSubscription.unsubscribe(); } catch (e) {}
+      let sub = centrifugeClient.getSubscription(channelName);
+      if (!sub) {
+        sub = centrifugeClient.newSubscription(channelName);
       }
 
-      activeSubscription = centrifugeClient.getSubscription(channelName);
-      if (!activeSubscription) {
-        activeSubscription = centrifugeClient.newSubscription(channelName);
-      }
+      sub.removeAllListeners();
 
-      activeSubscription.removeAllListeners();
-
-      activeSubscription.on('publication', function (ctx) {
-        console.log('[Chat] Real-time publication received:', ctx.data);
+      sub.on('publication', function (ctx) {
+        console.log('[Chat] Real-time publication received (' + channelName + '):', ctx.data);
         const payload = ctx.data;
         const event = payload.event || 'new_message';
 
@@ -228,7 +236,16 @@
         }
       });
 
-      activeSubscription.subscribe();
+      sub.subscribe();
+
+      if (isUserCh) {
+        userSubscription = sub;
+      } else {
+        if (activeSubscription && activeSubscription !== sub) {
+          try { activeSubscription.unsubscribe(); } catch (e) {}
+        }
+        activeSubscription = sub;
+      }
     } else if (ws && ws.readyState === WebSocket.OPEN) {
       sendWsCommand({
         subscribe: { channel: channelName }
@@ -348,6 +365,8 @@
       // Clear badge immediately upon selection
       const badge = itemEl.querySelector('.channel-badge');
       if (badge) badge.remove();
+      ch.unread_count = 0;
+      if (window.updateChatBadge) window.updateChatBadge();
     }
 
     // Show conversation view
@@ -507,6 +526,7 @@
           if (footer) footer.innerHTML += ' <span style="color:#ef4444; font-size:10px;">(Failed)</span>';
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     } catch (e) {
       console.error('[Chat] Send message network error:', e);
     }
@@ -573,6 +593,7 @@
           }
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     });
 
     if (appended) scrollToBottom();
@@ -634,6 +655,7 @@
           badgeEl.remove();
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     });
   }
 
@@ -672,6 +694,7 @@
           }
         }
       }
+      if (window.updateChatBadge) window.updateChatBadge();
     }
 
     // Update left sidebar snippet
@@ -700,6 +723,10 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message_id: messageId, channel_id: channelId, status: status })
+    }).then(() => {
+      if (status === 'read' && window.updateChatBadge) {
+        window.updateChatBadge();
+      }
     }).catch(() => {});
   }
 

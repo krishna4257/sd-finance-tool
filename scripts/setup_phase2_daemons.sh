@@ -107,46 +107,41 @@ cat <<EOF > "$CONFIG_PATH"
 {
   "address": "127.0.0.1",
   "port": 8001,
-  "health": {
-    "enabled": true
-  },
-  "client": {
-    "token": {
-      "hmac_secret_key": "$APP_SECRET_KEY"
-    },
-    "allowed_origins": []
-  },
-  "http_api": {
-    "key": "sdfinance-centrifugo-api-key-2026"
-  },
-  "channel": {
-    "without_namespace": {
+  "health": true,
+  "api_key": "sdfinance-centrifugo-api-key-2026",
+  "token_hmac_secret_key": "$APP_SECRET_KEY",
+  "allowed_origins": [
+    "*",
+    "https://sivadurga.in",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+  ],
+  "allow_subscribe_for_client": true,
+  "namespaces": [
+    {
+      "name": "chat",
       "allow_subscribe_for_client": true,
       "presence": true,
       "history_size": 100,
       "history_ttl": "300s"
     },
-    "namespaces": [
-      {
-        "name": "chat",
-        "allow_subscribe_for_client": true,
-        "presence": true,
-        "history_size": 100,
-        "history_ttl": "300s"
-      },
-      {
-        "name": "broadcast",
-        "allow_subscribe_for_client": true,
-        "presence": true,
-        "history_size": 50,
-        "history_ttl": "86400s"
-      }
-    ]
-  }
+    {
+      "name": "broadcast",
+      "allow_subscribe_for_client": true,
+      "presence": true,
+      "history_size": 50,
+      "history_ttl": "86400s"
+    }
+  ]
 }
 EOF
-chmod 640 "$CONFIG_PATH"
+chmod 644 "$CONFIG_PATH"
 echo "    [+] Generated Centrifugo v5 config with synchronized HMAC secret."
+
+if [ -d "/etc/sudoers.d" ]; then
+    echo "jayakrishna ALL=(ALL) NOPASSWD: /bin/systemctl restart centrifugo, /bin/systemctl status centrifugo" > /etc/sudoers.d/centrifugo
+    chmod 440 /etc/sudoers.d/centrifugo
+fi
 
 # Deploy Centrifugo Systemd Service
 CENTRIFUGO_SERVICE="/etc/systemd/system/centrifugo.service"
