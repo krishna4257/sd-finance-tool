@@ -223,7 +223,7 @@
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100">Assign Members</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Fill <span id="targetSharesLabel">20</span> shares — one each, or subscribers holding fractional/multi shares (0.5x, 1x, 2x).</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Fill <span id="targetSharesLabel">20</span> shares — one each, or subscribers holding fractional/multi shares (0.25x, 0.5x, 1x, 2x).</p>
       </div>
       <div class="text-right">
         <span class="text-sm font-extrabold text-slate-900 dark:text-slate-100 money-fig" id="sharesCounterDisplay">0 / 20</span>
@@ -635,6 +635,7 @@
 
     let filled = 0.0;
     assignedMembers.forEach(m => filled += m.share_units);
+    filled = Math.round(filled * 100) / 100;
 
     document.getElementById('sharesCounterDisplay').textContent = `${filled} / ${targetShares} shares`;
     const remaining = Math.max(0, targetShares - filled);
@@ -690,9 +691,9 @@
 
           <!-- Share Multiplier -->
           <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-chitDark-elevated border border-slate-200 dark:border-slate-700/50 rounded-xl p-1">
-            <button type="button" onclick="adjustMemberShare(${idx}, -0.5)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">-</button>
-            <span class="w-8 text-center text-xs font-extrabold dark:text-slate-100">${m.share_units}x</span>
-            <button type="button" onclick="adjustMemberShare(${idx}, 0.5)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">+</button>
+            <button type="button" onclick="adjustMemberShare(${idx}, -1)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">-</button>
+            <span class="w-10 text-center text-xs font-extrabold dark:text-slate-100 cursor-pointer hover:underline" title="Click to enter custom share (e.g. 0.25)" onclick="promptCustomMemberShareNew(${idx})">${m.share_units}x</span>
+            <button type="button" onclick="adjustMemberShare(${idx}, 1)" class="h-7 w-7 rounded-lg bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-white/[0.05]">+</button>
           </div>
 
           <!-- Remove -->
@@ -796,9 +797,35 @@
     goToStep(3);
   }
 
-  function adjustMemberShare(idx, delta) {
-    assignedMembers[idx].share_units = Math.max(0.5, assignedMembers[idx].share_units + delta);
+  function stepShareValue(cur, dir) {
+    cur = Math.round((parseFloat(cur) || 1.0) * 100) / 100;
+    if (dir > 0) {
+      if (cur < 1.0) return Math.round((cur + 0.25) * 100) / 100;
+      return Math.round((cur + 0.5) * 100) / 100;
+    } else {
+      if (cur <= 1.0) return Math.max(0.25, Math.round((cur - 0.25) * 100) / 100);
+      return Math.max(0.25, Math.round((cur - 0.5) * 100) / 100);
+    }
+  }
+
+  function adjustMemberShare(idx, dir) {
+    const cur = assignedMembers[idx].share_units || 1.0;
+    assignedMembers[idx].share_units = stepShareValue(cur, dir);
     renderAssignedMembers();
+  }
+
+  function promptCustomMemberShareNew(idx) {
+    const cur = assignedMembers[idx].share_units || 1.0;
+    const input = prompt('Enter share units (e.g. 0.25, 0.5, 1, 2):', cur);
+    if (input !== null) {
+      const val = parseFloat(input);
+      if (!isNaN(val) && val >= 0.25) {
+        assignedMembers[idx].share_units = Math.round(val * 100) / 100;
+        renderAssignedMembers();
+      } else {
+        alert('Please enter a valid share (minimum 0.25)');
+      }
+    }
   }
 
   function removeAssignedMember(idx) {

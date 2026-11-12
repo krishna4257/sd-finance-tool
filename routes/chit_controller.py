@@ -2169,7 +2169,7 @@ def get_chit_group_edit_details(group_id):
         total_shares = 0.0
         for m in mrows:
             sh = float(m[3])
-            total_shares += sh
+            total_shares = round(total_shares + sh, 2)
             m_itype = m[13] or 'incremental'
             if m_itype == 'fixed':
                 est_monthly = round_curr(sh * ce.get_fixed_installment_amount(val, dur))
@@ -2248,7 +2248,7 @@ def get_chit_group_edit_details(group_id):
                 'fixed_installment_amount': ce.get_fixed_installment_amount(val, dur),
                 'shares_assigned': total_shares,
                 'shares_target': tot_members,
-                'shares_matches': total_shares == float(tot_members)
+                'shares_matches': abs(total_shares - float(tot_members)) < 0.001
             },
             'members': members,
             'schedule': schedule,
@@ -2947,11 +2947,18 @@ def update_group_members(group_id):
             cur.execute("UPDATE chit_memberships SET account_number = %s WHERE id = %s;", (new_acc, membership_id))
 
         elif action == 'update_share' and membership_id:
-            cur.execute("""
-                UPDATE chit_memberships
-                SET share_units = %s, start_month_index = %s
-                WHERE id = %s AND chit_group_id = %s;
-            """, (share_units, joins_from, membership_id, group_id))
+            if data.get('start_month_index') is not None:
+                cur.execute("""
+                    UPDATE chit_memberships
+                    SET share_units = %s, start_month_index = %s
+                    WHERE id = %s AND chit_group_id = %s;
+                """, (share_units, joins_from, membership_id, group_id))
+            else:
+                cur.execute("""
+                    UPDATE chit_memberships
+                    SET share_units = %s
+                    WHERE id = %s AND chit_group_id = %s;
+                """, (share_units, membership_id, group_id))
 
             # Recalculate base installment dues for ALL months for this membership based on new share_units
             cur.execute("SELECT current_month_index, duration_months, chit_total_value FROM chit_groups WHERE id = %s;", (group_id,))
@@ -4460,7 +4467,7 @@ def handle_month_payout(chit_id, month_index):
         (ms_grp_id, m_id, t_num, orig_shares, has_lift,
          g_val, g_dur, g_start, g_comm, g_isco, g_name, acc_no) = ms_info
         orig_shares = float(orig_shares or 1.0)
-        share_count = min(max(0.5, share_count), orig_shares)
+        share_count = min(max(0.25, share_count), orig_shares)
 
         # Base schedule for 1 nominal chit
         base_sched = ce.generate_chit_schedule(float(g_val), int(g_dur or 20), g_start, float(g_comm or 3.0), bool(g_isco))
@@ -4953,7 +4960,7 @@ def update_recipient_payout(chit_id, membership_id):
                 sib_shares = float(sib[1]) if sib else 0.0
                 total_avail = curr_shares + sib_shares
 
-                if 0.5 <= new_shares <= total_avail:
+                if 0.25 <= new_shares <= total_avail:
                     rem_shares = round_curr(total_avail - new_shares)
                     final_shares = new_shares
                     if rem_shares > 0:

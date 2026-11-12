@@ -523,7 +523,9 @@
       <div>
         <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Share Multiplier</label>
         <select id="newMemberShareUnits" class="w-full h-10 px-3 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="0.25">0.25x (Quarter Ticket)</option>
           <option value="0.5">0.5x (Half Ticket)</option>
+          <option value="0.75">0.75x</option>
           <option value="1.0" selected>1.0x (Full Ticket)</option>
           <option value="1.5">1.5x</option>
           <option value="2.0">2.0x (Double Ticket)</option>
@@ -842,9 +844,9 @@
           <div class="flex items-center gap-2">
             <span class="text-[11px] text-slate-400 font-bold uppercase">Shares:</span>
             <div class="flex items-center gap-1 bg-slate-50 dark:bg-chitDark-bg border border-slate-200 dark:border-chitDark-border rounded-xl p-0.5">
-              <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units - 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">-</button>
-              <span class="w-10 text-center text-xs font-extrabold">${m.share_units}x</span>
-              <button type="button" onclick="changeMemberShare('${m.membership_id}', ${m.share_units + 0.5})" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">+</button>
+              <button type="button" onclick="stepMemberShare('${m.membership_id}', ${m.share_units}, -1)" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">-</button>
+              <span class="w-10 text-center text-xs font-extrabold cursor-pointer hover:underline" title="Click to enter custom share (e.g. 0.25)" onclick="promptCustomMemberShare('${m.membership_id}', ${m.share_units})">${m.share_units}x</span>
+              <button type="button" onclick="stepMemberShare('${m.membership_id}', ${m.share_units}, 1)" class="h-6 w-6 rounded bg-white dark:bg-chitDark-surface text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:bg-chitDark-elevated text-xs">+</button>
             </div>
             <span class="text-[11px] text-slate-500 dark:text-slate-400 ml-2">Pays ≈ ${formatINR(m.estimated_monthly_payment)}/mo</span>
           </div>
@@ -921,8 +923,38 @@
     drawer.classList.toggle('hidden');
   }
 
+  function stepShareValue(cur, dir) {
+    cur = Math.round((parseFloat(cur) || 1.0) * 100) / 100;
+    if (dir > 0) {
+      if (cur < 1.0) return Math.round((cur + 0.25) * 100) / 100;
+      return Math.round((cur + 0.5) * 100) / 100;
+    } else {
+      if (cur <= 1.0) return Math.max(0.25, Math.round((cur - 0.25) * 100) / 100);
+      return Math.max(0.25, Math.round((cur - 0.5) * 100) / 100);
+    }
+  }
+
+  function stepMemberShare(membershipId, curShare, dir) {
+    const nextShare = stepShareValue(curShare, dir);
+    if (nextShare !== curShare) {
+      changeMemberShare(membershipId, nextShare);
+    }
+  }
+
+  function promptCustomMemberShare(membershipId, currentShare) {
+    const input = prompt('Enter share units (e.g. 0.25, 0.5, 1, 2):', currentShare);
+    if (input !== null) {
+      const val = parseFloat(input);
+      if (!isNaN(val) && val >= 0.25) {
+        changeMemberShare(membershipId, Math.round(val * 100) / 100);
+      } else {
+        alert('Please enter a valid share (minimum 0.25)');
+      }
+    }
+  }
+
   async function changeMemberShare(membershipId, newShare) {
-    newShare = Math.max(0.5, parseFloat(newShare) || 1.0);
+    newShare = Math.max(0.25, Math.round((parseFloat(newShare) || 1.0) * 100) / 100);
     try {
       const res = await fetch(`/chit/api/chitgroups/${groupId}/members/assign`, {
         method: 'POST',
@@ -1220,7 +1252,9 @@
       </div>
       <div class="col-span-2">
         <select class="edit-qa-share w-full h-9 px-2 bg-white dark:bg-chitDark-surface border border-slate-200 dark:border-chitDark-border rounded-xl text-xs font-bold">
+          <option value="0.25">0.25x</option>
           <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
           <option value="1.0" selected>1.0x</option>
           <option value="1.5">1.5x</option>
           <option value="2.0">2.0x</option>

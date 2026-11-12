@@ -3109,19 +3109,26 @@
     const shareSel = document.getElementById('memberPayoutShareCountSelect');
     shareSel.innerHTML = '';
     const maxShares = parseFloat(activePayoutGroup.share_units || 1.0);
-    const maxInt = Math.max(1, Math.floor(maxShares));
-    for (let i = 1; i <= maxInt; i++) {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `${i} chit${i > 1 ? 's' : ''} (${i}.0x share)`;
-      shareSel.appendChild(opt);
+    const shareOpts = [];
+    if (maxShares < 1.0) {
+      for (let s = 0.25; s <= maxShares + 0.001; s += 0.25) {
+        shareOpts.push(Math.round(s * 100) / 100);
+      }
+    } else {
+      for (let i = 1; i <= Math.floor(maxShares); i++) {
+        shareOpts.push(i);
+      }
+      if (maxShares % 1 !== 0) {
+        shareOpts.push(Math.round(maxShares * 100) / 100);
+      }
     }
-    if (maxShares % 1 !== 0) {
+    shareOpts.forEach(val => {
       const opt = document.createElement('option');
-      opt.value = maxShares;
-      opt.textContent = `${maxShares} chits (${maxShares}x share)`;
+      opt.value = val;
+      opt.textContent = `${val} chit${val > 1 ? 's' : ''} (${val}x share)`;
+      if (val === maxShares) opt.selected = true;
       shareSel.appendChild(opt);
-    }
+    });
 
     // Determine default month: current_month_index if active, or last month (duration_months) if ended
     const curM = activePayoutGroup.current_month_index || 1;

@@ -1651,24 +1651,39 @@
     });
   }
 
+  function buildShareOptions(maxShares) {
+    maxShares = parseFloat(maxShares) || 1.0;
+    const opts = new Set();
+    if (maxShares < 1.0) {
+      for (let s = 0.25; s <= maxShares + 0.001; s += 0.25) {
+        opts.add(Math.round(s * 100) / 100);
+      }
+    } else {
+      for (let i = 1; i <= Math.floor(maxShares); i++) {
+        opts.add(i);
+      }
+      if (maxShares % 1 !== 0) {
+        opts.add(Math.round(maxShares * 100) / 100);
+      }
+    }
+    return Array.from(opts).sort((a, b) => a - b);
+  }
+
   function updateModalShareDropdown(maxShares = 1.0, preselect = 1.0) {
     const sel = document.getElementById('modalShareCountSelect');
     sel.innerHTML = '';
-    const maxInt = Math.max(1, Math.floor(maxShares));
-    for (let i = 1; i <= maxInt; i++) {
+    const options = buildShareOptions(maxShares);
+    options.forEach(val => {
       const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `${i} chit${i > 1 ? 's' : ''} (${i}.0x share)`;
-      if (i === preselect || (i === maxInt && preselect > maxInt)) opt.selected = true;
+      opt.value = val;
+      opt.textContent = `${val} chit${val > 1 ? 's' : ''} (${val}x share)`;
+      if (val === preselect || (val === options[options.length - 1] && preselect >= val)) {
+        opt.selected = true;
+      }
       sel.appendChild(opt);
-    }
-    // Handle half shares if any (e.g. 0.5, 1.5)
-    if (maxShares % 1 !== 0) {
-      const opt = document.createElement('option');
-      opt.value = maxShares;
-      opt.textContent = `${maxShares} chits (${maxShares}x share)`;
-      if (preselect === maxShares) opt.selected = true;
-      sel.appendChild(opt);
+    });
+    if (!sel.value && options.length > 0) {
+      sel.value = options[options.length - 1];
     }
   }
 
@@ -1757,20 +1772,18 @@
     const maxShares = parseFloat(r.max_available_shares || r.share_units || 1.0);
     const selShare = document.getElementById('editRecipientShareCountSelect');
     selShare.innerHTML = '';
-    const maxInt = Math.max(1, Math.floor(maxShares));
-    for (let i = 1; i <= maxInt; i++) {
+    const shareOpts = buildShareOptions(maxShares);
+    shareOpts.forEach(val => {
       const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `${i} chit${i > 1 ? 's' : ''} (${i}.0x share)`;
-      if (i === Math.floor(r.share_units)) opt.selected = true;
+      opt.value = val;
+      opt.textContent = `${val} chit${val > 1 ? 's' : ''} (${val}x share)`;
+      if (val === r.share_units || (val === shareOpts[shareOpts.length - 1] && r.share_units >= val)) {
+        opt.selected = true;
+      }
       selShare.appendChild(opt);
-    }
-    if (maxShares % 1 !== 0) {
-      const opt = document.createElement('option');
-      opt.value = maxShares;
-      opt.textContent = `${maxShares} chits (${maxShares}x share)`;
-      if (r.share_units === maxShares) opt.selected = true;
-      selShare.appendChild(opt);
+    });
+    if (!selShare.value && shareOpts.length > 0) {
+      selShare.value = shareOpts[0];
     }
 
     // Payout Date: Strictly this recipient's own payout date
