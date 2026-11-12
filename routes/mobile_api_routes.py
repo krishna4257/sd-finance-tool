@@ -83,6 +83,8 @@ csrf = _CSRFExemptHelper()
 # ----------------------------------------------------
 @csrf.exempt
 @mobile_bp.route("/api/mobile/ping", methods=["GET"])
+@mobile_bp.route("/ping", methods=["GET"])
+@mobile_bp.route("/api/mobile/api/mobile/ping", methods=["GET"])
 def mobile_ping():
     return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}), 200
 
