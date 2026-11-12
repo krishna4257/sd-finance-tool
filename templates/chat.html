@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+
+<div class="chat-portal-wrapper">
+  <!-- Top Bar -->
+  <div class="chat-portal-header">
+    <div class="chat-header-title">
+      <i class="fas fa-shield-alt chat-security-icon"></i>
+      <div>
+        <h2>Internal Staff Messaging</h2>
+        <p class="chat-subtitle">Real-Time WebSocket • WhatsApp Ticks • Offline Outbox Sync</p>
+      </div>
+    </div>
+    <div class="chat-header-actions">
+      <span class="chat-conn-pill" id="centrifugo-status-pill">
+        <span class="pulse-dot"></span> Connecting...
+      </span>
+      {% if user.role in ['admin', 'mgmt'] %}
+      <button class="btn-broadcast" onclick="openBroadcastModal()">
+        <i class="fas fa-bullhorn"></i> New Broadcast
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Main Chat Dashboard (Split Screen) -->
+  <div class="chat-main-container">
+    <!-- 1. Left Sidebar: Channels & Staff -->
+    <div class="chat-sidebar">
+      <div class="chat-search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="channel-search-input" placeholder="Search staff or channel..." oninput="filterChannels()">
+      </div>
+
+      <div class="chat-channels-list" id="chat-channels-list">
+        <div class="chat-loading-placeholder">
+          <i class="fas fa-circle-notch fa-spin"></i> Loading channels...
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Right Pane: Active Conversation -->
+    <div class="chat-viewport" id="chat-viewport">
+      <!-- Empty State -->
+      <div class="chat-empty-view" id="chat-empty-view">
+        <div class="empty-icon-wrap">
+          <i class="fas fa-comments"></i>
+        </div>
+        <h3>Select a conversation</h3>
+        <p>Choose an employee or the broadcast channel from the left to start messaging in English or తెలుగు.</p>
+      </div>
+
+      <!-- Active Conversation Screen -->
+      <div class="chat-conversation-wrap" id="chat-conversation-wrap" style="display: none;">
+        <!-- Conversation Header -->
+        <div class="conversation-header">
+          <div class="convo-user-info">
+            <div class="convo-avatar" id="convo-avatar">
+              <i class="fas fa-user"></i>
+            </div>
+            <div>
+              <h4 id="convo-title">Field Agent</h4>
+              <span class="convo-status" id="convo-status">Encrypted Direct Channel</span>
+            </div>
+          </div>
+          <div class="convo-header-tools">
+            <button class="btn-tool" onclick="refreshCurrentChannel()" title="Refresh messages">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages Scroll Area -->
+        <div class="conversation-messages" id="conversation-messages">
+          <!-- Messages will be injected here dynamically -->
+        </div>
+
+        <!-- Attachment Preview Bar (hidden by default) -->
+        <div class="chat-attachment-preview" id="chat-attachment-preview" style="display: none;">
+          <div class="preview-content">
+            <span id="preview-filename">image.jpg</span>
+            <button class="btn-cancel-attach" onclick="clearSelectedAttachment()">×</button>
+          </div>
+        </div>
+
+        <!-- Bottom Input Bar -->
+        <div class="conversation-input-bar">
+          <div class="input-actions-left">
+            <!-- Hidden file inputs -->
+            <input type="file" id="chat-photo-input" accept="image/*" style="display: none;" onchange="handlePhotoSelect(event)">
+            
+            <button class="btn-attach" onclick="document.getElementById('chat-photo-input').click()" title="Send Photo">
+              <i class="fas fa-camera"></i>
+            </button>
+            <button class="btn-attach" onclick="shareWebLocation()" title="Share Current Location">
+              <i class="fas fa-map-marker-alt"></i>
+            </button>
+            <button class="btn-attach btn-mic" id="btn-voice-record" onclick="toggleVoiceRecording()" title="Record Voice Note">
+              <i class="fas fa-microphone"></i>
+            </button>
+          </div>
+
+          <div class="input-field-wrap">
+            <textarea 
+              id="chat-text-input" 
+              class="chat-textarea" 
+              rows="1" 
+              placeholder="Type message in English or తెలుగు... (Press Enter to send)"
+              onkeydown="handleInputKey(event)"></textarea>
+          </div>
+
+          <button class="btn-send-message" id="btn-send-message" onclick="sendTextMessage()">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New Broadcast Announcement -->
+<div class="modal fade" id="broadcastModal" tabindex="-1" style="display: none;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content chat-modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-bullhorn text-warning"></i> Company Announcement</h5>
+        <button type="button" class="btn-close" onclick="closeBroadcastModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">This announcement will be broadcast in real-time to all field staff mobile devices and web terminals.</p>
+        <textarea id="broadcast-message-text" class="form-control broadcast-textarea" rows="4" placeholder="Enter announcement in English or తెలుగు..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBroadcastModal()">Cancel</button>
+        <button type="button" class="btn btn-warning" onclick="submitBroadcastAnnouncement()">Broadcast Now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}

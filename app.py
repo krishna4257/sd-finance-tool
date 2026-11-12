@@ -488,6 +488,15 @@ app.register_blueprint(feed_bp)
 from routes.payment_routes import payment_bp, format_waiting_duration, LEDGER_OCR_PROMPT
 app.register_blueprint(payment_bp)
 
+# Chat & Real-time Messaging Blueprint Registration
+from routes.chat_routes import chat_bp
+csrf.exempt(chat_bp)
+app.register_blueprint(chat_bp)
+
+@app.route("/chat")
+def chat_shortcut():
+    return redirect("/api/v1/chat")
+
 
 def ensure_customer_docs_feed_table():
     conn = get_pg_connection()

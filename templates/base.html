@@ -185,6 +185,7 @@
     {% if session.get('level') in ['admin', 'superadmin'] or session.get('role') in ['admin', 'superadmin'] %}
     <a href="/mobile_app" class="nav-link {% if request.endpoint == 'mobile_app_page' %}active{% endif %}"><i class="fas fa-mobile-screen-button"></i> Mobile App</a>
     {% endif %}
+    <a href="/chat" class="nav-link {% if 'chat' in request.path %}active{% endif %}"><i class="fas fa-comments"></i> Messages</a>
     {% endblock %}
 
   </aside>

@@ -3864,7 +3864,7 @@
                                                 <i class="fas fa-calendar-alt text-info"></i> Disbursement / Start Date
                                             </div>
                                             <div class="closure-info-val">
-                                                {{ row.start_date_display or (row.start_date or '')|ddmmyyyy }}
+                                                {{ row.start_date_display or (row.start_date or '')|format_date_iso }}
                                             </div>
                                         </div>
                                         <div class="closure-info-chip">
@@ -3872,7 +3872,7 @@
                                                 <i class="fas fa-calendar-check text-info"></i> Maturity / End Date
                                             </div>
                                             <div class="closure-info-val">
-                                                {{ row.end_date_display or (row.end_date or '')|ddmmyyyy }}
+                                                {{ row.end_date_display or (row.end_date or '')|format_date_iso }}
                                             </div>
                                         </div>
                                     </div>

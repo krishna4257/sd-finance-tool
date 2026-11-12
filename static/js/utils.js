@@ -162,37 +162,30 @@ window.formatWithRupeeAndCommas = formatWithRupeeAndCommas;
 window.applyGlobalMoneyFormatting = applyGlobalMoneyFormatting;
 
 /**
- * Apply Indian date formatting (dd-mm-yyyy) to leaf elements annotated with
- * [data-format-date], .date-display-auto, or plain table cells matching
+ * Apply Indian date formatting (dd-mm-yyyy) to elements annotated with
+ * data-format-date, .date-cell, .date-display, or plain text nodes/cells matching
  * ISO date pattern (yyyy-mm-dd).
- * Never mutates container elements, elements with children, or interactive inputs.
- * Note: [data-date] is intentionally excluded because it is an HTML5 data-storage
- * attribute (e.g. used on table rows, widgets, and filters) and must never be overwritten.
+ * Skips interactive inputs (e.g. <input type="date">) and container elements
+ * with children (like <tr>, <div>, etc.) to preserve DOM structure and native pickers.
  */
 function applyGlobalDateFormatting(root = document) {
   if (!root || !root.querySelectorAll) return;
 
-  const containerTags = new Set([
-    'TR', 'TABLE', 'TBODY', 'THEAD', 'TFOOT',
-    'DIV', 'FORM', 'UL', 'OL', 'LI', 'BODY', 'MAIN', 'SECTION', 'ARTICLE',
-    'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'LABEL'
-  ]);
-
-  // 1. Explicit leaf elements marked for date formatting via [data-format-date]
-  const explicitElements = root.querySelectorAll('[data-format-date]');
-  explicitElements.forEach(el => {
-    if (containerTags.has(el.tagName)) return;
+  // 1. Explicit data-format-date / data-date-display elements (leaf display nodes only)
+  const dateElements = root.querySelectorAll('[data-format-date], [data-date-display]');
+  dateElements.forEach(el => {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
     if (el.children && el.children.length > 0) return;
-    const raw = el.getAttribute('data-format-date') || el.textContent.trim();
+    const raw = el.getAttribute('data-format-date') || el.getAttribute('data-date-display') || el.textContent.trim();
     if (raw) {
       el.textContent = formatDate(raw);
     }
   });
 
-  // 2. Leaf elements with designated date classes (.date-auto, .date-display-auto)
-  const dateClasses = root.querySelectorAll('.date-auto, .date-display-auto');
+  // 2. Elements with date classes (leaf display nodes only)
+  const dateClasses = root.querySelectorAll('.date-cell, .date-display');
   dateClasses.forEach(el => {
-    if (containerTags.has(el.tagName)) return;
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
     if (el.children && el.children.length > 0) return;
     const txt = el.textContent.trim();
     if (txt) {
