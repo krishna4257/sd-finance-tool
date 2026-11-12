@@ -141,6 +141,7 @@ function applyGlobalMoneyFormatting() {
   const moneyFields = document.querySelectorAll('[data-money]');
   moneyFields.forEach(el => {
     if (el.dataset.editing === '1') return;
+    if (el.children && el.children.length > 0) return;
     let val = el.textContent.trim().replace(/[^\d.-]/g, '');
     if (val !== '') {
       const numeric = parseFloat(val);
@@ -161,28 +162,38 @@ window.formatWithRupeeAndCommas = formatWithRupeeAndCommas;
 window.applyGlobalMoneyFormatting = applyGlobalMoneyFormatting;
 
 /**
- * Apply Indian date formatting (dd-mm-yyyy) to elements annotated with
- * data-date, .date-cell, .date-display, or plain text nodes/cells matching
+ * Apply Indian date formatting (dd-mm-yyyy) to leaf elements annotated with
+ * [data-format-date], .date-display-auto, or plain table cells matching
  * ISO date pattern (yyyy-mm-dd).
- * Skips interactive inputs (e.g. <input type="date">) to preserve native UI pickers.
+ * Never mutates container elements, elements with children, or interactive inputs.
+ * Note: [data-date] is intentionally excluded because it is an HTML5 data-storage
+ * attribute (e.g. used on table rows, widgets, and filters) and must never be overwritten.
  */
 function applyGlobalDateFormatting(root = document) {
   if (!root || !root.querySelectorAll) return;
 
-  // 1. Explicit data-date elements
-  const dateElements = root.querySelectorAll('[data-date]');
-  dateElements.forEach(el => {
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
-    const raw = el.getAttribute('data-date');
+  const containerTags = new Set([
+    'TR', 'TABLE', 'TBODY', 'THEAD', 'TFOOT',
+    'DIV', 'FORM', 'UL', 'OL', 'LI', 'BODY', 'MAIN', 'SECTION', 'ARTICLE',
+    'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'LABEL'
+  ]);
+
+  // 1. Explicit leaf elements marked for date formatting via [data-format-date]
+  const explicitElements = root.querySelectorAll('[data-format-date]');
+  explicitElements.forEach(el => {
+    if (containerTags.has(el.tagName)) return;
+    if (el.children && el.children.length > 0) return;
+    const raw = el.getAttribute('data-format-date') || el.textContent.trim();
     if (raw) {
       el.textContent = formatDate(raw);
     }
   });
 
-  // 2. Elements with date classes
-  const dateClasses = root.querySelectorAll('.date-cell, .date-display, [data-format-date]');
+  // 2. Leaf elements with designated date classes (.date-auto, .date-display-auto)
+  const dateClasses = root.querySelectorAll('.date-auto, .date-display-auto');
   dateClasses.forEach(el => {
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+    if (containerTags.has(el.tagName)) return;
+    if (el.children && el.children.length > 0) return;
     const txt = el.textContent.trim();
     if (txt) {
       el.textContent = formatDate(txt);
@@ -191,9 +202,9 @@ function applyGlobalDateFormatting(root = document) {
 
   // 3. Automatically format table cells containing purely an ISO date YYYY-MM-DD
   const isoDateRegex = /^\s*(\d{4})[-/](\d{2})[-/](\d{2})\s*$/;
-  const cells = root.querySelectorAll('td, .date-auto');
+  const cells = root.querySelectorAll('td, th');
   cells.forEach(el => {
-    if (el.children.length === 0) {
+    if (el.children && el.children.length === 0) {
       const match = el.textContent.match(isoDateRegex);
       if (match) {
         el.textContent = `${match[3]}-${match[2]}-${match[1]}`;
