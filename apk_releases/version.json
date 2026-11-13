@@ -10,11 +10,16 @@
   "published_by": "jayakrishna",
   "target_scope": "targeted",
   "target_employee_ids": [
-    6,
-    5
+    2,
+    3,
+    4,
+    5,
+    6
   ],
   "target_employee_names": [
+    "KARRI JAYA KRISHNA REDDY (@jayakrishna)",
     "KARRI CHINNA REDDY (@chinna)",
-    "KARRI JAYA KRISHNA REDDY (@jayakrishna)"
+    "KOVVURI DURGA KRISHNA REDDY (@durga)",
+    "KOVVURI RAMAKOTI REDDY (@koti)"
   ]
 }
