@@ -212,6 +212,7 @@ instructions/
 .env
 account.json
 *.json
+!scripts/centrifugo.json
 
 procedures.txt
 data_processing
