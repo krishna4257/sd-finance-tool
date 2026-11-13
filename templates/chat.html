@@ -256,6 +256,9 @@
 </div>
 </div>
 
+<script>
+  window.CHAT_CURRENT_USER_ID = {{ user.id }};
+</script>
 <script src="{{ url_for('static', filename='js/centrifuge.min.js') }}?v=5.2.2"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=3.2.0"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=3.3.0"></script>
 {% endblock %}

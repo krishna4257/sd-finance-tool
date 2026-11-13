@@ -30,7 +30,7 @@
   let centrifugeClient = null;
   let activeSubscription = null;
   let userSubscription = null;
-  let currentUserId = null;
+  let currentUserId = window.CHAT_CURRENT_USER_ID || null;
 
   // Audio recording state
   let mediaRecorder = null;
@@ -739,12 +739,45 @@
   // 6. REAL-TIME EVENT HANDLERS (WebSocket Push)
   // ---------------------------------------------------------------------------
   function handleIncomingMessage(payload) {
+    const isMe = Boolean(
+      (payload.sender_id && currentUserId && Number(payload.sender_id) === Number(currentUserId)) ||
+      (payload.sender_name && payload.sender_name.toLowerCase() === 'me')
+    );
+
+    // 1. Check if the bubble already exists in the DOM (e.g. optimistic bubble on send)
+    const existing = (payload.id && document.getElementById('msg-' + payload.id)) ||
+                     (payload.client_uuid && document.getElementById('msg-' + payload.client_uuid));
+
+    if (existing) {
+      // Upgrade element id to server id if needed
+      if (payload.id && existing.id !== 'msg-' + payload.id) {
+        existing.id = 'msg-' + payload.id;
+        existing.setAttribute('data-msg-id', payload.id);
+      }
+      // Update status ticks if sent by me
+      if (isMe) {
+        const footer = existing.querySelector('.bubble-footer');
+        if (footer && payload.status) {
+          const span = footer.querySelector('span');
+          const timeText = span ? span.outerHTML : `<span>${formatTime(payload.created_at)}</span>`;
+          footer.innerHTML = `${timeText} ${buildTickHtml(payload.status)}`;
+        }
+      }
+      // Update sidebar snippet
+      const snippetEl = document.querySelector(`#channel-item-${payload.channel_id} .channel-snippet`);
+      if (snippetEl) {
+        snippetEl.innerText = payload.message_type === 'text' ? payload.body : '📎 Attachment: ' + payload.message_type;
+      }
+      return; // Do NOT duplicate on screen!
+    }
+
+    // 2. If it does not exist yet (e.g. received from recipient OR sent from another device/tab)
     if (activeChannel && activeChannel.channel_id === payload.channel_id) {
       appendMessage({
         id: payload.id,
         client_uuid: payload.client_uuid,
-        sender_name: payload.sender_name,
-        is_me: false,
+        sender_name: isMe ? 'Me' : payload.sender_name,
+        is_me: isMe,
         message_type: payload.message_type,
         body: payload.body,
         media_url: payload.media_url,
@@ -753,24 +786,29 @@
         status: payload.status,
         created_at: payload.created_at
       });
-      // Mark as read immediately since the recipient is actively viewing this channel
-      ackMessage(payload.id, payload.channel_id, 'read');
+
+      // ONLY ack read if this was sent by the OTHER person
+      if (!isMe) {
+        ackMessage(payload.id, payload.channel_id, 'read');
+      }
     } else {
-      // Increment unread badge in sidebar in real time (<10ms)
-      const itemEl = document.getElementById('channel-item-' + payload.channel_id);
-      if (itemEl) {
-        let badgeEl = itemEl.querySelector('.channel-badge');
-        if (badgeEl) {
-          const cur = parseInt(badgeEl.innerText, 10) || 0;
-          badgeEl.innerText = cur + 1;
-        } else {
-          const bottomRow = itemEl.querySelector('.channel-bottom-row');
-          if (bottomRow) {
-            bottomRow.insertAdjacentHTML('beforeend', '<span class="channel-badge">1</span>');
+      // If message is from someone else and channel is inactive, increment unread badge
+      if (!isMe) {
+        const itemEl = document.getElementById('channel-item-' + payload.channel_id);
+        if (itemEl) {
+          let badgeEl = itemEl.querySelector('.channel-badge');
+          if (badgeEl) {
+            const cur = parseInt(badgeEl.innerText, 10) || 0;
+            badgeEl.innerText = cur + 1;
+          } else {
+            const bottomRow = itemEl.querySelector('.channel-bottom-row');
+            if (bottomRow) {
+              bottomRow.insertAdjacentHTML('beforeend', '<span class="channel-badge">1</span>');
+            }
           }
         }
+        if (window.updateChatBadge) window.updateChatBadge();
       }
-      if (window.updateChatBadge) window.updateChatBadge();
     }
 
     // Update left sidebar snippet
@@ -839,6 +877,25 @@
 
   function appendMessage(msg) {
     const container = document.getElementById('conversation-messages');
+    if (!container) return;
+
+    // Check if element is already present in DOM
+    const existing = (msg.id && document.getElementById('msg-' + msg.id)) ||
+                     (msg.client_uuid && document.getElementById('msg-' + msg.client_uuid));
+    if (existing) {
+      if (msg.id && existing.id !== 'msg-' + msg.id) {
+        existing.id = 'msg-' + msg.id;
+        existing.setAttribute('data-msg-id', msg.id);
+      }
+      return;
+    }
+
+    // Remove empty placeholder notice if present
+    const emptyNotice = container.querySelector('[style*="No messages"]');
+    if (emptyNotice) {
+      emptyNotice.remove();
+    }
+
     container.insertAdjacentHTML('beforeend', buildMessageHtml(msg));
     scrollToBottom();
   }
