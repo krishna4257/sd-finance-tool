@@ -1,18 +1,20 @@
 {
-  "latest_version": "1.1.9",
-  "latest_version_code": 22,
+  "latest_version": "1.2.0",
+  "latest_version_code": 23,
   "min_supported_version_code": 5,
-  "force_update": false,
-  "sha256": "52effe4931c90e6287ee9aecd911d655a57032955c0b064200a889622c57037a",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.1.9",
-  "release_notes": "Internal staff messaging & real-time notification system with WhatsApp delivery receipts, audio notes, and attachments.",
-  "released_at": "2026-11-12T18:48:00+05:30",
+  "force_update": true,
+  "sha256": "60b206e229b8e0c7564368055e1203c7c2588f60cca767907cb4f300b52a139b",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.2.0",
+  "release_notes": "Internal staff messaging, real-time push notifications, dashboard unread badges, and live WhatsApp ticks.",
+  "released_at": "2026-11-12T21:10:00+05:30",
   "published_by": "jayakrishna",
   "target_scope": "targeted",
   "target_employee_ids": [
-    6
+    6,
+    5
   ],
   "target_employee_names": [
-    "KARRI CHINNA REDDY (@chinna)"
+    "KARRI CHINNA REDDY (@chinna)",
+    "KARRI JAYA KRISHNA REDDY (@jayakrishna)"
   ]
 }

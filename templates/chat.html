@@ -2,16 +2,17 @@
 
 {% block content %}
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=2.1.0">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=3.0.0">
 
 <div class="chat-portal-wrapper">
   <!-- Top Bar -->
   <div class="chat-portal-header">
     <div class="chat-header-title">
-      <i class="fas fa-shield-alt chat-security-icon"></i>
+      <div class="chat-brand-badge">
+        <i class="fas fa-comments"></i>
+      </div>
       <div>
         <h2>Internal Staff Messaging</h2>
-        <p class="chat-subtitle">Real-Time WebSocket • WhatsApp Ticks • Offline Outbox Sync</p>
       </div>
     </div>
     <div class="chat-header-actions">
@@ -59,16 +60,17 @@
         <div class="conversation-header">
           <div class="convo-user-info">
             <div class="convo-avatar" id="convo-avatar">
-              <i class="fas fa-user"></i>
+              <span id="convo-avatar-initial">U</span>
             </div>
             <div>
               <h4 id="convo-title">Field Agent</h4>
-              <span class="convo-status" id="convo-status">Encrypted Direct Channel</span>
+              <span class="convo-status" id="convo-status">End-to-End Encrypted Direct Channel</span>
             </div>
           </div>
           <div class="convo-header-tools">
-            <button class="btn-tool" onclick="refreshCurrentChannel()" title="Refresh messages">
-              <i class="fas fa-sync-alt"></i>
+            <button type="button" class="btn-chat-sync" id="btn-convo-refresh" onclick="refreshCurrentChannel(this)" title="Sync latest messages">
+              <i class="fas fa-arrows-rotate"></i>
+              <span>Sync</span>
             </button>
           </div>
         </div>
@@ -194,5 +196,5 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/centrifuge.min.js') }}?v=5.2.2"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=2.3.0"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=3.0.0"></script>
 {% endblock %}

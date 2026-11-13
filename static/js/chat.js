@@ -272,8 +272,54 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 3. CHANNELS RENDERING & SELECTION
+  // 3. CHANNELS RENDERING & SELECTION (Pastel Avatars & WhatsApp UI)
   // ---------------------------------------------------------------------------
+  const PASTEL_PALETTES = [
+    { bg: 'linear-gradient(135deg, #f472b6, #db2777)', text: '#ffffff', shadow: 'rgba(219, 39, 119, 0.35)' }, // Rose Pink
+    { bg: 'linear-gradient(135deg, #818cf8, #4f46e5)', text: '#ffffff', shadow: 'rgba(79, 70, 229, 0.35)' },  // Royal Indigo
+    { bg: 'linear-gradient(135deg, #38bdf8, #0284c7)', text: '#ffffff', shadow: 'rgba(2, 132, 199, 0.35)' },  // Sky Azure
+    { bg: 'linear-gradient(135deg, #34d399, #059669)', text: '#ffffff', shadow: 'rgba(5, 150, 105, 0.35)' },  // Emerald Mint
+    { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '#ffffff', shadow: 'rgba(217, 119, 6, 0.35)' },  // Warm Amber
+    { bg: 'linear-gradient(135deg, #a78bfa, #7c3aed)', text: '#ffffff', shadow: 'rgba(124, 58, 237, 0.35)' }, // Radiant Violet
+    { bg: 'linear-gradient(135deg, #fb923c, #ea580c)', text: '#ffffff', shadow: 'rgba(234, 88, 12, 0.35)' },  // Sunset Coral
+    { bg: 'linear-gradient(135deg, #2dd4bf, #0d9488)', text: '#ffffff', shadow: 'rgba(13, 148, 136, 0.35)' }, // Seafoam Teal
+    { bg: 'linear-gradient(135deg, #f87171, #dc2626)', text: '#ffffff', shadow: 'rgba(220, 38, 38, 0.35)' },  // Crimson Ruby
+    { bg: 'linear-gradient(135deg, #4ade80, #16a34a)', text: '#ffffff', shadow: 'rgba(22, 163, 74, 0.35)' },  // Fresh Lime
+    { bg: 'linear-gradient(135deg, #e879f9, #c026d3)', text: '#ffffff', shadow: 'rgba(192, 38, 211, 0.35)' }, // Pastel Orchid
+    { bg: 'linear-gradient(135deg, #60a5fa, #2563eb)', text: '#ffffff', shadow: 'rgba(37, 99, 235, 0.35)' },  // Sapphire Blue
+  ];
+
+  function getContactAvatarInfo(name, isBroadcast) {
+    if (isBroadcast) {
+      return {
+        isIcon: true,
+        html: '<i class="fas fa-bullhorn"></i>',
+        bg: 'linear-gradient(135deg, #f59e0b, #d97706)',
+        text: '#ffffff',
+        shadow: '0 4px 12px rgba(245, 158, 11, 0.35)'
+      };
+    }
+    const cleanName = (name || 'User').replace(/\[.*?\]/g, '').trim();
+    const firstLetter = (cleanName.charAt(0) || 'U').toUpperCase();
+
+    let hash = 0;
+    for (let i = 0; i < cleanName.length; i++) {
+      hash = (hash << 5) - hash + cleanName.charCodeAt(i);
+      hash |= 0;
+    }
+    const index = Math.abs(hash) % PASTEL_PALETTES.length;
+    const p = PASTEL_PALETTES[index];
+
+    return {
+      isIcon: false,
+      letter: firstLetter,
+      html: `<span>${firstLetter}</span>`,
+      bg: p.bg,
+      text: p.text,
+      shadow: `0 4px 12px ${p.shadow}`
+    };
+  }
+
   function renderChannels(list) {
     const container = document.getElementById('chat-channels-list');
     if (!container) return;
@@ -290,31 +336,18 @@
       const isAdmin = isDirect && !isSuperAdmin && role.includes('admin');
       const isMgmt = isDirect && (role.includes('mgmt') || role.includes('management'));
 
-      let avatarClass = 'staff';
-      let icon = 'fa-user';
       let rolePill = '';
-
-      if (!isDirect) {
-        avatarClass = 'broadcast';
-        icon = 'fa-bullhorn';
-      } else if (isSuperAdmin) {
-        avatarClass = 'superadmin';
-        icon = 'fa-crown';
+      if (isSuperAdmin) {
         rolePill = '<span class="role-pill superadmin">SUPER ADMIN</span>';
       } else if (isAdmin) {
-        avatarClass = 'admin';
-        icon = 'fa-shield-halved';
         rolePill = '<span class="role-pill admin">ADMIN</span>';
       } else if (isMgmt) {
-        avatarClass = 'mgmt';
-        icon = 'fa-user-tie';
         rolePill = '<span class="role-pill mgmt">MGMT</span>';
-      } else {
-        avatarClass = 'staff';
-        icon = 'fa-user';
+      } else if (isDirect) {
         rolePill = '<span class="role-pill staff">STAFF</span>';
       }
 
+      const avatarInfo = getContactAvatarInfo(ch.title, !isDirect);
       const activeClass = (activeChannel && activeChannel.channel_id === ch.channel_id) ? 'active' : '';
 
       const lastSnippet = ch.last_message 
@@ -331,8 +364,8 @@
 
       return `
         <div class="chat-channel-item ${activeClass}" id="channel-item-${ch.channel_id}" onclick="window.selectChannelById('${ch.channel_id}')">
-          <div class="channel-avatar ${avatarClass}">
-            <i class="fas ${icon}"></i>
+          <div class="channel-avatar" style="background: ${avatarInfo.bg}; box-shadow: ${avatarInfo.shadow}; color: ${avatarInfo.text};">
+            ${avatarInfo.html}
           </div>
           <div class="channel-meta">
             <div class="channel-top-row">
@@ -379,6 +412,17 @@
     document.getElementById('convo-status').innerText = ch.channel_type === 'broadcast' 
       ? 'Official Company Broadcast Channel' 
       : 'End-to-End Encrypted Direct Channel';
+
+    // Set Conversation Avatar to matching pastel initial
+    const isBroadcast = ch.channel_type === 'broadcast';
+    const avatarInfo = getContactAvatarInfo(ch.title, isBroadcast);
+    const convoAvatar = document.getElementById('convo-avatar');
+    if (convoAvatar) {
+      convoAvatar.style.background = avatarInfo.bg;
+      convoAvatar.style.boxShadow = avatarInfo.shadow;
+      convoAvatar.style.color = avatarInfo.text;
+      convoAvatar.innerHTML = avatarInfo.html;
+    }
 
     // Subscribe WebSocket
     subscribeToChannel(ch.channel_id);
@@ -440,8 +484,8 @@
       `;
     } else if (m.message_type === 'audio') {
       contentHtml = `
-        <div style="display:flex; align-items:center; gap:8px;">
-          <audio controls src="${escapeHtml(m.media_url)}" style="height:32px; max-width:240px;"></audio>
+        <div class="chat-audio-card">
+          <audio controls src="${escapeHtml(m.media_url)}" style="height:34px; max-width:250px; outline:none;"></audio>
         </div>
       `;
     } else {
@@ -1207,9 +1251,18 @@
     renderChannels(filtered);
   };
 
-  window.refreshCurrentChannel = function () {
-    if (activeChannel) loadHistory(activeChannel.channel_id);
-    syncChannels();
+  window.refreshCurrentChannel = async function (btn) {
+    const buttonEl = btn || document.getElementById('btn-convo-refresh');
+    if (buttonEl) {
+      buttonEl.classList.add('spinning');
+      setTimeout(function () {
+        buttonEl.classList.remove('spinning');
+      }, 700);
+    }
+    if (activeChannel) {
+      await loadHistory(activeChannel.channel_id);
+    }
+    await syncChannels();
   };
 
 })();
