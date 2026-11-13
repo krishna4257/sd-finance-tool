@@ -86,19 +86,33 @@
           </div>
         </div>
 
+        <!-- Voice Recording Live Indicator -->
+        <div id="voice-recording-banner" style="display: none; align-items: center; justify-content: space-between; padding: 6px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; margin: 0 16px 8px 16px; color: #f87171; font-size: 13px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; display: inline-block; animation: pulse 1s infinite alternate;"></span>
+            <span>Recording Voice Note: <strong id="voice-record-timer" style="color: #fff; font-family: monospace;">00:00</strong></span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" onclick="cancelVoiceRecording()" class="btn btn-sm btn-outline-light" style="font-size: 11px; padding: 2px 8px;">Cancel</button>
+            <button type="button" onclick="stopAndSendVoiceRecording()" class="btn btn-sm btn-danger" style="font-size: 11px; padding: 2px 10px; font-weight: 600;">
+              <i class="fas fa-paper-plane"></i> Send Note
+            </button>
+          </div>
+        </div>
+
         <!-- Bottom Input Bar -->
         <div class="conversation-input-bar">
           <div class="input-actions-left">
             <!-- Hidden file inputs -->
-            <input type="file" id="chat-photo-input" accept="image/*" style="display: none;" onchange="handlePhotoSelect(event)">
+            <input type="file" id="chat-photo-input" accept="image/*,.heic,.heif" style="display: none;" onchange="handlePhotoSelect(event)">
             
-            <button class="btn-attach" onclick="document.getElementById('chat-photo-input').click()" title="Send Photo">
+            <button type="button" class="btn-attach" onclick="openCameraModal()" title="Take / Send Photo">
               <i class="fas fa-camera"></i>
             </button>
-            <button class="btn-attach" onclick="shareWebLocation()" title="Share Current Location">
+            <button type="button" class="btn-attach" onclick="shareWebLocation()" title="Share Current Location">
               <i class="fas fa-map-marker-alt"></i>
             </button>
-            <button class="btn-attach btn-mic" id="btn-voice-record" onclick="toggleVoiceRecording()" title="Record Voice Note">
+            <button type="button" class="btn-attach btn-mic" id="btn-voice-record" onclick="toggleVoiceRecording()" title="Record Voice Note">
               <i class="fas fa-microphone"></i>
             </button>
           </div>
@@ -141,6 +155,44 @@
   </div>
 </div>
 
+<!-- Modal: Camera & Photo Capture -->
+<div class="modal fade" id="cameraModal" tabindex="-1" style="display: none;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content chat-modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-camera text-info"></i> Camera & Photo</h5>
+        <button type="button" class="btn-close" onclick="closeCameraModal()">×</button>
+      </div>
+      <div class="modal-body text-center" style="padding: 16px;">
+        <!-- Live Video Viewfinder -->
+        <div id="camera-video-wrap" style="position: relative; border-radius: 12px; overflow: hidden; background: #0b0f19; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+          <video id="camera-video-preview" autoplay playsinline muted style="width: 100%; max-height: 300px; object-fit: cover; display: block;"></video>
+          <img id="camera-photo-preview" style="width: 100%; max-height: 300px; object-fit: contain; display: none; border-radius: 12px;" />
+          <canvas id="camera-canvas" style="display: none;"></canvas>
+        </div>
+        <div id="camera-error-msg" style="display: none; color: #ef4444; font-size: 13px; margin-top: 10px;"></div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="triggerFileInput()">
+          <i class="fas fa-folder-open"></i> Upload File
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeCameraModal()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-camera-capture" onclick="captureCameraSnapshot()">
+            <i class="fas fa-camera"></i> Snap Photo
+          </button>
+          <button type="button" class="btn btn-warning btn-sm" id="btn-camera-retake" onclick="retakeCameraSnapshot()" style="display: none;">
+            <i class="fas fa-redo"></i> Retake
+          </button>
+          <button type="button" class="btn btn-success btn-sm" id="btn-camera-send" onclick="sendCapturedPhoto()" style="display: none;">
+            <i class="fas fa-paper-plane"></i> Send
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/centrifuge.min.js') }}?v=5.2.2"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=2.2.0"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=2.3.0"></script>
 {% endblock %}

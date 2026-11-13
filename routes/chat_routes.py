@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/v1/chat")
 
 # Allowed media extensions for chat
-ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-ALLOWED_AUDIO_EXTS = {".m4a", ".aac", ".opus", ".mp3", ".ogg"}
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"}
+ALLOWED_AUDIO_EXTS = {".m4a", ".aac", ".opus", ".mp3", ".ogg", ".webm", ".wav", ".mp4"}
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTS | ALLOWED_AUDIO_EXTS
 
 DEFAULT_CENTRIFUGO_URL = "http://127.0.0.1:8001/api"
@@ -824,13 +824,18 @@ def upload_chat_media():
     unique_filename = f"chat_{uuid.uuid4().hex}{ext}"
     dest_path = os.path.join(target_dir, unique_filename)
     file.save(dest_path)
+    try:
+        os.chmod(dest_path, 0o644)
+    except Exception:
+        pass
 
     media_url = f"/chat-media/{unique_filename}"
     return jsonify({
         "success": True,
         "media_url": media_url,
         "filename": unique_filename,
-        "is_audio": ext in ALLOWED_AUDIO_EXTS
+        "is_audio": ext in ALLOWED_AUDIO_EXTS,
+        "is_image": ext in ALLOWED_IMAGE_EXTS
     })
 
 

@@ -757,9 +757,163 @@
   // ---------------------------------------------------------------------------
   // 7. PHOTO & LOCATION ACTIONS
   // ---------------------------------------------------------------------------
+  // Camera state
+  let cameraStream = null;
+  let capturedBlob = null;
+
+  // Voice recording state
+  let audioStream = null;
+  let recordingTimerInterval = null;
+  let recordingSeconds = 0;
+
+  // ---------------------------------------------------------------------------
+  // 7. PHOTO & CAMERA ACTIONS
+  // ---------------------------------------------------------------------------
+  window.openCameraModal = async function () {
+    if (!activeChannel) {
+      alert('Please select a conversation first.');
+      return;
+    }
+    const modal = document.getElementById('cameraModal');
+    const video = document.getElementById('camera-video-preview');
+    const imgPreview = document.getElementById('camera-photo-preview');
+    const btnCapture = document.getElementById('btn-camera-capture');
+    const btnRetake = document.getElementById('btn-camera-retake');
+    const btnSend = document.getElementById('btn-camera-send');
+    const errMsg = document.getElementById('camera-error-msg');
+
+    if (errMsg) errMsg.style.display = 'none';
+    if (imgPreview) imgPreview.style.display = 'none';
+    if (video) video.style.display = 'block';
+    if (btnCapture) btnCapture.style.display = 'inline-block';
+    if (btnRetake) btnRetake.style.display = 'none';
+    if (btnSend) btnSend.style.display = 'none';
+    capturedBlob = null;
+
+    if (modal) modal.style.display = 'block';
+
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      if (video) {
+        video.srcObject = cameraStream;
+        await video.play();
+      }
+    } catch (err) {
+      console.warn('[Chat] Camera access failed, falling back to file picker:', err);
+      closeCameraModal();
+      triggerFileInput();
+    }
+  };
+
+  window.closeCameraModal = function () {
+    const modal = document.getElementById('cameraModal');
+    if (modal) modal.style.display = 'none';
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    capturedBlob = null;
+  };
+
+  window.triggerFileInput = function () {
+    closeCameraModal();
+    const input = document.getElementById('chat-photo-input');
+    if (input) input.click();
+  };
+
+  window.captureCameraSnapshot = function () {
+    const video = document.getElementById('camera-video-preview');
+    const canvas = document.getElementById('camera-canvas');
+    const imgPreview = document.getElementById('camera-photo-preview');
+    const btnCapture = document.getElementById('btn-camera-capture');
+    const btnRetake = document.getElementById('btn-camera-retake');
+    const btnSend = document.getElementById('btn-camera-send');
+
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(function (blob) {
+      capturedBlob = blob;
+      imgPreview.src = URL.createObjectURL(blob);
+      imgPreview.style.display = 'block';
+      video.style.display = 'none';
+
+      btnCapture.style.display = 'none';
+      btnRetake.style.display = 'inline-block';
+      btnSend.style.display = 'inline-block';
+    }, 'image/jpeg', 0.88);
+  };
+
+  window.retakeCameraSnapshot = function () {
+    const video = document.getElementById('camera-video-preview');
+    const imgPreview = document.getElementById('camera-photo-preview');
+    const btnCapture = document.getElementById('btn-camera-capture');
+    const btnRetake = document.getElementById('btn-camera-retake');
+    const btnSend = document.getElementById('btn-camera-send');
+
+    if (imgPreview) imgPreview.style.display = 'none';
+    if (video) video.style.display = 'block';
+    if (btnCapture) btnCapture.style.display = 'inline-block';
+    if (btnRetake) btnRetake.style.display = 'none';
+    if (btnSend) btnSend.style.display = 'none';
+    capturedBlob = null;
+  };
+
+  window.sendCapturedPhoto = async function () {
+    if (!capturedBlob || !activeChannel) return;
+
+    const btnSend = document.getElementById('btn-camera-send');
+    btnSend.disabled = true;
+    btnSend.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    const file = new File([capturedBlob], 'camera_snapshot.jpg', { type: 'image/jpeg' });
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const uploadRes = await fetch('/api/v1/chat/upload-media', {
+        method: 'POST',
+        body: formData
+      }).then(r => r.json());
+
+      if (uploadRes && uploadRes.success) {
+        const clientUuid = generateUuid();
+        await fetch('/api/v1/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_uuid: clientUuid,
+            channel_id: activeChannel.channel_id,
+            type: 'image',
+            media_url: uploadRes.media_url,
+            body: '📷 Photo'
+          })
+        });
+        closeCameraModal();
+        loadHistory(activeChannel.channel_id);
+      } else {
+        alert('Photo upload failed: ' + (uploadRes.error || 'Server error'));
+      }
+    } catch (e) {
+      console.error('[Chat] Snapshot send error:', e);
+      alert('Photo sending error: ' + e.message);
+    } finally {
+      btnSend.disabled = false;
+      btnSend.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+    }
+  };
+
   window.handlePhotoSelect = async function (event) {
     const file = event.target.files[0];
     if (!file || !activeChannel) return;
+    event.target.value = ''; // Reset so the same file can be selected again
 
     const formData = new FormData();
     formData.append('file', file);
@@ -770,7 +924,7 @@
         body: formData
       }).then(r => r.json());
 
-      if (uploadRes.success) {
+      if (uploadRes && uploadRes.success) {
         const clientUuid = generateUuid();
         await fetch('/api/v1/chat/send', {
           method: 'POST',
@@ -784,9 +938,12 @@
           })
         });
         loadHistory(activeChannel.channel_id);
+      } else {
+        alert('Photo upload failed: ' + (uploadRes.error || 'Unsupported file format'));
       }
     } catch (e) {
       console.error('[Chat] Photo upload failed:', e);
+      alert('Photo upload error: ' + e.message);
     }
   };
 
@@ -817,62 +974,153 @@
   };
 
   // ---------------------------------------------------------------------------
-  // 8. VOICE RECORDING (HTML5 MediaRecorder)
+  // 8. VOICE RECORDING (Cross-Browser HTML5 MediaRecorder)
   // ---------------------------------------------------------------------------
   window.toggleVoiceRecording = async function () {
-    const btn = document.getElementById('btn-voice-record');
-
     if (!isRecording) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = function (e) {
-          if (e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = async function () {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          const audioFile = new File([audioBlob], 'voice_note.webm', { type: 'audio/webm' });
-
-          const formData = new FormData();
-          formData.append('file', audioFile);
-
-          const uploadRes = await fetch('/api/v1/chat/upload-media', {
-            method: 'POST',
-            body: formData
-          }).then(r => r.json());
-
-          if (uploadRes.success) {
-            const clientUuid = generateUuid();
-            await fetch('/api/v1/chat/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                client_uuid: clientUuid,
-                channel_id: activeChannel.channel_id,
-                type: 'audio',
-                media_url: uploadRes.media_url,
-                body: '🎙️ Voice Note'
-              })
-            });
-            loadHistory(activeChannel.channel_id);
-          }
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        btn.classList.add('recording');
-        btn.innerHTML = '<i class="fas fa-stop"></i>';
-      } catch (e) {
-        alert('Microphone access denied: ' + e);
-      }
+      startVoiceRecording();
     } else {
-      mediaRecorder.stop();
-      isRecording = false;
+      stopAndSendVoiceRecording();
+    }
+  };
+
+  async function startVoiceRecording() {
+    if (!activeChannel) {
+      alert('Please select a conversation first.');
+      return;
+    }
+    const btn = document.getElementById('btn-voice-record');
+    const banner = document.getElementById('voice-recording-banner');
+    const timerEl = document.getElementById('voice-record-timer');
+
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Determine best supported audio format
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!window.MediaRecorder || !MediaRecorder.isTypeSupported(mimeType)) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        } else {
+          mimeType = '';
+        }
+      }
+
+      mediaRecorder = mimeType ? new MediaRecorder(audioStream, { mimeType: mimeType }) : new MediaRecorder(audioStream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = function (e) {
+        if (e.data && e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.start(100); // 100ms slice
+      isRecording = true;
+      btn.classList.add('recording');
+      btn.innerHTML = '<i class="fas fa-stop"></i>';
+      btn.title = 'Stop and Send Voice Note';
+
+      // Show recording banner with timer
+      if (banner) banner.style.display = 'flex';
+      recordingSeconds = 0;
+      if (timerEl) timerEl.innerText = '00:00';
+      clearInterval(recordingTimerInterval);
+      recordingTimerInterval = setInterval(function () {
+        recordingSeconds++;
+        const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+        const secs = String(recordingSeconds % 60).padStart(2, '0');
+        if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+      }, 1000);
+
+    } catch (e) {
+      console.warn('[Chat] Microphone error:', e);
+      alert('Microphone access denied or unavailable: ' + e.message);
+    }
+  }
+
+  window.stopAndSendVoiceRecording = function () {
+    if (!mediaRecorder || !isRecording) return;
+
+    const btn = document.getElementById('btn-voice-record');
+    const banner = document.getElementById('voice-recording-banner');
+    clearInterval(recordingTimerInterval);
+    if (banner) banner.style.display = 'none';
+
+    btn.classList.remove('recording');
+    btn.innerHTML = '<i class="fas fa-microphone"></i>';
+    btn.title = 'Record Voice Note';
+    isRecording = false;
+
+    mediaRecorder.onstop = async function () {
+      if (audioChunks.length === 0) return;
+
+      const mime = mediaRecorder.mimeType || 'audio/webm';
+      const ext = mime.includes('mp4') ? '.mp4' : (mime.includes('ogg') ? '.ogg' : '.webm');
+      const audioBlob = new Blob(audioChunks, { type: mime });
+      const audioFile = new File([audioBlob], `voice_note_${Date.now()}${ext}`, { type: mime });
+
+      const formData = new FormData();
+      formData.append('file', audioFile);
+
+      try {
+        const uploadRes = await fetch('/api/v1/chat/upload-media', {
+          method: 'POST',
+          body: formData
+        }).then(r => r.json());
+
+        if (uploadRes && uploadRes.success) {
+          const clientUuid = generateUuid();
+          await fetch('/api/v1/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_uuid: clientUuid,
+              channel_id: activeChannel.channel_id,
+              type: 'audio',
+              media_url: uploadRes.media_url,
+              media_duration_sec: recordingSeconds,
+              body: '🎙️ Voice Note'
+            })
+          });
+          loadHistory(activeChannel.channel_id);
+        } else {
+          alert('Voice note upload failed: ' + (uploadRes.error || 'Server rejected file'));
+        }
+      } catch (err) {
+        console.error('[Chat] Voice upload failed:', err);
+        alert('Voice note upload error: ' + err.message);
+      } finally {
+        if (audioStream) {
+          audioStream.getTracks().forEach(t => t.stop());
+          audioStream = null;
+        }
+      }
+    };
+
+    mediaRecorder.stop();
+  };
+
+  window.cancelVoiceRecording = function () {
+    if (!mediaRecorder) return;
+    clearInterval(recordingTimerInterval);
+    const btn = document.getElementById('btn-voice-record');
+    const banner = document.getElementById('voice-recording-banner');
+    if (banner) banner.style.display = 'none';
+    if (btn) {
       btn.classList.remove('recording');
       btn.innerHTML = '<i class="fas fa-microphone"></i>';
+      btn.title = 'Record Voice Note';
+    }
+    isRecording = false;
+    audioChunks = [];
+    mediaRecorder.onstop = null;
+    try { mediaRecorder.stop(); } catch (e) {}
+    if (audioStream) {
+      audioStream.getTracks().forEach(t => t.stop());
+      audioStream = null;
     }
   };
 
