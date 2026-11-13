@@ -2,7 +2,7 @@
 
 {% block content %}
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=3.1.0">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=3.2.0">
 
 <div class="chat-portal-wrapper">
   <!-- Top Bar -->
@@ -142,55 +142,61 @@
 </div>
 
 <!-- Modal: New Broadcast Announcement -->
-<div class="modal fade" id="broadcastModal" tabindex="-1" style="display: none;">
+<div class="chat-modal-overlay" id="broadcastModal" style="display: none;">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content chat-modal-content">
+    <div class="chat-modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-bullhorn text-warning"></i> Company Announcement</h5>
-        <button type="button" class="btn-close" onclick="closeBroadcastModal()">×</button>
+        <button type="button" class="chat-modal-close" onclick="closeBroadcastModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc">This announcement will be broadcast in real-time to all field staff mobile devices and web terminals.</p>
-        <textarea id="broadcast-message-text" class="form-control broadcast-textarea" rows="4" placeholder="Enter announcement in English or తెలుగు..."></textarea>
+        <p style="margin-top: 0; margin-bottom: 12px; font-size: 13.5px; color: #94a3b8;">This announcement will be broadcast in real-time to all field staff mobile devices and web terminals.</p>
+        <textarea id="broadcast-message-text" class="broadcast-textarea" rows="4" placeholder="Enter announcement in English or తెలుగు..."></textarea>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeBroadcastModal()">Cancel</button>
-        <button type="button" class="btn btn-warning" onclick="submitBroadcastAnnouncement()">Broadcast Now</button>
+        <button type="button" class="btn-chat-modal-cancel" onclick="closeBroadcastModal()">Cancel</button>
+        <button type="button" class="btn-chat-modal-warning" onclick="submitBroadcastAnnouncement()">
+          <i class="fas fa-bullhorn"></i> Broadcast Now
+        </button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Modal: Camera & Photo Capture -->
-<div class="modal fade" id="cameraModal" tabindex="-1" style="display: none;">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content chat-modal-content">
+<div class="chat-modal-overlay" id="cameraModal" style="display: none;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
+    <div class="chat-modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-camera text-info"></i> Camera & Photo</h5>
-        <button type="button" class="btn-close" onclick="closeCameraModal()">×</button>
+        <button type="button" class="chat-modal-close" onclick="closeCameraModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
-      <div class="modal-body text-center" style="padding: 16px;">
+      <div class="modal-body text-center" style="padding: 18px;">
         <!-- Live Video Viewfinder -->
-        <div id="camera-video-wrap" style="position: relative; border-radius: 12px; overflow: hidden; background: #0b0f19; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+        <div id="camera-video-wrap" style="position: relative; border-radius: 14px; overflow: hidden; background: #0b0f19; min-height: 220px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.08);">
           <video id="camera-video-preview" autoplay playsinline muted style="width: 100%; max-height: 300px; object-fit: cover; display: block;"></video>
-          <img id="camera-photo-preview" style="width: 100%; max-height: 300px; object-fit: contain; display: none; border-radius: 12px;" />
+          <img id="camera-photo-preview" style="width: 100%; max-height: 300px; object-fit: contain; display: none; border-radius: 14px;" />
           <canvas id="camera-canvas" style="display: none;"></canvas>
         </div>
         <div id="camera-error-msg" style="display: none; color: #ef4444; font-size: 13px; margin-top: 10px;"></div>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-        <button type="button" class="btn btn-outline-light btn-sm" onclick="triggerFileInput()">
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn-chat-modal-clear" onclick="triggerFileInput()">
           <i class="fas fa-folder-open"></i> Upload File
         </button>
         <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="closeCameraModal()">Cancel</button>
-          <button type="button" class="btn btn-primary btn-sm" id="btn-camera-capture" onclick="captureCameraSnapshot()">
+          <button type="button" class="btn-chat-modal-cancel" onclick="closeCameraModal()">Cancel</button>
+          <button type="button" class="btn-chat-modal-success" id="btn-camera-capture" onclick="captureCameraSnapshot()">
             <i class="fas fa-camera"></i> Snap Photo
           </button>
-          <button type="button" class="btn btn-warning btn-sm" id="btn-camera-retake" onclick="retakeCameraSnapshot()" style="display: none;">
+          <button type="button" class="btn-chat-modal-warning" id="btn-camera-retake" onclick="retakeCameraSnapshot()" style="display: none;">
             <i class="fas fa-redo"></i> Retake
           </button>
-          <button type="button" class="btn btn-success btn-sm" id="btn-camera-send" onclick="sendCapturedPhoto()" style="display: none;">
+          <button type="button" class="btn-chat-modal-success" id="btn-camera-send" onclick="sendCapturedPhoto()" style="display: none;">
             <i class="fas fa-paper-plane"></i> Send
           </button>
         </div>
@@ -200,17 +206,19 @@
 </div>
 
 <!-- Modal: Delete Individual Message (WhatsApp Style) -->
-<div class="modal fade" id="deleteMessageModal" tabindex="-1" style="display: none;">
-  <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
-    <div class="modal-content chat-modal-content">
+<div class="chat-modal-overlay" id="deleteMessageModal" style="display: none;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="chat-modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-trash-alt text-danger"></i> Delete Message?</h5>
-        <button type="button" class="btn-close" onclick="closeDeleteMessageModal()">×</button>
+        <button type="button" class="chat-modal-close" onclick="closeDeleteMessageModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" style="color: #cbd5e1; font-size: 14px; margin-bottom: 0;">Are you sure you want to delete this message?</p>
+        <p style="margin: 0; color: #cbd5e1; font-size: 14.5px;">Are you sure you want to delete this message?</p>
       </div>
-      <div class="modal-footer" id="delete-message-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
+      <div class="modal-footer" id="delete-message-footer">
         <!-- Buttons injected dynamically based on sender vs recipient -->
       </div>
     </div>
@@ -218,25 +226,27 @@
 </div>
 
 <!-- Modal: Clear / Delete Entire Chat -->
-<div class="modal fade" id="clearChatModal" tabindex="-1" style="display: none;">
-  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
-    <div class="modal-content chat-modal-content">
+<div class="chat-modal-overlay" id="clearChatModal" style="display: none;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+    <div class="chat-modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-trash-alt text-danger"></i> Clear Conversation</h5>
-        <button type="button" class="btn-close" onclick="closeClearChatModal()">×</button>
+        <button type="button" class="chat-modal-close" onclick="closeClearChatModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" style="color: #cbd5e1; font-size: 14px; line-height: 1.5; margin-bottom: 0;">
-          Are you sure you want to clear all messages in the chat with <strong id="clear-chat-contact-name" style="color: #ffffff;">this contact</strong>?
+        <p style="margin: 0; color: #cbd5e1; font-size: 14.5px; line-height: 1.6;">
+          Are you sure you want to clear all messages in the chat with <strong id="clear-chat-contact-name" style="color: #ffffff; font-weight: 600;">this contact</strong>?
         </p>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="closeClearChatModal()">Cancel</button>
-        <button type="button" class="btn btn-outline-light btn-sm" onclick="executeClearChat(false)">
+      <div class="modal-footer">
+        <button type="button" class="btn-chat-modal-cancel" onclick="closeClearChatModal()">Cancel</button>
+        <button type="button" class="btn-chat-modal-clear" onclick="executeClearChat(false)">
           <i class="fas fa-broom"></i> Clear for me
         </button>
         {% if user.role in ['admin', 'mgmt'] %}
-        <button type="button" class="btn btn-danger btn-sm" onclick="executeClearChat(true)">
+        <button type="button" class="btn-chat-modal-danger" onclick="executeClearChat(true)">
           <i class="fas fa-trash"></i> Delete for everyone
         </button>
         {% endif %}
@@ -244,7 +254,8 @@
     </div>
   </div>
 </div>
+</div>
 
 <script src="{{ url_for('static', filename='js/centrifuge.min.js') }}?v=5.2.2"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=3.1.0"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=3.2.0"></script>
 {% endblock %}

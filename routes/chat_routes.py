@@ -206,7 +206,7 @@ def get_user_channels():
                           AND unread.sender_id != %s
                           AND unread.status != 'read'
                           AND unread.is_deleted = FALSE
-                          AND NOT (%s = ANY(unread.deleted_by_users))
+                          AND NOT (%s = ANY(COALESCE(unread.deleted_by_users, '{}')))
                     ) AS unread_count
                 FROM chat_channels c
                 JOIN chat_channel_members m ON m.channel_id = c.id AND m.user_id = %s
@@ -219,7 +219,7 @@ def get_user_channels():
                     SELECT lm.id, lm.body, lm.message_type, lm.created_at, lm.status, lm.sender_id, lm.is_deleted
                     FROM chat_messages lm
                     WHERE lm.channel_id = c.id
-                      AND NOT (%s = ANY(lm.deleted_by_users))
+                      AND NOT (%s = ANY(COALESCE(lm.deleted_by_users, '{}')))
                     ORDER BY lm.created_at DESC
                     LIMIT 1
                 ) last_msg ON TRUE
@@ -298,7 +298,7 @@ def get_unread_count():
                     WHERE m.sender_id != %s
                       AND m.status != 'read'
                       AND m.is_deleted = FALSE
-                      AND NOT (%s = ANY(m.deleted_by_users))
+                      AND NOT (%s = ANY(COALESCE(m.deleted_by_users, '{}')))
                       AND c.is_active = TRUE
                       AND (
                           c.channel_type = 'broadcast'
@@ -321,7 +321,7 @@ def get_unread_count():
                     WHERE m.sender_id != %s
                       AND m.status != 'read'
                       AND m.is_deleted = FALSE
-                      AND NOT (%s = ANY(m.deleted_by_users))
+                      AND NOT (%s = ANY(COALESCE(m.deleted_by_users, '{}')))
                       AND c.is_active = TRUE;
                 """, (user_id, user_id, user_id))
             row = cur.fetchone()
@@ -527,7 +527,7 @@ def get_channel_history(channel_id):
                 JOIN users u ON u.id = m.sender_id
                 LEFT JOIN employee e ON e.eid = u.employee_id
                 WHERE m.channel_id = %s
-                  AND NOT (%s = ANY(m.deleted_by_users))
+                  AND NOT (%s = ANY(COALESCE(m.deleted_by_users, '{}')))
             """
             params = [channel_id, user["id"]]
 
@@ -985,8 +985,8 @@ def delete_message(message_id=None):
             else:  # 'me'
                 cur.execute("""
                     UPDATE chat_messages 
-                    SET deleted_by_users = array_append(deleted_by_users, %s)
-                    WHERE id = %s AND NOT (%s = ANY(deleted_by_users));
+                    SET deleted_by_users = array_append(COALESCE(deleted_by_users, '{}'), %s)
+                    WHERE id = %s AND NOT (%s = ANY(COALESCE(deleted_by_users, '{}')));
                 """, (user_id, msg_id, user_id))
                 conn.commit()
 
@@ -1076,8 +1076,8 @@ def clear_channel_chat(channel_id):
                 # Clear for me: mark all current messages as deleted for this user
                 cur.execute("""
                     UPDATE chat_messages 
-                    SET deleted_by_users = array_append(deleted_by_users, %s)
-                    WHERE channel_id = %s AND NOT (%s = ANY(deleted_by_users));
+                    SET deleted_by_users = array_append(COALESCE(deleted_by_users, '{}'), %s)
+                    WHERE channel_id = %s AND NOT (%s = ANY(COALESCE(deleted_by_users, '{}')));
                 """, (user_id, channel_id, user_id))
                 conn.commit()
 

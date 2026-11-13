@@ -863,37 +863,252 @@
   transform: scale(0.96);
 }
 
-/* ── Modals: Broadcast & Camera ── */
+/* ── Modals: Ultra-Posh Centered Glassmorphic Modal System ── */
+.chat-modal-overlay,
+.modal.chat-modal-backdrop,
+#broadcastModal,
+#cameraModal,
+#deleteMessageModal,
+#clearChatModal {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(8, 11, 18, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  z-index: 10500 !important;
+  display: none;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  box-sizing: border-box !important;
+}
+
+#broadcastModal.show,
+#cameraModal.show,
+#deleteMessageModal.show,
+#clearChatModal.show,
+#broadcastModal[style*="display: block"],
+#cameraModal[style*="display: block"],
+#deleteMessageModal[style*="display: block"],
+#clearChatModal[style*="display: block"],
+#broadcastModal[style*="display: flex"],
+#cameraModal[style*="display: flex"],
+#deleteMessageModal[style*="display: flex"],
+#clearChatModal[style*="display: flex"] {
+  display: flex !important;
+}
+
+.chat-modal-overlay .modal-dialog,
+.modal-dialog.modal-dialog-centered {
+  position: relative !important;
+  margin: auto !important;
+  width: 100% !important;
+  max-width: 450px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+}
+
 .chat-modal-content {
-  background: var(--chat-panel-dark);
-  color: #f8fafc;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, #1b202c 0%, #12151f 100%) !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05) inset, 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  animation: modalScaleUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .chat-modal-content .modal-header {
-  border-bottom: 1px solid var(--chat-border-dark);
-  padding: 16px 22px;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 18px 22px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
 }
 
 .chat-modal-content .modal-title {
-  font-family: var(--font-headline);
-  font-size: 17px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  margin: 0 !important;
+  font-family: var(--font-headline) !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  color: #ffffff !important;
+}
+
+.chat-modal-close {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.chat-modal-close:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #f87171 !important;
+  transform: rotate(90deg) !important;
 }
 
 .chat-modal-content .modal-body {
-  padding: 20px 22px;
+  padding: 22px 24px !important;
+  font-family: var(--font-body) !important;
+  font-size: 14.5px !important;
+  color: #cbd5e1 !important;
+  line-height: 1.6 !important;
 }
 
 .chat-modal-content .modal-footer {
-  border-top: 1px solid var(--chat-border-dark);
-  padding: 14px 22px;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 16px 24px !important;
+  background: rgba(10, 14, 23, 0.4) !important;
+}
+
+/* Modal Action Buttons */
+.btn-chat-modal-cancel {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  padding: 9px 18px !important;
+  border-radius: 11px !important;
+  font-family: var(--font-body) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-chat-modal-cancel:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.btn-chat-modal-clear {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  padding: 9px 18px !important;
+  border-radius: 11px !important;
+  font-family: var(--font-body) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-chat-modal-clear:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-chat-modal-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 9px 20px !important;
+  border-radius: 11px !important;
+  font-family: var(--font-body) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-chat-modal-danger:hover {
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5) !important;
+}
+
+.btn-chat-modal-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 9px 20px !important;
+  border-radius: 11px !important;
+  font-family: var(--font-body) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-chat-modal-warning:hover {
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5) !important;
+}
+
+.btn-chat-modal-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 9px 20px !important;
+  border-radius: 11px !important;
+  font-family: var(--font-body) !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-chat-modal-success:hover {
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
 }
 
 .broadcast-textarea {
