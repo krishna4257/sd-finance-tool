@@ -244,6 +244,65 @@ sleep 1
 echo "    [+] NotifKit systemd service active on port 4000."
 
 # ------------------------------------------------------------------------------
+# STEP 4.5: Automatic Nginx Reverse Proxy Configuration (Centrifugo WebSocket)
+# ------------------------------------------------------------------------------
+NGINX_TARGET="/etc/nginx/sites-available/sd_fin"
+if [ -f "$NGINX_TARGET" ]; then
+    echo "[*] Step 4.5: Configuring Nginx WebSocket gateway in $NGINX_TARGET..."
+    cp "$NGINX_TARGET" "${NGINX_TARGET}.bak"
+    cat << 'EOF' > "$NGINX_TARGET"
+server {
+    listen 80;
+    server_name _;
+    client_max_body_size 100M;
+
+    # Centrifugo Real-time WebSocket Gateway
+    location /connection/websocket {
+        proxy_pass http://127.0.0.1:8001/connection/websocket;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    # Secure Chat Media Static Files (Photos & Audio Voice Notes)
+    location /chat-media/ {
+        alias /var/www/sd-chat-media/;
+        expires 30d;
+        add_header Cache-Control "private, no-transform";
+        try_files $uri =404;
+    }
+
+    # Core SD Finance Flask App
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 120;
+        proxy_send_timeout 120;
+        proxy_read_timeout 120;
+    }
+}
+EOF
+    if nginx -t &>/dev/null; then
+        systemctl reload nginx || systemctl restart nginx
+        echo "    [+] Nginx WebSocket gateway configured and reloaded."
+    else
+        echo "    [-] Nginx test failed, rolling back..."
+        cp "${NGINX_TARGET}.bak" "$NGINX_TARGET"
+        systemctl reload nginx || true
+    fi
+fi
+
+# ------------------------------------------------------------------------------
 # STEP 5: Service Status & Loopback Port Verification
 # ------------------------------------------------------------------------------
 echo "=========================================================="
