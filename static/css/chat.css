@@ -483,6 +483,13 @@
   margin-top: 2px;
 }
 
+/* Conversation Header Tools */
+.convo-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Stylish Sync Button */
 .btn-chat-sync {
   display: inline-flex;
@@ -524,6 +531,35 @@
 @keyframes spinSync {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Stylish Clear Chat Button */
+.btn-chat-danger-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-chat-danger-tool:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
+  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-chat-danger-tool:active {
+  transform: translateY(0);
 }
 
 /* ── Conversation Messages Area ── */
@@ -569,6 +605,57 @@
   color: #f1f5f9;
   border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-bubble) var(--radius-bubble-tail);
   border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Bubble Delete Action Button (WhatsApp Style) */
+.btn-msg-delete {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 5;
+}
+
+.chat-bubble:hover .btn-msg-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.btn-msg-delete:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+/* WhatsApp Deleted Message Placeholder */
+.deleted-msg-body {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 13.5px;
+  user-select: none;
+}
+
+.deleted-msg-body i {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* Bubble Footer & WhatsApp Read Receipts */

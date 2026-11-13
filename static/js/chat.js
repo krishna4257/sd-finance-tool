@@ -203,6 +203,10 @@
           handleIncomingMessage(payload);
         } else if (event === 'status_update') {
           handleStatusUpdate(payload);
+        } else if (event === 'message_deleted') {
+          handleIncomingMessageDeleted(payload);
+        } else if (event === 'chat_cleared') {
+          handleIncomingChatCleared(payload);
         }
       }
       if (window.updateChatBadge) window.updateChatBadge();
@@ -233,6 +237,10 @@
           handleIncomingMessage(payload);
         } else if (event === 'status_update') {
           handleStatusUpdate(payload);
+        } else if (event === 'message_deleted') {
+          handleIncomingMessageDeleted(payload);
+        } else if (event === 'chat_cleared') {
+          handleIncomingChatCleared(payload);
         }
       });
 
@@ -470,7 +478,14 @@
     const bubbleClass = isMe ? 'me' : 'other';
     let contentHtml = '';
 
-    if (m.message_type === 'image') {
+    if (m.is_deleted) {
+      contentHtml = `
+        <div class="deleted-msg-body">
+          <i class="fas fa-ban"></i>
+          <em>This message was deleted</em>
+        </div>
+      `;
+    } else if (m.message_type === 'image') {
       contentHtml = `<div class="chat-media-card"><img src="${escapeHtml(m.media_url)}" onclick="window.open('${escapeHtml(m.media_url)}', '_blank')" alt="Photo"></div>`;
     } else if (m.message_type === 'location') {
       contentHtml = `
@@ -493,9 +508,13 @@
     }
 
     const tickHtml = isMe ? buildTickHtml(m.status) : '';
+    const deleteBtn = !m.is_deleted && m.id
+      ? `<button type="button" class="btn-msg-delete" onclick="window.promptDeleteMessage(event, '${m.id}', ${isMe})" title="Delete message"><i class="fas fa-trash-alt"></i></button>`
+      : '';
 
     return `
-      <div class="chat-bubble ${bubbleClass}" id="msg-${m.id || m.client_uuid}">
+      <div class="chat-bubble ${bubbleClass}" id="msg-${m.id || m.client_uuid}" data-msg-id="${m.id || ''}">
+        ${deleteBtn}
         ${!isMe && activeChannel && activeChannel.channel_type === 'broadcast' ? `<div style="font-size:11px; font-weight:700; color:#38bdf8; margin-bottom:2px;">${escapeHtml(m.sender_name)}</div>` : ''}
         ${contentHtml}
         <div class="bubble-footer">
@@ -760,6 +779,37 @@
         footer.innerHTML = `${timeText} ${buildTickHtml(newStatus)}`;
       }
     }
+  }
+
+  function handleIncomingMessageDeleted(payload) {
+    const msgEl = document.getElementById('msg-' + payload.message_id);
+    if (msgEl) {
+      const btn = msgEl.querySelector('.btn-msg-delete');
+      if (btn) btn.remove();
+
+      const footer = msgEl.querySelector('.bubble-footer');
+      const existingDeleted = msgEl.querySelector('.deleted-msg-body');
+      if (!existingDeleted) {
+        const deletedHtml = `<div class="deleted-msg-body"><i class="fas fa-ban"></i> <em>This message was deleted</em></div>`;
+        // Remove media, audio, location, and original text
+        msgEl.querySelectorAll('.chat-media-card, .chat-location-card, .chat-audio-card, span:not(.bubble-footer span)').forEach(el => el.remove());
+        if (footer) {
+          footer.insertAdjacentHTML('beforebegin', deletedHtml);
+        } else {
+          msgEl.innerHTML = deletedHtml;
+        }
+      }
+    }
+  }
+
+  function handleIncomingChatCleared(payload) {
+    if (activeChannel && activeChannel.channel_id === payload.channel_id) {
+      const container = document.getElementById('conversation-messages');
+      if (container) {
+        container.innerHTML = '<div style="text-align:center; padding:40px; color:rgba(255,255,255,0.4); font-size:13px;">No messages in this conversation.<br>Start typing in English or తెలుగు!</div>';
+      }
+    }
+    updateChannelSnippet(payload.channel_id, 'No messages yet');
   }
 
   function ackMessage(messageId, channelId, status) {
@@ -1263,6 +1313,127 @@
       await loadHistory(activeChannel.channel_id);
     }
     await syncChannels();
+  };
+
+  // ---------------------------------------------------------------------------
+  // 11. MESSAGE DELETION & CLEAR CHAT (WhatsApp Style)
+  // ---------------------------------------------------------------------------
+  let pendingDeleteMsgId = null;
+  let pendingDeleteIsMe = false;
+
+  window.promptDeleteMessage = function (e, msgId, isMe) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    pendingDeleteMsgId = msgId;
+    pendingDeleteIsMe = isMe;
+
+    const modal = document.getElementById('deleteMessageModal');
+    const footer = document.getElementById('delete-message-footer');
+    if (!modal || !footer) return;
+
+    if (isMe) {
+      footer.innerHTML = `
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeDeleteMessageModal()">Cancel</button>
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="executeDeleteMessage('me')">
+          <i class="fas fa-user-slash"></i> Delete for me
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="executeDeleteMessage('everyone')">
+          <i class="fas fa-trash-alt"></i> Delete for everyone
+        </button>
+      `;
+    } else {
+      footer.innerHTML = `
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeDeleteMessageModal()">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="executeDeleteMessage('me')">
+          <i class="fas fa-user-slash"></i> Delete for me
+        </button>
+      `;
+    }
+
+    modal.style.display = 'block';
+  };
+
+  window.closeDeleteMessageModal = function () {
+    const modal = document.getElementById('deleteMessageModal');
+    if (modal) modal.style.display = 'none';
+    pendingDeleteMsgId = null;
+  };
+
+  window.executeDeleteMessage = async function (deleteType) {
+    if (!pendingDeleteMsgId || !activeChannel) return;
+    const msgId = pendingDeleteMsgId;
+    closeDeleteMessageModal();
+
+    // Optimistically update UI
+    const msgEl = document.getElementById('msg-' + msgId);
+    if (deleteType === 'me') {
+      if (msgEl) {
+        msgEl.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        msgEl.style.opacity = '0';
+        msgEl.style.transform = 'scale(0.85)';
+        setTimeout(() => msgEl.remove(), 200);
+      }
+    } else {
+      handleIncomingMessageDeleted({ message_id: msgId, channel_id: activeChannel.channel_id });
+    }
+
+    try {
+      await fetch('/api/v1/chat/message/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: msgId,
+          channel_id: activeChannel.channel_id,
+          delete_type: deleteType
+        })
+      });
+      syncChannels();
+    } catch (e) {
+      console.error('[Chat] Delete message failed:', e);
+    }
+  };
+
+  window.openClearChatModal = function () {
+    if (!activeChannel) return;
+    const nameEl = document.getElementById('clear-chat-contact-name');
+    if (nameEl) {
+      nameEl.innerText = activeChannel.title || 'this contact';
+    }
+    const modal = document.getElementById('clearChatModal');
+    if (modal) modal.style.display = 'block';
+  };
+
+  window.closeClearChatModal = function () {
+    const modal = document.getElementById('clearChatModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.executeClearChat = async function (deleteForEveryone) {
+    if (!activeChannel) return;
+    const channelId = activeChannel.channel_id;
+    closeClearChatModal();
+
+    // Optimistically clear active messages
+    const container = document.getElementById('conversation-messages');
+    if (container) {
+      container.innerHTML = '<div style="text-align:center; padding:40px; color:rgba(255,255,255,0.4); font-size:13px;">No messages in this conversation.<br>Start typing in English or తెలుగు!</div>';
+    }
+    updateChannelSnippet(channelId, 'No messages yet');
+
+    try {
+      await fetch(`/api/v1/chat/channel/${channelId}/clear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delete_for_everyone: Boolean(deleteForEveryone)
+        })
+      });
+      syncChannels();
+    } catch (e) {
+      console.error('[Chat] Clear chat failed:', e);
+    }
   };
 
 })();

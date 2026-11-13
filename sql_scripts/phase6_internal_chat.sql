@@ -69,8 +69,10 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Ensure updated_at column exists if table was already created
+-- Ensure updated_at and deletion columns exist if table was already created
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_by_users INT[] NOT NULL DEFAULT '{}';
 
 -- 6. User Notification Settings (FCM & Quiet Hours for NotifKit)
 CREATE TABLE IF NOT EXISTS user_notification_settings (

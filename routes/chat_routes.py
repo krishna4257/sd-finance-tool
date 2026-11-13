@@ -197,6 +197,7 @@ def get_user_channels():
                     last_msg.created_at AS last_msg_time,
                     last_msg.status AS last_msg_status,
                     last_msg.sender_id AS last_msg_sender_id,
+                    last_msg.is_deleted AS last_msg_is_deleted,
                     -- Unread count
                     (
                         SELECT COUNT(*) 
@@ -204,6 +205,8 @@ def get_user_channels():
                         WHERE unread.channel_id = c.id 
                           AND unread.sender_id != %s
                           AND unread.status != 'read'
+                          AND unread.is_deleted = FALSE
+                          AND NOT (%s = ANY(unread.deleted_by_users))
                     ) AS unread_count
                 FROM chat_channels c
                 JOIN chat_channel_members m ON m.channel_id = c.id AND m.user_id = %s
@@ -213,21 +216,22 @@ def get_user_channels():
                 LEFT JOIN employee other_e ON other_e.eid = other_u.employee_id
                 -- Subquery for last message
                 LEFT JOIN LATERAL (
-                    SELECT lm.id, lm.body, lm.message_type, lm.created_at, lm.status, lm.sender_id
+                    SELECT lm.id, lm.body, lm.message_type, lm.created_at, lm.status, lm.sender_id, lm.is_deleted
                     FROM chat_messages lm
                     WHERE lm.channel_id = c.id
+                      AND NOT (%s = ANY(lm.deleted_by_users))
                     ORDER BY lm.created_at DESC
                     LIMIT 1
                 ) last_msg ON TRUE
                 WHERE c.is_active = TRUE
                 ORDER BY COALESCE(last_msg.created_at, c.created_at) DESC;
-            """, (user_id, user_id, user_id))
+            """, (user_id, user_id, user_id, user_id, user_id))
             
             rows = cur.fetchall()
             channels = []
             for r in rows:
                 c_id, c_type, c_name, c_created, last_read_id, o_uid, o_name, o_role, \
-                lm_id, lm_body, lm_type, lm_time, lm_status, lm_sender, unread_cnt = r
+                lm_id, lm_body, lm_type, lm_time, lm_status, lm_sender, lm_is_deleted, unread_cnt = r
 
                 clean_role = (o_role or "").lower()
                 # RBAC filter for staff: direct channels must be with admin or mgmt
@@ -256,10 +260,11 @@ def get_user_channels():
                     "unread_count": int(unread_cnt or 0),
                     "last_message": {
                         "id": str(lm_id) if lm_id else None,
-                        "body": lm_body,
+                        "body": "This message was deleted" if lm_is_deleted else lm_body,
                         "type": lm_type,
                         "status": lm_status,
                         "is_me": lm_sender == user_id,
+                        "is_deleted": bool(lm_is_deleted),
                         "created_at": lm_time.isoformat() if lm_time else None
                     } if lm_id else None,
                     "created_at": c_created.isoformat() if c_created else None
@@ -292,6 +297,8 @@ def get_unread_count():
                     JOIN chat_channel_members ccm ON ccm.channel_id = c.id AND ccm.user_id = %s
                     WHERE m.sender_id != %s
                       AND m.status != 'read'
+                      AND m.is_deleted = FALSE
+                      AND NOT (%s = ANY(m.deleted_by_users))
                       AND c.is_active = TRUE
                       AND (
                           c.channel_type = 'broadcast'
@@ -304,7 +311,7 @@ def get_unread_count():
                                 AND LOWER(COALESCE(oe.level, om.role, 'staff')) IN ('admin', 'mgmt', 'superadmin', 'management')
                           )
                       );
-                """, (user_id, user_id, user_id))
+                """, (user_id, user_id, user_id, user_id))
             else:
                 cur.execute("""
                     SELECT COUNT(*)
@@ -313,8 +320,10 @@ def get_unread_count():
                     JOIN chat_channel_members ccm ON ccm.channel_id = c.id AND ccm.user_id = %s
                     WHERE m.sender_id != %s
                       AND m.status != 'read'
+                      AND m.is_deleted = FALSE
+                      AND NOT (%s = ANY(m.deleted_by_users))
                       AND c.is_active = TRUE;
-                """, (user_id, user_id))
+                """, (user_id, user_id, user_id))
             row = cur.fetchone()
             count = row[0] if row else 0
         return jsonify({
@@ -512,13 +521,15 @@ def get_channel_history(channel_id):
                     m.latitude,
                     m.longitude,
                     m.status,
-                    m.created_at
+                    m.created_at,
+                    m.is_deleted
                 FROM chat_messages m
                 JOIN users u ON u.id = m.sender_id
                 LEFT JOIN employee e ON e.eid = u.employee_id
                 WHERE m.channel_id = %s
+                  AND NOT (%s = ANY(m.deleted_by_users))
             """
-            params = [channel_id]
+            params = [channel_id, user["id"]]
 
             if before_ts:
                 query += " AND m.created_at < %s"
@@ -532,7 +543,7 @@ def get_channel_history(channel_id):
 
             messages = []
             for r in rows:
-                m_id, c_uuid, s_id, s_name, m_type, body, media_url, dur, lat, lng, status, c_at = r
+                m_id, c_uuid, s_id, s_name, m_type, body, media_url, dur, lat, lng, status, c_at, is_del = r
                 messages.append({
                     "id": str(m_id),
                     "client_uuid": c_uuid,
@@ -541,12 +552,13 @@ def get_channel_history(channel_id):
                     "sender_name": s_name,
                     "is_me": s_id == user["id"],
                     "message_type": m_type,
-                    "body": body,
-                    "media_url": media_url,
-                    "media_duration_sec": dur,
-                    "latitude": float(lat) if lat is not None else None,
-                    "longitude": float(lng) if lng is not None else None,
+                    "body": "This message was deleted" if is_del else body,
+                    "media_url": None if is_del else media_url,
+                    "media_duration_sec": None if is_del else dur,
+                    "latitude": None if is_del else (float(lat) if lat is not None else None),
+                    "longitude": None if is_del else (float(lng) if lng is not None else None),
                     "status": status,
+                    "is_deleted": bool(is_del),
                     "created_at": c_at.isoformat() if c_at else None
                 })
 
@@ -864,5 +876,215 @@ def register_push_token():
             """, (user["id"], token))
             conn.commit()
         return jsonify({"success": True})
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------------------------------
+# ENDPOINT 8: Delete Message (WhatsApp-style: Delete for Everyone / Delete for Me)
+# ------------------------------------------------------------------------------
+@chat_bp.route("/message/delete", methods=["POST"])
+@chat_bp.route("/message/<message_id>", methods=["DELETE"])
+@chat_auth_required
+def delete_message(message_id=None):
+    """
+    Deletes an individual message.
+    - 'everyone': Replaces message body with 'This message was deleted', removes attachments, broadcasts real-time event.
+    - 'me': Hides the message from the current user only.
+    """
+    user = g.chat_user
+    user_id = user["id"]
+    data = request.get_json(silent=True) or {}
+    
+    msg_id = message_id or data.get("message_id")
+    delete_type = data.get("delete_type", "everyone").lower()
+    channel_id = data.get("channel_id")
+
+    if not msg_id:
+        return jsonify({"success": False, "error": "message_id is required"}), 400
+
+    conn = get_pg_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT m.id, m.channel_id, m.sender_id, m.is_deleted, c.channel_type
+                FROM chat_messages m
+                JOIN chat_channels c ON c.id = m.channel_id
+                WHERE m.id = %s;
+            """, (msg_id,))
+            msg_row = cur.fetchone()
+            if not msg_row:
+                return jsonify({"success": False, "error": "Message not found"}), 404
+
+            m_id, ch_id, sender_id, is_already_deleted, ch_type = msg_row
+            ch_id_str = str(ch_id)
+
+            # Verify current user is a member of this channel
+            cur.execute("""
+                SELECT 1 FROM chat_channel_members 
+                WHERE channel_id = %s AND user_id = %s;
+            """, (ch_id, user_id))
+            if not cur.fetchone():
+                return jsonify({"success": False, "error": "Access denied"}), 403
+
+            is_sender = (sender_id == user_id)
+            is_leadership = user["role"] in ("admin", "superadmin", "mgmt")
+
+            if delete_type == "everyone":
+                if not (is_sender or is_leadership):
+                    return jsonify({"success": False, "error": "Only the sender or admin can delete for everyone"}), 403
+
+                cur.execute("""
+                    UPDATE chat_messages 
+                    SET is_deleted = TRUE, 
+                        body = 'This message was deleted', 
+                        media_url = NULL, 
+                        latitude = NULL, 
+                        longitude = NULL, 
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING id;
+                """, (msg_id,))
+                conn.commit()
+
+                # Broadcast Centrifugo real-time event: message_deleted
+                centrifugo_url = current_app.config.get("CENTRIFUGO_API_URL", DEFAULT_CENTRIFUGO_URL)
+                api_key = current_app.config.get("CENTRIFUGO_API_KEY", "sdfinance-centrifugo-api-key-2026")
+                publish_url = f"{centrifugo_url.rstrip('/')}/publish" if not centrifugo_url.endswith("/publish") else centrifugo_url
+                del_payload = {
+                    "channel": f"chat:{ch_id_str}",
+                    "data": {
+                        "event": "message_deleted",
+                        "message_id": str(msg_id),
+                        "channel_id": ch_id_str,
+                        "delete_type": "everyone",
+                        "deleted_by": user_id
+                    }
+                }
+                try:
+                    requests.post(
+                        publish_url,
+                        headers={
+                            "X-API-Key": api_key,
+                            "Authorization": f"apikey {api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json=del_payload,
+                        timeout=1.0
+                    )
+                except Exception as e:
+                    logger.warning("[Centrifugo] Delete message publish failed: %s", e)
+
+                return jsonify({
+                    "success": True,
+                    "message_id": str(msg_id),
+                    "channel_id": ch_id_str,
+                    "delete_type": "everyone"
+                })
+
+            else:  # 'me'
+                cur.execute("""
+                    UPDATE chat_messages 
+                    SET deleted_by_users = array_append(deleted_by_users, %s)
+                    WHERE id = %s AND NOT (%s = ANY(deleted_by_users));
+                """, (user_id, msg_id, user_id))
+                conn.commit()
+
+                return jsonify({
+                    "success": True,
+                    "message_id": str(msg_id),
+                    "channel_id": ch_id_str,
+                    "delete_type": "me"
+                })
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------------------------------
+# ENDPOINT 9: Clear / Delete Chat with Employee
+# ------------------------------------------------------------------------------
+@chat_bp.route("/channel/<channel_id>/clear", methods=["POST", "DELETE"])
+@chat_auth_required
+def clear_channel_chat(channel_id):
+    """
+    Clears all messages in a conversation.
+    - If delete_for_everyone is True (admin only): permanently removes messages from the database.
+    - If delete_for_everyone is False (default): hides messages for the current user.
+    """
+    user = g.chat_user
+    user_id = user["id"]
+    data = request.get_json(silent=True) or {}
+    delete_for_everyone = bool(data.get("delete_for_everyone", False))
+
+    conn = get_pg_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify membership
+            cur.execute("""
+                SELECT c.id, c.channel_type, m.role
+                FROM chat_channels c
+                JOIN chat_channel_members m ON m.channel_id = c.id AND m.user_id = %s
+                WHERE c.id = %s;
+            """, (user_id, channel_id))
+            ch = cur.fetchone()
+            if not ch:
+                return jsonify({"success": False, "error": "Channel not found or access denied"}), 404
+
+            is_leadership = user["role"] in ("admin", "superadmin", "mgmt")
+
+            if delete_for_everyone:
+                if not is_leadership:
+                    return jsonify({"success": False, "error": "Only Admin and Management can delete chat for everyone"}), 403
+
+                cur.execute("DELETE FROM chat_messages WHERE channel_id = %s;", (channel_id,))
+                conn.commit()
+
+                # Broadcast Centrifugo event: chat_cleared
+                centrifugo_url = current_app.config.get("CENTRIFUGO_API_URL", DEFAULT_CENTRIFUGO_URL)
+                api_key = current_app.config.get("CENTRIFUGO_API_KEY", "sdfinance-centrifugo-api-key-2026")
+                publish_url = f"{centrifugo_url.rstrip('/')}/publish" if not centrifugo_url.endswith("/publish") else centrifugo_url
+                clear_payload = {
+                    "channel": f"chat:{channel_id}",
+                    "data": {
+                        "event": "chat_cleared",
+                        "channel_id": str(channel_id),
+                        "delete_for_everyone": True,
+                        "cleared_by": user_id
+                    }
+                }
+                try:
+                    requests.post(
+                        publish_url,
+                        headers={
+                            "X-API-Key": api_key,
+                            "Authorization": f"apikey {api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json=clear_payload,
+                        timeout=1.0
+                    )
+                except Exception as e:
+                    logger.warning("[Centrifugo] Clear chat publish failed: %s", e)
+
+                return jsonify({
+                    "success": True,
+                    "channel_id": str(channel_id),
+                    "delete_for_everyone": True
+                })
+
+            else:
+                # Clear for me: mark all current messages as deleted for this user
+                cur.execute("""
+                    UPDATE chat_messages 
+                    SET deleted_by_users = array_append(deleted_by_users, %s)
+                    WHERE channel_id = %s AND NOT (%s = ANY(deleted_by_users));
+                """, (user_id, channel_id, user_id))
+                conn.commit()
+
+                return jsonify({
+                    "success": True,
+                    "channel_id": str(channel_id),
+                    "delete_for_everyone": False
+                })
     finally:
         conn.close()

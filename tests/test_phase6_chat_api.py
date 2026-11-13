@@ -294,6 +294,63 @@ class TestPhase6ChatApi(unittest.TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["unread_count"], 5)
 
+    @patch("routes.chat_routes.requests.post")
+    @patch("routes.chat_routes.get_pg_connection")
+    def test_delete_message_for_everyone(self, mock_get_conn, mock_post):
+        """Verify delete message for everyone updates DB and broadcasts via Centrifugo."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_get_conn.return_value = mock_conn
+
+        # 1. Fetch message info: (id, channel_id, sender_id, is_deleted, channel_type)
+        mock_cur.fetchone.side_effect = [
+            ("msg-uuid-1", "chan-uuid-1", 1, False, "direct"),
+            (1,),  # membership check
+            ("msg-uuid-1",)  # returning id from update
+        ]
+
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["username"] = "admin"
+            sess["user_level"] = "admin"
+
+        res = self.client.post("/api/v1/chat/message/delete", json={
+            "message_id": "msg-uuid-1",
+            "channel_id": "chan-uuid-1",
+            "delete_type": "everyone"
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["delete_type"], "everyone")
+        self.assertTrue(mock_post.called)
+
+    @patch("routes.chat_routes.requests.post")
+    @patch("routes.chat_routes.get_pg_connection")
+    def test_clear_channel_chat_endpoint(self, mock_get_conn, mock_post):
+        """Verify clear channel chat deletes messages and broadcasts via Centrifugo."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_get_conn.return_value = mock_conn
+
+        mock_cur.fetchone.return_value = ("chan-uuid-1", "direct", "admin")
+
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["username"] = "admin"
+            sess["user_level"] = "admin"
+
+        res = self.client.post("/api/v1/chat/channel/chan-uuid-1/clear", json={
+            "delete_for_everyone": True
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["success"])
+        self.assertTrue(data["delete_for_everyone"])
+        self.assertTrue(mock_post.called)
+
 
 if __name__ == "__main__":
     unittest.main()
