@@ -68,3 +68,13 @@ def ios_redirect():
 @pwa_bp.route("/mobile/")
 def mobile_redirect():
     return redirect("/pwa/", code=302)
+
+
+@pwa_bp.route("/privacy")
+@pwa_bp.route("/privacy/")
+@pwa_bp.route("/privacy-policy")
+@pwa_bp.route("/privacy-policy/")
+def privacy_policy():
+    static_dir = os.path.join(BASE_DIR, "static")
+    return send_from_directory(static_dir, "privacy-policy.html")
+

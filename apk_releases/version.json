@@ -3,9 +3,9 @@
   "latest_version_code": 25,
   "min_supported_version_code": 5,
   "force_update": true,
-  "sha256": "6ee8477f99a0ac42fee41f4cdfda2e028dc76a6e8e67c446bb812d2f9b7d7032",
+  "sha256": "782c99fb4f56dc49d53f6b7a71ac6da3f3f8e54da0f212d727040c4361ce07a8",
   "url": "https://sivadurga.in/api/mobile/app/download/1.2.2",
-  "release_notes": "Font size scaling, 30-hour offline operation capability, and enhanced Aadhaar card upload from gallery & cropping in edit customer.",
-  "released_at": "2026-11-17T17:44:00+05:30",
+  "release_notes": "Updated package name to com.sivadurga.finance, font size scaling, 30-hour offline operation capability, and enhanced Aadhaar card upload from gallery & cropping in edit customer.",
+  "released_at": "2026-11-17T18:07:00+05:30",
   "published_by": "jayakrishna"
 }
