@@ -1,25 +1,11 @@
 {
-  "latest_version": "1.2.0",
-  "latest_version_code": 23,
+  "latest_version": "1.2.2",
+  "latest_version_code": 25,
   "min_supported_version_code": 5,
   "force_update": true,
-  "sha256": "60b206e229b8e0c7564368055e1203c7c2588f60cca767907cb4f300b52a139b",
-  "url": "https://sivadurga.in/api/mobile/app/download/1.2.0",
-  "release_notes": "Internal staff messaging, real-time push notifications, dashboard unread badges, and live WhatsApp ticks.",
-  "released_at": "2026-11-12T21:10:00+05:30",
-  "published_by": "jayakrishna",
-  "target_scope": "targeted",
-  "target_employee_ids": [
-    2,
-    3,
-    4,
-    5,
-    6
-  ],
-  "target_employee_names": [
-    "KARRI JAYA KRISHNA REDDY (@jayakrishna)",
-    "KARRI CHINNA REDDY (@chinna)",
-    "KOVVURI DURGA KRISHNA REDDY (@durga)",
-    "KOVVURI RAMAKOTI REDDY (@koti)"
-  ]
+  "sha256": "6ee8477f99a0ac42fee41f4cdfda2e028dc76a6e8e67c446bb812d2f9b7d7032",
+  "url": "https://sivadurga.in/api/mobile/app/download/1.2.2",
+  "release_notes": "Font size scaling, 30-hour offline operation capability, and enhanced Aadhaar card upload from gallery & cropping in edit customer.",
+  "released_at": "2026-11-17T17:44:00+05:30",
+  "published_by": "jayakrishna"
 }

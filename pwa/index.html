@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Counting - SD Finance</title>
+
+  <!-- iOS PWA Viewport & Standalone Configuration -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Smart Counting">
+  <meta name="theme-color" content="#07080C">
+
+  <!-- Icons & Web App Manifest -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/favicon.png">
+
+  <!-- Material Symbols Rounded Font (Matching Android Flutter Icons) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,0" />
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="bg-atmospheric">
+
+  <!-- Top Global Linear Progress Bar -->
+  <div id="global-progress-bar">
+    <div class="bar-inner"></div>
+  </div>
+
+  <!-- Network / Sync Status Banner -->
+  <div id="connectivity-banner" class="status-banner"></div>
+
+  <!-- Main Screen Container -->
+  <div class="app-screen-container" id="screen-container">
+
+    <!-- ====================================================================
+         VIEW 1: LOGIN (Matches Android login_screen.dart)
+         ==================================================================== -->
+    <section id="view-login" class="view-section active">
+      <div class="login-card-inner">
+        <!-- Authentic Smart Counting Matrix Logo -->
+        <div class="login-logo-wrap">
+          <img src="icons/logo.svg" alt="Smart Counting Logo">
+        </div>
+
+        <h1 class="login-title">Smart Counting</h1>
+        <p class="login-subtitle">Smart Counting & Auditing Portal</p>
+
+        <!-- Login Error Alert Pill -->
+        <div id="login-error" class="login-error-pill"></div>
+
+        <form id="login-form">
+          <!-- Username Input -->
+          <div class="form-group-dark">
+            <label class="form-label-dark" for="login-username">Employee Username</label>
+            <div class="input-with-icon">
+              <span class="ms-icon input-icon">person_outline</span>
+              <input type="text" id="login-username" class="form-control-dark" placeholder="Enter username" required autocomplete="username" autocapitalize="none">
+            </div>
+          </div>
+
+          <!-- Password Input -->
+          <div class="form-group-dark">
+            <label class="form-label-dark" for="login-password">Password</label>
+            <div class="input-with-icon">
+              <span class="ms-icon input-icon">lock_outline</span>
+              <input type="password" id="login-password" class="form-control-dark" placeholder="Enter password" required autocomplete="current-password">
+            </div>
+          </div>
+
+          <!-- Login Button -->
+          <button type="submit" id="login-btn" class="btn-emerald">
+            Sign In
+          </button>
+        </form>
+
+        <p class="login-hint">
+          To install on iPhone: Tap Safari <strong>Share</strong> → <strong>Add to Home Screen</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 2: VILLAGE SELECTION (Matches village_selection_screen.dart)
+         ==================================================================== -->
+    <section id="view-villages" class="view-section">
+      <div class="village-header">
+        <h2 class="village-header-title">Village Selection</h2>
+        <div class="village-status-pill">
+          <div class="status-dot-pulse"></div>
+          <div class="village-count-badge" id="villages-count-badge">0</div>
+        </div>
+      </div>
+
+      <!-- Translucent Search Bar -->
+      <div class="search-bar-wrap" style="position: relative; margin: 0 16px 14px;">
+        <span class="ms-icon search-icon-inside" style="position: absolute; left: 14px; top: 12px; color: rgba(255,255,255,0.4);">search</span>
+        <input type="search" id="village-search-input" class="search-input-pill" style="width: 100%; height: 44px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 22px; padding: 0 14px 0 44px; color: #fff; font-size: 14px; outline: none;" placeholder="Search village, route, code..." autocomplete="off">
+      </div>
+
+      <!-- Village Cards Grid -->
+      <div class="village-grid" id="villages-grid-container">
+        <!-- Dynamically rendered village cards -->
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 3: DASHBOARD (Matches dashboard_screen.dart)
+         ==================================================================== -->
+    <section id="view-dashboard" class="view-section">
+      <!-- Top Bar: Left Home Button, Center Village Name, Right Profile Avatar -->
+      <header class="revolut-topbar">
+        <button type="button" class="topbar-btn" id="dash-btn-home" title="Change Village">
+          <span class="ms-icon" style="font-size: 21px;">home</span>
+        </button>
+        <div class="topbar-title" id="dash-village-title">Village</div>
+        <button type="button" class="topbar-btn" id="dash-btn-profile" title="Profile">
+          <span class="ms-icon" style="font-size: 21px;">person</span>
+        </button>
+      </header>
+
+      <div class="dashboard-content">
+        <!-- Central Clean Metrics Carousel -->
+        <div class="metrics-carousel" id="metrics-carousel">
+          <div class="metric-slide" id="metric-slide-content">
+            <div class="metric-value" id="dash-metric-value">₹0</div>
+            <div class="metric-label" id="dash-metric-label">Total Balance</div>
+          </div>
+          <div class="metrics-dots" id="metrics-dots-container">
+            <div class="metric-dot" data-idx="0"></div>
+            <div class="metric-dot active" data-idx="1"></div>
+            <div class="metric-dot" data-idx="2"></div>
+          </div>
+        </div>
+
+        <!-- Circular Quick Action Buttons (Add Customer, Posting, Submit) -->
+        <div class="action-buttons-row">
+          <div class="action-btn-item" id="dash-act-add-customer">
+            <div class="action-circle">
+              <span class="ms-icon">person_add</span>
+            </div>
+            <span class="action-label">Add Customer</span>
+          </div>
+
+          <div class="action-btn-item" id="dash-act-posting">
+            <div class="action-circle">
+              <span class="ms-icon">post_add</span>
+            </div>
+            <span class="action-label">Posting</span>
+          </div>
+
+          <div class="action-btn-item" id="dash-act-submit">
+            <div class="action-circle">
+              <span class="ms-icon">arrow_circle_up</span>
+            </div>
+            <span class="action-label">Submit</span>
+          </div>
+        </div>
+
+        <!-- 3D Stacked Deck 1: Missing Payments -->
+        <div class="deck-section" id="deck-missing-payments">
+          <div class="deck-title">Missing Payments</div>
+          <div class="deck-stack-wrap">
+            <div class="deck-card-bottom"></div>
+            <div class="deck-card-mid"></div>
+            <div class="deck-card-top" id="deck-card-missing-top">
+              <div class="deck-icon-circle" id="deck-missing-icon-wrap" style="background: rgba(239, 68, 68, 0.16); color: #EF4444;">
+                <span class="ms-icon" id="deck-missing-icon">arrow_downward</span>
+              </div>
+              <div class="deck-text-area">
+                <div class="deck-count-row">
+                  <span class="deck-count-text" id="deck-missing-count">0 skipped</span>
+                  <div class="live-badge" id="deck-missing-live-badge" style="display: none;">
+                    <div class="live-badge-dot"></div>
+                    <span>LIVE</span>
+                  </div>
+                </div>
+                <div class="deck-subtitle" id="deck-missing-subtitle">Fetching latest status...</div>
+              </div>
+              <span class="ms-icon" style="color: rgba(255, 255, 255, 0.4); font-size: 24px;">chevron_right</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Stacked Deck 2: Closed Customers -->
+        <div class="deck-section" id="deck-closed-accounts">
+          <div class="deck-title">Closed Customers</div>
+          <div class="deck-stack-wrap">
+            <div class="deck-card-bottom"></div>
+            <div class="deck-card-mid"></div>
+            <div class="deck-card-top">
+              <div class="deck-icon-circle" style="background: rgba(14, 165, 233, 0.16); color: #0EA5E9;">
+                <span class="ms-icon">lock_clock</span>
+              </div>
+              <div class="deck-text-area">
+                <div class="deck-count-row">
+                  <span class="deck-count-text" id="deck-closed-count">0 closed</span>
+                </div>
+                <div class="deck-subtitle" id="deck-closed-subtitle">Fetching latest status...</div>
+              </div>
+              <span class="ms-icon" style="color: rgba(255, 255, 255, 0.4); font-size: 24px;">chevron_right</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 4: CUSTOMERS LIST (Matches Image 3 & 4 Parity)
+         ==================================================================== -->
+    <section id="view-customers" class="view-section">
+      <header class="native-appbar">
+        <div class="appbar-left">
+          <button type="button" class="appbar-btn-back" id="cust-btn-back">
+            <span class="ms-icon" style="font-size: 24px;">arrow_back</span>
+          </button>
+          <div class="appbar-title">Customers</div>
+        </div>
+        <button type="button" class="appbar-pill-btn primary" id="cust-btn-add">
+          <span class="ms-icon" style="font-size: 17px;">person_add</span>
+          <span>Add</span>
+        </button>
+      </header>
+
+      <!-- Search & Filter Row -->
+      <div class="search-filter-row">
+        <div class="search-box-dark">
+          <span class="ms-icon" style="font-size: 20px; color: rgba(255, 255, 255, 0.4);">search</span>
+          <input type="search" id="customer-search-input" placeholder="Search name, account #..." autocomplete="off">
+        </div>
+        <button type="button" class="filter-btn-dark" id="cust-btn-filter" title="Filter Customers">
+          <span class="ms-icon" style="font-size: 20px;">tune</span>
+          <span class="filter-dot-active" id="cust-filter-dot" style="display: none;"></span>
+        </button>
+      </div>
+
+      <!-- Count Header -->
+      <div class="section-count-title">
+        <span id="cust-count-label">0</span> CUSTOMERS
+      </div>
+
+      <!-- Customer 2-Line Cards Container -->
+      <div id="customers-cards-container" style="padding-bottom: calc(var(--safe-bottom) + 30px);">
+        <!-- Dynamically rendered 2-line cards -->
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 5: PAYMENTS LIST (Matches Image 9 & 10 Parity)
+         ==================================================================== -->
+    <section id="view-payments" class="view-section">
+      <header class="native-appbar">
+        <div class="appbar-left">
+          <button type="button" class="appbar-btn-back" id="pay-btn-back">
+            <span class="ms-icon" style="font-size: 24px;">arrow_back</span>
+          </button>
+          <div class="appbar-title">Payments</div>
+        </div>
+        <button type="button" class="appbar-pill-btn primary" id="pay-btn-posting">
+          <span class="ms-icon" style="font-size: 17px;">add</span>
+          <span>Posting</span>
+        </button>
+      </header>
+
+      <!-- Search & Filter Row -->
+      <div class="search-filter-row">
+        <div class="search-box-dark">
+          <span class="ms-icon" style="font-size: 20px; color: rgba(255, 255, 255, 0.4);">search</span>
+          <input type="search" id="payments-search-input" placeholder="Search ANO or Date..." autocomplete="off">
+        </div>
+        <button type="button" class="filter-btn-dark" id="payments-btn-filter" title="Filter Payments">
+          <span class="ms-icon" style="font-size: 20px;">tune</span>
+          <span class="filter-dot-active" id="payments-filter-dot" style="display: none;"></span>
+        </button>
+      </div>
+
+      <!-- Date Group Cards Container -->
+      <div id="payments-cards-container" style="padding-bottom: calc(var(--safe-bottom) + 30px);">
+        <!-- Dynamically rendered date group cards -->
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 6: POSTING / ADD PAYMENT (Matches Image 6 & 8 Parity)
+         ==================================================================== -->
+    <section id="view-posting" class="view-section">
+      <header class="native-appbar">
+        <div class="appbar-left">
+          <button type="button" class="appbar-btn-back" id="post-btn-back">
+            <span class="ms-icon" style="font-size: 24px;">arrow_back</span>
+          </button>
+          <div class="appbar-title">Posting</div>
+        </div>
+        <div class="appbar-date-chip" id="post-date-chip">
+          <span class="ms-icon" style="font-size: 15px; color: var(--primary);">calendar_today</span>
+          <span id="post-date-label">Today</span>
+          <span class="ms-icon" style="font-size: 18px; color: var(--primary);">arrow_drop_down</span>
+        </div>
+      </header>
+
+      <!-- Hidden native date input for date picker -->
+      <input type="date" id="pay-date-input" style="display: none;">
+
+      <div style="padding: 10px 16px 24px;">
+        <form id="payment-form">
+          <!-- Tile 1: Account Number & Inline Customer Preview -->
+          <div class="posting-tile">
+            <div class="tile-section-label">ACCOUNT NUMBER</div>
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon" style="color: var(--primary);">pin</span>
+              <input type="number" id="pay-ano" placeholder="Enter A/C Number (e.g. 104)" required inputmode="numeric">
+            </div>
+
+            <!-- Inline Customer Preview Banner (Image 8) -->
+            <div id="pay-inline-customer" class="cust-inline-preview found" style="display: none;">
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                <span class="ms-icon" style="color: var(--primary); font-size: 18px;">check_circle</span>
+                <span id="pay-customer-name" style="font-weight: 700; font-size: 14px; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Customer</span>
+              </div>
+              <span id="pay-customer-balance" style="font-size: 13px; font-weight: 800; color: var(--primary); white-space: nowrap;">Bal: ₹0</span>
+            </div>
+
+            <!-- Duplicate Warning Pill -->
+            <div id="pay-duplicate-warning" class="cust-inline-preview not-found" style="display: none; margin-top: 8px;">
+              <span class="ms-icon" style="color: var(--danger); font-size: 18px; margin-right: 6px;">warning</span>
+              <span id="pay-duplicate-text" style="font-size: 12px; font-weight: 600; color: var(--danger);">Payment already recorded for this date</span>
+            </div>
+          </div>
+
+          <!-- Tile 2: Payment & Amount 2-Column Grid (Image 6 & 8) -->
+          <div class="posting-tile">
+            <div class="tile-section-label">PAYMENT & AMOUNT</div>
+
+            <div class="posting-grid-row">
+              <!-- Left Column: Vertical Modes -->
+              <div class="posting-modes-col">
+                <button type="button" class="vertical-mode-btn active" id="btn-mode-cash" data-mode="cash">
+                  <span class="ms-icon" style="font-size: 18px;">payments</span>
+                  <span>Cash</span>
+                </button>
+                <button type="button" class="vertical-mode-btn" id="btn-mode-upi" data-mode="upi">
+                  <span class="ms-icon" style="font-size: 18px;">qr_code</span>
+                  <span>UPI</span>
+                </button>
+                <button type="button" class="vertical-mode-btn" id="btn-mode-partial" data-mode="partial">
+                  <span class="ms-icon" style="font-size: 18px;">call_split</span>
+                  <span>Partial</span>
+                </button>
+              </div>
+
+              <!-- Right Column: Amount Input + Post Button -->
+              <div class="posting-amount-col">
+                <input type="number" id="pay-amount" class="amount-input-box" placeholder="0" step="any" inputmode="decimal">
+                <div id="pay-fill-installment" style="display: none; margin-top: 4px; font-size: 11px; font-weight: 700; color: var(--primary); cursor: pointer;">
+                  Fill Installment (₹0)
+                </div>
+                
+                <!-- Partial Mode Split inputs (hidden by default) -->
+                <div id="partial-split-fields" style="display: none; gap: 8px; flex-direction: column;">
+                  <input type="number" id="pay-cash-split" class="amount-input-box" style="height: 38px; font-size: 14px;" placeholder="Cash portion" inputmode="decimal">
+                  <input type="number" id="pay-upi-split" class="amount-input-box" style="height: 38px; font-size: 14px;" placeholder="UPI portion" inputmode="decimal">
+                </div>
+
+                <button type="button" id="pay-post-btn" class="btn-post-payment">
+                  <span class="ms-icon" id="pay-post-icon" style="font-size: 18px;">check_circle</span>
+                  <span id="pay-post-text">POST PAYMENT</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Bottom Section: Payment Pending (Image 6 & 8) -->
+        <div style="font-size: 16px; font-weight: 800; color: #FFFFFF; margin: 18px 0 10px;">Payment pending</div>
+        <div id="posting-pending-container">
+          <div class="no-pending-box">No pending submissions</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 7: ADD CUSTOMER (Matches Image 5 & 7 Parity)
+         ==================================================================== -->
+    <section id="view-add-customer" class="view-section">
+      <header class="native-appbar">
+        <div class="appbar-left">
+          <button type="button" class="appbar-btn-back" id="addcust-btn-back">
+            <span class="ms-icon" style="font-size: 24px;">arrow_back</span>
+          </button>
+          <div class="appbar-title">Add Customer</div>
+        </div>
+        <button type="button" class="appbar-pill-btn outline" id="btn-pending-queue">
+          <span class="ms-icon" style="font-size: 16px;">inventory_2</span>
+          <span>Pending (<span id="addcust-pending-count">0</span>)</span>
+        </button>
+      </header>
+
+      <form id="add-customer-form" style="padding-bottom: 20px;">
+        <!-- Context Card (Image 5 & 7) -->
+        <div class="top-context-card">
+          <div class="top-context-row1">
+            <div class="account-pill-wrap">
+              <span class="account-pill-green" id="ctx-ano-pill">#1015</span>
+              <span style="font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.7);">New A/C</span>
+            </div>
+            <div class="village-bank-chip" id="ctx-bank-chip">
+              <span class="ms-icon" style="font-size: 15px;">domain</span>
+              <span id="ctx-bank-name">BARODA</span>
+            </div>
+          </div>
+          <div class="top-context-divider"></div>
+          <div class="top-context-row2">
+            <span id="ctx-rates-label">% Int: 16.7% • Cut: 1.7%</span>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <span class="ms-icon" style="font-size: 15px;">badge</span>
+              <span id="ctx-emp-name" style="text-transform: uppercase;">EMPLOYEE</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 1: KYC & Verification Photos (Image 5) -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="ms-icon" style="font-size: 18px;">photo_camera</span>
+            <span>KYC &amp; VERIFICATION PHOTOS</span>
+          </div>
+          <div class="photo-triplet-row">
+            <button type="button" class="photo-action-btn" id="btn-photo-front">
+              <span class="ms-icon">photo_camera</span>
+              <span class="photo-action-label" id="label-photo-front">Aadhaar Front</span>
+            </button>
+            <button type="button" class="photo-action-btn" id="btn-photo-back">
+              <span class="ms-icon">photo_camera</span>
+              <span class="photo-action-label" id="label-photo-back">Aadhaar Back</span>
+            </button>
+            <button type="button" class="photo-action-btn" id="btn-photo-house">
+              <span class="ms-icon">photo_camera</span>
+              <span class="photo-action-label" id="label-photo-house">House Photo</span>
+            </button>
+          </div>
+          <!-- Hidden inputs for images -->
+          <input type="file" id="file-photo-front" accept="image/*" capture="environment" style="display: none;">
+          <input type="file" id="file-photo-back" accept="image/*" capture="environment" style="display: none;">
+          <input type="file" id="file-photo-house" accept="image/*" capture="environment" style="display: none;">
+        </div>
+
+        <!-- Card 2: Customer Profile (Image 5) -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="ms-icon" style="font-size: 18px;">person</span>
+            <span>CUSTOMER PROFILE</span>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon">group</span>
+              <input type="number" id="new-pano" placeholder="Parent Account No" inputmode="numeric">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon">badge</span>
+              <input type="text" id="new-name" placeholder="Customer Name" required autocapitalize="characters" style="text-transform: uppercase;">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon">call</span>
+              <input type="tel" id="new-phone" placeholder="Phone Number" inputmode="tel">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon">credit_card</span>
+              <input type="text" id="new-aadhaar" placeholder="Aadhaar Number" maxlength="14" inputmode="numeric">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap" style="margin-bottom: 0;">
+            <div class="styled-field-box">
+              <span class="ms-icon field-icon">edit_note</span>
+              <input type="text" id="new-notes" placeholder="Notes">
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Loan Schedule & Dates (Image 5) -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="ms-icon" style="font-size: 18px;">calendar_today</span>
+            <span>LOAN SCHEDULE &amp; DATES</span>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <div class="segmented-toggle-wrap" style="flex: 1.2;">
+              <div class="segment-item active" id="seg-loan-weekly">Weekly</div>
+              <div class="segment-item" id="seg-loan-monthly">Monthly</div>
+            </div>
+            <div class="styled-field-box" style="flex: 1;">
+              <span class="ms-icon field-icon">timer</span>
+              <input type="number" id="new-period" placeholder="Period" required inputmode="numeric">
+            </div>
+          </div>
+
+          <!-- Start Date Button -->
+          <div class="date-picker-button" id="btn-start-date">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="ms-icon" style="color: var(--primary); font-size: 18px;">calendar_today</span>
+              <span>Start Date</span>
+            </div>
+            <span id="start-date-label">Today</span>
+          </div>
+          <input type="date" id="input-start-date" style="display: none;">
+
+          <!-- End Date Button -->
+          <div class="date-picker-button" id="btn-end-date" style="margin-bottom: 0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="ms-icon" style="color: var(--primary); font-size: 18px;">event</span>
+              <span>End Date</span>
+            </div>
+            <span id="end-date-label">-</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Financial Amounts (Image 7) -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="ms-icon" style="font-size: 18px;">payments</span>
+            <span>FINANCIAL AMOUNTS</span>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 4px;">
+            <div class="styled-field-box" style="flex: 1;">
+              <input type="number" id="new-total-amt" placeholder="Total Amount" required inputmode="decimal">
+            </div>
+            <div class="styled-field-box" style="flex: 1;">
+              <span class="ms-icon field-icon">price_check</span>
+              <input type="number" id="new-installment" placeholder="Installment Amount" required inputmode="decimal">
+            </div>
+          </div>
+
+          <div id="math-helper-label" style="font-size: 11px; color: var(--text-subtle); margin: 0 0 10px 4px;">
+            Must equal base + cutting + interest
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <input type="number" id="new-base-amt" placeholder="Base Amount" required inputmode="decimal">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <input type="number" id="new-cutting-amt" placeholder="Cutting Amount" required inputmode="decimal">
+            </div>
+          </div>
+
+          <div class="styled-field-wrap">
+            <div class="styled-field-box">
+              <input type="number" id="new-interest-amt" placeholder="Interest Amount" required inputmode="decimal">
+            </div>
+          </div>
+
+          <!-- Disbursement Mode -->
+          <div style="font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.7); letter-spacing: 0.8px; margin: 12px 0 8px;">
+            PAYMENT MODE
+          </div>
+          <div class="segmented-toggle-wrap">
+            <div class="segment-item active" id="seg-disb-cash">Cash</div>
+            <div class="segment-item" id="seg-disb-upi">UPI</div>
+            <div class="segment-item" id="seg-disb-partial">Partial</div>
+          </div>
+        </div>
+
+        <!-- Card 5: Location Coordinates (Image 7) -->
+        <div class="form-section-card">
+          <div class="form-section-header">
+            <span class="ms-icon" style="font-size: 18px;">location_on</span>
+            <span>LOCATION COORDINATES</span>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <div class="styled-field-box" style="flex: 1;">
+              <input type="text" id="new-lat" placeholder="Latitude" readonly>
+            </div>
+            <div class="styled-field-box" style="flex: 1;">
+              <input type="text" id="new-lng" placeholder="Longitude" readonly>
+            </div>
+          </div>
+
+          <button type="button" id="btn-pull-location" style="width: 100%; height: 44px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; color: var(--primary); font-size: 13.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+            <span class="ms-icon" style="font-size: 18px;">my_location</span>
+            <span>Pull Location</span>
+          </button>
+        </div>
+
+        <!-- Sticky Bottom Action Bar (Image 5 & 7) -->
+        <div class="sticky-bottom-action-bar">
+          <button type="submit" id="btn-send-customer" class="btn-emerald">
+            <span class="ms-icon">person_add</span>
+            <span>SEND CUSTOMER</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 8: SUBMISSION QUEUE / SYNC (Matches customer_queue_screen.dart)
+         ==================================================================== -->
+    <section id="view-sync" class="view-section">
+      <header class="native-appbar">
+        <div class="appbar-left">
+          <button type="button" class="appbar-btn-back" id="sync-btn-back">
+            <span class="ms-icon" style="font-size: 24px;">arrow_back</span>
+          </button>
+          <div class="appbar-title">Offline Queue</div>
+        </div>
+        <div style="width: 40px;"></div>
+      </header>
+
+      <div style="padding: 10px 16px 24px;">
+        <div class="posting-tile" style="text-align: center;">
+          <div class="tile-section-label" style="text-align: center;">LOCAL TRANSACTIONS</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Transactions recorded in offline dead zones are safely queued and sync automatically when internet is available.
+          </p>
+          <button type="button" id="btn-sync-now" class="btn-emerald">
+            SYNC NOW
+          </button>
+        </div>
+
+        <div class="posting-tile">
+          <div class="tile-section-label">PENDING SUBMISSIONS (<span id="sync-pending-count">0</span>)</div>
+          <div id="sync-pending-list">
+            <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px;">All transactions are synced!</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /app-screen-container -->
+
+  <!-- ====================================================================
+       FLOATING BOTTOM PILL DOCK (_buildRevolutBottomDock)
+       Visible ONLY on DashboardScreen
+       ==================================================================== -->
+  <nav class="bottom-dock" id="bottom-dock" style="display: none;">
+    <!-- 1. Home (Village Selection) -->
+    <div class="dock-icon-item" data-action="villages" title="Home">
+      <span class="ms-icon">home</span>
+    </div>
+
+    <!-- 2. Customers -->
+    <div class="dock-icon-item" data-action="customers" title="Customers">
+      <span class="ms-icon">people</span>
+    </div>
+
+    <!-- 3. Payments -->
+    <div class="dock-icon-item" data-action="payments" title="Payments">
+      <span class="ms-icon">receipt_long</span>
+    </div>
+
+    <!-- 4. Submit / Queue -->
+    <div class="dock-icon-item" data-action="sync" title="Submit Queue">
+      <span class="ms-icon">arrow_circle_up</span>
+      <span class="dock-badge" id="dock-sync-badge" style="display: none;">0</span>
+    </div>
+
+    <!-- 5. Profile -->
+    <div class="dock-icon-item" data-action="profile" title="Profile">
+      <span class="ms-icon">person</span>
+    </div>
+  </nav>
+
+  <!-- ====================================================================
+       MODAL 1: CUSTOMER DETAIL BOTTOM SHEET (Image 4 Parity)
+       ==================================================================== -->
+  <div class="modal-overlay" id="customer-detail-modal">
+    <div class="modal-sheet-revolut">
+      <div class="sheet-drag-handle"></div>
+
+      <!-- Header: Initial Avatar, Name, Account #, Close (✕) -->
+      <div class="cust-modal-header">
+        <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+          <div class="cust-modal-avatar" id="cdm-avatar">S</div>
+          <div style="min-width: 0;">
+            <div id="cdm-name" style="font-size: 18px; font-weight: 800; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">CUSTOMER</div>
+            <div id="cdm-ano-subtitle" style="font-size: 12.5px; color: var(--text-muted); font-weight: 600;">Account #1014</div>
+          </div>
+        </div>
+        <button type="button" id="cdm-btn-close" style="background: none; border: none; color: rgba(255, 255, 255, 0.6); cursor: pointer; padding: 4px;">
+          <span class="ms-icon" style="font-size: 22px;">close</span>
+        </button>
+      </div>
+
+      <!-- Info items -->
+      <div class="cust-info-item">
+        <div class="cust-info-left">
+          <span class="ms-icon" style="color: #10B981; font-size: 18px;">call</span>
+          <span>Phone Number</span>
+        </div>
+        <a id="cdm-phone" href="#" class="cust-info-val" style="text-decoration: none; color: #FFFFFF;">-</a>
+      </div>
+
+      <div class="cust-info-item">
+        <div class="cust-info-left">
+          <span class="ms-icon" style="color: #0EA5E9; font-size: 18px;">location_on</span>
+          <span>Location</span>
+        </div>
+        <div id="cdm-location" class="cust-info-val">-</div>
+      </div>
+
+      <div class="cust-info-item">
+        <div class="cust-info-left">
+          <span class="ms-icon" style="color: #8B5CF6; font-size: 18px;">account_tree</span>
+          <span>Parent A/C (PANO)</span>
+        </div>
+        <div id="cdm-pano" class="cust-info-val">-</div>
+      </div>
+
+      <div class="cust-info-item">
+        <div class="cust-info-left">
+          <span class="ms-icon" style="color: #F59E0B; font-size: 18px;">calendar_today</span>
+          <span>Duration</span>
+        </div>
+        <div id="cdm-duration" class="cust-info-val">-</div>
+      </div>
+
+      <!-- 3-Column Stats: Total Loan, Paid, Balance -->
+      <div class="cust-stats-3col">
+        <div class="stat-box">
+          <div class="stat-label">Total Loan</div>
+          <div class="stat-val" id="cdm-total-loan">₹0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Paid</div>
+          <div class="stat-val" id="cdm-paid-amount" style="color: var(--primary);">₹0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Balance</div>
+          <div class="stat-val" id="cdm-balance-amount" style="color: var(--danger);">₹0</div>
+        </div>
+      </div>
+
+      <!-- Close Customer Red Button -->
+      <button type="button" id="cdm-btn-close-customer" class="btn-close-customer">
+        <span class="ms-icon" style="font-size: 18px;">person_off</span>
+        <span>CLOSE CUSTOMER</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 2: CUSTOMER FILTER BOTTOM SHEET (Image 3 Parity)
+       ==================================================================== -->
+  <div class="modal-overlay" id="customer-filter-modal">
+    <div class="modal-sheet-revolut">
+      <div class="sheet-drag-handle"></div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <h3 style="font-size: 18px; font-weight: 800; color: #FFFFFF;">Filter Customers</h3>
+        <button type="button" id="btn-cust-filter-reset" style="background: none; border: none; color: var(--primary); font-size: 14px; font-weight: 700; cursor: pointer;">
+          Reset
+        </button>
+      </div>
+
+      <!-- Start Date Range -->
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">Start Date Range</label>
+        <div class="styled-field-box" id="btn-pick-filter-dates" style="cursor: pointer;">
+          <span class="ms-icon field-icon" style="color: var(--primary);">calendar_today</span>
+          <span id="cust-filter-date-label" style="font-size: 13.5px; color: rgba(255, 255, 255, 0.7);">All Dates (Tap to pick range)</span>
+        </div>
+        <input type="date" id="cust-filter-date-input" style="display: none;">
+      </div>
+
+      <!-- Balance Range -->
+      <div style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
+          <label style="font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.7);">Balance Range</label>
+          <span id="cust-filter-balance-label" style="font-size: 14px; font-weight: 800; color: var(--primary);">₹0 - ₹100,000</span>
+        </div>
+        <input type="range" id="cust-filter-balance-slider" min="0" max="150000" step="1000" value="150000" style="width: 100%; accent-color: var(--primary);">
+      </div>
+
+      <button type="button" id="btn-apply-cust-filter" class="btn-emerald">
+        Apply Filters
+      </button>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 3: PAYMENT DATE GROUP DETAIL SHEET (Image 10 Parity)
+       ==================================================================== -->
+  <div class="modal-overlay" id="payment-date-detail-modal">
+    <div class="modal-sheet-revolut" style="max-height: 85vh;">
+      <div class="sheet-drag-handle"></div>
+
+      <!-- Header: Date, Subtitle, Total Amount Badge, Close -->
+      <div class="date-modal-header">
+        <div>
+          <div id="pdd-date-title" style="font-size: 18px; font-weight: 900; color: #FFFFFF;">05 Nov 2026</div>
+          <div id="pdd-subtitle" style="font-size: 12.5px; color: rgba(255, 255, 255, 0.55); font-weight: 600;">Thursday • 140 Customers</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="tag-badge cash" id="pdd-total-badge" style="font-size: 14px; font-weight: 900; padding: 4px 10px; border-radius: 8px;">₹192000</div>
+          <button type="button" id="pdd-btn-close" style="background: none; border: none; color: rgba(255, 255, 255, 0.6); cursor: pointer; padding: 4px;">
+            <span class="ms-icon" style="font-size: 22px;">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Payment Rows Container -->
+      <div id="pdd-rows-container" style="overflow-y: auto; flex: 1; padding-right: 4px;">
+        <!-- Dynamically populated customer payment rows sorted by ANO -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL: MISSING PAYMENTS BOTTOM SHEET
+       ==================================================================== -->
+  <div class="modal-overlay" id="missing-payments-modal">
+    <div class="modal-sheet-revolut" style="max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="sheet-drag-handle"></div>
+
+      <!-- Header: Title, History Button (optional), Close -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <div>
+          <div id="mpm-title" style="font-size: 18px; font-weight: 800; color: #FFFFFF;">Missing Payments</div>
+          <div id="mpm-subtitle" style="font-size: 12.5px; color: rgba(255, 255, 255, 0.55); font-weight: 600;">916 skipped</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" id="mpm-btn-history" style="display: none; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; color: #FFFFFF; font-size: 12px; font-weight: 700; padding: 6px 10px; cursor: pointer; align-items: center; gap: 4px;">
+            <span class="ms-icon" style="font-size: 16px;">history</span>
+            <span>History</span>
+          </button>
+          <button type="button" id="mpm-btn-close" style="background: none; border: none; color: rgba(255, 255, 255, 0.6); cursor: pointer; padding: 4px;">
+            <span class="ms-icon" style="font-size: 22px;">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Groups List Container -->
+      <div id="mpm-content-container" style="overflow-y: auto; flex: 1; padding: 14px 0 20px;">
+        <!-- Dynamically rendered collapsible week groups -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL: CLOSED CUSTOMERS BOTTOM SHEET
+       ==================================================================== -->
+  <div class="modal-overlay" id="closed-customers-modal">
+    <div class="modal-sheet-revolut" style="max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="sheet-drag-handle"></div>
+
+      <!-- Header: Title, Total, Close -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <div>
+          <div style="font-size: 18px; font-weight: 800; color: #FFFFFF;">Closed Customers</div>
+          <div id="ccm-subtitle" style="font-size: 12.5px; color: rgba(255, 255, 255, 0.55); font-weight: 600;">770 closed</div>
+        </div>
+        <button type="button" id="ccm-btn-close" style="background: none; border: none; color: rgba(255, 255, 255, 0.6); cursor: pointer; padding: 4px;">
+          <span class="ms-icon" style="font-size: 22px;">close</span>
+        </button>
+      </div>
+
+      <!-- Groups List Container -->
+      <div id="ccm-content-container" style="overflow-y: auto; flex: 1; padding: 14px 0 20px;">
+        <!-- Dynamically rendered collapsible week groups -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 4: USER PROFILE BOTTOM SHEET
+       ==================================================================== -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-sheet-revolut">
+      <div class="sheet-drag-handle"></div>
+      <div style="font-size: 18px; font-weight: 800; color: #FFFFFF; margin-bottom: 16px;">Employee Profile</div>
+
+      <div style="display: flex; align-items: center; gap: 14px; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 16px; margin-bottom: 20px;">
+        <div class="cust-modal-avatar">
+          <span class="ms-icon" style="font-size: 26px;">person</span>
+        </div>
+        <div>
+          <div id="profile-modal-name" style="font-size: 17px; font-weight: 800; color: #FFFFFF;">Employee</div>
+          <div id="profile-modal-role" style="font-size: 13px; color: var(--text-muted);">Field Agent • v1.2.1 PWA</div>
+        </div>
+      </div>
+
+      <button type="button" id="btn-signout-modal" style="width: 100%; height: 48px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; color: var(--danger); font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+        <span class="ms-icon">logout</span>
+        <span>Sign Out</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- App Toast Notification -->
+  <div id="app-toast" class="app-toast">
+    <span class="ms-icon" id="toast-icon">check_circle</span>
+    <span id="toast-msg">Notification</span>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/db.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/geo.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then((reg) => console.log('[PWA] Service Worker active:', reg.scope))
+          .catch((err) => console.warn('[PWA] Service Worker failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>

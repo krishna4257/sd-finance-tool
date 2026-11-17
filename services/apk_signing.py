@@ -252,7 +252,7 @@ def _parse_axml_manifest(data: bytes) -> dict:
 def extract_apk_metadata(apk_path: str) -> dict:
     """Extract versionName, versionCode, packageName, and SHA256 from an APK."""
     result = {
-        "package_name": "com.sdfinance.mobile",
+        "package_name": "com.sivadurga.finance",
         "version_name": "",
         "version_code": 0,
         "size_bytes": 0,

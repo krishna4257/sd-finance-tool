@@ -493,6 +493,11 @@ from routes.chat_routes import chat_bp
 csrf.exempt(chat_bp)
 app.register_blueprint(chat_bp)
 
+# iOS & Mobile Progressive Web App (PWA) Registration
+from routes.pwa_routes import pwa_bp
+csrf.exempt(pwa_bp)
+app.register_blueprint(pwa_bp)
+
 @app.route("/chat")
 def chat_shortcut():
     return redirect("/api/v1/chat")
@@ -10137,7 +10142,7 @@ def update_payment_date_bulk():
 
         cur.execute("""
             UPDATE payment
-            SET payment_date = %s
+            SET payment_date = %s, updated_at = NOW() AT TIME ZONE 'UTC'
             WHERE vid = %s AND payment_date = %s
         """, (new_iso, vid, old_iso))
 
@@ -10154,6 +10159,27 @@ def update_payment_date_bulk():
             SET payment_date = %s
             WHERE vid = %s AND payment_date = %s
         """, (new_iso, vid, old_iso))
+
+        # Also update payment_feed_items payload JSON date for this village if matching old_iso
+        try:
+            cur.execute("""
+                UPDATE payment_feed_items
+                SET payload = jsonb_set(payload, '{payment_date}', to_jsonb(%s::text))
+                WHERE (payload->>'vid')::int = %s 
+                  AND (COALESCE(payload->>'payment_date', payload->>'pdate')) = %s
+            """, (str(new_iso), vid, str(old_iso)))
+        except Exception as pfe_err:
+            logger.warning(f"Could not update payment_feed_items payload: {pfe_err}")
+
+        # Also update payment_feed_edits if any exist
+        try:
+            cur.execute("""
+                UPDATE payment_feed_edits
+                SET edited_payload = jsonb_set(edited_payload, '{payment_date}', to_jsonb(%s::text))
+                WHERE vid = %s AND (COALESCE(edited_payload->>'payment_date', edited_payload->>'pdate')) = %s
+            """, (str(new_iso), vid, str(old_iso)))
+        except Exception as pfe_edits_err:
+            logger.warning(f"Could not update payment_feed_edits: {pfe_edits_err}")
 
         # Invalidate cache for this village
         min_pdt = min(old_iso, new_iso)

@@ -1106,7 +1106,7 @@ def register_fleet_telemetry_routes(app, csrf):
 
             v_name = metadata.get("version_name") or ""
             v_code = int(metadata.get("version_code") or 0)
-            pkg_name = metadata.get("package_name") or "com.sdfinance.mobile"
+            pkg_name = metadata.get("package_name") or "com.sivadurga.finance"
             min_sdk = int(metadata.get("min_sdk") or 0)
 
             return jsonify({

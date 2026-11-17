@@ -8,6 +8,7 @@ from routes.payment_routes import payment_bp
 from routes.banking_controller import banking_bp
 from routes.chit_controller import chit_bp
 from routes.fleet_telemetry_controller import register_fleet_telemetry_routes
+from routes.pwa_routes import pwa_bp
 
 __all__ = [
     "mobile_bp",
@@ -15,5 +16,6 @@ __all__ = [
     "payment_bp",
     "banking_bp",
     "chit_bp",
+    "pwa_bp",
     "register_fleet_telemetry_routes",
 ]
