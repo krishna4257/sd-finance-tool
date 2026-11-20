@@ -991,7 +991,7 @@ def customer_feed():
             return jsonify({"error": "invalid timestamp"}), 400
 
         age_seconds = abs((datetime.now(timezone.utc) - parsed_ts).total_seconds())
-        if age_seconds > 900:
+        if age_seconds > 86400:
             return jsonify({"error": "stale timestamp"}), 400
 
         signing_secret = get_mobile_queue_hmac_secret()
@@ -1050,6 +1050,24 @@ def customer_feed():
         longitude = data.get("longitude")
         gps_accuracy = data.get("gps_accuracy")
 
+        # Idempotency check: if this customer was already uploaded with this local_uuid, return success immediately
+        if local_uuid:
+            cur.execute("""
+                SELECT feed_id, status, payload->>'ano'
+                FROM customer_feed
+                WHERE local_uuid = %s
+                LIMIT 1
+            """, (local_uuid,))
+            existing_feed = cur.fetchone()
+            if existing_feed:
+                conn.rollback()
+                return jsonify({
+                    "status": "ok",
+                    "feed_id": existing_feed[0],
+                    "ano": int(existing_feed[2]) if existing_feed[2] else None,
+                    "message": "Customer already submitted",
+                }), 200
+
         ok, reason = register_mobile_request_integrity(
             cur,
             endpoint="/api/mobile/customer_feed",
@@ -1092,31 +1110,42 @@ def customer_feed():
             return jsonify({"error": str(exc)}), 400
 
         ano = customer_payload.get("ano") # type: ignore
-        payload = json.dumps(customer_payload, default=str)
+        reassigned_ano = None
 
-        # Duplicate check: prevent duplicate customer registrations in same village
+        # Smart ANO Conflict Resolution for multi-employee field operations:
+        # If ANO collides with an existing customer or pending submission, auto-assign next ANO instead of failing
         if ano is not None:
             cur.execute("""
                 SELECT cid FROM customer
                 WHERE vid = %s AND ano = %s
                 LIMIT 1
             """, (vid, int(ano)))
-            if cur.fetchone():
-                conn.rollback()
-                return jsonify({
-                    "error": f"Duplicate customer: Account #{ano} already exists in Village {vid}"
-                }), 409
+            exists_in_customer = cur.fetchone()
 
             cur.execute("""
                 SELECT feed_id FROM customer_feed
-                WHERE vid = %s AND (payload->>'ano')::int = %s AND status = 'pending'
+                WHERE vid = %s AND (payload->>'ano')::int = %s AND status = 'pending' AND local_uuid != %s
                 LIMIT 1
-            """, (vid, int(ano)))
-            if cur.fetchone():
-                conn.rollback()
-                return jsonify({
-                    "error": f"Duplicate customer: Account #{ano} is already pending approval for Village {vid}"
-                }), 409
+            """, (vid, int(ano), local_uuid or ""))
+            exists_in_feed = cur.fetchone()
+
+            if exists_in_customer or exists_in_feed:
+                cur.execute("""
+                    SELECT COALESCE(MAX(a), 0) FROM (
+                        SELECT ano AS a FROM customer WHERE vid = %s
+                        UNION ALL
+                        SELECT (payload->>'ano')::int AS a FROM customer_feed WHERE vid = %s AND (payload->>'ano') IS NOT NULL
+                    ) sub
+                """, (vid, vid))
+                max_ano = cur.fetchone()[0] or 0
+                reassigned_ano = max_ano + 1
+                logger.info(
+                    "ANO collision for vid=%s proposed_ano=%s -> auto-reassigning to ano=%s for local_uuid=%s",
+                    vid, ano, reassigned_ano, local_uuid
+                )
+                customer_payload["ano"] = reassigned_ano
+
+        payload = json.dumps(customer_payload, default=str)
 
         aadhaar_raw = str(customer_payload.get("aadhaar_number") or "").replace(" ", "").replace("-", "").strip()
         if len(aadhaar_raw) == 12 and aadhaar_raw.isdigit():
@@ -1224,7 +1253,12 @@ def customer_feed():
             }
         )
 
-        return jsonify({"status": "ok"})
+        resp = {"status": "ok"}
+        if reassigned_ano is not None:
+            resp["reassigned"] = True
+            resp["assigned_ano"] = reassigned_ano
+            resp["original_ano"] = ano
+        return jsonify(resp)
 
     except Exception as e:
         if conn:
@@ -1301,7 +1335,7 @@ def close_account_feed():
             return jsonify({"error": "invalid timestamp"}), 400
 
         age_seconds = abs((datetime.now(timezone.utc) - parsed_ts).total_seconds())
-        if age_seconds > 900:
+        if age_seconds > 86400:
             return jsonify({"error": "stale timestamp"}), 400
 
         signing_secret = get_mobile_queue_hmac_secret()
