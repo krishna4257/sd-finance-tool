@@ -1,8 +1,10 @@
 {
   "latest_version": "1.2.3",
   "latest_version_code": 26,
-  "min_supported_version_code": 5,
-  "force_update": true,
+  "min_supported_version_code": 1,
+  "force_update": false,
+  "target_scope": "targeted",
+  "target_employee_ids": [],
   "sha256": "0a53a5289e6175064a180d983849de64ff94ccd5efdaa29debac595132cd7822",
   "url": "https://sivadurga.in/api/mobile/app/download/1.2.3",
   "release_notes": "Fixed payment reconciliation data loss bug, resolved ANO customer submission conflict with auto-resequencing, increased photo upload timeouts for field conditions, and improved sync feedback.",
