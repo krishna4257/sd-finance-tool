@@ -169,6 +169,38 @@
         .download-btn:active {
             transform: scale(0.98);
         }
+        .playstore-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 15px 20px;
+            background: #01875f;
+            color: #ffffff;
+            font-size: 15.5px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(1, 135, 95, 0.28);
+            border: none;
+            cursor: pointer;
+            box-sizing: border-box;
+            letter-spacing: -0.01em;
+        }
+        .playstore-btn:hover {
+            background: #01684a;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(1, 135, 95, 0.35);
+        }
+        .playstore-btn:active {
+            transform: scale(0.98);
+        }
+        .playstore-btn i {
+            font-size: 20px;
+        }
         .instructions {
             margin-top: 28px;
             text-align: left;
@@ -303,7 +335,7 @@
             </div>
 
             <button type="submit" class="download-btn">
-                <i class="fas fa-user-plus me-2"></i> Create Account & Proceed to Download
+                <i class="fas fa-user-plus me-2"></i> Create Account & Proceed to Play Store
             </button>
         </form>
 
@@ -326,16 +358,22 @@
         </div>
 
         {% else %}
-        <!-- Step 2: Account Ready & APK Download State -->
+        <!-- Step 2: Account Ready & Play Store App Access State -->
         <div class="app-meta">
+            <div class="meta-row">
+                <span class="meta-label">App Distribution</span>
+                <span class="meta-value"><i class="fab fa-google-play" style="color: #01875f; margin-right: 4px;"></i> Google Play Store (Internal Test)</span>
+            </div>
             <div class="meta-row">
                 <span class="meta-label">App Version</span>
                 <span class="meta-value">v{{ version }}</span>
             </div>
+            {% if apk_exists and size and size != 'Unknown' %}
             <div class="meta-row">
                 <span class="meta-label">File Size</span>
                 <span class="meta-value">{{ size }}</span>
             </div>
+            {% endif %}
             {% if user_account %}
             <div class="meta-row">
                 <span class="meta-label">App Username</span>
@@ -350,28 +388,37 @@
             {% endif %}
         </div>
 
-        <a href="{{ url_for('app_download_action', v=version, token=token) if token else url_for('app_download_action', v=version) }}" class="download-btn">
-            <i class="fas fa-download me-2"></i> Download Installation Package (APK v{{ version }})
+        <a href="{{ play_store_url | default('https://play.google.com/apps/internaltest/4700818357814725371') }}" target="_blank" rel="noopener noreferrer" class="playstore-btn">
+            <i class="fab fa-google-play"></i>
+            <span>Install from Google Play Store</span>
         </a>
+
+        {% if apk_exists %}
+        <div style="margin-top: 14px; text-align: center;">
+            <a href="{{ url_for('app_download_action', v=version, token=token) if token else url_for('app_download_action', v=version) }}" style="font-size: 12px; color: #6b7280; text-decoration: underline;">
+                <i class="fas fa-file-arrow-down me-1"></i> Alternative: Download Direct APK (v{{ version }})
+            </a>
+        </div>
+        {% endif %}
 
         <div class="instructions">
             <h3><i class="fas fa-list-check me-1"></i> How to Install the App</h3>
             
             <div class="step">
                 <span class="step-num">1</span>
-                <span>Click the <strong>Download</strong> button above to save the installation file (<code>.apk</code>) to your phone.</span>
+                <span>Tap the <strong>"Install from Google Play Store"</strong> button above to open the testing invitation.</span>
             </div>
             <div class="step">
                 <span class="step-num">2</span>
-                <span>Open your browser's download folder and tap the downloaded APK file.</span>
+                <span>Sign in with your Google account and tap <strong>"Accept Invite"</strong> or join the testing program if prompted.</span>
             </div>
             <div class="step">
                 <span class="step-num">3</span>
-                <span>If prompted, enable <strong>"Allow installation of unknown apps"</strong> in your phone settings.</span>
+                <span>Tap <strong>"Download it on Google Play"</strong> and install the app from Google Play Store.</span>
             </div>
             <div class="step">
                 <span class="step-num">4</span>
-                <span>Tap <strong>Install</strong>, then open the app and log in with your created username and password.</span>
+                <span>Open the app and log in using your created username and password.</span>
             </div>
         </div>
 

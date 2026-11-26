@@ -11450,12 +11450,16 @@ def app_portal():
 
         version_data = _read_version_json() or {}
         apk_size = "Unknown"
+        apk_exists = False
         if version_data:
             version = version_data.get("latest_version")
             apk_path = os.path.join(APK_DIR, f"sdfin-{version}.apk")
             if os.path.isfile(apk_path):
                 size_mb = os.path.getsize(apk_path) / (1024 * 1024)
                 apk_size = f"{size_mb:.1f} MB"
+                apk_exists = True
+
+        play_store_url = "https://play.google.com/apps/internaltest/4700818357814725371"
 
         # If user account does not exist, render Self-Registration state
         if not user_row:
@@ -11466,6 +11470,8 @@ def app_portal():
                 token=token or "",
                 version=version_data.get("latest_version", "N/A"),
                 size=apk_size,
+                apk_exists=apk_exists,
+                play_store_url=play_store_url,
                 notes=version_data.get("release_notes", "No release notes available.")
             )
 
@@ -11479,6 +11485,8 @@ def app_portal():
             token=token or "",
             version=version_data.get("latest_version", "N/A"),
             size=apk_size,
+            apk_exists=apk_exists,
+            play_store_url=play_store_url,
             notes=version_data.get("release_notes", "No release notes available."),
             released_at=version_data.get("released_at", ""),
             force_update=version_data.get("force_update", False)
@@ -11589,7 +11597,7 @@ def app_portal_register():
             status="success"
         )
 
-        flash("Account created successfully! You can now download the app.", "success")
+        flash("Account created successfully! You can now install the app from Google Play Store.", "success")
         return redirect(url_for("app_portal", token=token))
 
     except Exception as e:
